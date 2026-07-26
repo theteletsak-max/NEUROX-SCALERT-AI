@@ -95,10 +95,16 @@ Why this stack: H4/H1 keep sniper quality (from B); M5 makes the shot faster wit
 - Per-symbol cap remains **3** (account cap usually binds first)  
 - Non-forex (gold, indices, crypto) = out of scope unless you add them later  
 
+## Slot allocation (locked) — A + B
+
+1. **Speed (B):** If account open trades **< 3** and a pair’s kill-chain passes → **instant execution** (do not wait for other pairs).  
+2. **Score (A):** If **multiple pairs** qualify in the **same evaluation pass** and only *N* slots remain → take the **top N by setup score**.  
+3. Do **not** close an existing trade just to free a slot for a “better” new setup.  
+4. Score uses structure + liquidity + zone quality (AI may help rank; rules still gate entry).
+
 ## Still open (decide next, piece by piece)
 
-1. How to pick which setups win when more than 3 pairs qualify (best score first?)  
-2. Any final “done with strategy” sign-off before we outline the build plan
+1. Final strategy sign-off — then we outline the build plan (still no code until you say so)
 
 ---
 
