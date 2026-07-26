@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//| SNIPER_AI_OK9.mq5                                                |
+//| SNIPER_AI_OK10.mq5                                                |
 //| BUILD_ID: SA_COMPILE_OK_10                                        |
 //| SNIPER AI                                                         |
 //| Delete ALL old Sniper files in Experts, then F7 compile this.     |

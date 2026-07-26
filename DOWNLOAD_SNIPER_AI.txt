@@ -1,17 +1,20 @@
-SNIPER AI — USE THIS FILE (UNCACHED)
-====================================
+SNIPER AI - DOWNLOAD THIS
+=========================
 
-https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/forex-trading-robot-b12d/SNIPER_AI_OK9.mq5
+https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/forex-trading-robot-b12d/SNIPER_AI_OK10.mq5
 
-TOP MUST SHOW:
-  BUILD_ID: SA_COMPILE_OK_9
+MUST SHOW AT TOP:
+  BUILD_ID: SA_COMPILE_OK_10
 
+STEPS:
 1. Close MetaEditor
-2. Delete ALL old Sniper/SNIPER mq5+ex5 in MQL5/Experts
-3. Save SNIPER_AI_OK9.mq5 into MQL5/Experts
-4. Open it, confirm SA_COMPILE_OK_9
-5. F7
+2. Delete ALL old Sniper/SNIPER *.mq5 and *.ex5 from MQL5/Experts
+3. Copy SNIPER_AI_OK10.mq5 into MQL5/Experts
+4. Open it and confirm SA_COMPILE_OK_10
+5. Press F7
 
-Fixed in this build:
-- TRADE_RETCODE_BUSY removed
-- const CSaSymbolCache method-call compile error fixed
+FIXES IN THIS BUILD:
+- removed invalid TRADE_RETCODE_BUSY
+- fixed const object method call errors
+- ASCII-only source (no special unicode dashes)
+- no input group / strict / LOG_LEVEL tokens

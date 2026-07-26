@@ -1,13 +1,13 @@
 //+------------------------------------------------------------------+
-//| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_COMPILE_OK_9                                         |
+//| SNIPER_AI.mq5                                                |
+//| BUILD_ID: SA_COMPILE_OK_10                                        |
 //| SNIPER AI                                                         |
-//| Delete old Sniper files in Experts, then compile THIS file (F7).  |
+//| Delete ALL old Sniper files in Experts, then F7 compile this.     |
 //+------------------------------------------------------------------+
 #property copyright   "SNIPER AI"
 #property link        "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version     "1.00"
-#property description "SNIPER AI — institutional sniper EA (H4/H1/M5)"
+#property description "SNIPER AI - institutional sniper EA (H4/H1/M5)"
 #property description "High-precision 24/7 adaptive execution. No session/news blocks."
 
 #include <Trade/Trade.mqh>
@@ -622,7 +622,7 @@ private:
    CSaLiquidityEngine m_liquidity;
    CSaZoneEngine      m_zones;
 
-   // Strict M5 confirmation — reduces false breaks (precision focus)
+   // Strict M5 confirmation - reduces false breaks (precision focus)
    bool M5Buy(const MqlRates &m5[], const int n)
      {
       if(n < 4) return false;
@@ -694,11 +694,11 @@ public:
       if(st.chochBull || st.chochBear) score += 3;
       if(st.biasH4 != SA_BIAS_FLAT) score += 2;
 
-      // Higher bar in extreme vol (still allowed — precision, not block)
+      // Higher bar in extreme vol (still allowed - precision, not block)
       const int needScore = (s.mkt == SA_MKT_EXTREME ? InpMinScore + 3 :
                              s.mkt == SA_MKT_HIGH     ? InpMinScore + 1 : InpMinScore);
 
-      // Path A — continuation (strict confluence for ~70% precision target)
+      // Path A - continuation (strict confluence for ~70% precision target)
       if(InpAllowContinuation && st.biasH4 == SA_BIAS_BULL)
         {
          const bool m5ok = M5Buy(m5, m5n);
@@ -752,7 +752,7 @@ public:
            }
         }
 
-      // Path B — reversal: sweep + CHoCH + zone + strict M5 (no weak BOS-only reverses)
+      // Path B - reversal: sweep + CHoCH + zone + strict M5 (no weak BOS-only reverses)
       if(InpAllowReversal && liq.sellSideSweep && st.chochBull && (zone.bullDisp || zone.bullFVG || zone.bullOB) && M5Buy(m5, m5n))
         {
          int conf = 4; // sweep, choch, zone family, m5
@@ -888,7 +888,7 @@ public:
       if(mkt == SA_MKT_EXTREME) boost = InpVolSLBoostExtreme;
 
       double stopDist = atr * InpAtrMultSL * boost;
-      const double minDist = MathMax(sym.stopsLevel, sym.freezeLevel) * sym.point;
+      const double minDist = MathMax((double)sym.stopsLevel, (double)sym.freezeLevel) * sym.point;
       if(stopDist < MathMax(minDist, sym.Pip() * 3.0))
          stopDist = MathMax(minDist, sym.Pip() * 3.0);
 
