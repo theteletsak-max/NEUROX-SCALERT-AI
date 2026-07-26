@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_QUALITY_SNIPER_19                                  |
-//| SNIPER AI - Quality sniper always + instant execution             |
+//| BUILD_ID: SA_ADJUSTABLE_RISK_20                                  |
+//| SNIPER AI - Quality sniper + adjustable lot / max trades          |
 //| Comment: SNIPER AI | Dashboard off | No watermark resource        |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "1.90"
+#property version   "2.00"
 #property description "SNIPER AI quality sniper PRISM EA"
-#property description "Quality signals every session; tighter in news events"
+#property description "Adjustable LotSize and MaxOpenTrades in Inputs"
 
 #include <Trade/Trade.mqh>
 
@@ -48,12 +48,15 @@ input bool   InstantTwoOfThreeLiquidity  = true;  // liquidity path: need 2 of 3
 input bool   InstantFvgOrOb              = true;  // FVG or OB accepted with BOS/trend
 input double InstantChannelBreakATR      = 0.25;  // tighter near-edge breakout
 
-input group "RISK"
+input group "TRADE SIZE & LIMITS (adjustable)"
+// Change these in EA Inputs after attach — they are live settings.
 
-input double RiskPercent = 1.0;
-input bool UseFixedLot = false;
-input double FixedLot = 0.01;
-input int MaxOpenTrades = 3;
+input double LotSize = 0.01;              // lots per trade (when UseFixedLot=true)
+input bool   UseFixedLot = true;          // true = use LotSize; false = risk % of equity
+input double RiskPercent = 1.0;           // used only when UseFixedLot=false
+input int    MaxOpenTrades = 3;           // max open trades on THIS symbol
+input int    MaxTotalOpenTradesAllSymbols = 9; // max open trades across ALL symbols (this EA)
+input double MaxLotSizeHardCap = 5.0;     // hard ceiling so sizing never goes insane
 
 input group "FILTERS"
 
@@ -377,10 +380,14 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_QUALITY_SNIPER_19");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_ADJUSTABLE_RISK_20");
    Print("Mode: QUALITY sniper always=", EnableAlwaysQualityMode,
          " | EventTighten=", EnableEventQualityMode,
          " | MPI regular=", QualityMPIScore, " event=", EventQualityMPIScore);
+   Print("Trade size: LotSize=", LotSize, " UseFixedLot=", UseFixedLot,
+         " RiskPercent=", RiskPercent,
+         " | MaxOpenTrades/symbol=", MaxOpenTrades,
+         " | MaxTotalAllSymbols=", MaxTotalOpenTradesAllSymbols);
 
    return(INIT_SUCCEEDED);
 }
@@ -1924,7 +1931,7 @@ bool MaxTradesProtection()
 
 input group "PORTFOLIO RISK"
 
-input int MaxTotalOpenTradesAllSymbols = 6;   // hard ceiling across every symbol combined, regardless of per-symbol MaxOpenTrades
+// MaxTotalOpenTradesAllSymbols is in TRADE SIZE & LIMITS (top) — adjustable there.
 input int MaxOpenTradesPerCurrency     = 4;   // max positions sharing a currency (either base or quote) - e.g. EURUSD+GBPUSD+USDJPY all count toward USD
 
 int CountTotalOpenTradesAllSymbols()
@@ -2053,31 +2060,11 @@ bool PortfolioExposureOK()
 // Calculate Lot Size
 //=============================================================//
 
-input group "LOT SIZING"
+input group "LOT SIZING (advanced)"
 
-// FIX: RiskPercent, UseFixedLot and FixedLot (top of file, RISK group)
-// were pure decoration - CalculateLotSize() ignored all three and always
-// returned a hardcoded 0.01 (clamped up only if the broker's minimum lot
-// is larger than that). That was itself a deliberate earlier safety fix
-// (see the historical note preserved below), so the default behavior here
-// is left exactly as it was - nothing changes unless you deliberately
-// turn UseRiskBasedSizing on. With it on, RiskPercent/UseFixedLot/FixedLot
-// actually do something: UseFixedLot=true trades FixedLot every time;
-// otherwise lot size is derived from RiskPercent of account equity against
-// the trade's actual SL distance, so risk stays roughly constant in money
-// terms across symbols with very different point values (forex vs
-// XAUUSD vs BTCUSD).
-
-input bool   UseRiskBasedSizing   = false;
-input double MaxLotSizeHardCap    = 5.0; // safety ceiling regardless of RiskPercent math
-
-//================ SYMBOL-SPECIFIC RISK OVERRIDE ======================//
-// NEW: previously every symbol in MultiSymbolList shared the exact same
-// RiskPercent regardless of how different their volatility/behavior is -
-// XAUUSD and EURUSD got identical risk sizing. This lets you scale risk
-// per symbol without touching the global RiskPercent. Format:
-// "SYMBOL:multiplier,SYMBOL:multiplier" e.g. "XAUUSD:0.5,BTCUSD:0.3" -
-// unlisted symbols use multiplier 1.0 (unchanged behavior).
+// LotSize / UseFixedLot / RiskPercent / MaxLotSizeHardCap are in
+// TRADE SIZE & LIMITS at the top. CalculateLotSize() now always honors them.
+// SymbolRiskOverrides scales RiskPercent per symbol when UseFixedLot=false.
 
 input string SymbolRiskOverrides = "";
 
@@ -2116,18 +2103,18 @@ double GetSymbolRiskMultiplier(string symbol)
 
 double CalculateRiskBasedLot(double slDistance)
 {
-   double lot = FixedLot;
+   double lot = LotSize;
 
    if(!UseFixedLot)
    {
       if(slDistance <= 0.0)
-         return FixedLot; // can't derive risk-based size without a stop distance - fail safe to FixedLot
+         return LotSize; // can't derive risk-based size without a stop distance - fail safe
 
       double tickValue = SymbolInfoDouble(BrokerSymbol, SYMBOL_TRADE_TICK_VALUE);
       double tickSize  = SymbolInfoDouble(BrokerSymbol, SYMBOL_TRADE_TICK_SIZE);
 
       if(tickValue <= 0.0 || tickSize <= 0.0)
-         return FixedLot; // can't price the risk on this symbol - fail safe
+         return LotSize; // can't price the risk on this symbol - fail safe
 
       double equity     = AccountInfoDouble(ACCOUNT_EQUITY);
       double effectiveRiskPercent = RiskPercent * GetSymbolRiskMultiplier(BrokerSymbol);
@@ -2135,7 +2122,7 @@ double CalculateRiskBasedLot(double slDistance)
       double lossPerLot  = (slDistance / tickSize) * tickValue;
 
       if(lossPerLot <= 0.0)
-         return FixedLot;
+         return LotSize;
 
       lot = riskMoney / lossPerLot;
    }
@@ -2156,22 +2143,26 @@ double CalculateRiskBasedLot(double slDistance)
 
 double CalculateLotSize(double slDistance = 0.0)
 {
-   if(UseRiskBasedSizing)
+   // Adjustable sizing: UseFixedLot=true -> LotSize input.
+   // UseFixedLot=false -> RiskPercent of equity vs SL distance.
+   if(!UseFixedLot)
       return CalculateRiskBasedLot(slDistance);
 
-   // ORIGINAL FIX (kept as default): every trade is exactly 0.01 lots,
-   // full stop - regardless of UseFixedLot, FixedLot, or RiskPercent, so
-   // there is no path that can ever produce a size other than 0.01 unless
-   // UseRiskBasedSizing above is explicitly turned on. The only
-   // adjustment made is clamping up to the broker's minimum lot, in the
-   // rare case a symbol's minimum is actually larger than 0.01.
+   double minLot  = SymbolInfoDouble(BrokerSymbol, SYMBOL_VOLUME_MIN);
+   double maxLot  = SymbolInfoDouble(BrokerSymbol, SYMBOL_VOLUME_MAX);
+   double lotStep = SymbolInfoDouble(BrokerSymbol, SYMBOL_VOLUME_STEP);
 
-   double minLot = SymbolInfoDouble(BrokerSymbol, SYMBOL_VOLUME_MIN);
+   double lot = LotSize;
 
-   double lot = 0.01;
+   if(lotStep > 0.0)
+      lot = MathFloor(lot / lotStep) * lotStep;
 
-   if(minLot > lot)
+   if(lot < minLot)
       lot = minLot;
+   if(maxLot > 0.0 && lot > maxLot)
+      lot = maxLot;
+   if(lot > MaxLotSizeHardCap)
+      lot = MaxLotSizeHardCap;
 
    return NormalizeDouble(lot, 2);
 }

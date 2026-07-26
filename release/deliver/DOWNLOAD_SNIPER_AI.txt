@@ -5,24 +5,25 @@ ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
 EA file:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK19.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK20.mq5
 
 MUST SHOW AT TOP:
-  BUILD_ID: SA_QUALITY_SNIPER_19
+  BUILD_ID: SA_ADJUSTABLE_RISK_20
 
-Quality sniper every session:
-- Regular trading: quality signals only (trend + ADX + structure)
-- Events: same quality system, stricter MPI (still no hard news pause)
-- Instant execution only when a quality path passes
+Adjustable in EA Inputs (group TRADE SIZE & LIMITS):
+- LotSize (default 0.01)
+- UseFixedLot (default true)
+- RiskPercent (when UseFixedLot=false)
+- MaxOpenTrades per symbol (default 3)
+- MaxTotalOpenTradesAllSymbols (default 9)
 
 STEPS:
 1. Close MetaEditor
 2. Delete ALL old Sniper/SNIPER *.mq5 and *.ex5 from MQL5/Experts
-3. Copy SNIPER_AI_OK19.mq5 into MQL5/Experts
-4. Confirm SA_QUALITY_SNIPER_19
+3. Copy SNIPER_AI_OK20.mq5 into MQL5/Experts
+4. Confirm SA_ADJUSTABLE_RISK_20
 5. Press F7
-6. Attach to chart
-7. Keep TradeComment exactly: SNIPER AI
-8. Defaults: EnableAlwaysQualityMode=true, EnableNewsFilter=false
-9. Enable AutoTrading + Algo Trading
-10. Experts: SNIPER AI Loaded Successfully BUILD_ID=SA_QUALITY_SNIPER_19
+6. Attach → set LotSize / MaxOpenTrades in Inputs
+7. TradeComment exactly: SNIPER AI
+8. AutoTrading + Algo Trading ON
+9. Experts: SNIPER AI Loaded Successfully BUILD_ID=SA_ADJUSTABLE_RISK_20
