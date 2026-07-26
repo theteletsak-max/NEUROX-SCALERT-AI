@@ -3,7 +3,7 @@
 **Bot name:** Sniper AI  
 **Identity:** Aggressive sniper  
 **Execution:** Instant — when the kill-chain passes, send the order immediately (no delay, no manual confirm, no “wait for next signal”)  
-**Status:** Design only — not coding yet
+**Status:** Strategy **SIGNED OFF** — build plan next; coding only when user says go
 
 ---
 
@@ -102,9 +102,11 @@ Why this stack: H4/H1 keep sniper quality (from B); M5 makes the shot faster wit
 3. Do **not** close an existing trade just to free a slot for a “better” new setup.  
 4. Score uses structure + liquidity + zone quality (AI may help rank; rules still gate entry).
 
-## Still open (decide next, piece by piece)
+## Sign-off
 
-1. Final strategy sign-off — then we outline the build plan (still no code until you say so)
+- Strategy freeze accepted (user: “1 and 2” = sign-off + build plan).  
+- No further strategy changes unless explicitly reopened.  
+- Coding starts only on user command.
 
 ---
 
