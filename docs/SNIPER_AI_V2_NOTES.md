@@ -21,4 +21,11 @@ Continuation + reversal · max 3 · lot 0.01 · 1.5×ATR · 2R · BE +1R · 24/7
 
 ## File
 
-`release/SniperAI/SniperAI.mq5`
+Canonical compile-safe EA: `release/deliver/SNIPER_AI.mq5`  
+`BUILD_ID: SA_COMPILE_OK_9`
+
+See also: [`SNIPER_AI_COMPILE_FIXES.md`](SNIPER_AI_COMPILE_FIXES.md)
+
+## Superseded by V3
+
+See [`SNIPER_AI_V3_AUDIT.md`](SNIPER_AI_V3_AUDIT.md) — production build is `SA_INSTITUTIONAL_V3`.

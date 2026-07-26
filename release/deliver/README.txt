@@ -1,10 +1,14 @@
-SNIPER AI — download THIS folder file only
-
+SNIPER AI — institutional rebuild
+=================================
 File: SNIPER_AI.mq5
-Build: SA_COMPILE_OK_8
+BUILD_ID: SA_INSTITUTIONAL_V3
 
-1. Close MetaEditor
-2. Delete old Sniper*.mq5 / Sniper*.ex5 from MQL5/Experts
-3. Copy SNIPER_AI.mq5 into MQL5/Experts
-4. Open it — top must say BUILD_ID: SA_COMPILE_OK_8
-5. Compile F7
+Install
+-------
+1. MT5 → File → Open Data Folder → MQL5/Experts/
+2. DELETE old Sniper / SNIPER_AI *.mq5 files (avoid MetaEditor cache mixups)
+3. Copy SNIPER_AI.mq5 here
+4. MetaEditor → Compile (F7) — expect 0 errors / 0 warnings
+5. Attach to chart → enable Algo Trading
+
+Trade comment is exactly: SNIPER AI
