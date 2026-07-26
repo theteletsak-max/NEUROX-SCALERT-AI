@@ -5,25 +5,31 @@ ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
 EA file:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK20.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK21.mq5
 
 MUST SHOW AT TOP:
-  BUILD_ID: SA_ADJUSTABLE_RISK_20
+  BUILD_ID: SA_PRISM_SMT_IMCE_21
 
-Adjustable in EA Inputs (group TRADE SIZE & LIMITS):
-- LotSize (default 0.01)
-- UseFixedLot (default true)
-- RiskPercent (when UseFixedLot=false)
-- MaxOpenTrades per symbol (default 3)
-- MaxTotalOpenTradesAllSymbols (default 9)
+PRISM + institutional engines:
+- SMT (Smart Money Technique) — cross-asset or internal sweep/reclaim
+- IMCE (Institutional Market Context Engine) — continuation / reversal / expansion / chop
+- ICE (Institutional Confidence Engine) — BOS/CHoCH/sweep/OB/FVG/displacement score
+- RSI / MACD / Stochastic removed (not used)
+
+Also adjustable: LotSize, MaxOpenTrades
+Quality sniper always on; news hard-block off; event tighten on
+
+Optional SMT tip:
+Set SMTReferenceSymbol to a correlated pair (e.g. GBPUSD.m for EURUSD)
+Leave blank to use internal SMT only
 
 STEPS:
 1. Close MetaEditor
 2. Delete ALL old Sniper/SNIPER *.mq5 and *.ex5 from MQL5/Experts
-3. Copy SNIPER_AI_OK20.mq5 into MQL5/Experts
-4. Confirm SA_ADJUSTABLE_RISK_20
+3. Copy SNIPER_AI_OK21.mq5 into MQL5/Experts
+4. Confirm SA_PRISM_SMT_IMCE_21
 5. Press F7
-6. Attach → set LotSize / MaxOpenTrades in Inputs
+6. Attach → set LotSize / MaxOpenTrades / optional SMTReferenceSymbol
 7. TradeComment exactly: SNIPER AI
 8. AutoTrading + Algo Trading ON
-9. Experts: SNIPER AI Loaded Successfully BUILD_ID=SA_ADJUSTABLE_RISK_20
+9. Experts: SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_SMT_IMCE_21

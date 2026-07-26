@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_ADJUSTABLE_RISK_20                                  |
-//| SNIPER AI - Quality sniper + adjustable lot / max trades          |
-//| Comment: SNIPER AI | Dashboard off | No watermark resource        |
+//| BUILD_ID: SA_PRISM_SMT_IMCE_21                                  |
+//| SNIPER AI - PRISM + SMT + IMCE + Institutional Confidence         |
+//| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "2.00"
-#property description "SNIPER AI quality sniper PRISM EA"
-#property description "Adjustable LotSize and MaxOpenTrades in Inputs"
+#property version   "2.10"
+#property description "SNIPER AI PRISM with SMT / IMCE / ICE"
+#property description "No RSI MACD Stochastic - structure & institutional only"
 
 #include <Trade/Trade.mqh>
 
@@ -57,6 +57,32 @@ input double RiskPercent = 1.0;           // used only when UseFixedLot=false
 input int    MaxOpenTrades = 3;           // max open trades on THIS symbol
 input int    MaxTotalOpenTradesAllSymbols = 9; // max open trades across ALL symbols (this EA)
 input double MaxLotSizeHardCap = 5.0;     // hard ceiling so sizing never goes insane
+
+input group "SMT - SMART MONEY TECHNIQUE"
+// Classic SMT: divergence vs a correlated reference (e.g. EURUSD vs GBPUSD,
+// NAS100 vs US30). Internal SMT works on one chart via sweep + structure reclaim.
+
+input bool   EnableSMT                 = true;
+input string SMTReferenceSymbol        = "";   // e.g. GBPUSD.m — blank = internal SMT only
+input bool   SMTAllowInternal          = true; // sweep/reclaim SMT without a second symbol
+input bool   SMTRequireForEntry        = true; // hard gate in PRISM when enabled
+input int    SMTSwingLookbackBars      = 20;
+input bool   SMTFailOpenIfNoRefData    = true; // don't block if reference history missing
+
+input group "IMCE - INSTITUTIONAL MARKET CONTEXT ENGINE"
+// Classifies context: continuation / reversal-liquidity / expansion / manipulation.
+// Entries must match the context (ContSniper in trend/expansion, RevSniper in reversal).
+
+input bool   EnableIMCE                = true;
+input bool   IMCERequireForEntry       = true;
+input bool   IMCEBlockManipulationChop = true; // block when trap/fake-breakout context dominates
+
+input group "ICE - INSTITUTIONAL CONFIDENCE ENGINE"
+// Scores institutional confirmation (BOS/CHoCH/sweep/OB/FVG/displacement/HTF).
+
+input bool   EnableInstitutionalConfidence = true;
+input bool   ICERequireForEntry            = true;
+input int    MinInstitutionalConfidence    = 50; // 0-100 quality floor
 
 input group "FILTERS"
 
@@ -380,10 +406,14 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_ADJUSTABLE_RISK_20");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_SMT_IMCE_21");
    Print("Mode: QUALITY sniper always=", EnableAlwaysQualityMode,
          " | EventTighten=", EnableEventQualityMode,
          " | MPI regular=", QualityMPIScore, " event=", EventQualityMPIScore);
+   Print("Engines: SMT=", EnableSMT, " IMCE=", EnableIMCE,
+         " ICE=", EnableInstitutionalConfidence,
+         " MinICE=", MinInstitutionalConfidence);
+   Print("Oscillators: RSI/MACD/Stochastic NOT used (structure + institutional only)");
    Print("Trade size: LotSize=", LotSize, " UseFixedLot=", UseFixedLot,
          " RiskPercent=", RiskPercent,
          " | MaxOpenTrades/symbol=", MaxOpenTrades,
@@ -1194,16 +1224,9 @@ bool InitializeIndicators()
          return false;
       }
 
-      // NEW - Mean-Reversion module (Part 15b). Created unconditionally
-      // (cheap, and StrategyMode can be changed live without recompiling)
-      // rather than only when StrategyMode selects it.
-      RSIHandlesArr[i] = iRSI(sym, EntryTF, RSI_Period, PRICE_CLOSE);
-
-      if(RSIHandlesArr[i] == INVALID_HANDLE)
-      {
-         Print("Failed to create RSI Handle for ", sym);
-         return false;
-      }
+      // RSI removed from PRISM stack (user request) — no iRSI handle.
+      // Dead mean-reversion helpers can still read BB; GetRSI() returns empty.
+      RSIHandlesArr[i] = INVALID_HANDLE;
 
       BBHandlesArr[i] = iBands(sym, EntryTF, BB_Period, 0, BB_Deviation, PRICE_CLOSE);
 
@@ -5913,6 +5936,8 @@ input bool   MeanReversionRequireHTFAgreement = false; // if true, still require
 
 double GetRSI()
 {
+   // RSI deliberately removed from the live PRISM stack (no MACD/Stoch either).
+   // Kept as a stub so any legacy mean-reversion helper still compiles.
    int idx = GetSymbolIndex(BrokerSymbol);
 
    if(idx < 0 || RSIHandlesArr[idx] == INVALID_HANDLE)
@@ -5982,16 +6007,9 @@ bool GetBollingerBands(double &upper, double &lower, double &mid)
    return true;
 }
 
-// Buy = price stretched to the downside extreme (touched/pierced the
-// lower band) AND RSI confirms oversold - a genuine reversion setup, not
-// just "price is low."
+// Legacy helper only (not on PRISM path). RSI removed — BB stretch alone.
 bool MeanReversionBuySetup()
 {
-   double rsi = GetRSI();
-
-   if(rsi == EMPTY_VALUE || rsi > RSI_Oversold)
-      return false;
-
    double upper, lower, mid;
 
    if(!GetBollingerBands(upper, lower, mid))
@@ -6000,7 +6018,7 @@ bool MeanReversionBuySetup()
    double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
 
    if(price > lower)
-      return false; // hasn't actually reached the band - no stretch, no reversion case
+      return false;
 
    if(MeanReversionRequireHTFAgreement && !HTFConfirms(true))
       return false;
@@ -6010,11 +6028,6 @@ bool MeanReversionBuySetup()
 
 bool MeanReversionSellSetup()
 {
-   double rsi = GetRSI();
-
-   if(rsi == EMPTY_VALUE || rsi < RSI_Overbought)
-      return false;
-
    double upper, lower, mid;
 
    if(!GetBollingerBands(upper, lower, mid))
@@ -6558,6 +6571,265 @@ int CalculatePRISMScore(bool buy)
    return score; // roughly 0-100, can dip slightly negative when a trap penalty applies to an otherwise-weak setup
 }
 
+//+------------------------------------------------------------------+
+//|  SMT + IMCE + INSTITUTIONAL CONFIDENCE ENGINE (PRISM layer)      |
+//+------------------------------------------------------------------+
+
+int GetDisplacementScore(bool buy); // defined later in displacement module
+
+enum ENUM_IMCE_CONTEXT
+{
+   IMCE_TREND_CONTINUATION = 0,
+   IMCE_REVERSAL_LIQUIDITY = 1,
+   IMCE_EXPANSION_BREAKOUT = 2,
+   IMCE_MANIPULATION_CHOP  = 3,
+   IMCE_NEUTRAL            = 4
+};
+
+//----- ICE: Institutional Confidence Engine (0-100) ------------------//
+int GetInstitutionalConfidenceScore(bool buy)
+{
+   int score = 0;
+   int rec = EffectiveStructureRecency();
+
+   if(buy ? IsBullTrend() : IsBearTrend()) score += 10;
+   if(TrendStrong())                       score += 10;
+   if(RecentBOS(rec))                      score += 15;
+   if(RecentCHoCH(rec))                    score += 10;
+   if(RecentSweep(rec))                    score += 15;
+   if(ActiveOrderBlock(buy))               score += 15;
+   if(ActiveFVG(buy))                      score += 10;
+   if(GetDisplacementScore(buy) >= 10)     score += 10;
+   if(HTFConfirms(buy))                    score += 5;
+
+   if(score > 100) score = 100;
+   return score;
+}
+
+bool InstitutionalConfidenceOK(bool buy)
+{
+   if(!EnableInstitutionalConfidence || !ICERequireForEntry)
+      return true;
+
+   int ice = GetInstitutionalConfidenceScore(buy);
+   if(ice < MinInstitutionalConfidence)
+   {
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("ICE blocked ", (buy ? "BUY" : "SELL"), " on ", BrokerSymbol,
+               " — confidence ", ice, " < ", MinInstitutionalConfidence);
+      return false;
+   }
+   return true;
+}
+
+//----- SMT: Smart Money Technique ------------------------------------//
+// Cross-asset: primary makes a more extreme swing than the reference
+// (bullish: primary lower-low, ref higher-low). Internal: liquidity sweep
+// + reclaim / CHoCH in trade direction (single-chart SMT).
+
+bool SMTInternalBullish()
+{
+   int rec = EffectiveStructureRecency();
+   bool swept = RecentSweep(rec) || DetectStopHunt(false); // sell-side liquidity (lows) swept
+   bool reclaim = RecentCHoCH(rec) || RecentBOS(rec) || ActiveOrderBlock(true) || ActiveFVG(true);
+   return swept && reclaim && (IsBullTrend() || RecentCHoCH(rec));
+}
+
+bool SMTInternalBearish()
+{
+   int rec = EffectiveStructureRecency();
+   bool swept = RecentSweep(rec) || DetectStopHunt(true); // buy-side liquidity (highs) swept
+   bool reclaim = RecentCHoCH(rec) || RecentBOS(rec) || ActiveOrderBlock(false) || ActiveFVG(false);
+   return swept && reclaim && (IsBearTrend() || RecentCHoCH(rec));
+}
+
+bool SMTCrossAssetBullish()
+{
+   if(SMTReferenceSymbol == "" || SMTReferenceSymbol == BrokerSymbol)
+      return false;
+   if(!SymbolSelect(SMTReferenceSymbol, true))
+      return SMTFailOpenIfNoRefData;
+
+   int lb = MathMax(SMTSwingLookbackBars, 5);
+   int need = SignalBarIndex() + lb + 1;
+   if(Bars(BrokerSymbol, EntryTF) < need || Bars(SMTReferenceSymbol, EntryTF) < need)
+      return SMTFailOpenIfNoRefData;
+
+   int b = SignalBarIndex();
+   double pLowNow  = iLow(BrokerSymbol, EntryTF, iLowest(BrokerSymbol, EntryTF, MODE_LOW, lb, b));
+   double pLowPast = iLow(BrokerSymbol, EntryTF, iLowest(BrokerSymbol, EntryTF, MODE_LOW, lb, b + lb));
+   double rLowNow  = iLow(SMTReferenceSymbol, EntryTF, iLowest(SMTReferenceSymbol, EntryTF, MODE_LOW, lb, b));
+   double rLowPast = iLow(SMTReferenceSymbol, EntryTF, iLowest(SMTReferenceSymbol, EntryTF, MODE_LOW, lb, b + lb));
+
+   if(pLowPast <= 0.0 || rLowPast <= 0.0)
+      return SMTFailOpenIfNoRefData;
+
+   // Bullish SMT: primary made a lower low, reference made a higher low
+   bool primaryLL = (pLowNow < pLowPast);
+   bool refHL     = (rLowNow > rLowPast);
+   return (primaryLL && refHL);
+}
+
+bool SMTCrossAssetBearish()
+{
+   if(SMTReferenceSymbol == "" || SMTReferenceSymbol == BrokerSymbol)
+      return false;
+   if(!SymbolSelect(SMTReferenceSymbol, true))
+      return SMTFailOpenIfNoRefData;
+
+   int lb = MathMax(SMTSwingLookbackBars, 5);
+   int need = SignalBarIndex() + lb + 1;
+   if(Bars(BrokerSymbol, EntryTF) < need || Bars(SMTReferenceSymbol, EntryTF) < need)
+      return SMTFailOpenIfNoRefData;
+
+   int b = SignalBarIndex();
+   double pHighNow  = iHigh(BrokerSymbol, EntryTF, iHighest(BrokerSymbol, EntryTF, MODE_HIGH, lb, b));
+   double pHighPast = iHigh(BrokerSymbol, EntryTF, iHighest(BrokerSymbol, EntryTF, MODE_HIGH, lb, b + lb));
+   double rHighNow  = iHigh(SMTReferenceSymbol, EntryTF, iHighest(SMTReferenceSymbol, EntryTF, MODE_HIGH, lb, b));
+   double rHighPast = iHigh(SMTReferenceSymbol, EntryTF, iHighest(SMTReferenceSymbol, EntryTF, MODE_HIGH, lb, b + lb));
+
+   if(pHighPast <= 0.0 || rHighPast <= 0.0)
+      return SMTFailOpenIfNoRefData;
+
+   // Bearish SMT: primary higher high, reference lower high
+   bool primaryHH = (pHighNow > pHighPast);
+   bool refLH     = (rHighNow < rHighPast);
+   return (primaryHH && refLH);
+}
+
+bool SMTOK(bool buy)
+{
+   if(!EnableSMT || !SMTRequireForEntry)
+      return true;
+
+   bool cross = false;
+   bool haveRef = (SMTReferenceSymbol != "" && SMTReferenceSymbol != BrokerSymbol);
+
+   if(haveRef)
+      cross = buy ? SMTCrossAssetBullish() : SMTCrossAssetBearish();
+
+   bool internal = false;
+   if(SMTAllowInternal)
+      internal = buy ? SMTInternalBullish() : SMTInternalBearish();
+
+   // Pass if either cross-asset SMT or internal SMT confirms
+   if(cross || internal)
+      return true;
+
+   // Continuation paths can pass SMT via strong BOS + OB/FVG (displacement SMT proxy)
+   int rec = EffectiveStructureRecency();
+   if((buy ? IsBullTrend() : IsBearTrend()) && TrendStrong() &&
+      RecentBOS(rec) && (ActiveOrderBlock(buy) || ActiveFVG(buy)))
+      return true;
+
+   if(EnableVerboseLogging || EnableSetupLogging)
+      Print("SMT blocked ", (buy ? "BUY" : "SELL"), " on ", BrokerSymbol,
+            " — no smart-money divergence/reclaim confirmation");
+   return false;
+}
+
+//----- IMCE: Institutional Market Context Engine ---------------------//
+ENUM_IMCE_CONTEXT GetIMCEContext()
+{
+   int rec = EffectiveStructureRecency();
+   bool trap = DetectFakeBreakoutTrap(true) || DetectFakeBreakoutTrap(false);
+   bool sweep = RecentSweep(rec);
+   bool bos = RecentBOS(rec);
+   bool choch = RecentCHoCH(rec);
+   bool expanding = IsVolatilityExpanding();
+   bool trending = TrendStrong() && (IsBullTrend() || IsBearTrend());
+
+   if(trap && !bos)
+      return IMCE_MANIPULATION_CHOP;
+
+   if(sweep && choch)
+      return IMCE_REVERSAL_LIQUIDITY;
+
+   if(expanding && trending && bos)
+      return IMCE_EXPANSION_BREAKOUT;
+
+   if(trending && (bos || ActiveOrderBlock(IsBullTrend()) || ActiveFVG(IsBullTrend())))
+      return IMCE_TREND_CONTINUATION;
+
+   if(EnableRegimeDetection && GetMarketRegime() == REGIME_RANGING && sweep)
+      return IMCE_REVERSAL_LIQUIDITY;
+
+   if(trending)
+      return IMCE_TREND_CONTINUATION;
+
+   return IMCE_NEUTRAL;
+}
+
+string IMCEContextToString(ENUM_IMCE_CONTEXT ctx)
+{
+   if(ctx == IMCE_TREND_CONTINUATION) return "TREND_CONTINUATION";
+   if(ctx == IMCE_REVERSAL_LIQUIDITY) return "REVERSAL_LIQUIDITY";
+   if(ctx == IMCE_EXPANSION_BREAKOUT) return "EXPANSION_BREAKOUT";
+   if(ctx == IMCE_MANIPULATION_CHOP)  return "MANIPULATION_CHOP";
+   return "NEUTRAL";
+}
+
+bool IMCEAllows(bool buy, const string strategyTag)
+{
+   if(!EnableIMCE || !IMCERequireForEntry)
+      return true;
+
+   ENUM_IMCE_CONTEXT ctx = GetIMCEContext();
+
+   if(IMCEBlockManipulationChop && ctx == IMCE_MANIPULATION_CHOP)
+   {
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("IMCE blocked ", strategyTag, " — manipulation/chop context on ", BrokerSymbol);
+      return false;
+   }
+
+   bool contTag =
+      (strategyTag == "ContSniper" || strategyTag == "TrendPullback" ||
+       strategyTag == "InstantTrend" || strategyTag == "VolBreakout(Spec)" ||
+       strategyTag == "FVG+OB");
+   bool revTag =
+      (strategyTag == "RevSniper" || strategyTag == "LiquiditySweep");
+
+   if(ctx == IMCE_TREND_CONTINUATION || ctx == IMCE_EXPANSION_BREAKOUT)
+   {
+      if(revTag && !(RecentSweep(EffectiveStructureRecency()) && RecentCHoCH(EffectiveStructureRecency())))
+      {
+         if(EnableVerboseLogging || EnableSetupLogging)
+            Print("IMCE blocked reversal tag in trend/expansion context: ", strategyTag);
+         return false;
+      }
+      if(contTag && !(buy ? IsBullTrend() : IsBearTrend()))
+         return false;
+      return true;
+   }
+
+   if(ctx == IMCE_REVERSAL_LIQUIDITY)
+   {
+      // Prefer reversal/liquidity tags; allow continuation only with fresh BOS
+      if(contTag && !RecentBOS(EffectiveStructureRecency()))
+      {
+         if(EnableVerboseLogging || EnableSetupLogging)
+            Print("IMCE blocked continuation in reversal-liquidity context without BOS: ", strategyTag);
+         return false;
+      }
+      return true;
+   }
+
+   // NEUTRAL: allow only if ICE/structure already strong (checked separately)
+   return true;
+}
+
+bool PrismInstitutionalEnginesOK(bool buy, const string strategyTag)
+{
+   if(!InstitutionalConfidenceOK(buy))
+      return false;
+   if(!SMTOK(buy))
+      return false;
+   if(!IMCEAllows(buy, strategyTag))
+      return false;
+   return true;
+}
+
 // The Priority Engine itself: evaluates every spec-named strategy for
 // both directions, rejects the bar entirely if valid setups disagree on
 // direction (a genuine conflict - spec says reject, not pick a side), and
@@ -6713,8 +6985,23 @@ void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &
       }
    }
 
+   // SMT + IMCE + ICE institutional layer (after strategy tag is known)
+   if(!PrismInstitutionalEnginesOK(isBuy, bestTag))
+   {
+      buySignal = false;
+      sellSignal = false;
+      strategyTag = "";
+      return;
+   }
+
    if(isBuy) { buySignal = true;  strategyTag = bestTag; }
    else      { sellSignal = true; strategyTag = bestTag; }
+
+   if(EnableVerboseLogging || EnableSetupLogging)
+      Print("PRISM+SMT/IMCE/ICE approved ", (isBuy ? "BUY" : "SELL"),
+            " [", bestTag, "] ICE=", GetInstitutionalConfidenceScore(isBuy),
+            " IMCE=", IMCEContextToString(GetIMCEContext()),
+            " on ", BrokerSymbol);
 }
 
 //+------------------------------------------------------------------+
@@ -7227,36 +7514,19 @@ int GetDisplacementScore(bool buy)
 }
 
 //================ MOMENTUM EXHAUSTION =================================//
-// Flags a move that's likely running out of steam: RSI sitting in an
-// extreme zone WHILE recent candle bodies are shrinking (deceleration) -
-// the classic "still going, but with less and less conviction each bar"
-// signature that often precedes a pullback or reversal. This is
-// deliberately a PENALTY input (used to reduce score / gate entries),
-// not a reversal signal on its own - exhaustion says "be cautious about
-// chasing this move further," it doesn't by itself confirm the opposite
-// direction the way CHoCH does.
-
-input double MomentumExhaustionRSIHigh = 72.0;
-input double MomentumExhaustionRSILow  = 28.0;
-input int    MomentumExhaustionBars    = 3; // how many recent candle bodies must show shrinking size to count as decelerating
+// Momentum exhaustion without RSI/MACD/Stoch: shrinking candle bodies only.
+input int MomentumExhaustionBars = 3;
 
 bool IsMomentumExhausted(bool buy)
 {
-   double rsi = GetRSI();
-   if(rsi == EMPTY_VALUE)
+   // Directional check: last closed bar should still be in trade direction
+   double o1 = iOpen(BrokerSymbol, EntryTF, 1);
+   double c1 = iClose(BrokerSymbol, EntryTF, 1);
+   if(buy && c1 <= o1)
+      return false;
+   if(!buy && c1 >= o1)
       return false;
 
-   if(buy && rsi < MomentumExhaustionRSIHigh)
-      return false;
-   if(!buy && rsi > MomentumExhaustionRSILow)
-      return false;
-
-   // Body-size deceleration check: each of the last MomentumExhaustionBars
-   // candles (in the trade's direction) should be smaller than the one
-   // before it. Not requiring every single bar to fit the direction - just
-   // that bodies are shrinking overall, which is a looser, more realistic
-   // bar for "losing steam" than demanding an unbroken run of same-colored
-   // shrinking candles.
    double bodies[];
    ArrayResize(bodies, MomentumExhaustionBars);
 
@@ -7274,8 +7544,6 @@ bool IsMomentumExhausted(bool buy)
          shrinkCount++;
    }
 
-   // Majority of comparisons showing shrinkage is enough - doesn't need to
-   // be perfectly monotonic bar-by-bar, real price action rarely is.
    return (shrinkCount >= (MomentumExhaustionBars-1+1)/2);
 }
 
@@ -8002,12 +8270,16 @@ void PrintSetupDiagnostics()
             " EventTighten=", eventQ,
             " MPI floor=", EffectiveMinimumMPIScore(),
             " NewsHardBlock=", EnableNewsFilter);
+      Print("NOTE: SMT=", EnableSMT, " IMCE=", EnableIMCE,
+            " ICE=", EnableInstitutionalConfidence,
+            " ICE_score_buy=", GetInstitutionalConfidenceScore(true),
+            " ICE_score_sell=", GetInstitutionalConfidenceScore(false),
+            " IMCE=", IMCEContextToString(GetIMCEContext()));
+      Print("NOTE: Oscillators RSI/MACD/Stoch removed — institutional structure engines only.");
       if(eventQ)
          Print("NOTE: EVENT TIGHTEN — quality sniper + higher MPI; still trading (no hard news pause).");
       else if(EnableAlwaysQualityMode)
-         Print("NOTE: REGULAR session — quality sniper only (trend+ADX+structure). Instant fire when quality passes.");
-      else
-         Print("NOTE: AlwaysQuality is OFF — paths are more aggressive.");
+         Print("NOTE: REGULAR session — quality sniper + SMT/IMCE/ICE. Instant fire when quality passes.");
    }
 }
 

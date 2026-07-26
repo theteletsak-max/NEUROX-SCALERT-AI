@@ -1,24 +1,28 @@
 SNIPER AI — Expert Advisor (send this)
 
-BUILD_ID: SA_ADJUSTABLE_RISK_20
-File name: SNIPER_AI_OK20.mq5
+BUILD_ID: SA_PRISM_SMT_IMCE_21
+File name: SNIPER_AI_OK21.mq5
 Trade comment: SNIPER AI
 
 Download EA (.mq5):
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK20.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK21.mq5
 
 Download ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
-Adjust in Inputs:
-- LotSize
-- MaxOpenTrades
-- MaxTotalOpenTradesAllSymbols
+Includes:
+- PRISM quality sniper
+- SMT (Smart Money Technique)
+- IMCE (Institutional Market Context Engine)
+- ICE (Institutional Confidence Engine)
+- No RSI / MACD / Stochastic
+- Adjustable LotSize + MaxOpenTrades
 
 Install:
-1. Download SNIPER_AI_OK20.mq5
+1. Download SNIPER_AI_OK21.mq5
 2. Put into MT5 → MQL5 → Experts (delete old SNIPER files first)
 3. F7 compile
 4. Attach → set LotSize / MaxOpenTrades
-5. AutoTrading ON → Algo Trading ON
-6. Experts: SNIPER AI Loaded Successfully BUILD_ID=SA_ADJUSTABLE_RISK_20
+5. Optional: SMTReferenceSymbol (correlated pair)
+6. AutoTrading ON → Algo Trading ON
+7. Experts: SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_SMT_IMCE_21
