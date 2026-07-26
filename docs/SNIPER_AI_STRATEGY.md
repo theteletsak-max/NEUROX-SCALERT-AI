@@ -17,6 +17,7 @@
 | Direction | BUY & SELL |
 | Symbols | **All forex pairs the broker lists** |
 | Horizon | Intraday (hours) |
+| Timeframes | **H4 bias → H1 setup → M5 entry** |
 | v1 path | **Trend continuation** first (reversals = v2) |
 | Max open trades | **3 total on the account** (also ≤ 3 per symbol) |
 | Management | SL / TP / Break-even only |
@@ -37,26 +38,36 @@
 
 ---
 
+## Multi-timeframe map (locked)
+
+| Layer | TF | Role |
+|-------|----|------|
+| Bias | **H4** | Bullish / bearish structure direction |
+| Setup | **H1** | BOS, liquidity, OB / FVG zone |
+| Entry | **M5** | Confirmation candle → instant market order |
+
+Why this stack: H4/H1 keep sniper quality (from B); M5 makes the shot faster without dropping to M1 noise.
+
 ## What “instant execution” means
 
-- Evaluate on the **closed confirmation candle** (or defined entry tick rule — to freeze next).  
-- If all mandatory gates pass → **market order immediately**.  
-- No pending “maybe later”, no extra candle wait beyond the defined entry rule.  
+- H4 + H1 gates must already be valid.  
+- On **closed M5 confirmation candle**, if all gates pass → **market order immediately**.  
+- No pending “maybe later”, no extra candle wait beyond that M5 close.  
 - Still **rule-gated** — instant ≠ reckless.
 
 ---
 
 ## v1 Entry kill-chain (Path A — continuation)
 
-1. **HTF bias** clear (bullish or bearish structure)  
-2. **BOS** with trend on setup timeframe  
-3. **Liquidity** interaction OK (sweep/clear opposing side or clean break)  
-4. Pullback into **fresh OB and/or untested FVG**  
-5. **Confirmation candle** with trend  
+1. **H4 bias** clear (bullish or bearish structure)  
+2. **H1 BOS** with that bias  
+3. **H1 liquidity** interaction OK (sweep/clear opposing side or clean break)  
+4. Pullback into **fresh OB and/or untested FVG** on H1  
+5. **M5 confirmation candle** with trend closes  
 6. **Risk** valid (SL / TP / lot)  
 7. Account open Sniper AI trades **< 3**, and that symbol **< 3**  
 
-→ **Instant market BUY/SELL**
+→ **Instant market BUY/SELL** on that M5 close
 
 *(Path B — reversal after sweep + CHoCH — deferred to v2)*
 
@@ -81,10 +92,8 @@
 
 ## Still open (decide next, piece by piece)
 
-1. Timeframes (HTF / setup / entry)  
-2. Exact SL / TP / BE / lot numbers  
-3. Entry timing detail (close of candle vs tick inside zone)  
-4. How to pick which setups win when more than 3 pairs qualify (best score first?)
+1. Exact SL / TP / BE / lot numbers  
+2. How to pick which setups win when more than 3 pairs qualify (best score first?)
 
 ---
 
