@@ -1,6 +1,6 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_COMPILE_OK_8                                         |
+//| BUILD_ID: SA_COMPILE_OK_9                                         |
 //| SNIPER AI                                                         |
 //| Delete old Sniper files in Experts, then compile THIS file (F7).  |
 //+------------------------------------------------------------------+
@@ -661,7 +661,7 @@ private:
 public:
    void SetSwingStrength(const int s) { m_structure.SetStrength(s); }
 
-   SaSetup Evaluate(CSaDataCache &data, const CSaSymbolCache &sym, const double bid, const double ask)
+   SaSetup Evaluate(CSaDataCache &data, CSaSymbolCache &sym, const double bid, const double ask)
      {
       SaSetup s;
       s.side = SA_SIDE_NONE;
@@ -880,7 +880,7 @@ public:
       return true;
      }
 
-   bool BuildStops(const CSaSymbolCache &sym, const ENUM_SA_SIDE side, const ENUM_SA_MKT mkt,
+   bool BuildStops(CSaSymbolCache &sym, const ENUM_SA_SIDE side, const ENUM_SA_MKT mkt,
                    const double atr, double &entry, double &sl, double &tp, string &why)
      {
       double boost = 1.0;

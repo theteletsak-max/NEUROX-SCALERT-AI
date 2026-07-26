@@ -1,24 +1,24 @@
 SNIPER AI — DOWNLOAD / COMPILE
 ==============================
 
-FILE:
-  SNIPER_AI.mq5   (also in release/deliver/SNIPER_AI.mq5)
-
-RAW DOWNLOAD (new path):
-  https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/forex-trading-robot-b12d/release/deliver/SNIPER_AI.mq5
-
-OR from repo root:
+FILE (use this):
   https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/forex-trading-robot-b12d/SNIPER_AI.mq5
 
-MUST SEE AT TOP:
-  BUILD_ID: SA_COMPILE_OK_8
+TOP MUST SHOW:
+  BUILD_ID: SA_COMPILE_OK_9
 
 STEPS:
-1. Close MetaEditor
-2. Delete ALL old Sniper* files in MQL5/Experts (mq5 and ex5)
-3. Save SNIPER_AI.mq5 into MQL5/Experts
-4. Open THAT file
-5. Confirm BUILD_ID: SA_COMPILE_OK_8
-6. F7 Compile — expect 0 errors
+1. Close MetaEditor completely
+2. In MQL5/Experts DELETE all old:
+   SniperAI.mq5, SniperAI.ex5, SNIPER_AI.mq5, SNIPER_AI.ex5, SNIPER_AI_FIXED.mq5
+3. Save the new SNIPER_AI.mq5 into MQL5/Experts
+4. Open it in MetaEditor
+5. Confirm BUILD_ID: SA_COMPILE_OK_9
+6. Press F7
 
-If you still see TRADE_RETCODE_BUSY, you compiled the old file.
+ERROR CHECK DONE ON THIS BUILD:
+- removed TRADE_RETCODE_BUSY (invalid identifier)
+- removed all TRADE_RETCODE_* usage
+- removed input group / strict / LOG_LEVEL
+- fixed const object calling non-const methods (real compile error)
+- trade comment = SNIPER AI
