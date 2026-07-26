@@ -1111,9 +1111,10 @@ public:
          why = StringFormat("retcode=%u %s", rc, m_trade.ResultRetcodeDescription());
          m_lastStatus = why;
 
-         // Recoverable: requote / price off / busy
+         // Recoverable: requote / price off / locked / connection / timeout
          if(rc == TRADE_RETCODE_REQUOTE || rc == TRADE_RETCODE_PRICE_OFF ||
-            rc == TRADE_RETCODE_BUSY || rc == TRADE_RETCODE_CONNECTION ||
+            rc == TRADE_RETCODE_PRICE_CHANGED || rc == TRADE_RETCODE_LOCKED ||
+            rc == TRADE_RETCODE_TOO_MANY_REQUESTS || rc == TRADE_RETCODE_CONNECTION ||
             rc == TRADE_RETCODE_TIMEOUT)
            {
             Sleep(120 * attempt);
