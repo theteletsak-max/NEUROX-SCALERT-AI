@@ -15,10 +15,10 @@
 | Style | Aggressive sniper (selective entries, decisive size) |
 | Execution | **Instant execution** on valid setup |
 | Direction | BUY & SELL |
-| Symbols | **All currency pairs** (forex universe — scope TBD below) |
+| Symbols | **All forex pairs the broker lists** |
 | Horizon | Intraday (hours) |
 | v1 path | **Trend continuation** first (reversals = v2) |
-| Max open trades | **3 per symbol** |
+| Max open trades | **3 total on the account** (also ≤ 3 per symbol) |
 | Management | SL / TP / Break-even only |
 | Forbidden | Grid, martingale, trailing, partials, self-optimising AI |
 | AI role | Assist ranking / labelling only — never bypass rules |
@@ -54,7 +54,7 @@
 4. Pullback into **fresh OB and/or untested FVG**  
 5. **Confirmation candle** with trend  
 6. **Risk** valid (SL / TP / lot)  
-7. Open Sniper AI positions on that symbol **< 3**  
+7. Account open Sniper AI trades **< 3**, and that symbol **< 3**  
 
 → **Instant market BUY/SELL**
 
@@ -72,19 +72,19 @@
 
 ---
 
-## Exposure note (important)
+## Exposure (locked)
 
-- **3 max per symbol** is locked.  
-- **All currencies** means many pairs can be live at once → need a later rule for **account-wide** risk (e.g. max total open trades or max % risk in use), or one pair’s sniper shots can stack into account blow-up.  
-- Not decided yet — ask next.
+- Scan **all forex symbols** available on the broker  
+- Hard cap: **3 open Sniper AI trades total** on the account  
+- Per-symbol cap remains **3** (account cap usually binds first)  
+- Non-forex (gold, indices, crypto) = out of scope unless you add them later  
 
 ## Still open (decide next, piece by piece)
 
-1. Forex universe scope (majors only vs majors+minors vs everything the broker lists)  
-2. Account-wide max exposure (recommended once multi-pair is on)  
-3. Timeframes (HTF / setup / entry)  
-4. Exact SL / TP / BE / lot numbers  
-5. Entry timing detail (close of candle vs tick inside zone)
+1. Timeframes (HTF / setup / entry)  
+2. Exact SL / TP / BE / lot numbers  
+3. Entry timing detail (close of candle vs tick inside zone)  
+4. How to pick which setups win when more than 3 pairs qualify (best score first?)
 
 ---
 
