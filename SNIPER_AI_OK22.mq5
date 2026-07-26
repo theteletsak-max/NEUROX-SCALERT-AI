@@ -6341,9 +6341,11 @@ bool AggressiveContinuationBuySetup()
    {
       if(QualityNeedsTrendAndADX() && !TrendStrong())
          return false;
+      // Aggressive: trend+ADX is enough; structure preferred but not required
+      if(AggressiveInstitutionalExecution)
+         return true;
       if(QualityNeedsStructureZone() && !(zone || bos))
          return false;
-      // Prefer real pullback/location when available, but BOS/zone is enough
       return true;
    }
 
@@ -6370,6 +6372,8 @@ bool AggressiveContinuationSellSetup()
    {
       if(QualityNeedsTrendAndADX() && !TrendStrong())
          return false;
+      if(AggressiveInstitutionalExecution)
+         return true;
       if(QualityNeedsStructureZone() && !(zone || bos))
          return false;
       return true;

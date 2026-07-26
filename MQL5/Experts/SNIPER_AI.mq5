@@ -6114,7 +6114,14 @@ bool QualityGatesActive();
 
 int EffectiveMinimumMPIScore()
 {
-   // Always-on quality floor; events tighten further.
+   // Aggressive execution: keep MPI floor modest so InstantTrend can fire.
+   if(AggressiveInstitutionalExecution)
+   {
+      if(EventQualityModeActive())
+         return MathMax(QualityMPIScore, InstantMinimumMPIScore); // no 50-wall during events
+      return MathMin(QualityMPIScore, InstantMinimumMPIScore);
+   }
+
    if(EventQualityModeActive())
       return MathMax(EventQualityMPIScore, QualityMPIScore);
    if(EnableAlwaysQualityMode)
@@ -6334,9 +6341,11 @@ bool AggressiveContinuationBuySetup()
    {
       if(QualityNeedsTrendAndADX() && !TrendStrong())
          return false;
+      // Aggressive: trend+ADX is enough; structure preferred but not required
+      if(AggressiveInstitutionalExecution)
+         return true;
       if(QualityNeedsStructureZone() && !(zone || bos))
          return false;
-      // Prefer real pullback/location when available, but BOS/zone is enough
       return true;
    }
 
@@ -6363,6 +6372,8 @@ bool AggressiveContinuationSellSetup()
    {
       if(QualityNeedsTrendAndADX() && !TrendStrong())
          return false;
+      if(AggressiveInstitutionalExecution)
+         return true;
       if(QualityNeedsStructureZone() && !(zone || bos))
          return false;
       return true;
