@@ -21,7 +21,6 @@
 #property version     "1.00"
 #property description "SNIPER AI — institutional sniper EA (H4/H1/M5)"
 #property description "High-precision 24/7 adaptive execution. No session/news blocks."
-#property strict
 
 #include <Trade/Trade.mqh>
 
@@ -1046,16 +1045,6 @@ private:
    int     m_slippage;
    string  m_lastStatus;
 
-   ENUM_ORDER_TYPE_FILLING ResolveFilling(const string symbol)
-     {
-      const int filling = (int)SymbolInfoInteger(symbol, SYMBOL_FILLING_MODE);
-      if((filling & SYMBOL_FILLING_IOC) == SYMBOL_FILLING_IOC)
-         return ORDER_FILLING_IOC;
-      if((filling & SYMBOL_FILLING_FOK) == SYMBOL_FILLING_FOK)
-         return ORDER_FILLING_FOK;
-      return ORDER_FILLING_RETURN;
-     }
-
 public:
                      CSaExecutionEngine(void): m_magic(0), m_slippage(30), m_lastStatus("idle") {}
 
@@ -1066,7 +1055,6 @@ public:
       m_trade.SetExpertMagicNumber((ulong)magic);
       m_trade.SetDeviationInPoints(slippage);
       m_trade.SetAsyncMode(false);
-      m_trade.LogLevel(LOG_LEVEL_ERRORS);
      }
 
    void ManagePositions(CSaRiskManager &risk)
@@ -1083,7 +1071,7 @@ public:
 
       m_trade.SetExpertMagicNumber((ulong)m_magic);
       m_trade.SetDeviationInPoints(m_slippage);
-      m_trade.SetTypeFilling(ResolveFilling(symbol));
+      m_trade.SetTypeFillingBySymbol(symbol);
 
       for(int attempt = 1; attempt <= InpMaxRetries; attempt++)
         {
@@ -1108,14 +1096,17 @@ public:
            }
 
          const uint rc = m_trade.ResultRetcode();
-         why = StringFormat("retcode=%u %s", rc, m_trade.ResultRetcodeDescription());
+         why = StringFormat("retcode=%d %s", (int)rc, m_trade.ResultRetcodeDescription());
          m_lastStatus = why;
 
-         // Recoverable: requote / price off / locked / connection / timeout
-         if(rc == TRADE_RETCODE_REQUOTE || rc == TRADE_RETCODE_PRICE_OFF ||
-            rc == TRADE_RETCODE_PRICE_CHANGED || rc == TRADE_RETCODE_LOCKED ||
-            rc == TRADE_RETCODE_TOO_MANY_REQUESTS || rc == TRADE_RETCODE_CONNECTION ||
-            rc == TRADE_RETCODE_TIMEOUT)
+         // Recoverable retcodes (numeric fallbacks for older builds)
+         // 10004 requote, 10020 price off, 10021 price changed,
+         // 10024 too many requests, 10028 locked, 10031 connection, 10012 timeout
+         // Numeric retcodes only (max MetaEditor compatibility)
+         const bool recoverable =
+            (rc == 10004 || rc == 10012 || rc == 10020 || rc == 10021 ||
+             rc == 10024 || rc == 10028 || rc == 10031);
+         if(recoverable)
            {
             Sleep(120 * attempt);
             continue;
