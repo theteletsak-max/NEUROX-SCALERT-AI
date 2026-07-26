@@ -567,7 +567,7 @@ bool SaRetcodeRetryable(const uint rc)
       return true;
    if(rc == SA_RC_PRICE_CHANGED)
       return true;
-   if(rc == SA_RC_CTX_BUSY)
+   if(rc == SA_RC_CONTEXT)
       return true;
    if(rc == 0)
       return true;
