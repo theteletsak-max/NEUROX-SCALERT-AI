@@ -1,23 +1,40 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_COMPILE_OK_9                                         |
-//| SNIPER AI                                                         |
-//| Delete old Sniper files in Experts, then compile THIS file (F7).  |
+//| BUILD_ID: SA_INSTITUTIONAL_V3                                     |
+//| SNIPER AI — institutional single-file Expert Advisor              |
+//|                                                                   |
+//| Internal engines (one responsibility each):                       |
+//|   Util / Config / Symbol / MarketData / Indicator                 |
+//|   Swing / Structure / Liquidity / Displacement / FVG / OB         |
+//|   Volatility / Confluence / Entry / Decision                      |
+//|   Risk / Money / Position / Execution / Statistics / Dashboard    |
+//|   System Core (state pipeline)                                    |
+//|                                                                   |
+//| Strategy preserved: H4 bias → H1 setup → M5 confirm               |
+//| Paths: Continuation + Reversal | Comment: SNIPER AI               |
+//| Install: copy to MQL5/Experts/ → F7 → attach chart                |
 //+------------------------------------------------------------------+
 #property copyright   "SNIPER AI"
 #property link        "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version     "1.00"
+#property version     "3.00"
 #property description "SNIPER AI — institutional sniper EA (H4/H1/M5)"
-#property description "High-precision 24/7 adaptive execution. No session/news blocks."
+#property description "24/7 adaptive execution. No session/news blocks."
 
 #include <Trade/Trade.mqh>
 
-#define SA_COMMENT        "SNIPER AI"
-#define SA_UI_PREFIX      "SA_UI_"
-#define SA_LOG_PREFIX     "SNIPER AI | "
+#define SA_COMMENT     "SNIPER AI"
+#define SA_UI_PREFIX   "SA_UI_"
+#define SA_LOG_PREFIX  "SNIPER AI | "
+#define SA_BUILD_ID    "SA_INSTITUTIONAL_V3"
+#define SA_H4_BARS     160
+#define SA_H1_BARS     160
+#define SA_M5_BARS     48
+#define SA_ATR_PERIOD  14
+#define SA_ATR_AVG_N   40
+#define SA_SWING_KEEP  24
 
 //==================================================================
-// 1) TYPES
+// TYPES
 //==================================================================
 enum ENUM_SA_BIAS
   {
@@ -48,10 +65,23 @@ enum ENUM_SA_MKT
    SA_MKT_EXTREME = 3
   };
 
+enum ENUM_SA_STAGE
+  {
+   SA_STAGE_INIT = 0,
+   SA_STAGE_DATA = 1,
+   SA_STAGE_ANALYSIS = 2,
+   SA_STAGE_DECISION = 3,
+   SA_STAGE_RISK = 4,
+   SA_STAGE_EXEC = 5,
+   SA_STAGE_MANAGE = 6,
+   SA_STAGE_SCAN = 7
+  };
+
 struct SaSwing
   {
    datetime time;
    double   price;
+   int      bar;
    bool     isHigh;
   };
 
@@ -79,6 +109,36 @@ struct SaLiquidity
    string note;
   };
 
+struct SaDisplacement
+  {
+   bool   bull;
+   bool   bear;
+   int    impulseBar;
+   int    score;
+   string note;
+  };
+
+struct SaFVG
+  {
+   bool   bull;
+   bool   bear;
+   bool   fresh;
+   double lo;
+   double hi;
+   int    score;
+   string note;
+  };
+
+struct SaOB
+  {
+   bool   bull;
+   bool   bear;
+   double lo;
+   double hi;
+   int    score;
+   string note;
+  };
+
 struct SaZones
   {
    bool   bullDisp;
@@ -102,52 +162,93 @@ struct SaSetup
    ENUM_SA_BIAS bias;
    ENUM_SA_MKT  mkt;
    int          score;
+   int          confluence;
    string       reason;
    double       atrH1;
    double       spreadPts;
   };
 
 //==================================================================
-// 2) INPUTS
+// INPUTS (plain input — portable across MT5 builds)
 //==================================================================
+input double InpLot                 = 0.01;
+input int    InpMaxTrades           = 3;
+input long   InpMagic               = 20260726;
+input int    InpMaxSlippagePoints   = 80;
+input int    InpMaxRetries          = 3;
 
-input double InpLot                 = 0.01;       // Lot size
-input int    InpMaxTrades           = 3;          // Max open trades (account)
-input long   InpMagic               = 20260726;   // Magic number
-input int    InpMaxSlippagePoints   = 80;         // Max slippage (points)
-input int    InpMaxRetries          = 3;          // Execution retries
+input int    InpSwingStrength       = 2;
+input int    InpMinScore            = 14;
+input int    InpMinConfluence       = 4;
+input bool   InpAllowContinuation   = true;
+input bool   InpAllowReversal       = true;
+input bool   InpRequireZoneTouch    = true;
+input bool   InpOneEntryPerM5       = true;
+input bool   InpTradeChartOnly      = true;
 
-input int    InpSwingStrength       = 2;          // Swing fractal strength
-input int    InpMinScore            = 14;         // Minimum setup score (strict)
-input int    InpMinConfluence       = 4;          // Min confluence factors required
-input bool   InpAllowContinuation   = true;       // Allow continuation
-input bool   InpAllowReversal       = true;       // Allow reversal
-input bool   InpRequireZoneTouch    = true;       // Require price at OB/FVG zone
-input bool   InpOneEntryPerM5       = true;       // One entry per M5 bar
-input bool   InpTradeChartOnly      = true;       // Trade attached chart only
+input double InpAtrMultSL           = 1.5;
+input double InpRewardRatio         = 2.0;
+input double InpBreakEvenR          = 1.0;
+input bool   InpUseTrailing         = false;
+input double InpTrailStartR         = 1.5;
+input double InpTrailStepR          = 0.5;
+input double InpMaxDailyDDPercent   = 0.0;
+input int    InpMaxConsecutiveLoss  = 0;
 
-input double InpAtrMultSL           = 1.5;        // SL = ATR(H1) * mult
-input double InpRewardRatio         = 2.0;        // TP = R multiple
-input double InpBreakEvenR          = 1.0;        // BE trigger (+R)
-input bool   InpUseTrailing         = false;      // Trailing stop (optional)
-input double InpTrailStartR         = 1.5;        // Trail start (+R)
-input double InpTrailStepR          = 0.5;        // Trail step (R)
-input double InpMaxDailyDDPercent   = 0.0;        // Max daily DD % (0=off)
-input int    InpMaxConsecutiveLoss  = 0;          // Max consecutive losses (0=off)
+input double InpHighVolAtrMult      = 1.8;
+input double InpExtremeVolAtrMult   = 2.5;
+input double InpVolSLBoostHigh      = 1.15;
+input double InpVolSLBoostExtreme   = 1.35;
+input double InpWideSpreadAtrFrac   = 0.12;
 
-input double InpHighVolAtrMult      = 1.8;        // ATR regime: high if > avg*this
-input double InpExtremeVolAtrMult   = 2.5;        // ATR regime: extreme
-input double InpVolSLBoostHigh      = 1.15;       // SL boost in high vol
-input double InpVolSLBoostExtreme   = 1.35;      // SL boost in extreme vol
-
-input bool   InpShowDashboard       = true;       // Show premium dashboard
-input bool   InpLogEvents           = true;       // Log important events
-input int    InpDashRefreshTicks    = 8;          // Dashboard refresh throttle
+input bool   InpShowDashboard       = true;
+input bool   InpLogEvents           = true;
+input int    InpDashRefreshTicks    = 8;
 
 //==================================================================
-// 3) SYMBOL + MARKET DATA CACHE
+// UTIL / LOGGING
 //==================================================================
-class CSaSymbolCache
+void SaLog(const string msg)
+  {
+   if(InpLogEvents)
+      Print(SA_LOG_PREFIX, msg);
+  }
+
+int SaClampInt(const int v, const int lo, const int hi)
+  {
+   if(v < lo) return lo;
+   if(v > hi) return hi;
+   return v;
+  }
+
+double SaBody(const MqlRates &r)
+  {
+   return MathAbs(r.close - r.open);
+  }
+
+//==================================================================
+// CONFIG
+//==================================================================
+class CSaConfig
+  {
+public:
+   bool Validate(string &why)
+     {
+      if(InpLot <= 0.0) { why = "lot<=0"; return false; }
+      if(InpMaxTrades < 1) { why = "max trades<1"; return false; }
+      if(InpAtrMultSL <= 0.0 || InpRewardRatio <= 0.0) { why = "SL/TP invalid"; return false; }
+      if(InpMinScore < 0 || InpMinConfluence < 1) { why = "score/confluence invalid"; return false; }
+      if(InpMaxSlippagePoints < 0 || InpMaxRetries < 1) { why = "exec params invalid"; return false; }
+      if(InpDashRefreshTicks < 1) { why = "dash throttle invalid"; return false; }
+      why = "ok";
+      return true;
+     }
+  };
+
+//==================================================================
+// SYMBOL MANAGER
+//==================================================================
+class CSaSymbolManager
   {
 public:
    string symbol;
@@ -161,13 +262,17 @@ public:
    double volMax;
    double volStep;
    ENUM_SYMBOL_TRADE_MODE tradeMode;
-   ENUM_SYMBOL_TRADE_EXECUTION execMode;
 
    bool Init(const string sym)
      {
       symbol = sym;
       if(!SymbolSelect(symbol, true))
          return false;
+      return RefreshSpecs();
+     }
+
+   bool RefreshSpecs()
+     {
       digits      = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
       point       = SymbolInfoDouble(symbol, SYMBOL_POINT);
       tickSize    = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_SIZE);
@@ -178,10 +283,8 @@ public:
       stopsLevel  = (int)SymbolInfoInteger(symbol, SYMBOL_TRADE_STOPS_LEVEL);
       freezeLevel = (int)SymbolInfoInteger(symbol, SYMBOL_TRADE_FREEZE_LEVEL);
       tradeMode   = (ENUM_SYMBOL_TRADE_MODE)SymbolInfoInteger(symbol, SYMBOL_TRADE_MODE);
-      execMode    = (ENUM_SYMBOL_TRADE_EXECUTION)SymbolInfoInteger(symbol, SYMBOL_TRADE_EXEMODE);
       if(volStep <= 0.0) volStep = 0.01;
-      if(point <= 0.0) return false;
-      return true;
+      return (point > 0.0);
      }
 
    double Pip()
@@ -204,22 +307,43 @@ public:
       const int d = (volStep < 0.01 ? 3 : 2);
       return NormalizeDouble(lots, d);
      }
+
+   bool TradeAllowed(string &why)
+     {
+      tradeMode = (ENUM_SYMBOL_TRADE_MODE)SymbolInfoInteger(symbol, SYMBOL_TRADE_MODE);
+      if(tradeMode == SYMBOL_TRADE_MODE_DISABLED)
+        { why = "symbol trade disabled"; return false; }
+      // CLOSEONLY / LONGONLY / SHORTONLY still allow directional handling at order time
+      why = "ok";
+      return true;
+     }
+
+   void Quotes(double &bid, double &ask)
+     {
+      bid = SymbolInfoDouble(symbol, SYMBOL_BID);
+      ask = SymbolInfoDouble(symbol, SYMBOL_ASK);
+     }
   };
 
-class CSaDataCache
+//==================================================================
+// MARKET DATA + INDICATOR MANAGER
+//==================================================================
+class CSaMarketData
   {
 private:
-   string          m_symbol;
-   int             m_atrHandle;
-   datetime        m_h4Bar;
-   datetime        m_h1Bar;
-   datetime        m_m5Bar;
-   MqlRates        m_h4[];
-   MqlRates        m_h1[];
-   MqlRates        m_m5[];
-   double          m_atrBuf[];
-   double          m_atrValue;
-   double          m_atrAvg;
+   string   m_symbol;
+   int      m_atrHandle;
+   datetime m_h4Bar;
+   datetime m_h1Bar;
+   datetime m_m5Bar;
+   datetime m_atrBar;
+   MqlRates m_h4[];
+   MqlRates m_h1[];
+   MqlRates m_m5[];
+   double   m_atrBuf[];
+   double   m_atr;
+   double   m_atrAvg;
+   bool     m_ready;
 
    bool CopyTF(const ENUM_TIMEFRAMES tf, const int count, MqlRates &dst[], datetime &stamp)
      {
@@ -235,16 +359,36 @@ private:
       return true;
      }
 
+   bool RefreshATR()
+     {
+      if(m_atrHandle == INVALID_HANDLE)
+         return false;
+      // ATR updates with H1 bar — skip buffer copy when H1 stamp unchanged
+      if(m_atrBar == m_h1Bar && m_atr > 0.0)
+         return true;
+      ArraySetAsSeries(m_atrBuf, true);
+      if(CopyBuffer(m_atrHandle, 0, 1, SA_ATR_AVG_N, m_atrBuf) < SA_ATR_AVG_N)
+         return false;
+      m_atr = m_atrBuf[0];
+      double sum = 0.0;
+      for(int i = 0; i < SA_ATR_AVG_N; i++)
+         sum += m_atrBuf[i];
+      m_atrAvg = sum / (double)SA_ATR_AVG_N;
+      m_atrBar = m_h1Bar;
+      return (m_atr > 0.0);
+     }
+
 public:
-                     CSaDataCache(void): m_atrHandle(INVALID_HANDLE), m_h4Bar(0), m_h1Bar(0),
-                                         m_m5Bar(0), m_atrValue(0.0), m_atrAvg(0.0) {}
-                    ~CSaDataCache(void) { Release(); }
+                     CSaMarketData(void): m_atrHandle(INVALID_HANDLE), m_h4Bar(0), m_h1Bar(0),
+                                          m_m5Bar(0), m_atrBar(0), m_atr(0.0), m_atrAvg(0.0), m_ready(false) {}
+                    ~CSaMarketData(void) { Release(); }
 
    bool Init(const string symbol)
      {
       Release();
       m_symbol = symbol;
-      m_atrHandle = iATR(m_symbol, PERIOD_H1, 14);
+      m_atrHandle = iATR(m_symbol, PERIOD_H1, SA_ATR_PERIOD);
+      m_ready = false;
       return (m_atrHandle != INVALID_HANDLE);
      }
 
@@ -255,30 +399,26 @@ public:
          IndicatorRelease(m_atrHandle);
          m_atrHandle = INVALID_HANDLE;
         }
+      m_ready = false;
      }
 
-   bool Refresh(const int h4Bars = 160, const int h1Bars = 160, const int m5Bars = 40)
+   bool Refresh()
      {
-      if(!CopyTF(PERIOD_H4, h4Bars, m_h4, m_h4Bar)) return false;
-      if(!CopyTF(PERIOD_H1, h1Bars, m_h1, m_h1Bar)) return false;
-      if(!CopyTF(PERIOD_M5, m5Bars, m_m5, m_m5Bar)) return false;
-
-      ArraySetAsSeries(m_atrBuf, true);
-      if(CopyBuffer(m_atrHandle, 0, 1, 40, m_atrBuf) < 40)
-         return false;
-      m_atrValue = m_atrBuf[0];
-      double sum = 0.0;
-      for(int i = 0; i < 40; i++)
-         sum += m_atrBuf[i];
-      m_atrAvg = sum / 40.0;
-      return (m_atrValue > 0.0);
+      if(!CopyTF(PERIOD_H4, SA_H4_BARS, m_h4, m_h4Bar)) { m_ready = false; return false; }
+      if(!CopyTF(PERIOD_H1, SA_H1_BARS, m_h1, m_h1Bar)) { m_ready = false; return false; }
+      if(!CopyTF(PERIOD_M5, SA_M5_BARS, m_m5, m_m5Bar)) { m_ready = false; return false; }
+      if(!RefreshATR()) { m_ready = false; return false; }
+      m_ready = true;
+      return true;
      }
+
+   bool Ready() { return m_ready; }
 
    bool NewM5Bar(datetime &last)
      {
       if(ArraySize(m_m5) < 2)
          return false;
-      datetime t = m_m5[0].time;
+      const datetime t = m_m5[0].time;
       if(t != last)
         {
          last = t;
@@ -287,57 +427,68 @@ public:
       return false;
      }
 
-   bool GetH4(MqlRates &out[])
+   bool H4(MqlRates &out[])
      {
       const int n = ArraySize(m_h4);
+      if(n <= 0) return false;
       ArraySetAsSeries(out, true);
       ArrayResize(out, n);
-      for(int i = 0; i < n; i++)
-         out[i] = m_h4[i];
-      return (n > 0);
+      return (ArrayCopy(out, m_h4) == n);
      }
-   bool GetH1(MqlRates &out[])
+   bool H1(MqlRates &out[])
      {
       const int n = ArraySize(m_h1);
+      if(n <= 0) return false;
       ArraySetAsSeries(out, true);
       ArrayResize(out, n);
-      for(int i = 0; i < n; i++)
-         out[i] = m_h1[i];
-      return (n > 0);
+      return (ArrayCopy(out, m_h1) == n);
      }
-   bool GetM5(MqlRates &out[])
+   bool M5(MqlRates &out[])
      {
       const int n = ArraySize(m_m5);
+      if(n <= 0) return false;
       ArraySetAsSeries(out, true);
       ArrayResize(out, n);
-      for(int i = 0; i < n; i++)
-         out[i] = m_m5[i];
-      return (n > 0);
+      return (ArrayCopy(out, m_m5) == n);
      }
-   double Atr() { return m_atrValue; }
+
+   int H4Count() { return ArraySize(m_h4); }
+   int H1Count() { return ArraySize(m_h1); }
+   int M5Count() { return ArraySize(m_m5); }
+
+   double Atr() { return m_atr; }
    double AtrAvg() { return m_atrAvg; }
+   datetime M5BarTime() { return m_m5Bar; }
   };
 
 //==================================================================
-// 4) STRUCTURE ENGINE
+// SWING ENGINE
 //==================================================================
-class CSaStructureEngine
+class CSaSwingEngine
   {
 private:
    int m_strength;
 
-   // Collect confirmed swings using closed bars only (non-repainting)
-   void CollectSwings(const MqlRates &r[], const int n, SaSwing &swings[], const int maxKeep)
+public:
+                     CSaSwingEngine(void): m_strength(2) {}
+   void              SetStrength(const int s) { m_strength = SaClampInt(s, 1, 5); }
+
+   void Collect(const MqlRates &r[], const int n, SaSwing &swings[], const int maxKeep)
      {
       ArrayResize(swings, 0);
-      // series: index 0 = forming. Require right-side bars fully closed => i >= strength+1
+      if(n < (m_strength * 2 + 3))
+         return;
+
+      // series index 0 = forming. Confirmed pivots require right side closed.
       for(int i = m_strength + 1; i < n - m_strength; i++)
         {
-         bool hi = true, lo = true;
+         bool hi = true;
+         bool lo = true;
          for(int k = 1; k <= m_strength; k++)
            {
-            if(r[i].high < r[i - k].high || r[i].high < r[i + k].high) hi = false;
-            if(r[i].low > r[i - k].low || r[i].low > r[i + k].low) lo = false;
+            if(r[i].high <= r[i - k].high || r[i].high <= r[i + k].high) hi = false;
+            if(r[i].low >= r[i - k].low || r[i].low >= r[i + k].low) lo = false;
+            if(!hi && !lo) break;
            }
          if(hi)
            {
@@ -345,6 +496,7 @@ private:
             ArrayResize(swings, sz + 1);
             swings[sz].time = r[i].time;
             swings[sz].price = r[i].high;
+            swings[sz].bar = i;
             swings[sz].isHigh = true;
            }
          if(lo)
@@ -353,6 +505,7 @@ private:
             ArrayResize(swings, sz + 1);
             swings[sz].time = r[i].time;
             swings[sz].price = r[i].low;
+            swings[sz].bar = i;
             swings[sz].isHigh = false;
            }
          if(ArraySize(swings) >= maxKeep)
@@ -364,7 +517,6 @@ private:
      {
       double h1 = 0, h2 = 0, l1 = 0, l2 = 0;
       int hc = 0, lc = 0;
-      // swings are newest-first because we scanned from low i
       for(int i = 0; i < ArraySize(swings); i++)
         {
          if(swings[i].isHigh)
@@ -383,10 +535,10 @@ private:
       if(hc < 2 || lc < 2)
          return SA_BIAS_FLAT;
 
-      bool hh = (h1 > h2);
-      bool hl = (l1 > l2);
-      bool lh = (h1 < h2);
-      bool ll = (l1 < l2);
+      const bool hh = (h1 > h2);
+      const bool hl = (l1 > l2);
+      const bool lh = (h1 < h2);
+      const bool ll = (l1 < l2);
 
       if(hh && hl) return SA_BIAS_BULL;
       if(lh && ll) return SA_BIAS_BEAR;
@@ -395,42 +547,59 @@ private:
       return SA_BIAS_FLAT;
      }
 
+   bool LatestHighLow(const SaSwing &swings[], double &hi, double &lo)
+     {
+      hi = 0.0;
+      lo = 0.0;
+      for(int i = 0; i < ArraySize(swings); i++)
+        {
+         if(swings[i].isHigh && hi == 0.0)
+            hi = swings[i].price;
+         if(!swings[i].isHigh && lo == 0.0)
+            lo = swings[i].price;
+         if(hi > 0.0 && lo > 0.0)
+            return true;
+        }
+      return false;
+     }
+  };
+
+//==================================================================
+// STRUCTURE ENGINE (BOS / CHoCH / H4 bias)
+//==================================================================
+class CSaStructureEngine
+  {
+private:
+   CSaSwingEngine m_swing;
+
 public:
-                     CSaStructureEngine(void): m_strength(2) {}
-   void              SetStrength(const int s) { m_strength = MathMax(1, MathMin(5, s)); }
+   void SetStrength(const int s) { m_swing.SetStrength(s); }
 
    SaStructure Evaluate(const MqlRates &h4[], const int h4n,
                         const MqlRates &h1[], const int h1n)
      {
       SaStructure st;
       st.biasH4 = SA_BIAS_FLAT;
-      st.bosBull = st.bosBear = false;
-      st.chochBull = st.chochBear = false;
-      st.swingHigh = st.swingLow = 0.0;
+      st.bosBull = false;
+      st.bosBear = false;
+      st.chochBull = false;
+      st.chochBear = false;
+      st.swingHigh = 0.0;
+      st.swingLow = 0.0;
       st.note = "structure";
 
       SaSwing sw4[];
-      CollectSwings(h4, h4n, sw4, 40);
-      st.biasH4 = BiasFromSwings(sw4);
+      m_swing.Collect(h4, h4n, sw4, SA_SWING_KEEP);
+      st.biasH4 = m_swing.BiasFromSwings(sw4);
 
       SaSwing sw1[];
-      CollectSwings(h1, h1n, sw1, 40);
-
-      // most recent swing high/low on H1
-      for(int i = 0; i < ArraySize(sw1); i++)
-        {
-         if(sw1[i].isHigh && st.swingHigh == 0.0)
-            st.swingHigh = sw1[i].price;
-         if(!sw1[i].isHigh && st.swingLow == 0.0)
-            st.swingLow = sw1[i].price;
-         if(st.swingHigh > 0.0 && st.swingLow > 0.0)
-            break;
-        }
+      m_swing.Collect(h1, h1n, sw1, SA_SWING_KEEP);
+      m_swing.LatestHighLow(sw1, st.swingHigh, st.swingLow);
 
       if(h1n < 3)
          return st;
 
-      // Non-repainting break: closed bar [1]
+      // Non-repainting: closed H1 bar [1] vs prior confirmed swings
       const double c1 = h1[1].close;
       if(st.swingHigh > 0.0 && c1 > st.swingHigh)
         {
@@ -457,7 +626,7 @@ public:
   };
 
 //==================================================================
-// 5) LIQUIDITY ENGINE
+// LIQUIDITY ENGINE
 //==================================================================
 class CSaLiquidityEngine
   {
@@ -473,21 +642,21 @@ public:
       liq.poolLow = 0.0;
       liq.score = 0;
       liq.note = "liquidity";
-      if(n < 20 || pip <= 0.0)
+      if(n < 20 || pip <= 0.0 || atr <= 0.0)
          return liq;
 
       const double tol = MathMax(pip * 2.0, atr * 0.05);
+      const int poolN = MathMin(n, 50);
 
-      // pools from closed bars [2..N]
       liq.poolHigh = r[2].high;
       liq.poolLow  = r[2].low;
-      for(int i = 2; i < MathMin(n, 50); i++)
+      for(int i = 2; i < poolN; i++)
         {
          if(r[i].high > liq.poolHigh) liq.poolHigh = r[i].high;
          if(r[i].low < liq.poolLow) liq.poolLow = r[i].low;
         }
 
-      // equal highs/lows vs recent pivot cluster
+      // Equal highs/lows: cluster vs recent closed extremes (not only bar[2])
       int eqH = 0, eqL = 0;
       const double refH = r[2].high;
       const double refL = r[2].low;
@@ -501,15 +670,15 @@ public:
       if(liq.equalHighs) liq.score += 1;
       if(liq.equalLows)  liq.score += 1;
 
-      // opposing liquidity for sweeps: recent extremes excluding bar1
-      double rh = r[3].high, rl = r[3].low;
+      double rh = r[3].high;
+      double rl = r[3].low;
       for(int i = 3; i < MathMin(n, 16); i++)
         {
          if(r[i].high > rh) rh = r[i].high;
          if(r[i].low < rl) rl = r[i].low;
         }
 
-      // Sweep = pierce pool then reclaim (close back inside) on closed bar
+      // Sweep = pierce then reclaim on closed bar [1]
       if(r[1].high > rh + tol * 0.25 && r[1].close < rh)
         {
          liq.buySideSweep = true;
@@ -529,69 +698,216 @@ public:
   };
 
 //==================================================================
-// 6) ZONE ENGINE (Displacement / OB / FVG)
+// DISPLACEMENT ENGINE
 //==================================================================
-class CSaZoneEngine
+class CSaDisplacementEngine
   {
 public:
-   SaZones Evaluate(const MqlRates &r[], const int n, const double bid)
+   SaDisplacement Evaluate(const MqlRates &r[], const int n)
      {
-      SaZones z;
-      z.bullDisp = z.bearDisp = false;
-      z.bullFVG = z.bearFVG = false;
-      z.bullOB = z.bearOB = false;
-      z.bullZoneTouch = z.bearZoneTouch = false;
-      z.zoneLo = z.zoneHi = 0.0;
-      z.score = 0;
-      z.note = "zones";
+      SaDisplacement d;
+      d.bull = false;
+      d.bear = false;
+      d.impulseBar = 1;
+      d.score = 0;
+      d.note = "no displacement";
       if(n < 8)
-         return z;
+         return d;
 
-      const double b1 = MathAbs(r[1].close - r[1].open);
-      const double b2 = MathAbs(r[2].close - r[2].open);
-      const double b3 = MathAbs(r[3].close - r[3].open);
-      const double b4 = MathAbs(r[4].close - r[4].open);
-      double avg = (b2 + b3 + b4) / 3.0;
-      if(avg <= 0.0) avg = b1;
+      const double b1 = SaBody(r[1]);
+      const double avg = (SaBody(r[2]) + SaBody(r[3]) + SaBody(r[4])) / 3.0;
+      const double thr = MathMax(avg, r[1].high - r[1].low) * 0.01; // avoid div0-ish noise
+      double base = avg;
+      if(base <= thr)
+         base = MathMax(b1, thr);
 
-      // Displacement on closed bar
-      if(r[1].close > r[1].open && b1 >= avg * 1.7)
-        { z.bullDisp = true; z.score += 2; }
-      if(r[1].close < r[1].open && b1 >= avg * 1.7)
-        { z.bearDisp = true; z.score += 2; }
+      if(r[1].close > r[1].open && b1 >= base * 1.7)
+        {
+         d.bull = true;
+         d.score = 2;
+         d.note = "bull displacement";
+        }
+      else if(r[1].close < r[1].open && b1 >= base * 1.7)
+        {
+         d.bear = true;
+         d.score = 2;
+         d.note = "bear displacement";
+        }
+      return d;
+     }
+  };
 
-      // Classic 3-candle FVG using [3],[2],[1] closed
+//==================================================================
+// FAIR VALUE GAP ENGINE
+//==================================================================
+class CSaFVGEngine
+  {
+   bool MitigatedBull(const MqlRates &r[], const int n, const double lo, const double hi)
+     {
+      // Formed by [3]/[2]/[1]. Mitigation on later closed bars starting at [1] body fill.
+      // Bar[1] created the gap — check if subsequent price (forming excluded) filled it.
+      // Using closed bar[1] low/high already defines gap; consider filled if any closed
+      // bar after creation trades through the gap fully. Creation bar is [1], so no later
+      // closed bar yet on same print — treat as fresh unless bar[1] closed back into gap.
+      if(hi <= lo) return true;
+      // If close of impulse re-entered the gap deeply, treat as weak/mitigated
+      if(r[1].close < hi && r[1].close > lo)
+         return true;
+      return false;
+     }
+
+   bool MitigatedBear(const MqlRates &r[], const int n, const double lo, const double hi)
+     {
+      if(hi <= lo) return true;
+      if(r[1].close > lo && r[1].close < hi)
+         return true;
+      return false;
+     }
+
+public:
+   SaFVG Evaluate(const MqlRates &r[], const int n)
+     {
+      SaFVG f;
+      f.bull = false;
+      f.bear = false;
+      f.fresh = false;
+      f.lo = 0.0;
+      f.hi = 0.0;
+      f.score = 0;
+      f.note = "no fvg";
+      if(n < 5)
+         return f;
+
+      // Classic 3-candle FVG on closed bars [3],[2],[1]
       if(r[3].high < r[1].low)
         {
-         z.bullFVG = true;
-         z.zoneLo = r[3].high;
-         z.zoneHi = r[1].low;
-         // untested if bar[0] and [1] body didn't fully fill (bar1 created it)
-         z.score += 3;
+         f.lo = r[3].high;
+         f.hi = r[1].low;
+         f.bull = true;
+         f.fresh = !MitigatedBull(r, n, f.lo, f.hi);
+         if(f.fresh)
+           {
+            f.score = 3;
+            f.note = "bull FVG fresh";
+           }
+         else
+           {
+            f.score = 1;
+            f.note = "bull FVG weak";
+           }
         }
-      if(r[3].low > r[1].high)
+      else if(r[3].low > r[1].high)
         {
-         z.bearFVG = true;
-         z.zoneLo = r[1].high;
-         z.zoneHi = r[3].low;
-         z.score += 3;
+         f.lo = r[1].high;
+         f.hi = r[3].low;
+         f.bear = true;
+         f.fresh = !MitigatedBear(r, n, f.lo, f.hi);
+         if(f.fresh)
+           {
+            f.score = 3;
+            f.note = "bear FVG fresh";
+           }
+         else
+           {
+            f.score = 1;
+            f.note = "bear FVG weak";
+           }
         }
+      return f;
+     }
+  };
 
-      // Order block = last opposing candle before impulse (bar 2 if impulsive bar1)
-      if(z.bullDisp && r[2].close < r[2].open)
+//==================================================================
+// ORDER BLOCK ENGINE
+//==================================================================
+class CSaOBEngine
+  {
+public:
+   SaOB Evaluate(const MqlRates &r[], const int n, const SaDisplacement &disp)
+     {
+      SaOB ob;
+      ob.bull = false;
+      ob.bear = false;
+      ob.lo = 0.0;
+      ob.hi = 0.0;
+      ob.score = 0;
+      ob.note = "no ob";
+      if(n < 8)
+         return ob;
+
+      // Last opposing candle before impulse (search [2..6])
+      if(disp.bull)
         {
-         z.bullOB = true;
-         if(!(z.zoneHi > z.zoneLo))
-           { z.zoneLo = r[2].low; z.zoneHi = r[2].high; }
-         z.score += 2;
+         for(int i = 2; i <= 6 && i < n; i++)
+           {
+            if(r[i].close < r[i].open)
+              {
+               ob.bull = true;
+               ob.lo = r[i].low;
+               ob.hi = r[i].high;
+               ob.score = 2;
+               ob.note = "bull OB";
+               break;
+              }
+           }
         }
-      if(z.bearDisp && r[2].close > r[2].open)
+      if(disp.bear)
         {
-         z.bearOB = true;
-         if(!(z.zoneHi > z.zoneLo))
-           { z.zoneLo = r[2].low; z.zoneHi = r[2].high; }
-         z.score += 2;
+         for(int i = 2; i <= 6 && i < n; i++)
+           {
+            if(r[i].close > r[i].open)
+              {
+               ob.bear = true;
+               ob.lo = r[i].low;
+               ob.hi = r[i].high;
+               ob.score = 2;
+               ob.note = "bear OB";
+               break;
+              }
+           }
         }
+      return ob;
+     }
+  };
+
+//==================================================================
+// ZONE COMPOSITOR (location touch — not a second signal source)
+//==================================================================
+class CSaZoneCompositor
+  {
+public:
+   SaZones Compose(const SaDisplacement &d, const SaFVG &f, const SaOB &ob, const double bid)
+     {
+      SaZones z;
+      z.bullDisp = d.bull;
+      z.bearDisp = d.bear;
+      z.bullFVG = f.bull && f.fresh;
+      z.bearFVG = f.bear && f.fresh;
+      z.bullOB = ob.bull;
+      z.bearOB = ob.bear;
+      z.bullZoneTouch = false;
+      z.bearZoneTouch = false;
+      z.zoneLo = 0.0;
+      z.zoneHi = 0.0;
+      z.score = d.score + f.score + ob.score;
+      z.note = "zones";
+
+      if(f.bull || f.bear)
+        {
+         z.zoneLo = f.lo;
+         z.zoneHi = f.hi;
+         z.note = f.note;
+        }
+      else if(ob.bull || ob.bear)
+        {
+         z.zoneLo = ob.lo;
+         z.zoneHi = ob.hi;
+         z.note = ob.note;
+        }
+      else if(d.bull || d.bear)
+         z.note = d.note;
+      else
+         z.note = "awaiting zone";
 
       if(z.zoneHi > z.zoneLo)
         {
@@ -603,26 +919,54 @@ public:
             if(z.bearFVG || z.bearOB || z.bearDisp) z.bearZoneTouch = true;
            }
         }
-
-      if(z.bullFVG || z.bearFVG) z.note = "FVG";
-      else if(z.bullOB || z.bearOB) z.note = "order block";
-      else if(z.bullDisp || z.bearDisp) z.note = "displacement";
-      else z.note = "awaiting zone";
       return z;
      }
   };
 
 //==================================================================
-// 7) STRATEGY / ENTRY ENGINE
+// VOLATILITY / REGIME ENGINE
 //==================================================================
-class CSaStrategyEngine
+class CSaVolatilityEngine
   {
-private:
-   CSaStructureEngine m_structure;
-   CSaLiquidityEngine m_liquidity;
-   CSaZoneEngine      m_zones;
+public:
+   ENUM_SA_MKT Regime(const double atr, const double atrAvg)
+     {
+      if(atrAvg <= 0.0) return SA_MKT_NORMAL;
+      if(atr >= atrAvg * InpExtremeVolAtrMult) return SA_MKT_EXTREME;
+      if(atr >= atrAvg * InpHighVolAtrMult) return SA_MKT_HIGH;
+      if(atr <= atrAvg * 0.55) return SA_MKT_LOW;
+      return SA_MKT_NORMAL;
+     }
 
-   // Strict M5 confirmation — reduces false breaks (precision focus)
+   int ScoreRequirement(const ENUM_SA_MKT mkt, const double spreadPts, const double atr, const double point)
+     {
+      int need = InpMinScore;
+      if(mkt == SA_MKT_HIGH) need += 1;
+      if(mkt == SA_MKT_EXTREME) need += 3;
+      // Adapt to wide spread — raise bar, never hard-block
+      if(atr > 0.0 && point > 0.0)
+        {
+         const double spreadPrice = spreadPts * point;
+         if(spreadPrice >= atr * InpWideSpreadAtrFrac)
+            need += 2;
+        }
+      return need;
+     }
+
+   double SLBoost(const ENUM_SA_MKT mkt)
+     {
+      if(mkt == SA_MKT_EXTREME) return InpVolSLBoostExtreme;
+      if(mkt == SA_MKT_HIGH) return InpVolSLBoostHigh;
+      return 1.0;
+     }
+  };
+
+//==================================================================
+// ENTRY ENGINE (M5 confirmation)
+//==================================================================
+class CSaEntryEngine
+  {
+public:
    bool M5Buy(const MqlRates &m5[], const int n)
      {
       if(n < 4) return false;
@@ -631,8 +975,8 @@ private:
       if(range <= 0.0 || body <= 0.0) return false;
       const bool bull = (m5[1].close > m5[1].open);
       const bool up = (m5[1].close > m5[2].close && m5[2].close >= m5[3].close);
-      const bool strongBody = (body >= range * 0.55);          // close in upper half decisively
-      const bool breaksMicro = (m5[1].close > m5[2].high);    // micro BOS on M5
+      const bool strongBody = (body >= range * 0.55);
+      const bool breaksMicro = (m5[1].close > m5[2].high);
       return (bull && strongBody && up && breaksMicro);
      }
 
@@ -648,20 +992,27 @@ private:
       const bool breaksMicro = (m5[1].close < m5[2].low);
       return (bear && strongBody && dn && breaksMicro);
      }
+  };
 
-   ENUM_SA_MKT Regime(const double atr, const double atrAvg)
-     {
-      if(atrAvg <= 0.0) return SA_MKT_NORMAL;
-      if(atr >= atrAvg * InpExtremeVolAtrMult) return SA_MKT_EXTREME;
-      if(atr >= atrAvg * InpHighVolAtrMult) return SA_MKT_HIGH;
-      if(atr <= atrAvg * 0.55) return SA_MKT_LOW;
-      return SA_MKT_NORMAL;
-     }
+//==================================================================
+// CONFLUENCE + TRADE DECISION ENGINE
+//==================================================================
+class CSaDecisionEngine
+  {
+private:
+   CSaStructureEngine    m_structure;
+   CSaLiquidityEngine    m_liquidity;
+   CSaDisplacementEngine m_disp;
+   CSaFVGEngine          m_fvg;
+   CSaOBEngine           m_ob;
+   CSaZoneCompositor     m_zones;
+   CSaVolatilityEngine   m_vol;
+   CSaEntryEngine        m_entry;
 
 public:
    void SetSwingStrength(const int s) { m_structure.SetStrength(s); }
 
-   SaSetup Evaluate(CSaDataCache &data, CSaSymbolCache &sym, const double bid, const double ask)
+   SaSetup Evaluate(CSaMarketData &data, CSaSymbolManager &sym, const double bid, const double ask)
      {
       SaSetup s;
       s.side = SA_SIDE_NONE;
@@ -669,13 +1020,14 @@ public:
       s.bias = SA_BIAS_FLAT;
       s.mkt = SA_MKT_NORMAL;
       s.score = 0;
+      s.confluence = 0;
       s.reason = "scanning";
       s.atrH1 = data.Atr();
       s.spreadPts = (sym.point > 0.0 ? (ask - bid) / sym.point : 0.0);
-      s.mkt = Regime(data.Atr(), data.AtrAvg());
+      s.mkt = m_vol.Regime(data.Atr(), data.AtrAvg());
 
       MqlRates h4[], h1[], m5[];
-      if(!data.GetH4(h4) || !data.GetH1(h1) || !data.GetM5(m5))
+      if(!data.H4(h4) || !data.H1(h1) || !data.M5(m5))
         {
          s.reason = "rates unavailable";
          return s;
@@ -684,9 +1036,12 @@ public:
       const int h1n = ArraySize(h1);
       const int m5n = ArraySize(m5);
 
-      SaStructure st = m_structure.Evaluate(h4, h4n, h1, h1n);
-      SaLiquidity liq = m_liquidity.Evaluate(h1, h1n, sym.Pip(), data.Atr());
-      SaZones zone = m_zones.Evaluate(h1, h1n, bid);
+      const SaStructure st = m_structure.Evaluate(h4, h4n, h1, h1n);
+      const SaLiquidity liq = m_liquidity.Evaluate(h1, h1n, sym.Pip(), data.Atr());
+      const SaDisplacement disp = m_disp.Evaluate(h1, h1n);
+      const SaFVG fvg = m_fvg.Evaluate(h1, h1n);
+      const SaOB ob = m_ob.Evaluate(h1, h1n, disp);
+      const SaZones zone = m_zones.Compose(disp, fvg, ob, bid);
 
       s.bias = st.biasH4;
       int score = liq.score + zone.score;
@@ -694,21 +1049,19 @@ public:
       if(st.chochBull || st.chochBear) score += 3;
       if(st.biasH4 != SA_BIAS_FLAT) score += 2;
 
-      // Higher bar in extreme vol (still allowed — precision, not block)
-      const int needScore = (s.mkt == SA_MKT_EXTREME ? InpMinScore + 3 :
-                             s.mkt == SA_MKT_HIGH     ? InpMinScore + 1 : InpMinScore);
+      const int needScore = m_vol.ScoreRequirement(s.mkt, s.spreadPts, data.Atr(), sym.point);
 
-      // Path A — continuation (strict confluence for ~70% precision target)
+      // Path A — Continuation
       if(InpAllowContinuation && st.biasH4 == SA_BIAS_BULL)
         {
-         const bool m5ok = M5Buy(m5, m5n);
+         const bool m5ok = m_entry.M5Buy(m5, m5n);
          int conf = 0;
          if(st.biasH4 == SA_BIAS_BULL) conf++;
          if(st.bosBull) conf++;
          if(zone.bullDisp) conf++;
          if(zone.bullFVG || zone.bullOB) conf++;
          if(zone.bullZoneTouch || !InpRequireZoneTouch) conf++;
-         if(liq.sellSideSweep || liq.equalLows) conf++; // opposing liq taken / demand
+         if(liq.sellSideSweep || liq.equalLows) conf++;
          if(m5ok) conf++;
 
          const bool institutional = (st.bosBull && (zone.bullFVG || zone.bullOB) && zone.bullDisp);
@@ -717,17 +1070,19 @@ public:
            {
             s.side = SA_SIDE_BUY;
             s.path = SA_PATH_CONTINUATION;
+            s.confluence = conf;
             s.score = score + 8 + conf;
             if(s.score >= needScore)
               {
-               s.reason = "CONT precision | " + st.note + " | " + zone.note;
+               s.reason = "CONT | " + st.note + " | " + zone.note;
                return s;
               }
            }
         }
+
       if(InpAllowContinuation && st.biasH4 == SA_BIAS_BEAR)
         {
-         const bool m5ok = M5Sell(m5, m5n);
+         const bool m5ok = m_entry.M5Sell(m5, m5n);
          int conf = 0;
          if(st.biasH4 == SA_BIAS_BEAR) conf++;
          if(st.bosBear) conf++;
@@ -743,43 +1098,49 @@ public:
            {
             s.side = SA_SIDE_SELL;
             s.path = SA_PATH_CONTINUATION;
+            s.confluence = conf;
             s.score = score + 8 + conf;
             if(s.score >= needScore)
               {
-               s.reason = "CONT precision | " + st.note + " | " + zone.note;
+               s.reason = "CONT | " + st.note + " | " + zone.note;
                return s;
               }
            }
         }
 
-      // Path B — reversal: sweep + CHoCH + zone + strict M5 (no weak BOS-only reverses)
-      if(InpAllowReversal && liq.sellSideSweep && st.chochBull && (zone.bullDisp || zone.bullFVG || zone.bullOB) && M5Buy(m5, m5n))
+      // Path B — Reversal (sweep + CHoCH + zone + M5)
+      if(InpAllowReversal && liq.sellSideSweep && st.chochBull &&
+         (zone.bullDisp || zone.bullFVG || zone.bullOB) && m_entry.M5Buy(m5, m5n))
         {
-         int conf = 4; // sweep, choch, zone family, m5
+         int conf = 4;
          if(zone.bullZoneTouch || zone.bullFVG) conf++;
          if(zone.bullDisp) conf++;
          s.side = SA_SIDE_BUY;
          s.path = SA_PATH_REVERSAL;
+         s.confluence = conf;
          s.score = score + 10 + conf;
          if(conf >= InpMinConfluence && s.score >= needScore)
            {
-            s.reason = "REV precision | sell-side sweep | " + st.note;
+            s.reason = "REV | sell-side sweep | " + st.note;
             return s;
            }
          s.side = SA_SIDE_NONE;
          s.path = SA_PATH_NONE;
         }
-      if(InpAllowReversal && liq.buySideSweep && st.chochBear && (zone.bearDisp || zone.bearFVG || zone.bearOB) && M5Sell(m5, m5n))
+
+      if(InpAllowReversal && liq.buySideSweep && st.chochBear &&
+         (zone.bearDisp || zone.bearFVG || zone.bearOB) && m_entry.M5Sell(m5, m5n))
         {
          int conf = 4;
          if(zone.bearZoneTouch || zone.bearFVG) conf++;
          if(zone.bearDisp) conf++;
          s.side = SA_SIDE_SELL;
          s.path = SA_PATH_REVERSAL;
+         s.confluence = conf;
          s.score = score + 10 + conf;
          if(conf >= InpMinConfluence && s.score >= needScore)
            {
-            s.reason = "REV precision | buy-side sweep | " + st.note;
+            s.reason = "REV | buy-side sweep | " + st.note;
             return s;
            }
          s.side = SA_SIDE_NONE;
@@ -793,7 +1154,35 @@ public:
   };
 
 //==================================================================
-// 8) RISK + POSITION MANAGER
+// MONEY MANAGER
+//==================================================================
+class CSaMoneyManager
+  {
+public:
+   double Lots(CSaSymbolManager &sym)
+     {
+      return sym.NormVol(InpLot);
+     }
+
+   bool MarginOK(const string symbol, const ENUM_SA_SIDE side, const double lots, string &why)
+     {
+      double margin = 0.0;
+      const ENUM_ORDER_TYPE ot = (side == SA_SIDE_BUY ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
+      const double price = (side == SA_SIDE_BUY ? SymbolInfoDouble(symbol, SYMBOL_ASK)
+                                                : SymbolInfoDouble(symbol, SYMBOL_BID));
+      if(price <= 0.0)
+        { why = "invalid price"; return false; }
+      if(!OrderCalcMargin(ot, symbol, lots, price, margin))
+        { why = "margin calc fail"; return false; }
+      if(margin > AccountInfoDouble(ACCOUNT_MARGIN_FREE))
+        { why = "insufficient margin"; return false; }
+      why = "ok";
+      return true;
+     }
+  };
+
+//==================================================================
+// RISK MANAGER
 //==================================================================
 class CSaRiskManager
   {
@@ -802,12 +1191,13 @@ private:
    double   m_dayStartEquity;
    datetime m_dayStamp;
    int      m_consecLoss;
+   CSaVolatilityEngine m_vol;
 
    void RollDay()
      {
       MqlDateTime dt;
       TimeToStruct(TimeTradeServer(), dt);
-      datetime day = StringToTime(StringFormat("%04d.%02d.%02d", dt.year, dt.mon, dt.day));
+      const datetime day = StringToTime(StringFormat("%04d.%02d.%02d", dt.year, dt.mon, dt.day));
       if(day != m_dayStamp)
         {
          m_dayStamp = day;
@@ -816,12 +1206,14 @@ private:
      }
 
 public:
-                     CSaRiskManager(void): m_magic(0), m_dayStartEquity(0), m_dayStamp(0), m_consecLoss(0) {}
-   void              Init(const long magic)
+                     CSaRiskManager(void): m_magic(0), m_dayStartEquity(0.0), m_dayStamp(0), m_consecLoss(0) {}
+
+   void Init(const long magic)
      {
       m_magic = magic;
       m_dayStartEquity = AccountInfoDouble(ACCOUNT_EQUITY);
       m_dayStamp = 0;
+      m_consecLoss = 0;
       RollDay();
      }
 
@@ -830,7 +1222,8 @@ public:
       int c = 0;
       for(int i = PositionsTotal() - 1; i >= 0; --i)
         {
-         if(!PositionSelectByTicket(PositionGetTicket(i)))
+         const ulong ticket = PositionGetTicket(i);
+         if(ticket == 0 || !PositionSelectByTicket(ticket))
             continue;
          if((long)PositionGetInteger(POSITION_MAGIC) != m_magic)
             continue;
@@ -846,7 +1239,8 @@ public:
       double p = 0.0;
       for(int i = PositionsTotal() - 1; i >= 0; --i)
         {
-         if(!PositionSelectByTicket(PositionGetTicket(i)))
+         const ulong ticket = PositionGetTicket(i);
+         if(ticket == 0 || !PositionSelectByTicket(ticket))
             continue;
          if((long)PositionGetInteger(POSITION_MAGIC) != m_magic)
             continue;
@@ -855,88 +1249,73 @@ public:
       return p;
      }
 
-   bool CanOpen(const string symbol, string &why)
+   bool CanOpen(CSaSymbolManager &sym, string &why)
      {
       RollDay();
+      if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || !MQLInfoInteger(MQL_TRADE_ALLOWED))
+        { why = "trading disabled"; return false; }
+      if(!TerminalInfoInteger(TERMINAL_CONNECTED))
+        { why = "no connection"; return false; }
+      if(!sym.TradeAllowed(why))
+         return false;
       if(CountPositions() >= InpMaxTrades)
         { why = "max trades"; return false; }
-      if(CountPositions(symbol) >= InpMaxTrades)
+      if(CountPositions(sym.symbol) >= InpMaxTrades)
         { why = "max symbol trades"; return false; }
 
       if(InpMaxDailyDDPercent > 0.0 && m_dayStartEquity > 0.0)
         {
-         double eq = AccountInfoDouble(ACCOUNT_EQUITY);
-         double dd = (m_dayStartEquity - eq) / m_dayStartEquity * 100.0;
+         const double eq = AccountInfoDouble(ACCOUNT_EQUITY);
+         const double dd = (m_dayStartEquity - eq) / m_dayStartEquity * 100.0;
          if(dd >= InpMaxDailyDDPercent)
            { why = "daily DD limit"; return false; }
         }
       if(InpMaxConsecutiveLoss > 0 && m_consecLoss >= InpMaxConsecutiveLoss)
         { why = "consec loss limit"; return false; }
 
-      if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || !MQLInfoInteger(MQL_TRADE_ALLOWED))
-        { why = "trading disabled"; return false; }
-
       why = "ok";
       return true;
      }
 
-   bool BuildStops(CSaSymbolCache &sym, const ENUM_SA_SIDE side, const ENUM_SA_MKT mkt,
+   bool BuildStops(CSaSymbolManager &sym, const ENUM_SA_SIDE side, const ENUM_SA_MKT mkt,
                    const double atr, double &entry, double &sl, double &tp, string &why)
      {
-      double boost = 1.0;
-      if(mkt == SA_MKT_HIGH) boost = InpVolSLBoostHigh;
-      if(mkt == SA_MKT_EXTREME) boost = InpVolSLBoostExtreme;
+      if(atr <= 0.0)
+        { why = "atr invalid"; return false; }
 
+      sym.RefreshSpecs();
+      const double boost = m_vol.SLBoost(mkt);
       double stopDist = atr * InpAtrMultSL * boost;
-      const double minDist = MathMax(sym.stopsLevel, sym.freezeLevel) * sym.point;
-      if(stopDist < MathMax(minDist, sym.Pip() * 3.0))
-         stopDist = MathMax(minDist, sym.Pip() * 3.0);
+      const double minDist = MathMax((double)MathMax(sym.stopsLevel, sym.freezeLevel) * sym.point,
+                                     sym.Pip() * 3.0);
+      if(stopDist < minDist)
+         stopDist = minDist;
 
       if(side == SA_SIDE_BUY)
         {
          entry = SymbolInfoDouble(sym.symbol, SYMBOL_ASK);
+         if(entry <= 0.0) { why = "invalid ask"; return false; }
          sl = sym.NormPrice(entry - stopDist);
          tp = sym.NormPrice(entry + stopDist * InpRewardRatio);
          if(sl >= entry || tp <= entry)
            { why = "invalid buy stops"; return false; }
+         if(entry - sl < minDist) sl = sym.NormPrice(entry - minDist);
+         if(tp - entry < minDist) tp = sym.NormPrice(entry + minDist);
         }
       else if(side == SA_SIDE_SELL)
         {
          entry = SymbolInfoDouble(sym.symbol, SYMBOL_BID);
+         if(entry <= 0.0) { why = "invalid bid"; return false; }
          sl = sym.NormPrice(entry + stopDist);
          tp = sym.NormPrice(entry - stopDist * InpRewardRatio);
          if(sl <= entry || tp >= entry)
            { why = "invalid sell stops"; return false; }
+         if(sl - entry < minDist) sl = sym.NormPrice(entry + minDist);
+         if(entry - tp < minDist) tp = sym.NormPrice(entry - minDist);
         }
       else
         { why = "no side"; return false; }
 
-      // broker distance validation vs current price
-      if(side == SA_SIDE_BUY)
-        {
-         if(entry - sl < minDist) sl = sym.NormPrice(entry - minDist);
-         if(tp - entry < minDist) tp = sym.NormPrice(entry + minDist);
-        }
-      else
-        {
-         if(sl - entry < minDist) sl = sym.NormPrice(entry + minDist);
-         if(entry - tp < minDist) tp = sym.NormPrice(entry - minDist);
-        }
-
-      why = "ok";
-      return true;
-     }
-
-   bool MarginOK(const string symbol, const ENUM_SA_SIDE side, const double lots, string &why)
-     {
-      double margin = 0.0;
-      ENUM_ORDER_TYPE ot = (side == SA_SIDE_BUY ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
-      double price = (side == SA_SIDE_BUY ? SymbolInfoDouble(symbol, SYMBOL_ASK)
-                                          : SymbolInfoDouble(symbol, SYMBOL_BID));
-      if(!OrderCalcMargin(ot, symbol, lots, price, margin))
-        { why = "margin calc fail"; return false; }
-      if(margin > AccountInfoDouble(ACCOUNT_MARGIN_FREE))
-        { why = "insufficient margin"; return false; }
       why = "ok";
       return true;
      }
@@ -947,7 +1326,31 @@ public:
       else m_consecLoss = 0;
      }
 
-   void ManageOpenPositions(CTrade &trade, const long magic)
+   int ConsecLoss() { return m_consecLoss; }
+  };
+
+//==================================================================
+// POSITION MANAGER (exit / BE / optional trail)
+//==================================================================
+class CSaPositionManager
+  {
+   double InitialRisk(const long type, const double open, const double sl, const double tp, const double point)
+     {
+      double risk = (type == POSITION_TYPE_BUY ? open - sl : sl - open);
+      if(risk > point)
+         return risk;
+      // After BE, recover R from TP distance / reward ratio
+      if(tp > 0.0 && InpRewardRatio > 0.0)
+        {
+         const double toTP = MathAbs(tp - open);
+         if(toTP > point)
+            return toTP / InpRewardRatio;
+        }
+      return 0.0;
+     }
+
+public:
+   void Manage(CTrade &trade, const long magic)
      {
       for(int i = PositionsTotal() - 1; i >= 0; --i)
         {
@@ -965,14 +1368,14 @@ public:
          const double bid = SymbolInfoDouble(symbol, SYMBOL_BID);
          const double ask = SymbolInfoDouble(symbol, SYMBOL_ASK);
          const double point = SymbolInfoDouble(symbol, SYMBOL_POINT);
+         const int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
          if(point <= 0.0)
             continue;
 
-         double risk = (type == POSITION_TYPE_BUY ? open - sl : sl - open);
+         const double risk = InitialRisk(type, open, sl, tp, point);
          if(risk <= 0.0)
             continue;
 
-         // Break-even
          bool beHit = false;
          if(type == POSITION_TYPE_BUY && bid >= open + risk * InpBreakEvenR)
             beHit = true;
@@ -985,49 +1388,49 @@ public:
                                    (type == POSITION_TYPE_SELL && sl > 0.0 && sl <= open + point);
             if(!alreadyBE)
               {
-               const double newSL = NormalizeDouble(open, (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS));
-               trade.PositionModify(ticket, newSL, tp);
-               sl = newSL;
+               const double newSL = NormalizeDouble(open, digits);
+               if(trade.PositionModify(ticket, newSL, tp))
+                  sl = newSL;
               }
            }
 
-         // Optional trailing
-         if(InpUseTrailing)
+         if(!InpUseTrailing)
+            continue;
+
+         bool trailArmed = false;
+         if(type == POSITION_TYPE_BUY && bid >= open + risk * InpTrailStartR) trailArmed = true;
+         if(type == POSITION_TYPE_SELL && ask <= open - risk * InpTrailStartR) trailArmed = true;
+         if(!trailArmed)
+            continue;
+
+         const double step = risk * InpTrailStepR;
+         if(type == POSITION_TYPE_BUY)
            {
-            bool trailArmed = false;
-            if(type == POSITION_TYPE_BUY && bid >= open + risk * InpTrailStartR) trailArmed = true;
-            if(type == POSITION_TYPE_SELL && ask <= open - risk * InpTrailStartR) trailArmed = true;
-            if(trailArmed)
-              {
-               const double step = risk * InpTrailStepR;
-               if(type == POSITION_TYPE_BUY)
-                 {
-                  double nsl = NormalizeDouble(bid - step, (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS));
-                  if(nsl > sl + point)
-                     trade.PositionModify(ticket, nsl, tp);
-                 }
-               else
-                 {
-                  double nsl = NormalizeDouble(ask + step, (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS));
-                  if(sl == 0.0 || nsl < sl - point)
-                     trade.PositionModify(ticket, nsl, tp);
-                 }
-              }
+            const double nsl = NormalizeDouble(bid - step, digits);
+            if(nsl > sl + point)
+               trade.PositionModify(ticket, nsl, tp);
+           }
+         else
+           {
+            const double nsl = NormalizeDouble(ask + step, digits);
+            if(sl == 0.0 || nsl < sl - point)
+               trade.PositionModify(ticket, nsl, tp);
            }
         }
      }
   };
 
 //==================================================================
-// 9) EXECUTION ENGINE
+// EXECUTION ENGINE
 //==================================================================
 class CSaExecutionEngine
   {
 private:
-   CTrade  m_trade;
-   long    m_magic;
-   int     m_slippage;
-   string  m_lastStatus;
+   CTrade              m_trade;
+   long                m_magic;
+   int                 m_slippage;
+   string              m_lastStatus;
+   CSaPositionManager  m_positions;
 
 public:
                      CSaExecutionEngine(void): m_magic(0), m_slippage(30), m_lastStatus("idle") {}
@@ -1039,19 +1442,23 @@ public:
       m_trade.SetExpertMagicNumber((ulong)magic);
       m_trade.SetDeviationInPoints(slippage);
       m_trade.SetAsyncMode(false);
+      m_lastStatus = "armed";
      }
 
-   void ManagePositions(CSaRiskManager &risk)
-     {
-      risk.ManageOpenPositions(m_trade, m_magic);
-     }
    string LastStatus() { return m_lastStatus; }
 
+   void ManagePositions()
+     {
+      m_positions.Manage(m_trade, m_magic);
+     }
+
    bool Send(const string symbol, const ENUM_SA_SIDE side, const double lots,
-             const double sl, const double tp, string &why)
+             double sl, double tp, string &why)
      {
       if(side == SA_SIDE_NONE || lots <= 0.0)
         { why = "invalid order params"; m_lastStatus = why; return false; }
+      if(sl <= 0.0 || tp <= 0.0)
+        { why = "invalid stops"; m_lastStatus = why; return false; }
 
       m_trade.SetExpertMagicNumber((ulong)m_magic);
       m_trade.SetDeviationInPoints(m_slippage);
@@ -1060,17 +1467,22 @@ public:
       for(int attempt = 1; attempt <= InpMaxRetries; attempt++)
         {
          ResetLastError();
+         // Refresh stops against live quotes each attempt (slippage / requote safe)
+         double bid = SymbolInfoDouble(symbol, SYMBOL_BID);
+         double ask = SymbolInfoDouble(symbol, SYMBOL_ASK);
+         if(bid <= 0.0 || ask <= 0.0)
+           {
+            why = "no quotes";
+            m_lastStatus = why;
+            if(attempt < InpMaxRetries) { Sleep(120 * attempt); continue; }
+            return false;
+           }
+
          bool ok = false;
          if(side == SA_SIDE_BUY)
-           {
-            const double ask = SymbolInfoDouble(symbol, SYMBOL_ASK);
             ok = m_trade.Buy(lots, symbol, ask, sl, tp, SA_COMMENT);
-           }
          else
-           {
-            const double bid = SymbolInfoDouble(symbol, SYMBOL_BID);
             ok = m_trade.Sell(lots, symbol, bid, sl, tp, SA_COMMENT);
-           }
 
          if(ok)
            {
@@ -1082,7 +1494,8 @@ public:
          const int rc = (int)m_trade.ResultRetcode();
          why = StringFormat("retcode=%d %s", rc, m_trade.ResultRetcodeDescription());
          m_lastStatus = why;
-         // Retry a few times on any failure (portable retry loop)
+
+         // Portable retry loop (no build-specific retcode enums)
          if(attempt < InpMaxRetries)
            {
             Sleep(150 * attempt);
@@ -1095,7 +1508,27 @@ public:
   };
 
 //==================================================================
-// 10) DASHBOARD
+// STATISTICS ENGINE
+//==================================================================
+class CSaStatistics
+  {
+private:
+   int m_entries;
+   int m_fills;
+   int m_fails;
+
+public:
+                     CSaStatistics(void): m_entries(0), m_fills(0), m_fails(0) {}
+   void OnAttempt() { m_entries++; }
+   void OnFill() { m_fills++; }
+   void OnFail() { m_fails++; }
+   int  Entries() { return m_entries; }
+   int  Fills() { return m_fills; }
+   int  Fails() { return m_fails; }
+  };
+
+//==================================================================
+// DASHBOARD ENGINE (premium HUD preserved)
 //==================================================================
 class CSaDashboard
   {
@@ -1201,7 +1634,7 @@ public:
       int y = m_y + 10;
       Lbl("t", x, y, "SNIPER AI", clrWhite, 14, "Arial Bold");
       y = m_y + 48;
-      Lbl("sub", x, y, "24/7  |  HIGH PRECISION SNIPER", C'230,190,190', 8, "Arial");
+      Lbl("sub", x, y, "24/7  |  INSTITUTIONAL V3", C'230,190,190', 8, "Arial");
 
       color sigClr = clrSilver;
       if(setup.side == SA_SIDE_BUY) sigClr = C'45,230,130';
@@ -1242,44 +1675,35 @@ public:
   };
 
 //==================================================================
-// 11) CORE STATE
+// SYSTEM CORE / STATE PIPELINE
 //==================================================================
-CSaSymbolCache      g_sym;
-CSaDataCache        g_data;
-CSaStrategyEngine   g_strategy;
+CSaConfig           g_cfg;
+CSaSymbolManager    g_sym;
+CSaMarketData       g_data;
+CSaDecisionEngine   g_decision;
 CSaRiskManager      g_risk;
+CSaMoneyManager     g_money;
 CSaExecutionEngine  g_exec;
+CSaStatistics       g_stats;
 CSaDashboard        g_dash;
 
-datetime g_lastM5 = 0;
-datetime g_lastEntryM5 = 0;
-string   g_lastAction = "boot";
-string   g_eaStatus = "init";
-SaSetup  g_setup;
-int      g_tick = 0;
-
-void SaLog(const string msg)
-  {
-   if(InpLogEvents)
-      Print(SA_LOG_PREFIX, msg);
-  }
-
-bool SaValidateInputs()
-  {
-   if(InpLot <= 0.0) return false;
-   if(InpMaxTrades < 1) return false;
-   if(InpAtrMultSL <= 0.0 || InpRewardRatio <= 0.0) return false;
-   if(InpMinScore < 0) return false;
-   return true;
-  }
+ENUM_SA_STAGE g_stage = SA_STAGE_INIT;
+datetime      g_lastM5 = 0;
+datetime      g_lastEntryM5 = 0;
+string        g_lastAction = "boot";
+string        g_eaStatus = "init";
+SaSetup       g_setup;
+int           g_tick = 0;
+string        g_broker = "";
 
 bool SaFire(const SaSetup &setup)
   {
+   g_stage = SA_STAGE_RISK;
    if(setup.side == SA_SIDE_NONE || setup.score < InpMinScore)
       return false;
 
    string why;
-   if(!g_risk.CanOpen(_Symbol, why))
+   if(!g_risk.CanOpen(g_sym, why))
      {
       g_lastAction = why;
       g_eaStatus = "blocked";
@@ -1293,25 +1717,29 @@ bool SaFire(const SaSetup &setup)
       return false;
      }
 
-   const double lots = g_sym.NormVol(InpLot);
-   if(!g_risk.MarginOK(_Symbol, setup.side, lots, why))
+   const double lots = g_money.Lots(g_sym);
+   if(!g_money.MarginOK(_Symbol, setup.side, lots, why))
      {
       g_lastAction = why;
       return false;
      }
 
+   g_stage = SA_STAGE_EXEC;
+   g_stats.OnAttempt();
    if(!g_exec.Send(_Symbol, setup.side, lots, sl, tp, why))
      {
+      g_stats.OnFail();
       g_lastAction = why;
       g_eaStatus = "exec fail";
       SaLog("order failed: " + why);
       return false;
      }
 
+   g_stats.OnFill();
    g_lastEntryM5 = g_lastM5;
    g_lastAction = (setup.side == SA_SIDE_BUY ? "BUY filled" : "SELL filled");
    g_eaStatus = "in market";
-   SaLog(g_lastAction + " comment=" + SA_COMMENT);
+   SaLog(g_lastAction + " comment=" + SA_COMMENT + " build=" + SA_BUILD_ID);
    return true;
   }
 
@@ -1329,17 +1757,18 @@ void SaRefreshDashboard()
                  g_lastAction,
                  g_eaStatus,
                  g_exec.LastStatus(),
-                 AccountInfoString(ACCOUNT_COMPANY));
+                 g_broker);
   }
 
 //==================================================================
-// 12) LIFECYCLE
+// LIFECYCLE
 //==================================================================
 int OnInit()
   {
-   if(!SaValidateInputs())
+   string why;
+   if(!g_cfg.Validate(why))
      {
-      Print(SA_LOG_PREFIX, "invalid inputs");
+      Print(SA_LOG_PREFIX, "invalid inputs: ", why);
       return INIT_PARAMETERS_INCORRECT;
      }
    if(!g_sym.Init(_Symbol))
@@ -1353,26 +1782,29 @@ int OnInit()
       return INIT_FAILED;
      }
 
-   g_strategy.SetSwingStrength(InpSwingStrength);
+   g_decision.SetSwingStrength(InpSwingStrength);
    g_risk.Init(InpMagic);
    g_exec.Init(InpMagic, InpMaxSlippagePoints);
+   g_broker = AccountInfoString(ACCOUNT_COMPANY);
 
    g_setup.side = SA_SIDE_NONE;
    g_setup.path = SA_PATH_NONE;
    g_setup.bias = SA_BIAS_FLAT;
    g_setup.mkt = SA_MKT_NORMAL;
    g_setup.score = 0;
+   g_setup.confluence = 0;
    g_setup.atrH1 = 0.0;
    g_setup.spreadPts = 0.0;
    g_setup.reason = "armed";
    g_eaStatus = "online";
    g_lastAction = "online 24/7";
+   g_stage = SA_STAGE_SCAN;
 
    if(!g_data.Refresh())
       SaLog("initial refresh pending history");
 
    SaRefreshDashboard();
-   SaLog(StringFormat("ONLINE %s lot=%.2f max=%d", _Symbol, InpLot, InpMaxTrades));
+   SaLog(StringFormat("ONLINE %s build=%s lot=%.2f max=%d", _Symbol, SA_BUILD_ID, InpLot, InpMaxTrades));
    return INIT_SUCCEEDED;
   }
 
@@ -1381,16 +1813,16 @@ void OnDeinit(const int reason)
    g_data.Release();
    g_dash.Destroy();
    Comment("");
-   SaLog(StringFormat("stopped reason=%d", reason));
+   SaLog(StringFormat("stopped reason=%d fills=%d fails=%d", reason, g_stats.Fills(), g_stats.Fails()));
   }
 
 void OnTick()
   {
    g_tick++;
+   g_stage = SA_STAGE_MANAGE;
+   g_exec.ManagePositions();
 
-   // Position management every tick (BE / optional trail)
-   g_exec.ManagePositions(g_risk);
-
+   g_stage = SA_STAGE_DATA;
    if(!g_data.Refresh())
      {
       g_eaStatus = "data wait";
@@ -1400,20 +1832,29 @@ void OnTick()
      }
 
    const bool newM5 = g_data.NewM5Bar(g_lastM5);
-   const double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-   const double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+   double bid = 0.0, ask = 0.0;
+   g_sym.Quotes(bid, ask);
 
-   // Evaluate on new M5 or throttled for dashboard accuracy
-   if(newM5 || (g_tick % InpDashRefreshTicks == 0))
+   // Full kill-chain only on new M5 (CPU). Dashboard throttle updates quotes only.
+   if(newM5)
      {
-      g_setup = g_strategy.Evaluate(g_data, g_sym, bid, ask);
+      g_stage = SA_STAGE_ANALYSIS;
+      g_setup = g_decision.Evaluate(g_data, g_sym, bid, ask);
       g_eaStatus = "scanning";
+      g_stage = SA_STAGE_DECISION;
 
-      if(newM5 && InpTradeChartOnly)
+      if(InpTradeChartOnly)
         {
          if(!(InpOneEntryPerM5 && g_lastEntryM5 == g_lastM5))
             SaFire(g_setup);
         }
+      SaRefreshDashboard();
+      g_stage = SA_STAGE_SCAN;
+     }
+   else if(g_tick % InpDashRefreshTicks == 0)
+     {
+      g_setup.atrH1 = g_data.Atr();
+      g_setup.spreadPts = (g_sym.point > 0.0 ? (ask - bid) / g_sym.point : 0.0);
       SaRefreshDashboard();
      }
   }
@@ -1422,12 +1863,16 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
                         const MqlTradeRequest &request,
                         const MqlTradeResult &result)
   {
-   // Track consecutive losses from closed deals of this EA
    if(trans.type != TRADE_TRANSACTION_DEAL_ADD)
       return;
-   HistorySelect(0, TimeCurrent());
-   if(!HistoryDealSelect(trans.deal))
+   if(trans.deal == 0)
       return;
+   if(!HistoryDealSelect(trans.deal))
+     {
+      HistorySelect(0, TimeCurrent());
+      if(!HistoryDealSelect(trans.deal))
+         return;
+     }
    if((long)HistoryDealGetInteger(trans.deal, DEAL_MAGIC) != InpMagic)
       return;
    if((ENUM_DEAL_ENTRY)HistoryDealGetInteger(trans.deal, DEAL_ENTRY) != DEAL_ENTRY_OUT)

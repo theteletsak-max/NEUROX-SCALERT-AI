@@ -1,13 +1,15 @@
-# SNIPER AI — why some pastes fail MetaEditor
+# SNIPER AI — MetaEditor compile surface
 
-If your local `SniperAI.mq5` still has these lines, MetaEditor can error:
+Canonical: `release/deliver/SNIPER_AI.mq5` (`BUILD_ID: SA_INSTITUTIONAL_V3`)
 
-| Pattern | Problem | Fix in `SA_COMPILE_OK_9` |
-|---------|---------|--------------------------|
-| `#property strict` | MQL4-only; unknown/invalid in MQL5 | Removed |
-| `input group "..."` | Not supported on older MT5 builds | Removed (plain `input`s) |
-| `SA_BIAS_BEAR = -1` / `SA_SIDE_SELL = -1` | Negative enum literals trip some compilers | Use `= 2` |
-| Custom `SYMBOL_FILLING_*` bit checks | Filling-mode constants differ by build | `SetTypeFillingBySymbol` |
-| `TRADE_RETCODE_BUSY` / similar | Missing on some builds | Portable retry without those constants |
+Deliberately avoided (common F7 failures on older pastes):
 
-Canonical file: `release/deliver/SNIPER_AI.mq5` (`BUILD_ID: SA_COMPILE_OK_9`).
+| Pattern | Why avoided |
+|---------|-------------|
+| `#property strict` | MQL4-only |
+| `input group` | Missing on older builds |
+| Negative enum literals | Some compilers reject |
+| Manual `SYMBOL_FILLING_*` bit tests | Prefer `SetTypeFillingBySymbol` |
+| Hard-coded `TRADE_RETCODE_*` switches | Prefer portable retry |
+
+Expect **0 errors / 0 warnings** on a current MetaTrader 5 MetaEditor build.

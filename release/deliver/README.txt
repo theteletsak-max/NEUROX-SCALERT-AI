@@ -1,29 +1,14 @@
-SNIPER AI — compile-safe single file
-====================================
+SNIPER AI — institutional rebuild
+=================================
+File: SNIPER_AI.mq5
+BUILD_ID: SA_INSTITUTIONAL_V3
 
-USE THIS FILE ONLY:
-  SNIPER_AI.mq5
-  BUILD_ID: SA_COMPILE_OK_9
-
-Install in MetaTrader 5
------------------------
+Install
+-------
 1. MT5 → File → Open Data Folder → MQL5/Experts/
-2. DELETE any old files named:
-     SniperAI.mq5, SNIPER_AI.mq5, SNIPER_AI_FIXED.mq5,
-     SNIPER_AI_OK9.mq5, SniperAI_v2_SINGLEFILE.mq5
-3. Copy THIS SNIPER_AI.mq5 into MQL5/Experts/
-4. Open it in MetaEditor → Compile (F7)
-5. Attach to a chart → enable Algo Trading
+2. DELETE old Sniper / SNIPER_AI *.mq5 files (avoid MetaEditor cache mixups)
+3. Copy SNIPER_AI.mq5 here
+4. MetaEditor → Compile (F7) — expect 0 errors / 0 warnings
+5. Attach to chart → enable Algo Trading
 
-If MetaEditor still shows old errors:
-- Confirm the top of the file says BUILD_ID: SA_COMPILE_OK_9
-- Fully close MetaEditor/MT5, reopen, compile again
-- Do not keep multiple Sniper .mq5 files in Experts/
-
-What was fixed vs older pastes
-------------------------------
-- Removed #property strict (MQL4-only; breaks MQL5)
-- Removed input group (older builds reject it)
-- Enums use 0/1/2 (no negative values)
-- Filling via SetTypeFillingBySymbol (portable)
-- No TRADE_RETCODE_* constants that some builds lack
+Trade comment is exactly: SNIPER AI

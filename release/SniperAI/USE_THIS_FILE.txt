@@ -1,0 +1,5 @@
+Production EA (single file):
+  SNIPER_AI.mq5   (same as SniperAI.mq5)
+  BUILD_ID: SA_INSTITUTIONAL_V3
+
+Delete any old SNIPER_AI_*.mq5 / SniperAI_v2_*.mq5 from MQL5/Experts before compiling.
