@@ -15,10 +15,10 @@
 | Style | Aggressive sniper (selective entries, decisive size) |
 | Execution | **Instant execution** on valid setup |
 | Direction | BUY & SELL |
-| Symbols | Single symbol (TBD) |
+| Symbols | **All currency pairs** (forex universe — scope TBD below) |
 | Horizon | Intraday (hours) |
 | v1 path | **Trend continuation** first (reversals = v2) |
-| Max open trades | **1** |
+| Max open trades | **3 per symbol** |
 | Management | SL / TP / Break-even only |
 | Forbidden | Grid, martingale, trailing, partials, self-optimising AI |
 | AI role | Assist ranking / labelling only — never bypass rules |
@@ -54,7 +54,7 @@
 4. Pullback into **fresh OB and/or untested FVG**  
 5. **Confirmation candle** with trend  
 6. **Risk** valid (SL / TP / lot)  
-7. No open Sniper AI position on symbol  
+7. Open Sniper AI positions on that symbol **< 3**  
 
 → **Instant market BUY/SELL**
 
@@ -72,12 +72,19 @@
 
 ---
 
+## Exposure note (important)
+
+- **3 max per symbol** is locked.  
+- **All currencies** means many pairs can be live at once → need a later rule for **account-wide** risk (e.g. max total open trades or max % risk in use), or one pair’s sniper shots can stack into account blow-up.  
+- Not decided yet — ask next.
+
 ## Still open (decide next, piece by piece)
 
-1. Symbol (e.g. EURUSD, XAUUSD, …)  
-2. Timeframes (HTF / setup / entry)  
-3. Exact SL / TP / BE / lot numbers  
-4. Entry timing detail (close of candle vs tick inside zone)
+1. Forex universe scope (majors only vs majors+minors vs everything the broker lists)  
+2. Account-wide max exposure (recommended once multi-pair is on)  
+3. Timeframes (HTF / setup / entry)  
+4. Exact SL / TP / BE / lot numbers  
+5. Entry timing detail (close of candle vs tick inside zone)
 
 ---
 
