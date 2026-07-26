@@ -5,24 +5,27 @@ ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
 EA file:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK14.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK15.mq5
 
 MUST SHOW AT TOP:
-  BUILD_ID: SA_TRADE_READY_14
+  BUILD_ID: SA_BABFX_TRADE_15
+
+THIS IS YOUR BABFX / PRISM SNIPER AI (CTrade - NOT raw OrderSend)
 
 STEPS:
 1. Close MetaEditor
-2. Delete ALL old Sniper/SNIPER *.mq5 and *.ex5 from MQL5/Experts
-3. Copy SNIPER_AI_OK14.mq5 into MQL5/Experts
-4. Confirm SA_TRADE_READY_14
-5. Press F7
-6. Attach to forex chart
-7. Enable AutoTrading (toolbar) AND allow Algo Trading in EA settings
-8. Watch Experts tab each M5 for: "M5 scan: ..." or "TRADE EXECUTED"
+2. Delete ALL old Sniper/SNIPER *.mq5 *.ex5 from MQL5/Experts
+3. Copy SNIPER_AI_OK15.mq5 into MQL5/Experts
+4. Confirm SA_BABFX_TRADE_15
+5. F7 compile
+6. Attach to forex chart (M15 recommended; TrendTF=H4 EntryTF=M15)
+7. Inputs: TradeComment must stay exactly SNIPER AI
+8. Enable AutoTrading + Algo Trading
+9. Experts tab should show: SNIPER AI Loaded Successfully BUILD_ID=SA_BABFX_TRADE_15
 
-FIXES IN THIS BUILD:
-- open order first, then attach SL/TP (common broker requirement)
-- tries IOC / FOK / RETURN filling modes
-- spread-aware stop distance
-- higher default slippage
-- clear logs if AutoTrading is off
+CHANGES FROM YOUR PASTE:
+- removed #property strict (breaks MQL5)
+- removed watermark #resource (blocked compile without BMP)
+- TradeComment locked to SNIPER AI
+- dashboard off
+- CTrade ExecuteBuy/ExecuteSell kept (broker fill mode + no-stops fallback)

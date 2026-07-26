@@ -1,10 +1,12 @@
-# SNIPER AI - compile / execution surface
+# SNIPER AI - BabFX PRISM build
 
-Canonical: `SNIPER_AI_OK14.mq5` (`BUILD_ID: SA_TRADE_READY_14`)
+Canonical: `SNIPER_AI_OK15.mq5` (`BUILD_ID: SA_BABFX_TRADE_15`)
 
-Execution:
-- Market deal via OrderSend
-- Fallback: open without stops, then TRADE_ACTION_SLTP
-- Multi filling mode retry (IOC/FOK/RETURN)
-- Trade comment locked: `SNIPER AI`
-- No chart dashboard
+Source: user's BabFX Sniper AI / PRISM engine.
+
+Portability edits:
+- Removed `#property strict` (MQL4-only)
+- Removed `#resource` watermark BMP dependency
+- `TradeComment` default/lock: `SNIPER AI`
+- Dashboard default off
+- Kept `CTrade` execution (ConfigureFillingMode + invalid-stops open-then-attach)
