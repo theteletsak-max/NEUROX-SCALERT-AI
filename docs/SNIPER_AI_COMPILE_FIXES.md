@@ -1,19 +1,14 @@
-# SNIPER AI - MetaEditor compile surface
+# SNIPER AI - MetaEditor / execution surface
 
-Canonical download: `SNIPER_AI_OK12.mq5` (`BUILD_ID: SA_COMPILE_OK_12`)
+Canonical: `SNIPER_AI_OK13.mq5` (`BUILD_ID: SA_TRADE_READY_13`)
 
-Also mirrored as `SNIPER_AI.mq5` / `release/deliver/SNIPER_AI.mq5`.
+## Hard rules in this build
+- No `#include` / no `CTrade`
+- Raw `OrderSend` with portable numeric retcodes
+- Trade comment locked to exactly `SNIPER AI`
+- Dashboard removed (user request)
+- ASCII-only source
 
-Deliberately avoided:
-
-| Pattern | Why avoided |
-|---------|-------------|
-| `#include <Trade/Trade.mqh>` / `CTrade` | Eliminated; raw `OrderSend` only |
-| `#property strict` | MQL4-only |
-| `input group` | Missing on older builds |
-| Hard-coded `TRADE_RETCODE_*` (incl. BUSY) | Not portable |
-| Non-ASCII punctuation | Encoding issues |
-| `SetAsyncMode` / `SetTypeFillingBySymbol` | Avoid optional CTrade APIs |
-| `OnTradeTransaction` | Reduced compile surface |
-
-Expect **0 errors** on MetaTrader 5 MetaEditor.
+## Strategy preserved
+H4 bias -> H1 structure/liquidity/zones -> M5 confirm
+Continuation + Reversal | max 3 | lot 0.01 | 1.5xATR | 2R | BE +1R | 24/7

@@ -1,24 +1,48 @@
 //+------------------------------------------------------------------+
-//| SNIPER_AI_OK12.mq5                                                |
-//| BUILD_ID: SA_COMPILE_OK_12                                        |
-//| SNIPER AI                                                         |
-//| ZERO includes. Raw OrderSend only. Put in Experts, press F7.      |
+//| SNIPER_AI_OK13.mq5                                                |
+//| BUILD_ID: SA_TRADE_READY_13                                       |
+//| SNIPER AI - production execution build (no dashboard)             |
+//| Strategy: H4 bias -> H1 setup -> M5 entry | Comment: SNIPER AI    |
+//| ZERO includes. Raw OrderSend. ASCII only. Put in Experts, F7.     |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "1.00"
+#property version   "1.30"
 #property description "SNIPER AI institutional sniper EA"
-#property description "H4 H1 M5 high precision 24/7"
+#property description "H4 H1 M5 precision execution 24/7"
 
-#define SA_NAME "SNIPER AI"
-#define SA_UI   "SA_UI_"
+#define SA_COMMENT        "SNIPER AI"
+#define SA_LOG            "SNIPER AI | "
+#define SA_H4_BARS        160
+#define SA_H1_BARS        160
+#define SA_M5_BARS        48
+#define SA_ATR_PERIOD     14
+#define SA_ATR_AVG_N      40
+#define SA_DISP_MULT      1.7
+#define SA_ZONE_PAD       0.35
 
-//--- inputs
+// Portable numeric retcodes (avoid named retcode identifiers)
+#define SA_RC_DONE           10009
+#define SA_RC_PLACED         10008
+#define SA_RC_DONE_PARTIAL   10010
+#define SA_RC_REQUOTE        10004
+#define SA_RC_REJECT         10006
+#define SA_RC_CANCEL         10007
+#define SA_RC_TOO_MANY       10018
+#define SA_RC_TIMEOUT        10012
+#define SA_RC_PRICE_OFF      10021
+#define SA_RC_PRICE_CHANGED  10020
+#define SA_RC_CONTEXT        10031
+
+//==================================================================
+// CONFIG
+//==================================================================
 input double InpLot                = 0.01;
 input int    InpMaxTrades          = 3;
 input long   InpMagic              = 20260726;
-input int    InpSlippage           = 80;
-input int    InpMaxRetries         = 3;
+input int    InpSlippagePoints     = 80;
+input int    InpMaxRetries         = 5;
+input int    InpRetryBaseMs        = 120;
 input int    InpSwingStrength      = 2;
 input int    InpMinScore           = 14;
 input int    InpMinConfluence      = 4;
@@ -26,6 +50,9 @@ input bool   InpAllowContinuation  = true;
 input bool   InpAllowReversal      = true;
 input bool   InpRequireZoneTouch   = true;
 input bool   InpOnePerM5           = true;
+input bool   InpTradeChartOnly     = true;
+input bool   InpScanAllForex       = false;
+input int    InpMaxSymbolsPerTick  = 12;
 input double InpAtrMultSL          = 1.5;
 input double InpRR                 = 2.0;
 input double InpBreakEvenR         = 1.0;
@@ -38,104 +65,216 @@ input double InpHighVolMult        = 1.8;
 input double InpExtremeVolMult     = 2.5;
 input double InpSLBoostHigh        = 1.15;
 input double InpSLBoostExtreme     = 1.35;
-input bool   InpShowDashboard      = true;
 input bool   InpLogEvents          = true;
-input int    InpDashEveryTicks     = 8;
 
-//--- globals
+//==================================================================
+// TYPES
+//==================================================================
+struct SaSymCache
+  {
+   string symbol;
+   double point;
+   double volMin;
+   double volMax;
+   double volStep;
+   int    digits;
+   int    stopsLevel;
+   int    freezeLevel;
+   long   fillingMode;
+   long   tradeMode;
+   bool   ready;
+  };
+
+struct SaSetup
+  {
+   string symbol;
+   int    side;
+   int    path;
+   int    bias;
+   int    mkt;
+   int    score;
+   int    conf;
+   double atr;
+   double entry;
+   double sl;
+   double tp;
+   double lots;
+   string reason;
+   bool   valid;
+  };
+
+//==================================================================
+// GLOBAL STATE
+//==================================================================
 int      g_atrHandle = INVALID_HANDLE;
-datetime g_lastM5 = 0;
-datetime g_lastEntryM5 = 0;
+string   g_atrSymbol = "";
+datetime g_lastM5Chart = 0;
 datetime g_dayStamp = 0;
 double   g_dayStartEquity = 0.0;
 int      g_consecLoss = 0;
 int      g_tick = 0;
+int      g_scanCursor = 0;
 string   g_lastAction = "boot";
-string   g_eaStatus = "init";
 string   g_execStatus = "idle";
-string   g_reason = "armed";
-int      g_side = 0;      // 1 buy, -1 sell, 0 flat
-int      g_path = 0;      // 1 cont, 2 rev
-int      g_bias = 0;      // 1 bull, -1 bear, 0 flat
-int      g_mkt = 1;       // 0 low,1 normal,2 high,3 extreme
-int      g_score = 0;
-double   g_atr = 0.0;
-double   g_spreadPts = 0.0;
+datetime g_entryStamp[];
+string   g_entrySymbol[];
 
-//+------------------------------------------------------------------+
-void SaLog(string msg)
+//==================================================================
+// UTIL / LOGGING
+//==================================================================
+void SaLog(const string msg)
   {
    if(InpLogEvents)
-      Print(SA_NAME, " | ", msg);
+      Print(SA_LOG, msg);
   }
 
-//+------------------------------------------------------------------+
-double SaPip()
+int SaClampInt(const int v, const int lo, const int hi)
   {
-   int digits = (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS);
-   double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
-   if(digits == 3 || digits == 5)
-      return point * 10.0;
-   return point;
+   if(v < lo)
+      return lo;
+   if(v > hi)
+      return hi;
+   return v;
   }
 
-//+------------------------------------------------------------------+
-double SaNormPrice(double price)
+double SaMaxD(const double a, const double b)
   {
-   return NormalizeDouble(price, (int)SymbolInfoInteger(_Symbol, SYMBOL_DIGITS));
+   return (a > b ? a : b);
   }
 
-//+------------------------------------------------------------------+
-double SaNormLots(double lots)
+bool SaIsForexSymbol(const string symbol)
   {
-   double minLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
-   double maxLot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
-   double step = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
-   if(step <= 0.0)
-      step = 0.01;
-   lots = MathFloor(lots / step + 1e-12) * step;
-   if(lots < minLot)
-      lots = minLot;
-   if(lots > maxLot)
-      lots = maxLot;
-   return NormalizeDouble(lots, (step < 0.01 ? 3 : 2));
+   string path = SymbolInfoString(symbol, SYMBOL_PATH);
+   string pathL = path;
+   StringToLower(pathL);
+   if(StringFind(pathL, "forex") >= 0)
+      return true;
+   string base = SymbolInfoString(symbol, SYMBOL_CURRENCY_BASE);
+   string profit = SymbolInfoString(symbol, SYMBOL_CURRENCY_PROFIT);
+   if(StringLen(base) == 3 && StringLen(profit) == 3 && base != profit)
+      return true;
+   return false;
   }
 
-//+------------------------------------------------------------------+
-bool SaCopyRates(ENUM_TIMEFRAMES tf, int count, MqlRates &rates[])
+//==================================================================
+// SYMBOL / MARKET DATA
+//==================================================================
+bool SaLoadSymbol(const string symbol, SaSymCache &c)
+  {
+   c.symbol = symbol;
+   c.ready = false;
+   if(!SymbolSelect(symbol, true))
+      return false;
+   c.point       = SymbolInfoDouble(symbol, SYMBOL_POINT);
+   c.volMin      = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN);
+   c.volMax      = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MAX);
+   c.volStep     = SymbolInfoDouble(symbol, SYMBOL_VOLUME_STEP);
+   c.digits      = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+   c.stopsLevel  = (int)SymbolInfoInteger(symbol, SYMBOL_TRADE_STOPS_LEVEL);
+   c.freezeLevel = (int)SymbolInfoInteger(symbol, SYMBOL_TRADE_FREEZE_LEVEL);
+   c.fillingMode = SymbolInfoInteger(symbol, SYMBOL_FILLING_MODE);
+   c.tradeMode   = SymbolInfoInteger(symbol, SYMBOL_TRADE_MODE);
+   if(c.point <= 0.0 || c.volStep <= 0.0 || c.volMin <= 0.0)
+      return false;
+   c.ready = true;
+   return true;
+  }
+
+double SaPip(const SaSymCache &c)
+  {
+   if(c.digits == 3 || c.digits == 5)
+      return c.point * 10.0;
+   return c.point;
+  }
+
+double SaNormPrice(const SaSymCache &c, const double price)
+  {
+   return NormalizeDouble(price, c.digits);
+  }
+
+double SaNormLots(const SaSymCache &c, double lots)
+  {
+   if(c.volStep <= 0.0)
+      return 0.0;
+   lots = MathFloor(lots / c.volStep + 1e-12) * c.volStep;
+   if(lots < c.volMin)
+      lots = c.volMin;
+   if(lots > c.volMax)
+      lots = c.volMax;
+   int prec = 2;
+   if(c.volStep < 0.01)
+      prec = 3;
+   if(c.volStep < 0.001)
+      prec = 4;
+   return NormalizeDouble(lots, prec);
+  }
+
+bool SaCopyRatesTF(const string symbol, const ENUM_TIMEFRAMES tf, const int count, MqlRates &rates[])
   {
    ArraySetAsSeries(rates, true);
-   return (CopyRates(_Symbol, tf, 0, count, rates) >= count);
+   return (CopyRates(symbol, tf, 0, count, rates) >= count);
   }
 
-//+------------------------------------------------------------------+
-bool SaIsSwingHigh(MqlRates &r[], int i, int strength, int n)
+bool SaEnsureAtr(const string symbol)
+  {
+   if(g_atrHandle != INVALID_HANDLE && g_atrSymbol == symbol)
+      return true;
+   if(g_atrHandle != INVALID_HANDLE)
+     {
+      IndicatorRelease(g_atrHandle);
+      g_atrHandle = INVALID_HANDLE;
+     }
+   g_atrHandle = iATR(symbol, PERIOD_H1, SA_ATR_PERIOD);
+   g_atrSymbol = symbol;
+   return (g_atrHandle != INVALID_HANDLE);
+  }
+
+bool SaAtrSeries(const string symbol, double &atrNow, double &atrAvg)
+  {
+   atrNow = 0.0;
+   atrAvg = 0.0;
+   if(!SaEnsureAtr(symbol))
+      return false;
+   double buf[];
+   ArraySetAsSeries(buf, true);
+   if(CopyBuffer(g_atrHandle, 0, 1, SA_ATR_AVG_N, buf) < SA_ATR_AVG_N)
+      return false;
+   atrNow = buf[0];
+   double sum = 0.0;
+   for(int i = 0; i < SA_ATR_AVG_N; i++)
+      sum += buf[i];
+   atrAvg = sum / (double)SA_ATR_AVG_N;
+   return (atrNow > 0.0 && atrAvg > 0.0);
+  }
+
+//==================================================================
+// SWING / STRUCTURE
+//==================================================================
+bool SaIsSwingHigh(const MqlRates &r[], const int i, const int strength, const int n)
   {
    if(i - strength < 0 || i + strength >= n)
       return false;
    for(int k = 1; k <= strength; k++)
      {
-      if(r[i].high < r[i - k].high || r[i].high < r[i + k].high)
+      if(r[i].high < r[i - k].high || r[i].high <= r[i + k].high)
          return false;
      }
    return true;
   }
 
-//+------------------------------------------------------------------+
-bool SaIsSwingLow(MqlRates &r[], int i, int strength, int n)
+bool SaIsSwingLow(const MqlRates &r[], const int i, const int strength, const int n)
   {
    if(i - strength < 0 || i + strength >= n)
       return false;
    for(int k = 1; k <= strength; k++)
      {
-      if(r[i].low > r[i - k].low || r[i].low > r[i + k].low)
+      if(r[i].low > r[i - k].low || r[i].low >= r[i + k].low)
          return false;
      }
    return true;
   }
 
-//+------------------------------------------------------------------+
-int SaBiasH4(MqlRates &r[], int n, int strength)
+int SaBiasH4(const MqlRates &r[], const int n, const int strength)
   {
    double h1 = 0, h2 = 0, l1 = 0, l2 = 0;
    int hc = 0, lc = 0;
@@ -177,11 +316,10 @@ int SaBiasH4(MqlRates &r[], int n, int strength)
    return 0;
   }
 
-//+------------------------------------------------------------------+
-void SaRecentSwings(MqlRates &r[], int n, int strength, double &swingHigh, double &swingLow)
+void SaRecentSwings(const MqlRates &r[], const int n, const int strength, double &swingHigh, double &swingLow)
   {
-   swingHigh = 0;
-   swingLow = 0;
+   swingHigh = 0.0;
+   swingLow = 0.0;
    for(int i = strength + 1; i < n - strength; i++)
      {
       if(swingHigh == 0.0 && SaIsSwingHigh(r, i, strength, n))
@@ -193,8 +331,10 @@ void SaRecentSwings(MqlRates &r[], int n, int strength, double &swingHigh, doubl
      }
   }
 
-//+------------------------------------------------------------------+
-bool SaM5Buy(MqlRates &m5[], int n)
+//==================================================================
+// ENTRY CONFIRM (M5)
+//==================================================================
+bool SaM5Buy(const MqlRates &m5[], const int n)
   {
    if(n < 4)
       return false;
@@ -209,8 +349,7 @@ bool SaM5Buy(MqlRates &m5[], int n)
    return (bull && strong && up && brk);
   }
 
-//+------------------------------------------------------------------+
-bool SaM5Sell(MqlRates &m5[], int n)
+bool SaM5Sell(const MqlRates &m5[], const int n)
   {
    if(n < 4)
       return false;
@@ -225,16 +364,28 @@ bool SaM5Sell(MqlRates &m5[], int n)
    return (bear && strong && dn && brk);
   }
 
-//+------------------------------------------------------------------+
+//==================================================================
+// RISK / MONEY
+//==================================================================
+void SaRollDay()
+  {
+   MqlDateTime dt;
+   TimeToStruct(TimeTradeServer(), dt);
+   datetime day = StringToTime(StringFormat("%04d.%02d.%02d", dt.year, dt.mon, dt.day));
+   if(day != g_dayStamp)
+     {
+      g_dayStamp = day;
+      g_dayStartEquity = AccountInfoDouble(ACCOUNT_EQUITY);
+     }
+  }
+
 int SaCountMagic()
   {
    int c = 0;
    for(int i = PositionsTotal() - 1; i >= 0; i--)
      {
       ulong ticket = PositionGetTicket(i);
-      if(ticket == 0)
-         continue;
-      if(!PositionSelectByTicket(ticket))
+      if(ticket == 0 || !PositionSelectByTicket(ticket))
          continue;
       if((long)PositionGetInteger(POSITION_MAGIC) != InpMagic)
          continue;
@@ -243,40 +394,45 @@ int SaCountMagic()
    return c;
   }
 
-//+------------------------------------------------------------------+
-double SaFloating()
+int SaCountMagicSymbol(const string symbol)
   {
-   double p = 0.0;
+   int c = 0;
    for(int i = PositionsTotal() - 1; i >= 0; i--)
      {
       ulong ticket = PositionGetTicket(i);
-      if(ticket == 0)
-         continue;
-      if(!PositionSelectByTicket(ticket))
+      if(ticket == 0 || !PositionSelectByTicket(ticket))
          continue;
       if((long)PositionGetInteger(POSITION_MAGIC) != InpMagic)
          continue;
-      p += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+      if(PositionGetString(POSITION_SYMBOL) != symbol)
+         continue;
+      c++;
      }
-   return p;
+   return c;
   }
 
-//+------------------------------------------------------------------+
-void SaRollDay()
+bool SaTradingAllowed(string &why)
   {
-   MqlDateTime dt;
-   TimeToStruct(TimeTradeServer(), dt);
-   string s = StringFormat("%04d.%02d.%02d", dt.year, dt.mon, dt.day);
-   datetime day = StringToTime(s);
-   if(day != g_dayStamp)
+   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
      {
-      g_dayStamp = day;
-      g_dayStartEquity = AccountInfoDouble(ACCOUNT_EQUITY);
+      why = "terminal trade off";
+      return false;
      }
+   if(!MQLInfoInteger(MQL_TRADE_ALLOWED))
+     {
+      why = "ea trade off";
+      return false;
+     }
+   if(!TerminalInfoInteger(TERMINAL_CONNECTED))
+     {
+      why = "no connection";
+      return false;
+     }
+   why = "ok";
+   return true;
   }
 
-//+------------------------------------------------------------------+
-bool SaCanOpen(string &why)
+bool SaRiskGate(string &why)
   {
    SaRollDay();
    if(SaCountMagic() >= InpMaxTrades)
@@ -299,17 +455,11 @@ bool SaCanOpen(string &why)
       why = "consec loss";
       return false;
      }
-   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || !MQLInfoInteger(MQL_TRADE_ALLOWED))
-     {
-      why = "trading disabled";
-      return false;
-     }
-   why = "ok";
-   return true;
+   return SaTradingAllowed(why);
   }
 
-//+------------------------------------------------------------------+
-bool SaBuildStops(int side, int mkt, double atr, double &entry, double &sl, double &tp, string &why)
+bool SaBuildStops(const SaSymCache &c, const int side, const int mkt, const double atr,
+                  double &entry, double &sl, double &tp, string &why)
   {
    double boost = 1.0;
    if(mkt == 2)
@@ -317,68 +467,119 @@ bool SaBuildStops(int side, int mkt, double atr, double &entry, double &sl, doub
    if(mkt == 3)
       boost = InpSLBoostExtreme;
 
-   double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
-   int stops = (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL);
-   int freeze = (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_FREEZE_LEVEL);
-   double minDist = MathMax((double)stops, (double)freeze) * point;
+   double minDist = SaMaxD((double)c.stopsLevel, (double)c.freezeLevel) * c.point;
    double stopDist = atr * InpAtrMultSL * boost;
-   double floorDist = MathMax(minDist, SaPip() * 3.0);
+   double floorDist = SaMaxD(minDist, SaPip(c) * 3.0);
    if(stopDist < floorDist)
       stopDist = floorDist;
 
+   double bid = SymbolInfoDouble(c.symbol, SYMBOL_BID);
+   double ask = SymbolInfoDouble(c.symbol, SYMBOL_ASK);
+   if(bid <= 0.0 || ask <= 0.0)
+     {
+      why = "no quotes";
+      return false;
+     }
+
    if(side == 1)
      {
-      entry = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-      sl = SaNormPrice(entry - stopDist);
-      tp = SaNormPrice(entry + stopDist * InpRR);
+      entry = ask;
+      sl = SaNormPrice(c, entry - stopDist);
+      tp = SaNormPrice(c, entry + stopDist * InpRR);
       if(sl >= entry || tp <= entry)
         {
          why = "bad buy stops";
          return false;
         }
       if(entry - sl < minDist)
-         sl = SaNormPrice(entry - minDist);
+         sl = SaNormPrice(c, entry - SaMaxD(minDist, c.point));
       if(tp - entry < minDist)
-         tp = SaNormPrice(entry + minDist);
+         tp = SaNormPrice(c, entry + SaMaxD(minDist, c.point));
      }
    else if(side == -1)
      {
-      entry = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-      sl = SaNormPrice(entry + stopDist);
-      tp = SaNormPrice(entry - stopDist * InpRR);
+      entry = bid;
+      sl = SaNormPrice(c, entry + stopDist);
+      tp = SaNormPrice(c, entry - stopDist * InpRR);
       if(sl <= entry || tp >= entry)
         {
          why = "bad sell stops";
          return false;
         }
       if(sl - entry < minDist)
-         sl = SaNormPrice(entry + minDist);
+         sl = SaNormPrice(c, entry + SaMaxD(minDist, c.point));
       if(entry - tp < minDist)
-         tp = SaNormPrice(entry - minDist);
+         tp = SaNormPrice(c, entry - SaMaxD(minDist, c.point));
      }
    else
      {
       why = "no side";
       return false;
      }
+
    why = "ok";
    return true;
   }
 
-
-//+------------------------------------------------------------------+
-ENUM_ORDER_TYPE_FILLING SaFilling()
+bool SaMarginOK(const string symbol, const int side, const double lots, const double price, string &why)
   {
-   long mode = SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
-   if((mode & SYMBOL_FILLING_FOK) == SYMBOL_FILLING_FOK)
+   double margin = 0.0;
+   ENUM_ORDER_TYPE ot = (side == 1 ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
+   if(!OrderCalcMargin(ot, symbol, lots, price, margin))
+     {
+      why = "margin calc fail";
+      return false;
+     }
+   if(margin > AccountInfoDouble(ACCOUNT_MARGIN_FREE))
+     {
+      why = "insufficient margin";
+      return false;
+     }
+   why = "ok";
+   return true;
+  }
+
+//==================================================================
+// EXECUTION ENGINE (raw OrderSend)
+//==================================================================
+ENUM_ORDER_TYPE_FILLING SaFilling(const SaSymCache &c)
+  {
+   if((c.fillingMode & SYMBOL_FILLING_FOK) == SYMBOL_FILLING_FOK)
       return ORDER_FILLING_FOK;
-   if((mode & SYMBOL_FILLING_IOC) == SYMBOL_FILLING_IOC)
+   if((c.fillingMode & SYMBOL_FILLING_IOC) == SYMBOL_FILLING_IOC)
       return ORDER_FILLING_IOC;
    return ORDER_FILLING_RETURN;
   }
 
-//+------------------------------------------------------------------+
-bool SaModify(ulong ticket, string symbol, double sl, double tp)
+bool SaRetcodeRetryable(const uint rc)
+  {
+   if(rc == SA_RC_REQUOTE)
+      return true;
+   if(rc == SA_RC_REJECT)
+      return true;
+   if(rc == SA_RC_CANCEL)
+      return true;
+   if(rc == SA_RC_TOO_MANY)
+      return true;
+   if(rc == SA_RC_TIMEOUT)
+      return true;
+   if(rc == SA_RC_PRICE_OFF)
+      return true;
+   if(rc == SA_RC_PRICE_CHANGED)
+      return true;
+   if(rc == SA_RC_CTX_BUSY)
+      return true;
+   if(rc == 0)
+      return true;
+   return false;
+  }
+
+bool SaRetcodeFilled(const uint rc)
+  {
+   return (rc == SA_RC_DONE || rc == SA_RC_PLACED || rc == SA_RC_DONE_PARTIAL);
+  }
+
+bool SaModifySLTP(const ulong ticket, const string symbol, const double sl, const double tp)
   {
    MqlTradeRequest req;
    MqlTradeResult res;
@@ -393,9 +594,30 @@ bool SaModify(ulong ticket, string symbol, double sl, double tp)
    return OrderSend(req, res);
   }
 
-//+------------------------------------------------------------------+
-bool SaSend(int side, double lots, double sl, double tp, string &why)
+bool SaSendMarket(const SaSymCache &c, const int side, const double lots,
+                  double sl, double tp, string &why)
   {
+   if(side != 1 && side != -1)
+     {
+      why = "invalid side";
+      g_execStatus = why;
+      return false;
+     }
+   if(lots <= 0.0 || sl <= 0.0 || tp <= 0.0)
+     {
+      why = "invalid order params";
+      g_execStatus = why;
+      return false;
+     }
+   if(c.tradeMode == SYMBOL_TRADE_MODE_DISABLED)
+     {
+      why = "symbol trade disabled";
+      g_execStatus = why;
+      return false;
+     }
+
+   ENUM_ORDER_TYPE_FILLING fill = SaFilling(c);
+
    for(int attempt = 1; attempt <= InpMaxRetries; attempt++)
      {
       ResetLastError();
@@ -404,52 +626,103 @@ bool SaSend(int side, double lots, double sl, double tp, string &why)
       ZeroMemory(req);
       ZeroMemory(res);
 
-      double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-      double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+      double bid = SymbolInfoDouble(c.symbol, SYMBOL_BID);
+      double ask = SymbolInfoDouble(c.symbol, SYMBOL_ASK);
       if(bid <= 0.0 || ask <= 0.0)
         {
          why = "no quotes";
          g_execStatus = why;
          if(attempt < InpMaxRetries)
            {
-            Sleep(150 * attempt);
+            Sleep(InpRetryBaseMs * attempt);
             continue;
            }
          return false;
         }
 
+      double minDist = SaMaxD((double)c.stopsLevel, (double)c.freezeLevel) * c.point;
+      if(side == 1)
+        {
+         if(ask - sl < minDist)
+            sl = SaNormPrice(c, ask - SaMaxD(minDist, c.point));
+         if(tp - ask < minDist)
+            tp = SaNormPrice(c, ask + SaMaxD(minDist, c.point));
+         if(sl >= ask || tp <= ask)
+           {
+            why = "stops invalid vs ask";
+            g_execStatus = why;
+            return false;
+           }
+        }
+      else
+        {
+         if(sl - bid < minDist)
+            sl = SaNormPrice(c, bid + SaMaxD(minDist, c.point));
+         if(bid - tp < minDist)
+            tp = SaNormPrice(c, bid - SaMaxD(minDist, c.point));
+         if(sl <= bid || tp >= bid)
+           {
+            why = "stops invalid vs bid";
+            g_execStatus = why;
+            return false;
+           }
+        }
+
       req.action       = TRADE_ACTION_DEAL;
-      req.symbol       = _Symbol;
+      req.symbol       = c.symbol;
       req.volume       = lots;
       req.type         = (side == 1 ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
       req.price        = (side == 1 ? ask : bid);
       req.sl           = sl;
       req.tp           = tp;
-      req.deviation    = InpSlippage;
+      req.deviation    = InpSlippagePoints;
       req.magic        = (ulong)InpMagic;
-      req.comment      = SA_NAME;
-      req.type_filling = SaFilling();
+      req.comment      = SA_COMMENT;   // exactly: SNIPER AI
+      req.type_filling = fill;
 
       bool ok = OrderSend(req, res);
-      if(ok)
+      uint rc = res.retcode;
+
+      if(ok || SaRetcodeFilled(rc))
         {
          why = "filled";
          g_execStatus = "FILLED";
+         g_lastAction = (side == 1 ? "BUY filled " : "SELL filled ") + c.symbol;
+         SaLog(g_lastAction + " lots=" + DoubleToString(lots, 2) + " comment=" + SA_COMMENT);
          return true;
         }
 
-      why = StringFormat("retcode=%d err=%d", (int)res.retcode, GetLastError());
+      why = StringFormat("retcode=%u err=%d", rc, GetLastError());
       g_execStatus = why;
-      if(attempt < InpMaxRetries)
+      SaLog("order fail " + c.symbol + " " + why + " attempt=" + IntegerToString(attempt));
+
+      if(attempt < InpMaxRetries && SaRetcodeRetryable(rc))
         {
-         Sleep(150 * attempt);
+         Sleep(InpRetryBaseMs * attempt);
          continue;
         }
+      break;
      }
    return false;
   }
 
-//+------------------------------------------------------------------+
+//==================================================================
+// TRADE MANAGER
+//==================================================================
+double SaRecoverRisk(const long type, const double open, const double sl, const double tp)
+  {
+   double risk = (type == POSITION_TYPE_BUY ? (open - sl) : (sl - open));
+   if(risk > 0.0)
+      return risk;
+   if(InpRR > 0.0)
+     {
+      double reward = (type == POSITION_TYPE_BUY ? (tp - open) : (open - tp));
+      if(reward > 0.0)
+         return reward / InpRR;
+     }
+   return 0.0;
+  }
+
 void SaManagePositions()
   {
    for(int i = PositionsTotal() - 1; i >= 0; i--)
@@ -468,10 +741,11 @@ void SaManagePositions()
       double bid = SymbolInfoDouble(symbol, SYMBOL_BID);
       double ask = SymbolInfoDouble(symbol, SYMBOL_ASK);
       double point = SymbolInfoDouble(symbol, SYMBOL_POINT);
+      int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
       if(point <= 0.0)
          continue;
 
-      double risk = (type == POSITION_TYPE_BUY ? (open - sl) : (sl - open));
+      double risk = SaRecoverRisk(type, open, sl, tp);
       if(risk <= 0.0)
          continue;
 
@@ -490,256 +764,162 @@ void SaManagePositions()
             already = true;
          if(!already)
            {
-            double newSL = NormalizeDouble(open, (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS));
-            SaModify(ticket, symbol, newSL, tp);
-            sl = newSL;
+            double newSL = NormalizeDouble(open, digits);
+            if(SaModifySLTP(ticket, symbol, newSL, tp))
+               sl = newSL;
            }
         }
 
-      if(InpUseTrailing)
+      if(!InpUseTrailing)
+         continue;
+
+      bool armed = false;
+      if(type == POSITION_TYPE_BUY && bid >= open + risk * InpTrailStartR)
+         armed = true;
+      if(type == POSITION_TYPE_SELL && ask <= open - risk * InpTrailStartR)
+         armed = true;
+      if(!armed)
+         continue;
+
+      double step = risk * InpTrailStepR;
+      if(type == POSITION_TYPE_BUY)
         {
-         bool armed = false;
-         if(type == POSITION_TYPE_BUY && bid >= open + risk * InpTrailStartR)
-            armed = true;
-         if(type == POSITION_TYPE_SELL && ask <= open - risk * InpTrailStartR)
-            armed = true;
-         if(armed)
-           {
-            double step = risk * InpTrailStepR;
-            int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
-            if(type == POSITION_TYPE_BUY)
-              {
-               double nsl = NormalizeDouble(bid - step, digits);
-               if(nsl > sl + point)
-                  SaModify(ticket, symbol, nsl, tp);
-              }
-            else
-              {
-               double nsl = NormalizeDouble(ask + step, digits);
-               if(sl == 0.0 || nsl < sl - point)
-                  SaModify(ticket, symbol, nsl, tp);
-              }
-           }
+         double nsl = NormalizeDouble(bid - step, digits);
+         if(nsl > sl + point)
+            SaModifySLTP(ticket, symbol, nsl, tp);
+        }
+      else
+        {
+         double nsl = NormalizeDouble(ask + step, digits);
+         if(sl == 0.0 || nsl < sl - point)
+            SaModifySLTP(ticket, symbol, nsl, tp);
         }
      }
   }
 
-//+------------------------------------------------------------------+
-void SaUiBox(string id, int x, int y, int w, int h, int bg, int border)
+//==================================================================
+// ONE-PER-M5 GUARD
+//==================================================================
+bool SaAlreadyEntered(const string symbol, const datetime m5bar)
   {
-   string name = SA_UI + id;
-   if(ObjectFind(0, name) < 0)
-      ObjectCreate(0, name, OBJ_RECTANGLE_LABEL, 0, 0, 0);
-   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
-   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
-   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
-   ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
-   ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
-   ObjectSetInteger(0, name, OBJPROP_BGCOLOR, bg);
-   ObjectSetInteger(0, name, OBJPROP_COLOR, border);
-   ObjectSetInteger(0, name, OBJPROP_BORDER_TYPE, BORDER_FLAT);
-   ObjectSetInteger(0, name, OBJPROP_BACK, false);
-   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
-  }
-
-//+------------------------------------------------------------------+
-void SaUiLbl(string id, int x, int y, string text, int clr, int size)
-  {
-   string name = SA_UI + id;
-   if(ObjectFind(0, name) < 0)
-      ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0);
-   ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
-   ObjectSetInteger(0, name, OBJPROP_ANCHOR, ANCHOR_RIGHT_UPPER);
-   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
-   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
-   ObjectSetString(0, name, OBJPROP_TEXT, text);
-   ObjectSetString(0, name, OBJPROP_FONT, "Arial");
-   ObjectSetInteger(0, name, OBJPROP_FONTSIZE, size);
-   ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
-   ObjectSetInteger(0, name, OBJPROP_BACK, false);
-   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
-  }
-
-//+------------------------------------------------------------------+
-void SaDashboard()
-  {
-   if(!InpShowDashboard)
-      return;
-
-   int x0 = 14, y0 = 16, w = 300, h = 410;
-   SaUiBox("bg", x0, y0, w, h, 1314832, 2955710);
-   SaUiBox("hdr", x0, y0, w, 42, 1837186, 4271590);
-
-   int x = x0 + 12;
-   int y = y0 + 10;
-   SaUiLbl("t", x, y, SA_NAME, clrWhite, 14);
-   y = y0 + 48;
-   SaUiLbl("sub", x, y, "24/7 | HIGH PRECISION", 12500710, 8);
-
-   string bias = "NEUTRAL";
-   if(g_bias == 1)
-      bias = "BULLISH";
-   if(g_bias == -1)
-      bias = "BEARISH";
-
-   string sig = "FLAT";
-   int sigClr = (int)clrSilver;
-   if(g_side == 1)
+   int n = ArraySize(g_entrySymbol);
+   for(int i = 0; i < n; i++)
      {
-      sig = "BUY";
-      sigClr = 8578605;
+      if(g_entrySymbol[i] == symbol && g_entryStamp[i] == m5bar)
+         return true;
      }
-   if(g_side == -1)
-     {
-      sig = "SELL";
-      sigClr = 4934655;
-     }
-
-   string path = "-";
-   if(g_path == 1)
-      path = "CONTINUATION";
-   if(g_path == 2)
-      path = "REVERSAL";
-
-   string mkt = "NORMAL";
-   if(g_mkt == 0)
-      mkt = "LOW VOL";
-   if(g_mkt == 2)
-      mkt = "HIGH VOL";
-   if(g_mkt == 3)
-      mkt = "EXTREME VOL";
-
-   y = y0 + 70;
-   SaUiLbl("sym", x, y, "SYMBOL      " + _Symbol, clrWhite, 10); y += 17;
-   SaUiLbl("tf", x, y, "STACK       H4 / H1 / M5", 14469300, 9); y += 17;
-   SaUiLbl("bias", x, y, "BIAS        " + bias, clrAqua, 10); y += 17;
-   SaUiLbl("sig", x, y, "SIGNAL      " + sig, sigClr, 11); y += 17;
-   SaUiLbl("path", x, y, "ENTRY TYPE  " + path, clrGold, 10); y += 17;
-   SaUiLbl("score", x, y, StringFormat("SETUP SCORE %d", g_score), clrOrange, 10); y += 17;
-   SaUiLbl("open", x, y, StringFormat("OPEN        %d / %d", SaCountMagic(), InpMaxTrades), clrWhite, 10); y += 17;
-   SaUiLbl("lot", x, y, StringFormat("LOT         %.2f", InpLot), clrWhite, 10); y += 17;
-   SaUiLbl("bal", x, y, StringFormat("BALANCE     %.2f", AccountInfoDouble(ACCOUNT_BALANCE)), 16768180, 9); y += 16;
-   SaUiLbl("eq", x, y, StringFormat("EQUITY      %.2f", AccountInfoDouble(ACCOUNT_EQUITY)), 16768180, 9); y += 16;
-   double fl = SaFloating();
-   int flClr = 6579455;
-   if(fl >= 0.0)
-      flClr = 9231440;
-   SaUiLbl("fl", x, y, StringFormat("FLOATING    %.2f", fl), flClr, 9); y += 16;
-   SaUiLbl("spr", x, y, StringFormat("SPREAD      %.1f pts", g_spreadPts), clrSilver, 9); y += 16;
-   SaUiLbl("atr", x, y, StringFormat("ATR(H1)     %.5f", g_atr), clrSilver, 9); y += 16;
-   SaUiLbl("mkt", x, y, "MARKET      " + mkt, 11206560, 9); y += 16;
-   SaUiLbl("exec", x, y, "EXECUTION   " + g_execStatus, 9211135, 8); y += 15;
-   SaUiLbl("ea", x, y, "EA STATUS   " + g_eaStatus, 13813960, 8); y += 15;
-   SaUiLbl("br", x, y, "BROKER      " + AccountInfoString(ACCOUNT_COMPANY), 11182240, 8); y += 15;
-   SaUiLbl("srv", x, y, "SERVER      " + TimeToString(TimeTradeServer(), (TIME_DATE|TIME_SECONDS)), 9866380, 8); y += 16;
-   string rs = g_reason;
-   if(StringLen(rs) > 44)
-      rs = StringSubstr(rs, 0, 44) + "...";
-   SaUiLbl("st", x, y, "TRADE STATUS", clrSilver, 8); y += 14;
-   SaUiLbl("st2", x, y, rs, clrSilver, 8); y += 16;
-   SaUiLbl("last", x, y, "LAST  " + g_lastAction, clrGray, 8);
-   ChartRedraw(0);
+   return false;
   }
 
-//+------------------------------------------------------------------+
-void SaClearUI()
+void SaMarkEntered(const string symbol, const datetime m5bar)
   {
-   int total = ObjectsTotal(0);
-   for(int i = total - 1; i >= 0; i--)
+   int n = ArraySize(g_entrySymbol);
+   ArrayResize(g_entrySymbol, n + 1);
+   ArrayResize(g_entryStamp, n + 1);
+   g_entrySymbol[n] = symbol;
+   g_entryStamp[n] = m5bar;
+   if(n + 1 > 64)
      {
-      string name = ObjectName(0, i);
-      if(StringFind(name, SA_UI) == 0)
-         ObjectDelete(0, name);
+      for(int i = 0; i < 64; i++)
+        {
+         g_entrySymbol[i] = g_entrySymbol[i + (n + 1 - 64)];
+         g_entryStamp[i] = g_entryStamp[i + (n + 1 - 64)];
+        }
+      ArrayResize(g_entrySymbol, 64);
+      ArrayResize(g_entryStamp, 64);
      }
   }
 
-//+------------------------------------------------------------------+
-void SaEvaluateAndMaybeTrade(bool allowEntry)
+//==================================================================
+// DECISION ENGINE (strategy preserved)
+//==================================================================
+bool SaAnalyzeSymbol(const string symbol, const bool allowEntry, SaSetup &out)
   {
-   g_side = 0;
-   g_path = 0;
-   g_score = 0;
-   g_reason = "scanning";
+   out.symbol = symbol;
+   out.side = 0;
+   out.path = 0;
+   out.bias = 0;
+   out.mkt = 1;
+   out.score = 0;
+   out.conf = 0;
+   out.atr = 0.0;
+   out.entry = 0.0;
+   out.sl = 0.0;
+   out.tp = 0.0;
+   out.lots = 0.0;
+   out.reason = "scanning";
+   out.valid = false;
+
+   SaSymCache c;
+   if(!SaLoadSymbol(symbol, c))
+     {
+      out.reason = "symbol cache fail";
+      return false;
+     }
+   if(c.tradeMode == SYMBOL_TRADE_MODE_DISABLED)
+     {
+      out.reason = "trade disabled";
+      return false;
+     }
 
    MqlRates h4[], h1[], m5[];
-   if(!SaCopyRates(PERIOD_H4, 160, h4))
+   if(!SaCopyRatesTF(symbol, PERIOD_H4, SA_H4_BARS, h4))
      {
-      g_reason = "no H4";
-      return;
+      out.reason = "no H4";
+      return false;
      }
-   if(!SaCopyRates(PERIOD_H1, 160, h1))
+   if(!SaCopyRatesTF(symbol, PERIOD_H1, SA_H1_BARS, h1))
      {
-      g_reason = "no H1";
-      return;
+      out.reason = "no H1";
+      return false;
      }
-   if(!SaCopyRates(PERIOD_M5, 40, m5))
+   if(!SaCopyRatesTF(symbol, PERIOD_M5, SA_M5_BARS, m5))
      {
-      g_reason = "no M5";
-      return;
-     }
-
-   double atrBuf[];
-   ArraySetAsSeries(atrBuf, true);
-   if(CopyBuffer(g_atrHandle, 0, 1, 40, atrBuf) < 40)
-     {
-      g_reason = "no ATR";
-      return;
-     }
-   g_atr = atrBuf[0];
-   double atrSum = 0.0;
-   for(int i = 0; i < 40; i++)
-      atrSum += atrBuf[i];
-   double atrAvg = atrSum / 40.0;
-
-   double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
-   double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
-   double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
-   g_spreadPts = (point > 0.0 ? (ask - bid) / point : 0.0);
-
-   g_mkt = 1;
-   if(atrAvg > 0.0)
-     {
-      if(g_atr >= atrAvg * InpExtremeVolMult)
-         g_mkt = 3;
-      else if(g_atr >= atrAvg * InpHighVolMult)
-         g_mkt = 2;
-      else if(g_atr <= atrAvg * 0.55)
-         g_mkt = 0;
+      out.reason = "no M5";
+      return false;
      }
 
-   int strength = InpSwingStrength;
-   if(strength < 1)
-      strength = 1;
-   if(strength > 5)
-      strength = 5;
+   double atrNow = 0.0, atrAvg = 0.0;
+   if(!SaAtrSeries(symbol, atrNow, atrAvg))
+     {
+      out.reason = "no ATR";
+      return false;
+     }
+   out.atr = atrNow;
 
-   g_bias = SaBiasH4(h4, ArraySize(h4), strength);
+   out.mkt = 1;
+   if(atrNow >= atrAvg * InpExtremeVolMult)
+      out.mkt = 3;
+   else if(atrNow >= atrAvg * InpHighVolMult)
+      out.mkt = 2;
+   else if(atrNow <= atrAvg * 0.55)
+      out.mkt = 0;
 
-   double swingHigh = 0, swingLow = 0;
+   int strength = SaClampInt(InpSwingStrength, 1, 5);
+   out.bias = SaBiasH4(h4, ArraySize(h4), strength);
+
+   double swingHigh = 0.0, swingLow = 0.0;
    SaRecentSwings(h1, ArraySize(h1), strength, swingHigh, swingLow);
 
    bool bosBull = false, bosBear = false, chochBull = false, chochBear = false;
    double c1 = h1[1].close;
    if(swingHigh > 0.0 && c1 > swingHigh)
      {
-      if(g_bias == 1 || g_bias == 0)
+      if(out.bias == 1 || out.bias == 0)
          bosBull = true;
-      if(g_bias == -1)
+      if(out.bias == -1)
          chochBull = true;
      }
    if(swingLow > 0.0 && c1 < swingLow)
      {
-      if(g_bias == -1 || g_bias == 0)
+      if(out.bias == -1 || out.bias == 0)
          bosBear = true;
-      if(g_bias == 1)
+      if(out.bias == 1)
          chochBear = true;
      }
 
-   // liquidity
-   double pip = SaPip();
-   double tol = MathMax(pip * 2.0, g_atr * 0.05);
+   double pip = SaPip(c);
+   double tol = SaMaxD(pip * 2.0, out.atr * 0.05);
    double rh = h1[3].high, rl = h1[3].low;
    int n1 = ArraySize(h1);
    int limSweep = (n1 < 16 ? n1 : 16);
@@ -752,7 +932,6 @@ void SaEvaluateAndMaybeTrade(bool allowEntry)
      }
    bool buySweep = (h1[1].high > rh + tol * 0.25 && h1[1].close < rh);
    bool sellSweep = (h1[1].low < rl - tol * 0.25 && h1[1].close > rl);
-   bool eqH = false, eqL = false;
    int eqhc = 0, eqlc = 0;
    int limEq = (n1 < 30 ? n1 : 30);
    for(int i = 3; i < limEq; i++)
@@ -762,10 +941,9 @@ void SaEvaluateAndMaybeTrade(bool allowEntry)
       if(MathAbs(h1[i].low - h1[2].low) <= tol)
          eqlc++;
      }
-   eqH = (eqhc >= 1);
-   eqL = (eqlc >= 1);
+   bool eqH = (eqhc >= 1);
+   bool eqL = (eqlc >= 1);
 
-   // zones
    double b1 = MathAbs(h1[1].close - h1[1].open);
    double b2 = MathAbs(h1[2].close - h1[2].open);
    double b3 = MathAbs(h1[3].close - h1[3].open);
@@ -774,14 +952,14 @@ void SaEvaluateAndMaybeTrade(bool allowEntry)
    if(avg <= 0.0)
       avg = b1;
 
-   bool bullDisp = (h1[1].close > h1[1].open && b1 >= avg * 1.7);
-   bool bearDisp = (h1[1].close < h1[1].open && b1 >= avg * 1.7);
+   bool bullDisp = (h1[1].close > h1[1].open && b1 >= avg * SA_DISP_MULT);
+   bool bearDisp = (h1[1].close < h1[1].open && b1 >= avg * SA_DISP_MULT);
    bool bullFVG = (h1[3].high < h1[1].low);
    bool bearFVG = (h1[3].low > h1[1].high);
    bool bullOB = (bullDisp && h1[2].close < h1[2].open);
    bool bearOB = (bearDisp && h1[2].close > h1[2].open);
 
-   double zLo = 0, zHi = 0;
+   double zLo = 0.0, zHi = 0.0;
    if(bullFVG)
      {
       zLo = h1[3].high;
@@ -803,10 +981,11 @@ void SaEvaluateAndMaybeTrade(bool allowEntry)
       zHi = h1[2].high;
      }
 
+   double bid = SymbolInfoDouble(symbol, SYMBOL_BID);
    bool bullTouch = false, bearTouch = false;
    if(zHi > zLo)
      {
-      double pad = (zHi - zLo) * 0.35;
+      double pad = (zHi - zLo) * SA_ZONE_PAD;
       if(bid <= zHi + pad && bid >= zLo - pad)
         {
          if(bullFVG || bullOB || bullDisp)
@@ -833,23 +1012,23 @@ void SaEvaluateAndMaybeTrade(bool allowEntry)
       score += 3;
    if(chochBull || chochBear)
       score += 3;
-   if(g_bias != 0)
+   if(out.bias != 0)
       score += 2;
 
    int need = InpMinScore;
-   if(g_mkt == 2)
+   if(out.mkt == 2)
       need = InpMinScore + 1;
-   if(g_mkt == 3)
+   if(out.mkt == 3)
       need = InpMinScore + 3;
 
    bool m5buy = SaM5Buy(m5, ArraySize(m5));
    bool m5sell = SaM5Sell(m5, ArraySize(m5));
 
-   // continuation buy
-   if(InpAllowContinuation && g_bias == 1)
+   // Path A - Continuation
+   if(InpAllowContinuation && out.bias == 1)
      {
       int conf = 0;
-      if(g_bias == 1)
+      if(out.bias == 1)
          conf++;
       if(bosBull)
          conf++;
@@ -863,23 +1042,22 @@ void SaEvaluateAndMaybeTrade(bool allowEntry)
          conf++;
       if(m5buy)
          conf++;
-
       bool institutional = (bosBull && (bullFVG || bullOB) && bullDisp);
       bool locationOk = (!InpRequireZoneTouch || bullTouch || bullFVG || bullOB);
       if(institutional && locationOk && m5buy && conf >= InpMinConfluence)
         {
-         g_side = 1;
-         g_path = 1;
-         g_score = score + 8 + conf;
-         g_reason = "CONT precision";
+         out.side = 1;
+         out.path = 1;
+         out.conf = conf;
+         out.score = score + 8 + conf;
+         out.reason = "CONT precision";
         }
      }
 
-   // continuation sell
-   if(g_side == 0 && InpAllowContinuation && g_bias == -1)
+   if(out.side == 0 && InpAllowContinuation && out.bias == -1)
      {
       int conf = 0;
-      if(g_bias == -1)
+      if(out.bias == -1)
          conf++;
       if(bosBear)
          conf++;
@@ -893,145 +1071,250 @@ void SaEvaluateAndMaybeTrade(bool allowEntry)
          conf++;
       if(m5sell)
          conf++;
-
       bool institutional = (bosBear && (bearFVG || bearOB) && bearDisp);
       bool locationOk = (!InpRequireZoneTouch || bearTouch || bearFVG || bearOB);
       if(institutional && locationOk && m5sell && conf >= InpMinConfluence)
         {
-         g_side = -1;
-         g_path = 1;
-         g_score = score + 8 + conf;
-         g_reason = "CONT precision";
+         out.side = -1;
+         out.path = 1;
+         out.conf = conf;
+         out.score = score + 8 + conf;
+         out.reason = "CONT precision";
         }
      }
 
-   // reversal buy
-   if(g_side == 0 && InpAllowReversal && sellSweep && chochBull && (bullDisp || bullFVG || bullOB) && m5buy)
+   // Path B - Reversal
+   if(out.side == 0 && InpAllowReversal && sellSweep && chochBull && (bullDisp || bullFVG || bullOB) && m5buy)
      {
       int conf = 4;
       if(bullTouch || bullFVG)
          conf++;
       if(bullDisp)
          conf++;
-      g_side = 1;
-      g_path = 2;
-      g_score = score + 10 + conf;
       if(conf >= InpMinConfluence)
-         g_reason = "REV precision";
-      else
         {
-         g_side = 0;
-         g_path = 0;
-         g_score = score;
-         g_reason = "rev conf low";
+         out.side = 1;
+         out.path = 2;
+         out.conf = conf;
+         out.score = score + 10 + conf;
+         out.reason = "REV precision";
         }
+      else
+         out.reason = "rev conf low";
      }
 
-   // reversal sell
-   if(g_side == 0 && InpAllowReversal && buySweep && chochBear && (bearDisp || bearFVG || bearOB) && m5sell)
+   if(out.side == 0 && InpAllowReversal && buySweep && chochBear && (bearDisp || bearFVG || bearOB) && m5sell)
      {
       int conf = 4;
       if(bearTouch || bearFVG)
          conf++;
       if(bearDisp)
          conf++;
-      g_side = -1;
-      g_path = 2;
-      g_score = score + 10 + conf;
       if(conf >= InpMinConfluence)
-         g_reason = "REV precision";
-      else
         {
-         g_side = 0;
-         g_path = 0;
-         g_score = score;
-         g_reason = "rev conf low";
+         out.side = -1;
+         out.path = 2;
+         out.conf = conf;
+         out.score = score + 10 + conf;
+         out.reason = "REV precision";
         }
+      else
+         out.reason = "rev conf low";
      }
 
-   if(g_side == 0)
+   if(out.side == 0)
      {
-      g_score = score;
-      if(StringFind(g_reason, "precision") < 0)
-         g_reason = "awaiting setup";
+      out.score = score;
+      out.reason = "awaiting setup";
+      return false;
+     }
+   if(out.score < need)
+     {
+      out.reason = "score low";
+      out.side = 0;
+      return false;
+     }
+   if(!allowEntry)
+     {
+      out.reason = "signal only";
+      return false;
      }
 
-   if(!allowEntry)
-      return;
-   if(g_side == 0 || g_score < need)
-      return;
+   datetime m5bar = m5[0].time;
+   if(InpOnePerM5 && SaAlreadyEntered(symbol, m5bar))
+     {
+      out.reason = "one per M5";
+      out.side = 0;
+      return false;
+     }
+   if(SaCountMagicSymbol(symbol) >= InpMaxTrades)
+     {
+      out.reason = "symbol max";
+      out.side = 0;
+      return false;
+     }
 
    string why;
-   if(!SaCanOpen(why))
+   if(!SaRiskGate(why))
      {
-      g_lastAction = why;
-      g_eaStatus = "blocked";
-      return;
+      out.reason = why;
+      out.side = 0;
+      return false;
+     }
+   if(!SaBuildStops(c, out.side, out.mkt, out.atr, out.entry, out.sl, out.tp, why))
+     {
+      out.reason = why;
+      out.side = 0;
+      return false;
      }
 
-   double entry = 0, sl = 0, tp = 0;
-   if(!SaBuildStops(g_side, g_mkt, g_atr, entry, sl, tp, why))
+   out.lots = SaNormLots(c, InpLot);
+   if(out.lots <= 0.0)
      {
-      g_lastAction = why;
-      return;
+      out.reason = "lot invalid";
+      out.side = 0;
+      return false;
+     }
+   if(!SaMarginOK(symbol, out.side, out.lots, out.entry, why))
+     {
+      out.reason = why;
+      out.side = 0;
+      return false;
      }
 
-   double lots = SaNormLots(InpLot);
-   double margin = 0.0;
-   ENUM_ORDER_TYPE ot = (g_side == 1 ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
-   double px = (g_side == 1 ? ask : bid);
-   if(!OrderCalcMargin(ot, _Symbol, lots, px, margin))
+   if(!SaSendMarket(c, out.side, out.lots, out.sl, out.tp, why))
      {
-      g_lastAction = "margin calc fail";
-      return;
-     }
-   if(margin > AccountInfoDouble(ACCOUNT_MARGIN_FREE))
-     {
-      g_lastAction = "insufficient margin";
-      return;
+      out.reason = why;
+      return false;
      }
 
-   if(!SaSend(g_side, lots, sl, tp, why))
-     {
-      g_lastAction = why;
-      g_eaStatus = "exec fail";
-      SaLog("order failed: " + why);
-      return;
-     }
-
-   g_lastEntryM5 = g_lastM5;
-   g_lastAction = (g_side == 1 ? "BUY filled" : "SELL filled");
-   g_eaStatus = "in market";
-   SaLog(g_lastAction);
+   SaMarkEntered(symbol, m5bar);
+   out.valid = true;
+   out.reason = "executed";
+   return true;
   }
 
-//+------------------------------------------------------------------+
+//==================================================================
+// SYSTEM CORE
+//==================================================================
+void SaCollectForex(string &symbols[])
+  {
+   ArrayResize(symbols, 1);
+   symbols[0] = _Symbol;
+   if(InpTradeChartOnly || !InpScanAllForex)
+      return;
+
+   int n = 1;
+   int total = SymbolsTotal(true);
+   for(int i = 0; i < total; i++)
+     {
+      string s = SymbolName(i, true);
+      if(s == _Symbol)
+         continue;
+      if(!SaIsForexSymbol(s))
+         continue;
+      ArrayResize(symbols, n + 1);
+      symbols[n] = s;
+      n++;
+     }
+  }
+
+void SaEvaluatePass(const bool newM5)
+  {
+   string why;
+   if(!SaTradingAllowed(why))
+     {
+      g_lastAction = why;
+      return;
+     }
+
+   string symbols[];
+   SaCollectForex(symbols);
+   int n = ArraySize(symbols);
+   if(n <= 0)
+      return;
+
+   bool allow = newM5;
+   SaSetup chartSetup;
+   if(SaAnalyzeSymbol(_Symbol, allow, chartSetup))
+      return;
+
+   if(InpTradeChartOnly || !InpScanAllForex)
+      return;
+
+   if(g_scanCursor < 1 || g_scanCursor >= n)
+      g_scanCursor = 1;
+   int checked = 0;
+   int idx = g_scanCursor;
+   while(checked < InpMaxSymbolsPerTick && checked < n - 1)
+     {
+      if(idx >= n)
+         idx = 1;
+      if(SaCountMagic() >= InpMaxTrades)
+         break;
+      SaSetup s;
+      if(SaAnalyzeSymbol(symbols[idx], allow, s))
+        {
+         g_scanCursor = idx + 1;
+         return;
+        }
+      idx++;
+      checked++;
+     }
+   g_scanCursor = idx;
+  }
+
+void SaOnDealOut(const ulong deal)
+  {
+   if(!HistoryDealSelect(deal))
+      return;
+   if((long)HistoryDealGetInteger(deal, DEAL_MAGIC) != InpMagic)
+      return;
+   if((ENUM_DEAL_ENTRY)HistoryDealGetInteger(deal, DEAL_ENTRY) != DEAL_ENTRY_OUT)
+      return;
+   double profit = HistoryDealGetDouble(deal, DEAL_PROFIT)
+                   + HistoryDealGetDouble(deal, DEAL_SWAP)
+                   + HistoryDealGetDouble(deal, DEAL_COMMISSION);
+   if(profit < 0.0)
+      g_consecLoss++;
+   else
+      g_consecLoss = 0;
+  }
+
+//==================================================================
+// EVENT HANDLERS
+//==================================================================
 int OnInit()
   {
    if(InpLot <= 0.0 || InpMaxTrades < 1 || InpAtrMultSL <= 0.0 || InpRR <= 0.0)
      {
-      Print(SA_NAME, " invalid inputs");
+      Print(SA_LOG, "invalid inputs");
       return INIT_PARAMETERS_INCORRECT;
      }
-
-   SymbolSelect(_Symbol, true);
-   g_atrHandle = iATR(_Symbol, PERIOD_H1, 14);
-   if(g_atrHandle == INVALID_HANDLE)
+   if(SA_COMMENT != "SNIPER AI")
      {
-      Print(SA_NAME, " ATR init failed");
+      Print(SA_LOG, "comment lock failed");
       return INIT_FAILED;
      }
 
+   SymbolSelect(_Symbol, true);
+   if(!SaEnsureAtr(_Symbol))
+     {
+      Print(SA_LOG, "ATR init failed");
+      return INIT_FAILED;
+     }
+
+   ArrayResize(g_entrySymbol, 0);
+   ArrayResize(g_entryStamp, 0);
    g_dayStartEquity = AccountInfoDouble(ACCOUNT_EQUITY);
-   g_eaStatus = "online";
    g_lastAction = "online 24/7";
-   g_reason = "armed";
-   SaDashboard();
-   SaLog(StringFormat("ONLINE %s lot=%.2f", _Symbol, InpLot));
+   g_execStatus = "armed";
+   Comment("");
+   SaLog(StringFormat("ONLINE %s build=SA_TRADE_READY_13 lot=%.2f max=%d comment=%s",
+                      _Symbol, InpLot, InpMaxTrades, SA_COMMENT));
    return INIT_SUCCEEDED;
   }
 
-//+------------------------------------------------------------------+
 void OnDeinit(const int reason)
   {
    if(g_atrHandle != INVALID_HANDLE)
@@ -1039,42 +1322,41 @@ void OnDeinit(const int reason)
       IndicatorRelease(g_atrHandle);
       g_atrHandle = INVALID_HANDLE;
      }
-   SaClearUI();
    Comment("");
    SaLog(StringFormat("stopped reason=%d", reason));
   }
 
-//+------------------------------------------------------------------+
 void OnTick()
   {
    g_tick++;
    SaManagePositions();
 
    datetime t[];
+   ArraySetAsSeries(t, true);
    if(CopyTime(_Symbol, PERIOD_M5, 0, 1, t) != 1)
      {
-      g_eaStatus = "data wait";
-      if(g_tick % InpDashEveryTicks == 0)
-         SaDashboard();
+      g_lastAction = "data wait";
       return;
      }
 
    bool newM5 = false;
-   if(t[0] != g_lastM5)
+   if(t[0] != g_lastM5Chart)
      {
-      g_lastM5 = t[0];
+      g_lastM5Chart = t[0];
       newM5 = true;
      }
 
-   if(newM5 || (g_tick % InpDashEveryTicks == 0))
-     {
-      bool allow = newM5;
-      if(allow && InpOnePerM5 && g_lastEntryM5 == g_lastM5)
-         allow = false;
-      SaEvaluateAndMaybeTrade(allow);
-      g_eaStatus = "scanning";
-      SaDashboard();
-     }
+   if(newM5)
+      SaEvaluatePass(true);
   }
 
+void OnTradeTransaction(const MqlTradeTransaction &trans,
+                        const MqlTradeRequest &request,
+                        const MqlTradeResult &result)
+  {
+   if(trans.type != TRADE_TRANSACTION_DEAL_ADD)
+      return;
+   HistorySelect(0, TimeCurrent());
+   SaOnDealOut(trans.deal);
+  }
 //+------------------------------------------------------------------+

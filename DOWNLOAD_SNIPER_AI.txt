@@ -1,22 +1,23 @@
 SNIPER AI - DOWNLOAD THIS
 =========================
 
-https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK12.mq5
+https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK13.mq5
 
 MUST SHOW AT TOP:
-  BUILD_ID: SA_COMPILE_OK_12
+  BUILD_ID: SA_TRADE_READY_13
 
 STEPS:
-1. Close MetaEditor completely
+1. Close MetaEditor
 2. Delete ALL old Sniper/SNIPER *.mq5 and *.ex5 from MQL5/Experts
-3. Copy ONLY SNIPER_AI_OK12.mq5 into MQL5/Experts
-4. Open SNIPER_AI_OK12.mq5
-5. Confirm line 3 says BUILD_ID: SA_COMPILE_OK_12
-6. Press F7
+3. Copy SNIPER_AI_OK13.mq5 into MQL5/Experts
+4. Open it and confirm SA_TRADE_READY_13
+5. Press F7
+6. Attach to a forex chart, enable Algo Trading
 
-THIS BUILD FIXES:
-- NO #include (no Trade.mqh / CTrade)
-- raw OrderSend only
-- zero TRADE_RETCODE_* / BUSY tokens
-- ASCII-only
-- no OnTradeTransaction / SetAsyncMode / SetTypeFillingBySymbol
+THIS BUILD:
+- trades with raw OrderSend (no CTrade include)
+- trade comment exactly: SNIPER AI
+- dashboard REMOVED
+- strategy preserved (H4/H1/M5 continuation + reversal)
+- BE + optional trail, max 3, lot 0.01, 24/7 adaptive
+- default: trade attached chart (InpTradeChartOnly=true)
