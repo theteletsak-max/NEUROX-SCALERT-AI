@@ -1,18 +1,16 @@
-SNIPER AI — Install
-===================
+SNIPER AI — Install (IMPORTANT)
+===============================
 
-File required:
-  SniperAI.mq5
+Your old file still has TRADE_RETCODE_BUSY.
+You MUST use this new clean file.
 
-Steps:
-  1. MetaTrader 5 → File → Open Data Folder
-  2. Copy SniperAI.mq5 into MQL5/Experts/
-  3. MetaEditor → open SniperAI.mq5 → Compile (F7)
-  4. Attach to chart → Enable Algo Trading
+1. Close MetaEditor tab for the old SniperAI.mq5
+2. Delete old file from MQL5/Experts/
+3. Copy ONE of these into MQL5/Experts/:
+      - SNIPER_AI.mq5   (recommended new name)
+      - SniperAI.mq5
+4. Open the NEW file in MetaEditor
+5. Check top comment has: BUILD_ID: SA_CLEAN_NO_BUSY
+6. Compile (F7)
 
-Notes:
-  - Name: SNIPER AI (no version branding)
-  - High-precision sniper filters (fewer, cleaner trades)
-  - Trade comment is exactly: SNIPER AI
-  - Premium dashboard on the right
-  - Demo test first
+Trade comment = SNIPER AI

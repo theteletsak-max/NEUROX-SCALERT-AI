@@ -1,6 +1,5 @@
 //+------------------------------------------------------------------+
 //| SniperAI.mq5                                                      |
-//| BUILD_ID: SA_CLEAN_NO_BUSY                                        |
 //| SNIPER AI — Institutional single-file Expert Advisor              |
 //|                                                                   |
 //| Architecture (sections in this file):                             |
