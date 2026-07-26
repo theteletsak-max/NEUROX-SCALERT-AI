@@ -6114,7 +6114,14 @@ bool QualityGatesActive();
 
 int EffectiveMinimumMPIScore()
 {
-   // Always-on quality floor; events tighten further.
+   // Aggressive execution: keep MPI floor modest so InstantTrend can fire.
+   if(AggressiveInstitutionalExecution)
+   {
+      if(EventQualityModeActive())
+         return MathMax(QualityMPIScore, InstantMinimumMPIScore); // no 50-wall during events
+      return MathMin(QualityMPIScore, InstantMinimumMPIScore);
+   }
+
    if(EventQualityModeActive())
       return MathMax(EventQualityMPIScore, QualityMPIScore);
    if(EnableAlwaysQualityMode)

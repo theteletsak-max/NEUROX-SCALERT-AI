@@ -5,31 +5,24 @@ ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
 EA file:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK21.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK22.mq5
 
 MUST SHOW AT TOP:
-  BUILD_ID: SA_PRISM_SMT_IMCE_21
+  BUILD_ID: SA_AGGRESSIVE_INST_22
 
-PRISM + institutional engines:
-- SMT (Smart Money Technique) — cross-asset or internal sweep/reclaim
-- IMCE (Institutional Market Context Engine) — continuation / reversal / expansion / chop
-- ICE (Institutional Confidence Engine) — BOS/CHoCH/sweep/OB/FVG/displacement score
-- RSI / MACD / Stochastic removed (not used)
+Fixes your Experts log:
+- InstantTrend was blocked even with trend=true ADXstrong=true
+- ICE_score_buy=25 was below hard floor 50
 
-Also adjustable: LotSize, MaxOpenTrades
-Quality sniper always on; news hard-block off; event tighten on
-
-Optional SMT tip:
-Set SMTReferenceSymbol to a correlated pair (e.g. GBPUSD.m for EURUSD)
-Leave blank to use internal SMT only
+OK22 keeps SMT/IMCE/ICE but does NOT smother aggressive execution:
+- InstantTrend ON again (trend+ADX can fire)
+- ICE/SMT soft by default (score/log, not hard veto)
+- IMCE only hard-blocks manipulation/chop
+- MPI floor lowered to 25
 
 STEPS:
-1. Close MetaEditor
-2. Delete ALL old Sniper/SNIPER *.mq5 and *.ex5 from MQL5/Experts
-3. Copy SNIPER_AI_OK21.mq5 into MQL5/Experts
-4. Confirm SA_PRISM_SMT_IMCE_21
-5. Press F7
-6. Attach → set LotSize / MaxOpenTrades / optional SMTReferenceSymbol
-7. TradeComment exactly: SNIPER AI
-8. AutoTrading + Algo Trading ON
-9. Experts: SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_SMT_IMCE_21
+1. Delete old SNIPER* Experts files
+2. Copy SNIPER_AI_OK22.mq5 → MQL5/Experts
+3. Confirm SA_AGGRESSIVE_INST_22 → F7
+4. Keep AggressiveInstitutionalExecution=true
+5. AutoTrading + Algo Trading ON

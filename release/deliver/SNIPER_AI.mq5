@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_SMT_IMCE_21                                  |
-//| SNIPER AI - PRISM + SMT + IMCE + Institutional Confidence         |
+//| BUILD_ID: SA_AGGRESSIVE_INST_22                                  |
+//| SNIPER AI - PRISM + SMT/IMCE/ICE with aggressive execution        |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "2.10"
-#property description "SNIPER AI PRISM with SMT / IMCE / ICE"
-#property description "No RSI MACD Stochastic - structure & institutional only"
+#property version   "2.20"
+#property description "SNIPER AI PRISM SMT/IMCE/ICE aggressive execution"
+#property description "Engines assist quality - do not kill instant fire"
 
 #include <Trade/Trade.mqh>
 
@@ -25,28 +25,29 @@ input group "GENERAL"
 input long MagicNumber = 40001;
 input string TradeComment = "SNIPER AI";
 
-input group "QUALITY SNIPER (always on + instant fire when quality passes)"
-// Quality sniper COMPONENTS every session: trend + ADX + structure zone
-// (BOS / OB / FVG / sweep+CHoCH). Instant execution ONLY after a quality
-// path passes. Weak trend-only entries are off by default.
+input group "QUALITY SNIPER + AGGRESSIVE EXECUTION"
+// Quality components stay. Aggressive execution means InstantTrend (trend+ADX)
+// can still fire instantly — SMT/IMCE/ICE assist, they do not smother entries.
+// Your log: trend=true ADXstrong=true but InstantTrend blocked + ICE 25<50.
 
-input bool   EnableAlwaysQualityMode     = true;  // quality gates every bar, not only during news
-input bool   QualityRequireStructureZone = true;  // need OB/FVG/BOS (continuation) or liq+zone (reversal)
-input bool   QualityRequireTrendAndADX   = true;  // direction + ADX must agree
-input bool   QualityDisableWeakPaths     = true;  // no InstantTrend-only / 1-of-3 soft entries
-input int    QualityMPIScore             = 40;    // minimum MPI on regular trading
+input bool   EnableAlwaysQualityMode     = true;
+input bool   QualityRequireStructureZone = true;
+input bool   QualityRequireTrendAndADX   = true;
+input bool   QualityDisableWeakPaths     = false; // keep InstantTrend alive
+input int    QualityMPIScore             = 25;    // was 40 — was blocking aggressive fire
 
-input bool   EnableInstantSniperMode     = true;  // recency windows / quality path helpers
-input bool   AllowTrendOnlyInstantEntry  = false; // OFF: trend+ADX alone is NOT quality
-input bool   AggressiveSniperEntries     = true;  // ContSniper / RevSniper paths
-input bool   NeverBlockValidSniperEntry  = true;  // no conflict-reject-both / news hard pause
-input bool   ResolveConflictByTrend      = true;  // on buy+sell conflict, take trend side
-input double InstantPullbackATRMultiple  = 2.5;   // quality pullback band (tighter than spray mode)
-input int    InstantStructureRecencyBars = 20;    // BOS/CHoCH/sweep recency
-input int    InstantMinimumMPIScore      = 40;    // aligns with QualityMPIScore
-input bool   InstantTwoOfThreeLiquidity  = true;  // liquidity path: need 2 of 3 always in quality mode
-input bool   InstantFvgOrOb              = true;  // FVG or OB accepted with BOS/trend
-input double InstantChannelBreakATR      = 0.25;  // tighter near-edge breakout
+input bool   EnableInstantSniperMode     = true;
+input bool   AllowTrendOnlyInstantEntry  = true;  // trend+ADX instant entry ON
+input bool   AggressiveSniperEntries     = true;
+input bool   NeverBlockValidSniperEntry  = true;
+input bool   ResolveConflictByTrend      = true;
+input bool   AggressiveInstitutionalExecution = true; // soft SMT/ICE; IMCE only blocks chop
+input double InstantPullbackATRMultiple  = 3.0;
+input int    InstantStructureRecencyBars = 25;
+input int    InstantMinimumMPIScore      = 25;
+input bool   InstantTwoOfThreeLiquidity  = true;
+input bool   InstantFvgOrOb              = true;
+input double InstantChannelBreakATR      = 0.35;
 
 input group "TRADE SIZE & LIMITS (adjustable)"
 // Change these in EA Inputs after attach — they are live settings.
@@ -65,24 +66,24 @@ input group "SMT - SMART MONEY TECHNIQUE"
 input bool   EnableSMT                 = true;
 input string SMTReferenceSymbol        = "";   // e.g. GBPUSD.m — blank = internal SMT only
 input bool   SMTAllowInternal          = true; // sweep/reclaim SMT without a second symbol
-input bool   SMTRequireForEntry        = true; // hard gate in PRISM when enabled
+input bool   SMTRequireForEntry        = false; // soft — was harming aggressive execution
 input int    SMTSwingLookbackBars      = 20;
-input bool   SMTFailOpenIfNoRefData    = true; // don't block if reference history missing
+input bool   SMTFailOpenIfNoRefData    = true;
 
 input group "IMCE - INSTITUTIONAL MARKET CONTEXT ENGINE"
-// Classifies context: continuation / reversal-liquidity / expansion / manipulation.
-// Entries must match the context (ContSniper in trend/expansion, RevSniper in reversal).
+// Aggressive mode: classify context; hard-block only manipulation/chop.
 
 input bool   EnableIMCE                = true;
 input bool   IMCERequireForEntry       = true;
-input bool   IMCEBlockManipulationChop = true; // block when trap/fake-breakout context dominates
+input bool   IMCEBlockManipulationChop = true;
 
 input group "ICE - INSTITUTIONAL CONFIDENCE ENGINE"
-// Scores institutional confirmation (BOS/CHoCH/sweep/OB/FVG/displacement/HTF).
+// Your log showed ICE_score_buy=25 with floor 50 → blocked InstantTrend.
+// Soft by default so aggressive execution stays alive.
 
 input bool   EnableInstitutionalConfidence = true;
-input bool   ICERequireForEntry            = true;
-input int    MinInstitutionalConfidence    = 50; // 0-100 quality floor
+input bool   ICERequireForEntry            = false; // soft score / log only
+input int    MinInstitutionalConfidence    = 20;    // only if ICERequireForEntry=true
 
 input group "FILTERS"
 
@@ -406,14 +407,15 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_SMT_IMCE_21");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_AGGRESSIVE_INST_22");
    Print("Mode: QUALITY sniper always=", EnableAlwaysQualityMode,
          " | EventTighten=", EnableEventQualityMode,
          " | MPI regular=", QualityMPIScore, " event=", EventQualityMPIScore);
    Print("Engines: SMT=", EnableSMT, " IMCE=", EnableIMCE,
          " ICE=", EnableInstitutionalConfidence,
-         " MinICE=", MinInstitutionalConfidence);
-   Print("Oscillators: RSI/MACD/Stochastic NOT used (structure + institutional only)");
+         " AggressiveInstExec=", AggressiveInstitutionalExecution,
+         " InstantTrend=", AllowTrendOnlyInstantEntry);
+   Print("Oscillators: RSI/MACD/Stochastic NOT used | ICE/SMT soft (do not smother fire)");
    Print("Trade size: LotSize=", LotSize, " UseFixedLot=", UseFixedLot,
          " RiskPercent=", RiskPercent,
          " | MaxOpenTrades/symbol=", MaxOpenTrades,
@@ -6225,7 +6227,9 @@ bool InstantTrendSniperBuySetup()
 {
    if(!EnableInstantSniperMode || !AllowTrendOnlyInstantEntry)
       return false;
-   if(QualityWeakPathsDisabled())
+   // Aggressive institutional execution: InstantTrend stays alive.
+   // Only suppress when user explicitly disables weak paths AND not in aggressive mode.
+   if(QualityWeakPathsDisabled() && !AggressiveInstitutionalExecution)
       return false;
    if(!IsBullTrend())
       return false;
@@ -6238,7 +6242,7 @@ bool InstantTrendSniperSellSetup()
 {
    if(!EnableInstantSniperMode || !AllowTrendOnlyInstantEntry)
       return false;
-   if(QualityWeakPathsDisabled())
+   if(QualityWeakPathsDisabled() && !AggressiveInstitutionalExecution)
       return false;
    if(!IsBearTrend())
       return false;
@@ -6416,8 +6420,8 @@ input int SpecBreakout_ChannelLookbackBars = 20; // structure reference: recent 
 
 bool SpecVolatilityBreakoutBuySetup()
 {
-   // Channel spikes are low-quality without structure — off in quality mode
-   if(QualityWeakPathsDisabled())
+   // Only suppress weak breakouts when quality-weak-paths is on AND not aggressive
+   if(QualityWeakPathsDisabled() && !AggressiveInstitutionalExecution)
       return false;
 
    if(!TrendStrong())
@@ -6439,7 +6443,7 @@ bool SpecVolatilityBreakoutBuySetup()
 
 bool SpecVolatilityBreakoutSellSetup()
 {
-   if(QualityWeakPathsDisabled())
+   if(QualityWeakPathsDisabled() && !AggressiveInstitutionalExecution)
       return false;
 
    if(!TrendStrong())
@@ -6776,11 +6780,26 @@ bool IMCEAllows(bool buy, const string strategyTag)
 
    ENUM_IMCE_CONTEXT ctx = GetIMCEContext();
 
+   // Always hard-block clear manipulation/chop if enabled
    if(IMCEBlockManipulationChop && ctx == IMCE_MANIPULATION_CHOP)
    {
       if(EnableVerboseLogging || EnableSetupLogging)
          Print("IMCE blocked ", strategyTag, " — manipulation/chop context on ", BrokerSymbol);
       return false;
+   }
+
+   // Aggressive execution: IMCE classifies context but does NOT veto
+   // ContSniper / InstantTrend when trend context already agrees.
+   if(AggressiveInstitutionalExecution)
+   {
+      if(strategyTag == "InstantTrend" || strategyTag == "ContSniper" || strategyTag == "TrendPullback")
+      {
+         if(buy ? IsBullTrend() : IsBearTrend())
+            return true;
+      }
+      if(strategyTag == "RevSniper" || strategyTag == "LiquiditySweep")
+         return true; // let path-level gates decide
+      return true;
    }
 
    bool contTag =
@@ -6805,7 +6824,6 @@ bool IMCEAllows(bool buy, const string strategyTag)
 
    if(ctx == IMCE_REVERSAL_LIQUIDITY)
    {
-      // Prefer reversal/liquidity tags; allow continuation only with fresh BOS
       if(contTag && !RecentBOS(EffectiveStructureRecency()))
       {
          if(EnableVerboseLogging || EnableSetupLogging)
@@ -6815,12 +6833,39 @@ bool IMCEAllows(bool buy, const string strategyTag)
       return true;
    }
 
-   // NEUTRAL: allow only if ICE/structure already strong (checked separately)
    return true;
 }
 
 bool PrismInstitutionalEnginesOK(bool buy, const string strategyTag)
 {
+   // Aggressive mode: engines INFORM and only hard-stop manipulation chop.
+   // SMT/ICE soft defaults already fail-open via RequireForEntry=false.
+   if(AggressiveInstitutionalExecution)
+   {
+      ENUM_IMCE_CONTEXT ctx = GetIMCEContext();
+      if(EnableIMCE && IMCEBlockManipulationChop && ctx == IMCE_MANIPULATION_CHOP)
+      {
+         if(EnableVerboseLogging || EnableSetupLogging)
+            Print("IMCE (aggressive) blocked ", strategyTag, " — manipulation/chop on ", BrokerSymbol);
+         return false;
+      }
+
+      // Soft ICE: log only unless user turned ICERequireForEntry back on
+      if(EnableInstitutionalConfidence)
+      {
+         int ice = GetInstitutionalConfidenceScore(buy);
+         if(EnableVerboseLogging)
+            Print("ICE soft score ", ice, " for ", strategyTag, " on ", BrokerSymbol);
+         if(ICERequireForEntry && ice < MinInstitutionalConfidence)
+            return false;
+      }
+
+      if(EnableSMT && SMTRequireForEntry && !SMTOK(buy))
+         return false;
+
+      return true; // do not smother InstantTrend / ContSniper
+   }
+
    if(!InstitutionalConfidenceOK(buy))
       return false;
    if(!SMTOK(buy))
@@ -8270,16 +8315,19 @@ void PrintSetupDiagnostics()
             " EventTighten=", eventQ,
             " MPI floor=", EffectiveMinimumMPIScore(),
             " NewsHardBlock=", EnableNewsFilter);
-      Print("NOTE: SMT=", EnableSMT, " IMCE=", EnableIMCE,
-            " ICE=", EnableInstitutionalConfidence,
-            " ICE_score_buy=", GetInstitutionalConfidenceScore(true),
-            " ICE_score_sell=", GetInstitutionalConfidenceScore(false),
+      Print("NOTE: SMT=", EnableSMT, " require=", SMTRequireForEntry,
+            " IMCE=", EnableIMCE,
+            " ICE=", EnableInstitutionalConfidence, " require=", ICERequireForEntry,
+            " ICE_buy=", GetInstitutionalConfidenceScore(true),
+            " ICE_sell=", GetInstitutionalConfidenceScore(false),
             " IMCE=", IMCEContextToString(GetIMCEContext()));
-      Print("NOTE: Oscillators RSI/MACD/Stoch removed — institutional structure engines only.");
+      Print("NOTE: AggressiveInstExec=", AggressiveInstitutionalExecution,
+            " InstantTrendAllowed=", AllowTrendOnlyInstantEntry,
+            " — engines assist, do not smother aggressive execution.");
       if(eventQ)
-         Print("NOTE: EVENT TIGHTEN — quality sniper + higher MPI; still trading (no hard news pause).");
-      else if(EnableAlwaysQualityMode)
-         Print("NOTE: REGULAR session — quality sniper + SMT/IMCE/ICE. Instant fire when quality passes.");
+         Print("NOTE: EVENT TIGHTEN — still trading (no hard news pause).");
+      else
+         Print("NOTE: REGULAR session — instant fire when InstantTrend/ContSniper/RevSniper passes.");
    }
 }
 
