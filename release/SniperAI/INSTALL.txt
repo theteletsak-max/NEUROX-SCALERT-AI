@@ -2,19 +2,20 @@ SNIPER AI — Install (2 files only)
 =================================
 
 Files:
-  1) SniperAI.mq5
-  2) SniperAI_Watermark.bmp   (required for watermark)
+  1) SniperAI.mq5                 ← required
+  2) SniperAI_Watermark.bmp       ← optional (watermark is OFF for now)
 
 Steps:
   1. Open MetaTrader 5 → File → Open Data Folder
   2. Go to MQL5/Experts/
-  3. Copy BOTH files into MQL5/Experts/
+  3. Copy SniperAI.mq5 into MQL5/Experts/
+     (BMP only needed if you later turn watermark ON in inputs)
   4. In MetaEditor open SniperAI.mq5 → Compile (F7)
   5. In Navigator → Expert Advisors → attach SniperAI to your chart
   6. Enable Algo Trading
 
 Notes:
-  - Candles stay visible (watermark is behind the chart)
+  - Background picture / watermark is disabled by default
   - Dashboard appears on the right
   - Lot default 0.01 (change in inputs)
   - Demo test first

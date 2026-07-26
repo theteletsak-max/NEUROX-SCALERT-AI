@@ -1088,7 +1088,7 @@ input int      InpMinScore         = 3;         // Minimum setup score to fire
 input bool     InpOnePerBar        = true;      // One new entry per M5 bar
 
 input group "=== UI ==="
-input bool     InpShowWatermark    = true;      // Show SNIPER AI watermark
+input bool     InpShowWatermark    = false;     // Show SNIPER AI watermark (off for now)
 input bool     InpShowDashboard    = true;      // Show right-corner dashboard
 input bool     InpLogTrades        = true;      // Journal to Experts log
 
