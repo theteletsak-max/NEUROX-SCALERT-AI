@@ -10,22 +10,22 @@ https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compi
 MUST SHOW AT TOP:
   BUILD_ID: SA_BABFX_TRADE_15
 
-THIS IS YOUR BABFX / PRISM SNIPER AI (CTrade - NOT raw OrderSend)
+This is your BabFX / PRISM Sniper AI using CTrade (not raw OrderSend).
 
 STEPS:
 1. Close MetaEditor
-2. Delete ALL old Sniper/SNIPER *.mq5 *.ex5 from MQL5/Experts
+2. Delete ALL old Sniper/SNIPER *.mq5 and *.ex5 from MQL5/Experts
 3. Copy SNIPER_AI_OK15.mq5 into MQL5/Experts
 4. Confirm SA_BABFX_TRADE_15
-5. F7 compile
-6. Attach to forex chart (M15 recommended; TrendTF=H4 EntryTF=M15)
-7. Inputs: TradeComment must stay exactly SNIPER AI
-8. Enable AutoTrading + Algo Trading
-9. Experts tab should show: SNIPER AI Loaded Successfully BUILD_ID=SA_BABFX_TRADE_15
+5. Press F7
+6. Attach to a forex chart (EntryTF default M15, TrendTF H4)
+7. Keep TradeComment exactly: SNIPER AI
+8. Enable AutoTrading (toolbar) AND Algo Trading in EA settings
+9. Experts should show: SNIPER AI Loaded Successfully BUILD_ID=SA_BABFX_TRADE_15
 
-CHANGES FROM YOUR PASTE:
-- removed #property strict (breaks MQL5)
-- removed watermark #resource (blocked compile without BMP)
-- TradeComment locked to SNIPER AI
+Portability fixes applied to your paste:
+- removed #property strict
+- removed watermark BMP #resource (was blocking compile)
 - dashboard off
-- CTrade ExecuteBuy/ExecuteSell kept (broker fill mode + no-stops fallback)
+- TradeComment locked to SNIPER AI
+- kept ExecuteBuy/ExecuteSell CTrade path with fill-mode + no-stops fallback
