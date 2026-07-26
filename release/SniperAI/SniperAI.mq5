@@ -1096,20 +1096,13 @@ public:
             return true;
            }
 
-         const uint rc = m_trade.ResultRetcode();
-         why = StringFormat("retcode=%d %s", (int)rc, m_trade.ResultRetcodeDescription());
+         const int rc = (int)m_trade.ResultRetcode();
+         why = StringFormat("retcode=%d %s", rc, m_trade.ResultRetcodeDescription());
          m_lastStatus = why;
-
-         // Recoverable retcodes (numeric fallbacks for older builds)
-         // 10004 requote, 10020 price off, 10021 price changed,
-         // 10024 too many requests, 10028 locked, 10031 connection, 10012 timeout
-         // Numeric retcodes only (max MetaEditor compatibility)
-         const bool recoverable =
-            (rc == 10004 || rc == 10012 || rc == 10020 || rc == 10021 ||
-             rc == 10024 || rc == 10028 || rc == 10031);
-         if(recoverable)
+         // Retry a few times on any failure (no TRADE_RETCODE_* identifiers)
+         if(attempt < InpMaxRetries)
            {
-            Sleep(120 * attempt);
+            Sleep(150 * attempt);
             continue;
            }
          break;
