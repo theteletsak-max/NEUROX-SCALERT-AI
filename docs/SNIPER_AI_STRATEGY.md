@@ -20,6 +20,8 @@
 | Timeframes | **H4 bias → H1 setup → M5 entry** |
 | v1 path | **Trend continuation** first (reversals = v2) |
 | Max open trades | **3 total on the account** (also ≤ 3 per symbol) |
+| Lot | **0.01** default (user-changeable input) |
+| SL / TP / BE | **1.5×ATR(H1)** / **2R** / BE at **+1R** |
 | Management | SL / TP / Break-even only |
 | Forbidden | Grid, martingale, trailing, partials, self-optimising AI |
 | AI role | Assist ranking / labelling only — never bypass rules |
@@ -94,8 +96,8 @@ Why this stack: H4/H1 keep sniper quality (from B); M5 makes the shot faster wit
 
 ## Still open (decide next, piece by piece)
 
-1. Exact SL / TP / BE / lot numbers  
-2. How to pick which setups win when more than 3 pairs qualify (best score first?)
+1. How to pick which setups win when more than 3 pairs qualify (best score first?)  
+2. Any final “done with strategy” sign-off before we outline the build plan
 
 ---
 
