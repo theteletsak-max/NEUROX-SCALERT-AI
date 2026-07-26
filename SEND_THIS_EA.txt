@@ -1,25 +1,23 @@
 SNIPER AI — Expert Advisor (send this)
 
-BUILD_ID: SA_AGGRESSIVE_SNIPER_17
-File name: SNIPER_AI_OK17.mq5
+BUILD_ID: SA_EVENT_SAFE_18
+File name: SNIPER_AI_OK18.mq5
 Trade comment: SNIPER AI
 
 Download EA (.mq5):
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK17.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK18.mq5
 
 Download ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
-What it does:
-- Detects correct sniper components (trend/BOS/CHoCH/sweep/OB/FVG)
-- Aggressive sniper entries (fires when enough components agree)
-- Aggressive / instant execution
-- Does not strategy-veto valid sniper entries
+Safe through events:
+- Does NOT pause on CPI/NFP (news filter off)
+- During events: only quality sniper setups (structure zone + trend/ADX)
+- Outside events: aggressive sniper entries
 
 Install:
-1. Open link → Download
-2. Put SNIPER_AI_OK17.mq5 into MT5 → MQL5 → Experts
-3. Delete old SNIPER/Sniper .mq5 and .ex5 first
-4. MetaEditor → F7
-5. Attach → AutoTrading ON → Algo Trading ON
-6. Experts must show: SNIPER AI Loaded Successfully BUILD_ID=SA_AGGRESSIVE_SNIPER_17
+1. Download SNIPER_AI_OK18.mq5
+2. Put into MT5 → MQL5 → Experts (delete old SNIPER files first)
+3. F7 compile
+4. Attach → AutoTrading ON → Algo Trading ON
+5. Experts: SNIPER AI Loaded Successfully BUILD_ID=SA_EVENT_SAFE_18

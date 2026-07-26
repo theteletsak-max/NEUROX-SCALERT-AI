@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_AGGRESSIVE_SNIPER_17                                  |
-//| SNIPER AI - Aggressive sniper: correct signals + instant fire     |
+//| BUILD_ID: SA_EVENT_SAFE_18                                  |
+//| SNIPER AI - Aggressive sniper + event-safe quality entries        |
 //| Comment: SNIPER AI | Dashboard off | No watermark resource        |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "1.70"
+#property version   "1.80"
 #property description "SNIPER AI aggressive sniper PRISM EA"
-#property description "Correct signals, aggressive entries, instant execution"
+#property description "Trades through events, but only quality sniper setups"
 
 #include <Trade/Trade.mqh>
 
@@ -84,21 +84,26 @@ input ENUM_TIMEFRAMES  HigherTimeframe = PERIOD_H4;
 
 input group "NEWS FILTER"
 
-input bool EnableNewsFilter = false; // default off per request - every symbol now trades through news events (previously only BTC/ETH did, via NonScalpDisableNewsFilter below). Set back to true if you want the high/medium-impact blocking window back for any symbol.
+input bool EnableNewsFilter = false; // KEEP OFF - hard pause during CPI is what blocked you before
 input int  MinutesBeforeNews = 30;
 input int  MinutesAfterNews = 30;
-input bool BlockHighImpactNews = true;
+input bool BlockHighImpactNews = true;   // only used if EnableNewsFilter=true
 input bool BlockMediumImpactNews = false;
-input bool NonScalpDisableNewsFilter = true; // FIX: BTC/ETH (matched by NonScalpSymbolKeywords)
-// were being blocked by nearly every USD news release, because the news filter derives
-// currency codes from the symbol name (BTCUSD -> base "BTC", quote "USD") and treats crypto
-// exactly like a forex pair. Since USD is the quote currency on almost every crypto symbol,
-// and USD has high-impact releases very frequently (CPI, NFP, FOMC...), this was silently
-// blocking BTC/ETH trading most of the time. Crypto trades 24/7 and isn't driven by
-// scheduled forex-session macro releases the same way EURUSD is - this exempts non-scalp
-// symbols from the news filter by default, mirroring the exemption already given to them for
-// trend-exit and hold-time. Set to false if you specifically want the news filter applied
-// to BTC/ETH too.
+input bool NonScalpDisableNewsFilter = true;
+
+input group "EVENT SAFE QUALITY (trade through news, quality only)"
+// Does NOT block trading during CPI/NFP/FOMC. Instead raises the bar so
+// only quality sniper setups can fire in the event window (structure zone
+// + trend/ADX, weak InstantTrend-only paths disabled).
+
+input bool   EnableEventQualityMode       = true;  // safe mode during high-impact events
+input bool   EventQualityAppliesToCrypto  = true;  // also tighten BTC/ETH around USD high-impact news
+input bool   EventDisableWeakPaths        = true;  // no InstantTrend-only / 1-of-3 soft entries in events
+input bool   EventRequireStructureZone    = true;  // need OB or FVG (or recent BOS for continuation)
+input bool   EventRequireTrendAndADX      = true;  // direction + ADX must agree in events
+input int    EventQualityMPIScore         = 40;    // minimum MPI during events (quality floor)
+input int    EventMinutesBeforeNews       = 30;
+input int    EventMinutesAfterNews        = 30;
 
 //======================== GLOBALS ==================================//
 
@@ -369,8 +374,9 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_AGGRESSIVE_SNIPER_17");
-   Print("Mode: aggressive sniper | correct signals | instant execution | NeverBlock=", NeverBlockValidSniperEntry);
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_EVENT_SAFE_18");
+   Print("Mode: aggressive sniper | EventQuality=", EnableEventQualityMode,
+         " (trades through news, quality setups only) | NeverBlock=", NeverBlockValidSniperEntry);
 
    return(INIT_SUCCEEDED);
 }
@@ -6095,6 +6101,8 @@ double EffectivePullbackATRMultiple()
 
 int EffectiveMinimumMPIScore()
 {
+   if(EventQualityModeActive())
+      return MathMax(EventQualityMPIScore, InstantMinimumMPIScore);
    if(NeverBlockValidSniperEntry)
       return 0;
    if(EnableInstantSniperMode)
@@ -6102,10 +6110,76 @@ int EffectiveMinimumMPIScore()
    return MinimumMPIScore;
 }
 
+// High-impact event window detector — does NOT block trading.
+// Used only to switch into quality-sniper mode (CPI/NFP/FOMC, etc.).
+bool IsHighImpactEventWindow()
+{
+   string baseCcy  = StringSubstr(BrokerSymbol, 0, 3);
+   string quoteCcy = "";
+   if(StringLen(BrokerSymbol) >= 6)
+      quoteCcy = StringSubstr(BrokerSymbol, 3, 3);
+   else
+      quoteCcy = StringSubstr(BrokerSymbol, StringLen(BrokerSymbol) - 3, 3);
+
+   // BTCUSD.m / ETHUSD.m: treat USD quote high-impact as relevant when enabled
+   bool cryptoUsd = (EventQualityAppliesToCrypto && IsNonScalpSymbol() &&
+                     (StringFind(BrokerSymbol, "USD") >= 0 || quoteCcy == "USD"));
+
+   datetime from = TimeCurrent() - EventMinutesAfterNews  * 60;
+   datetime to   = TimeCurrent() + EventMinutesBeforeNews * 60;
+
+   MqlCalendarValue values[];
+   int total = CalendarValueHistory(values, from, to, NULL, NULL);
+   if(total <= 0)
+      return false;
+
+   for(int i = 0; i < total; i++)
+   {
+      MqlCalendarEvent event;
+      if(!CalendarEventById(values[i].event_id, event))
+         continue;
+      if(event.importance != CALENDAR_IMPORTANCE_HIGH)
+         continue;
+
+      MqlCalendarCountry country;
+      if(!CalendarCountryById(event.country_id, country))
+         continue;
+
+      bool currencyHit =
+         (country.currency == baseCcy) ||
+         (country.currency == quoteCcy) ||
+         (cryptoUsd && country.currency == "USD");
+
+      if(currencyHit)
+         return true;
+   }
+   return false;
+}
+
+ulong g_EventQualityCycle = 0;
+bool  g_EventQualityCached = false;
+
+bool EventQualityModeActive()
+{
+   if(!EnableEventQualityMode)
+      return false;
+
+   // Cache once per trading cycle — calendar scan is not free
+   if(g_EventQualityCycle == g_CycleCounter)
+      return g_EventQualityCached;
+
+   g_EventQualityCycle = g_CycleCounter;
+   g_EventQualityCached = IsHighImpactEventWindow();
+   return g_EventQualityCached;
+}
+
 // Aggressive continuation sniper: correct trend + ADX (valid sniper bias).
 bool InstantTrendSniperBuySetup()
 {
    if(!EnableInstantSniperMode || !AllowTrendOnlyInstantEntry)
+      return false;
+   // During events: InstantTrend alone is too weak — quality mode disables it
+   if(EventQualityModeActive() && EventDisableWeakPaths)
       return false;
    if(!IsBullTrend())
       return false;
@@ -6117,6 +6191,8 @@ bool InstantTrendSniperBuySetup()
 bool InstantTrendSniperSellSetup()
 {
    if(!EnableInstantSniperMode || !AllowTrendOnlyInstantEntry)
+      return false;
+   if(EventQualityModeActive() && EventDisableWeakPaths)
       return false;
    if(!IsBearTrend())
       return false;
@@ -6188,7 +6264,7 @@ bool ActiveFVG(bool buy)
 }
 
 // Correct sniper Path A (aggressive): trend + at least one real component
-// (BOS / OB / FVG / pullback / ADX). Not spray-and-pray — still sniper parts.
+// (BOS / OB / FVG / pullback / ADX). Event quality: trend+ADX + structure zone.
 bool AggressiveContinuationBuySetup()
 {
    if(!AggressiveSniperEntries)
@@ -6202,8 +6278,19 @@ bool AggressiveContinuationBuySetup()
    double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
    bool pulled = (ema != EMPTY_VALUE && atr > 0.0 &&
                   MathAbs(price - ema) <= atr * EffectivePullbackATRMultiple());
+   bool bos = RecentBOS(rec);
+   bool zone = ActiveOrderBlock(true) || ActiveFVG(true);
 
-   return RecentBOS(rec) || ActiveOrderBlock(true) || ActiveFVG(true) || pulled || TrendStrong();
+   if(EventQualityModeActive())
+   {
+      if(EventRequireTrendAndADX && !TrendStrong())
+         return false;
+      if(EventRequireStructureZone && !(zone || bos))
+         return false;
+      return true;
+   }
+
+   return bos || zone || pulled || TrendStrong();
 }
 
 bool AggressiveContinuationSellSetup()
@@ -6219,11 +6306,23 @@ bool AggressiveContinuationSellSetup()
    double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
    bool pulled = (ema != EMPTY_VALUE && atr > 0.0 &&
                   MathAbs(price - ema) <= atr * EffectivePullbackATRMultiple());
+   bool bos = RecentBOS(rec);
+   bool zone = ActiveOrderBlock(false) || ActiveFVG(false);
 
-   return RecentBOS(rec) || ActiveOrderBlock(false) || ActiveFVG(false) || pulled || TrendStrong();
+   if(EventQualityModeActive())
+   {
+      if(EventRequireTrendAndADX && !TrendStrong())
+         return false;
+      if(EventRequireStructureZone && !(zone || bos))
+         return false;
+      return true;
+   }
+
+   return bos || zone || pulled || TrendStrong();
 }
 
 // Correct sniper Path B (aggressive): liquidity event + institutional zone.
+// Event quality: always require liquidity AND zone (no weak OR).
 bool AggressiveReversalBuySetup()
 {
    if(!AggressiveSniperEntries)
@@ -6232,6 +6331,14 @@ bool AggressiveReversalBuySetup()
    int rec = EffectiveStructureRecency();
    bool liq = RecentSweep(rec) || RecentCHoCH(rec);
    bool zone = ActiveOrderBlock(true) || ActiveFVG(true);
+
+   if(EventQualityModeActive())
+   {
+      if(EventRequireTrendAndADX && !(IsBullTrend() && TrendStrong()))
+         return false;
+      return liq && zone;
+   }
+
    if(NeverBlockValidSniperEntry)
       return (liq || zone) && (IsBullTrend() || liq);
    return liq && zone;
@@ -6245,6 +6352,14 @@ bool AggressiveReversalSellSetup()
    int rec = EffectiveStructureRecency();
    bool liq = RecentSweep(rec) || RecentCHoCH(rec);
    bool zone = ActiveOrderBlock(false) || ActiveFVG(false);
+
+   if(EventQualityModeActive())
+   {
+      if(EventRequireTrendAndADX && !(IsBearTrend() && TrendStrong()))
+         return false;
+      return liq && zone;
+   }
+
    if(NeverBlockValidSniperEntry)
       return (liq || zone) && (IsBearTrend() || liq);
    return liq && zone;
@@ -6256,6 +6371,10 @@ input int SpecBreakout_ChannelLookbackBars = 20; // structure reference: recent 
 
 bool SpecVolatilityBreakoutBuySetup()
 {
+   // News spikes fake channel breaks — skip weak breakout path in event quality mode
+   if(EventQualityModeActive() && EventDisableWeakPaths)
+      return false;
+
    if(!TrendStrong())
       return false;
 
@@ -6275,6 +6394,9 @@ bool SpecVolatilityBreakoutBuySetup()
 
 bool SpecVolatilityBreakoutSellSetup()
 {
+   if(EventQualityModeActive() && EventDisableWeakPaths)
+      return false;
+
    if(!TrendStrong())
       return false;
 
@@ -6480,8 +6602,19 @@ void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &
    int mpiScore = CalculatePRISMScore(isBuy);
    int mpiFloor = EffectiveMinimumMPIScore();
 
-   // NeverBlock / InstantTrend / ContSniper / RevSniper: do not veto with MPI.
-   if(!NeverBlockValidSniperEntry && mpiFloor > 0 && mpiScore < mpiFloor)
+   // Event quality: raise MPI floor during CPI/NFP/etc (still trades — quality only).
+   // Outside events: NeverBlock keeps MPI from vetoing.
+   if(EventQualityModeActive())
+   {
+      if(mpiScore < EventQualityMPIScore)
+      {
+         if(EnableVerboseLogging || EnableSetupLogging)
+            Print("EVENT QUALITY: MPI ", mpiScore, " < ", EventQualityMPIScore,
+                  " on ", BrokerSymbol, " - waiting for higher-quality sniper setup (not hard-blocked from news).");
+         return;
+      }
+   }
+   else if(!NeverBlockValidSniperEntry && mpiFloor > 0 && mpiScore < mpiFloor)
    {
       if(EnableVerboseLogging)
          Print("PRISM: MPI score ", mpiScore, " below MinimumMPIScore (", mpiFloor, ") on ",
@@ -6585,9 +6718,11 @@ bool TrendPullbackBuySetup()
    bool nearEma = (MathAbs(price - ema) <= atr * pullMul);
 
    // Aggressive / Instant: trend+ADX with near-EMA or recent BOS.
-   // NeverBlock: trend+ADX alone is enough (same as InstantTrend — no veto).
+   // NeverBlock: trend+ADX alone outside events. During events: quality only.
    if(EnableInstantSniperMode || NeverBlockValidSniperEntry)
    {
+      if(EventQualityModeActive())
+         return (nearEma || RecentBOS(EffectiveStructureRecency()));
       if(NeverBlockValidSniperEntry)
          return true;
       if(nearEma)
@@ -6624,6 +6759,8 @@ bool TrendPullbackSellSetup()
 
    if(EnableInstantSniperMode || NeverBlockValidSniperEntry)
    {
+      if(EventQualityModeActive())
+         return (nearEma || RecentBOS(EffectiveStructureRecency()));
       if(NeverBlockValidSniperEntry)
          return true;
       if(nearEma)
@@ -6656,7 +6793,9 @@ bool LiquiditySweepBuySetup()
    if(EnableInstantSniperMode && InstantTwoOfThreeLiquidity)
    {
       int hits = (sweep ? 1 : 0) + (choch ? 1 : 0) + (ob ? 1 : 0);
-      int need = NeverBlockValidSniperEntry ? 1 : 2;
+      int need = 2;
+      if(NeverBlockValidSniperEntry && !EventQualityModeActive())
+         need = 1;
       return (hits >= need);
    }
 
@@ -6677,7 +6816,9 @@ bool LiquiditySweepSellSetup()
    if(EnableInstantSniperMode && InstantTwoOfThreeLiquidity)
    {
       int hits = (sweep ? 1 : 0) + (choch ? 1 : 0) + (ob ? 1 : 0);
-      int need = NeverBlockValidSniperEntry ? 1 : 2;
+      int need = 2;
+      if(NeverBlockValidSniperEntry && !EventQualityModeActive())
+         need = 1;
       return (hits >= need);
    }
 
@@ -6692,6 +6833,16 @@ bool FVGOrderBlockBuySetup()
    bool bos = RecentBOS(rec);
    bool fvg = ActiveFVG(true);
    bool ob = ActiveOrderBlock(true);
+
+   if(EventQualityModeActive())
+   {
+      if(EventRequireTrendAndADX && !(IsBullTrend() && TrendStrong()))
+         return false;
+      // Quality: need a zone, plus BOS or both FVG+OB
+      if(EventRequireStructureZone && !(fvg || ob))
+         return false;
+      return (bos || (fvg && ob));
+   }
 
    if(EnableInstantSniperMode && InstantFvgOrOb)
    {
@@ -6710,6 +6861,15 @@ bool FVGOrderBlockSellSetup()
    bool bos = RecentBOS(rec);
    bool fvg = ActiveFVG(false);
    bool ob = ActiveOrderBlock(false);
+
+   if(EventQualityModeActive())
+   {
+      if(EventRequireTrendAndADX && !(IsBearTrend() && TrendStrong()))
+         return false;
+      if(EventRequireStructureZone && !(fvg || ob))
+         return false;
+      return (bos || (fvg && ob));
+   }
 
    if(EnableInstantSniperMode && InstantFvgOrOb)
    {
@@ -7805,11 +7965,15 @@ void PrintSetupDiagnostics()
       Print("VolBreakout BUY: live=", (SpecVolatilityBreakoutBuySetup() ? "WOULD PASS" : "blocked"),
             " | close=", closeBar, " chHigh=", chHigh, " | SELL live=",
             (SpecVolatilityBreakoutSellSetup() ? "WOULD PASS" : "blocked"), " chLow=", chLow);
+      bool eventQ = EventQualityModeActive();
       Print("NOTE: AggressiveSniper=", AggressiveSniperEntries,
             " NeverBlock=", NeverBlockValidSniperEntry,
-            " Instant=", EnableInstantSniperMode,
-            " HTFConfirm=", EnableHTFConfirmation);
-      Print("NOTE: Correct sniper components detected; aggressive ORs + no strategy vetoes. Only max-trades/margin can still stop a send.");
+            " EventQualityACTIVE=", eventQ,
+            " NewsHardBlock=", EnableNewsFilter);
+      if(eventQ)
+         Print("NOTE: High-impact event window — trading ALLOWED, but only quality sniper setups (structure + trend/ADX, weak paths off).");
+      else
+         Print("NOTE: Outside events — aggressive sniper entries; during events quality mode tightens automatically.");
    }
 }
 

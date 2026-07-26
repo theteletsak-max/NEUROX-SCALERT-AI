@@ -5,29 +5,25 @@ ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
 EA file:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK17.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK18.mq5
 
 MUST SHOW AT TOP:
-  BUILD_ID: SA_AGGRESSIVE_SNIPER_17
+  BUILD_ID: SA_EVENT_SAFE_18
 
-Aggressive sniper EA:
-- Correct signal components (trend, BOS, CHoCH, sweep, OB, FVG, pullback)
-- Aggressive sniper entries (ContSniper / RevSniper / InstantTrend)
-- Instant execution when a path passes
-- Strategy vetoes OFF (MPI, HTF hard block, conflict-reject-both, long cooldowns)
+Event-safe aggressive sniper:
+- News hard-block stays OFF (no more "can't trade" on CPI)
+- During high-impact events: QUALITY MODE (structure + trend/ADX)
+- Weak InstantTrend / fake breakout paths disabled in the event window
+- Outside events: full aggressive sniper
 
 STEPS:
 1. Close MetaEditor
 2. Delete ALL old Sniper/SNIPER *.mq5 and *.ex5 from MQL5/Experts
-3. Copy SNIPER_AI_OK17.mq5 into MQL5/Experts
-4. Confirm SA_AGGRESSIVE_SNIPER_17
+3. Copy SNIPER_AI_OK18.mq5 into MQL5/Experts
+4. Confirm SA_EVENT_SAFE_18
 5. Press F7
 6. Attach to chart
 7. Keep TradeComment exactly: SNIPER AI
-8. Leave defaults: AggressiveSniperEntries=true, NeverBlockValidSniperEntry=true
+8. Defaults: EnableNewsFilter=false, EnableEventQualityMode=true
 9. Enable AutoTrading + Algo Trading
-10. Experts: SNIPER AI Loaded Successfully BUILD_ID=SA_AGGRESSIVE_SNIPER_17
-
-Still enforced (broker safety only):
-- MaxOpenTrades
-- Sufficient free margin
+10. Experts: SNIPER AI Loaded Successfully BUILD_ID=SA_EVENT_SAFE_18
