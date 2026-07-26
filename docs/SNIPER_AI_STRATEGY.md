@@ -73,13 +73,15 @@ Why this stack: H4/H1 keep sniper quality (from B); M5 makes the shot faster wit
 
 ---
 
-## Risk / management (direction locked; numbers TBD)
+## Risk / management (locked)
 
-- Fixed lot **or** % risk (pick one later)  
-- SL: fixed base + ATR adjustment  
-- TP: fixed R:R  
-- BE: move to break-even at defined R  
-- Trade ends only on SL, TP, or BE stop
+| Setting | Value | Notes |
+|---------|--------|------|
+| Lot | **0.01** default | Input — user can change |
+| SL | **1.5 × ATR(H1)** | ATR-based stop |
+| TP | **2R** | 2 × stop distance |
+| BE | At **+1R** | Move SL to break-even |
+| Ends on | SL / TP / BE | No trailing, no partials |
 
 ---
 
