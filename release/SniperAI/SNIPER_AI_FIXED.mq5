@@ -1,8 +1,8 @@
 //+------------------------------------------------------------------+
-//| SNIPER_AI_FIXED.mq5                                               |
+//| SNIPER_AI.mq5                                                     |
 //| BUILD_ID: SA_COMPILE_OK_8                                         |
 //| SNIPER AI                                                         |
-//| DELETE old SniperAI.mq5 from Experts before compiling this file.  |
+//| Delete old Sniper files in Experts, then compile THIS file (F7).  |
 //+------------------------------------------------------------------+
 #property copyright   "SNIPER AI"
 #property link        "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
