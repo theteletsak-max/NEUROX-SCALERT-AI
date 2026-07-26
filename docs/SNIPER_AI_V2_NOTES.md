@@ -1,4 +1,4 @@
-# SNIPER AI v2.00 — Engineering Rebuild Notes
+# SNIPER AI — Engineering Rebuild Notes
 
 ## What changed vs v1
 

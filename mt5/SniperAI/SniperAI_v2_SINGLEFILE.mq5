@@ -1,6 +1,6 @@
 //+------------------------------------------------------------------+
 //| SniperAI.mq5                                                      |
-//| SNIPER AI v2.00 — Institutional single-file Expert Advisor        |
+//| SNIPER AI — Institutional single-file Expert Advisor              |
 //|                                                                   |
 //| Architecture (sections in this file):                             |
 //|   1. Types / Inputs                                               |
@@ -18,9 +18,9 @@
 //+------------------------------------------------------------------+
 #property copyright   "SNIPER AI"
 #property link        "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version     "2.00"
+#property version     "1.00"
 #property description "SNIPER AI — institutional sniper EA (H4/H1/M5)"
-#property description "24/7 adaptive execution. No session/news trading blocks."
+#property description "High-precision 24/7 adaptive execution. No session/news blocks."
 #property strict
 
 #include <Trade/Trade.mqh>
@@ -130,11 +130,13 @@ input long   InpMagic               = 20260726;   // Magic number
 input int    InpMaxSlippagePoints   = 80;         // Max slippage (points)
 input int    InpMaxRetries          = 3;          // Execution retries
 
-input group "=== STRATEGY ==="
+input group "=== STRATEGY (precision ~70% target) ==="
 input int    InpSwingStrength       = 2;          // Swing fractal strength
-input int    InpMinScore            = 6;          // Minimum setup score
+input int    InpMinScore            = 14;         // Minimum setup score (strict)
+input int    InpMinConfluence       = 4;          // Min confluence factors required
 input bool   InpAllowContinuation   = true;       // Allow continuation
 input bool   InpAllowReversal       = true;       // Allow reversal
+input bool   InpRequireZoneTouch    = true;       // Require price at OB/FVG zone
 input bool   InpOneEntryPerM5       = true;       // One entry per M5 bar
 input bool   InpTradeChartOnly      = true;       // Trade attached chart only
 
@@ -637,26 +639,31 @@ private:
    CSaLiquidityEngine m_liquidity;
    CSaZoneEngine      m_zones;
 
+   // Strict M5 confirmation — reduces false breaks (precision focus)
    bool M5Buy(const MqlRates &m5[], const int n)
      {
-      if(n < 3) return false;
+      if(n < 4) return false;
+      const double body = m5[1].close - m5[1].open;
+      const double range = m5[1].high - m5[1].low;
+      if(range <= 0.0 || body <= 0.0) return false;
       const bool bull = (m5[1].close > m5[1].open);
-      const bool up   = (m5[1].close > m5[2].close);
-      const double upper = m5[1].high - m5[1].close;
-      const double lower = m5[1].close - m5[1].low;
-      const bool closeStrong = (lower >= upper);
-      return (bull && (up || closeStrong));
+      const bool up = (m5[1].close > m5[2].close && m5[2].close >= m5[3].close);
+      const bool strongBody = (body >= range * 0.55);          // close in upper half decisively
+      const bool breaksMicro = (m5[1].close > m5[2].high);    // micro BOS on M5
+      return (bull && strongBody && up && breaksMicro);
      }
 
    bool M5Sell(const MqlRates &m5[], const int n)
      {
-      if(n < 3) return false;
+      if(n < 4) return false;
+      const double body = m5[1].open - m5[1].close;
+      const double range = m5[1].high - m5[1].low;
+      if(range <= 0.0 || body <= 0.0) return false;
       const bool bear = (m5[1].close < m5[1].open);
-      const bool dn   = (m5[1].close < m5[2].close);
-      const double upper = m5[1].high - m5[1].close;
-      const double lower = m5[1].close - m5[1].low;
-      const bool closeStrong = (upper >= lower);
-      return (bear && (dn || closeStrong));
+      const bool dn = (m5[1].close < m5[2].close && m5[2].close <= m5[3].close);
+      const bool strongBody = (body >= range * 0.55);
+      const bool breaksMicro = (m5[1].close < m5[2].low);
+      return (bear && strongBody && dn && breaksMicro);
      }
 
    ENUM_SA_MKT Regime(const double atr, const double atrAvg) const

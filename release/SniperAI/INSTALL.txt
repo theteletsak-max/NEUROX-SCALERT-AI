@@ -1,5 +1,5 @@
-SNIPER AI v2.00 — Install
-=========================
+SNIPER AI — Install
+===================
 
 File required:
   SniperAI.mq5
@@ -11,8 +11,8 @@ Steps:
   4. Attach to chart → Enable Algo Trading
 
 Notes:
-  - Single-file institutional build
+  - Name: SNIPER AI (no version branding)
+  - High-precision sniper filters (fewer, cleaner trades)
   - Trade comment is exactly: SNIPER AI
-  - Watermark disabled
   - Premium dashboard on the right
   - Demo test first
