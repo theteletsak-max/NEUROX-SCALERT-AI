@@ -14,3 +14,9 @@ config.yaml
 .DS_Store
 .idea/
 .vscode/
+
+# MetaTrader build artifacts (if compiled locally into repo)
+*.ex5
+*.ex4
+*.log
+

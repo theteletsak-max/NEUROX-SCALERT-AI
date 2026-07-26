@@ -1,20 +1,48 @@
 # NEUROX Scalper AI
 
-Forex scalping trading robot with risk controls, session filters, backtesting, and paper replay.
+Forex scalping robot built **from scratch** — MetaTrader 5 Expert Advisor (MQL5) plus an optional Python research/backtest toolkit.
 
-**Not financial advice.** This is a research / paper-trading toolkit. Do not run it with real money until you have validated it thoroughly on your own data and broker.
+> Not financial advice. Demo-test thoroughly before any live use.
 
-## Strategy
+## 1) MetaTrader 5 robot (primary)
 
-NEUROX uses a short-horizon trend scalper on M5 (configurable):
+The live trading robot lives in [`mt5/`](mt5/):
 
-1. **EMA cross** — fast EMA vs slow EMA for direction
-2. **RSI filter** — skip buys when overbought / sells when oversold
-3. **ATR stops** — stop-loss and take-profit sized from ATR
-4. **Session window** — optional London/NY overlap (UTC 12–16 by default)
-5. **Risk manager** — % risk per trade, max daily loss, max open trades, spread filter
+| Piece | Role |
+|-------|------|
+| `NeuroX_Scalper_AI.mq5` | Main Expert Advisor |
+| `Include/NeuroX/NX_Signals.mqh` | EMA cross + RSI filter |
+| `Include/NeuroX/NX_Risk.mqh` | Risk % sizing, daily loss, spread |
+| `Include/NeuroX/NX_Trade.mqh` | Order execution |
+| `Include/NeuroX/NX_Indicators.mqh` | EMA / RSI / ATR handles |
+| `Include/NeuroX/NX_Session.mqh` | UTC session window |
 
-## Quick start
+### Install
+
+See **[mt5/README.md](mt5/README.md)** for copy paths, compile steps, and Strategy Tester usage.
+
+Short version:
+
+1. Copy `NeuroX_Scalper_AI.mq5` → MT5 `MQL5/Experts/`
+2. Copy `Include/NeuroX/` → MT5 `MQL5/Include/NeuroX/`
+3. Compile in MetaEditor (F7)
+4. Attach to EURUSD M5 (or your pair/TF), enable Algo Trading
+5. Start on **demo** / Strategy Tester
+
+### Strategy (from scratch)
+
+```
+new closed bar
+   → EMA fast crosses EMA slow?
+   → RSI allows the direction?
+   → ATR large enough to scalp?
+   → inside session + risk checks pass?
+   → open trade with ATR stop & target, risk-% lot size
+```
+
+## 2) Python research toolkit (optional)
+
+Offline backtests and paper replay without MetaTrader:
 
 ```bash
 python -m venv .venv
@@ -22,69 +50,14 @@ source .venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
 
-# Write a local config
 neurox init-config -o config.yaml
-
-# Backtest on synthetic EURUSD-like data
 neurox backtest --bars 3000
-
-# Backtest your own candles
-neurox backtest --csv path/to/ohlc.csv --export-trades trades.csv
-
-# Paper replay of the latest bars
-neurox paper --bars 1000 --tail 300
-```
-
-### CSV format
-
-```csv
-time,open,high,low,close,volume
-2024-01-02 00:00:00,1.10421,1.10455,1.10390,1.10410,120
-```
-
-`time` should be UTC (timezone-aware preferred).
-
-## Project layout
-
-```
-neurox_scalper/
-  config.py      # YAML config models
-  indicators.py  # EMA, RSI, ATR
-  strategy.py    # Signal logic
-  risk.py        # Position sizing & limits
-  broker.py      # Paper execution (spread + commission)
-  engine.py      # Backtest / paper engine
-  data.py        # CSV loader + synthetic OHLC
-  cli.py         # `neurox` commands
-config.example.yaml
-tests/
-```
-
-## Configure
-
-Copy `config.example.yaml` → `config.yaml` and tune:
-
-| Section   | Key ideas                                      |
-|-----------|-------------------------------------------------|
-| strategy  | EMA lengths, RSI bands, ATR stop/target multiples |
-| risk      | Risk %, daily loss cap, pip size, lot sizing     |
-| session   | Enable/disable UTC trading window                |
-| engine    | Symbol, timeframe, balance, spread, commission   |
-
-```bash
-neurox --config config.yaml backtest --bars 5000 --json
-```
-
-## Live brokers
-
-This release ships a **paper broker** only. To go live, plug a broker adapter into `PaperBroker`'s interface (same open/close/update methods) for MetaTrader 5, OANDA, or your bridge. Keep the risk manager in front of every order.
-
-## Tests
-
-```bash
+neurox backtest --csv your_ohlc.csv --export-trades trades.csv
 pytest -q
 ```
 
+Config knobs: [`config.example.yaml`](config.example.yaml)
+
 ## Disclaimer
 
-Forex trading involves substantial risk of loss. Past backtest results do not guarantee future performance. Synthetic data is for demos only — always validate on real historical ticks/candles from your broker.
+Forex trading involves substantial risk of loss. Backtests (especially on synthetic data) do not guarantee live results. Validate on your broker’s history and a demo account first.
