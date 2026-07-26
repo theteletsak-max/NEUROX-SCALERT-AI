@@ -1,0 +1,20 @@
+SNIPER AI — COMPILE STEPS (READ CAREFULLY)
+==========================================
+
+Your error TRADE_RETCODE_BUSY means MetaEditor is compiling an OLD file.
+
+1) Close MetaEditor completely
+2) Open Data Folder -> MQL5 -> Experts
+3) DELETE:
+   SniperAI.mq5
+   SniperAI.ex5
+   SNIPER_AI.mq5
+   SNIPER_AI.ex5
+4) Copy ONLY this file into Experts:
+   SNIPER_AI_FIXED.mq5
+5) Open MetaEditor -> File -> Open -> SNIPER_AI_FIXED.mq5
+6) Line 2/3 must show: BUILD_ID: SA_COMPILE_OK_8
+7) Press F7
+
+If BUILD_ID is missing, wrong file.
+Trade comment = SNIPER AI
