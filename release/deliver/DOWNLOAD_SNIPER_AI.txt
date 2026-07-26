@@ -2,19 +2,24 @@ SNIPER AI - DOWNLOAD
 ====================
 
 EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK24.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK25.mq5
 
 ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
-BUILD_ID: SA_HARD_ENGINES_24
+BUILD_ID: SA_ICE_EXEC_25
 
-Why soft before? That was wrong for what you asked.
-OK24:
-- Aggressive Instant = NO MPI wait only
-- SMT = HARD
-- IMCE = HARD
-- ICE = HARD (min 25)
-- Fire only when path + HARD engines pass
+Fixes Experts: ICE blocked BUY — HARD ICE 25 < 50
 
-Remove EA from chart and re-attach after compile (reset inputs).
+Cause: old chart input still had ICE floor = 50.
+OK25:
+- New input ICE_MinScore = 25 (resets old 50)
+- ICE score boosted (trend+ADX+IMCE trend ≈ 45)
+- HARD engines kept; MPI wait still OFF
+
+MUST DO:
+1. Delete old SNIPER*.ex5
+2. Compile OK25
+3. REMOVE EA from chart completely
+4. Attach SNIPER_AI_OK25 again (Inputs must show ICE_MinScore=25)
+5. Experts: BUILD_ID=SA_ICE_EXEC_25

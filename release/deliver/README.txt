@@ -1,2 +1,1 @@
-BUILD_ID: SA_HARD_ENGINES_24
-SMT/IMCE/ICE are HARD gates. Aggressive Instant = no MPI wait only.
+BUILD_ID: SA_ICE_EXEC_25 — ICE_MinScore=25; remove+reattach

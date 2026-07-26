@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_HARD_ENGINES_24                                  |
-//| SNIPER AI - Aggressive Instant + HARD SMT/IMCE/ICE                |
+//| BUILD_ID: SA_ICE_EXEC_25                                  |
+//| SNIPER AI - Execution fix: ICE floor matches real scores          |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "2.40"
-#property description "SNIPER AI aggressive instant with HARD engines"
-#property description "No MPI wait; SMT IMCE ICE are hard entry gates"
+#property version   "2.50"
+#property description "SNIPER AI hard engines with executable ICE floor"
+#property description "Fixes ICE 25 < 50 block — new ICE_MinScore input"
 
 #include <Trade/Trade.mqh>
 
@@ -78,11 +78,12 @@ input bool   IMCERequireForEntry       = true;  // HARD gate
 input bool   IMCEBlockManipulationChop = true;
 
 input group "ICE - INSTITUTIONAL CONFIDENCE ENGINE"
-// HARD confidence gate (trend+ADX alone scores ~20-25).
+// Your log: HARD ICE 25 < 50 — old saved input floor was 50.
+// NEW input name ICE_MinScore resets that. Trend+ADX+IMCE now scores ~45.
 
 input bool   EnableInstitutionalConfidence = true;
 input bool   ICERequireForEntry            = true;  // HARD gate
-input int    MinInstitutionalConfidence    = 25;    // must clear ICE to trade
+input int    ICE_MinScore                  = 25;    // NEW name (ignores old MinInstitutionalConfidence=50)
 
 input group "FILTERS"
 
@@ -406,13 +407,14 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_HARD_ENGINES_24");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_ICE_EXEC_25");
    Print("Mode: AGGRESSIVE INSTANT (no MPI wait)=", AggressiveInstantQuality,
          " | InstantTrend=", AllowTrendOnlyInstantEntry);
    Print("HARD engines: SMT require=", SMTRequireForEntry,
          " IMCE require=", IMCERequireForEntry,
          " ICE require=", ICERequireForEntry,
-         " MinICE=", MinInstitutionalConfidence);
+         " ICE_MinScore=", ICE_MinScore);
+   Print("If Experts still says ICE < 50: REMOVE EA from chart and re-attach OK25");
    Print("Oscillators: RSI/MACD/Stochastic NOT used");
    Print("Trade size: LotSize=", LotSize, " UseFixedLot=", UseFixedLot,
          " RiskPercent=", RiskPercent,
@@ -6603,15 +6605,22 @@ int GetInstitutionalConfidenceScore(bool buy)
    int score = 0;
    int rec = EffectiveStructureRecency();
 
-   if(buy ? IsBullTrend() : IsBearTrend()) score += 10;
-   if(TrendStrong())                       score += 10;
-   if(RecentBOS(rec))                      score += 15;
+   // Weighted so a real trend sniper (trend+ADX) is executable, not stuck at 25 forever
+   if(buy ? IsBullTrend() : IsBearTrend()) score += 15;
+   if(TrendStrong())                       score += 15;
+   if(RecentBOS(rec))                      score += 12;
    if(RecentCHoCH(rec))                    score += 10;
-   if(RecentSweep(rec))                    score += 15;
-   if(ActiveOrderBlock(buy))               score += 15;
+   if(RecentSweep(rec))                    score += 12;
+   if(ActiveOrderBlock(buy))               score += 12;
    if(ActiveFVG(buy))                      score += 10;
-   if(GetDisplacementScore(buy) >= 10)     score += 10;
+   if(GetDisplacementScore(buy) >= 5)      score += 8;
    if(HTFConfirms(buy))                    score += 5;
+
+   // IMCE alignment bonus — your log had IMCE=TREND_CONTINUATION with ICE=25
+   ENUM_IMCE_CONTEXT ctx = GetIMCEContext();
+   if((ctx == IMCE_TREND_CONTINUATION || ctx == IMCE_EXPANSION_BREAKOUT) &&
+      (buy ? IsBullTrend() : IsBearTrend()) && TrendStrong())
+      score += 15;
 
    if(score > 100) score = 100;
    return score;
@@ -6623,11 +6632,11 @@ bool InstitutionalConfidenceOK(bool buy)
       return true;
 
    int ice = GetInstitutionalConfidenceScore(buy);
-   if(ice < MinInstitutionalConfidence)
+   if(ice < ICE_MinScore)
    {
       if(EnableVerboseLogging || EnableSetupLogging)
-         Print("ICE blocked ", (buy ? "BUY" : "SELL"), " on ", BrokerSymbol,
-               " — HARD ICE ", ice, " < ", MinInstitutionalConfidence);
+         Print("ICE HARD-blocked ", (buy ? "BUY" : "SELL"), " on ", BrokerSymbol,
+               " — ICE ", ice, " < ICE_MinScore ", ICE_MinScore);
       return false;
    }
    return true;

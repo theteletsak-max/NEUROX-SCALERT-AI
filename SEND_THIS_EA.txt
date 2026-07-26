@@ -1,6 +1,5 @@
-SNIPER AI EA
+SNIPER AI EA — SA_ICE_EXEC_25
 
-BUILD_ID: SA_HARD_ENGINES_24
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK24.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK25.mq5
 
-HARD SMT + IMCE + ICE. No MPI wait. Instant fire after engines pass.
+Fixes ICE 25 < 50 block. Remove EA + re-attach after compile.
