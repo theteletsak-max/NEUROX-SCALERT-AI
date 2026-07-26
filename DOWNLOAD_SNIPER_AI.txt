@@ -1,0 +1,11 @@
+PRIMARY DOWNLOAD
+================
+release/deliver/SNIPER_AI.mq5
+BUILD_ID: SA_COMPILE_OK_9
+
+Also mirrored at:
+- SNIPER_AI.mq5 (repo root)
+- MQL5/Experts/SNIPER_AI.mq5
+- release/SniperAI/SniperAI.mq5
+
+Delete ALL old Sniper EA files from MQL5/Experts/ before compiling.

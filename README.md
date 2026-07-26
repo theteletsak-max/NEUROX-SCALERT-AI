@@ -23,14 +23,18 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 | `Include/SniperAI/SA_Dashboard.mqh` | Right-corner HUD |
 | `Images/SniperAI_Watermark.bmp` | SNIPER AI branded artwork |
 
-### Install (MT5) — single file (v2.00)
+### Install (MT5) — single file (compile-safe)
 
-From [`release/SniperAI/SniperAI.mq5`](release/SniperAI/SniperAI.mq5):
+Use **[`release/deliver/SNIPER_AI.mq5`](release/deliver/SNIPER_AI.mq5)**  
+`BUILD_ID: SA_COMPILE_OK_9`
 
 1. **File → Open Data Folder** → `MQL5/Experts/`
-2. Copy **`SniperAI.mq5`**
-3. MetaEditor → Compile **(F7)**
-4. Attach to chart → enable **Algo Trading**
+2. **Delete** any old `SniperAI*.mq5` / `SNIPER_AI*.mq5` files there
+3. Copy **`SNIPER_AI.mq5`**
+4. MetaEditor → Compile **(F7)** — expect 0 errors
+5. Attach to chart → enable **Algo Trading**
+
+Also mirrored at repo root: [`SNIPER_AI.mq5`](SNIPER_AI.mq5)
 
 Engineering notes: [`docs/SNIPER_AI_V2_NOTES.md`](docs/SNIPER_AI_V2_NOTES.md) · Audit: [`docs/SNIPER_AI_AUDIT_v2.md`](docs/SNIPER_AI_AUDIT_v2.md)
 
