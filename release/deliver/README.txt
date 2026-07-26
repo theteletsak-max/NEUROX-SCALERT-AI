@@ -1,1 +1,1 @@
-BUILD_ID: SA_ICE_EXEC_25 — ICE_MinScore=25; remove+reattach
+SA_SMT_PLACE_26 — SMT on RevSniper; InstantTrend not SMT-blocked

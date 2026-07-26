@@ -25,14 +25,14 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 
 ### Install (MT5) — single file (compile-safe)
 
-Use **[`SNIPER_AI_OK25.mq5`](SNIPER_AI_OK25.mq5)**  
-`BUILD_ID: SA_ICE_EXEC_25`
+Use **[`SNIPER_AI_OK26.mq5`](SNIPER_AI_OK26.mq5)**  
+`BUILD_ID: SA_SMT_PLACE_26`
 
 1. Close MetaEditor
 2. **File → Open Data Folder** → `MQL5/Experts/`
 3. **Delete** any old `Sniper*` / `SNIPER*` `.mq5` / `.ex5` files
-4. Copy **`SNIPER_AI_OK25.mq5`**
-5. Open it, confirm `SA_ICE_EXEC_25`, compile **(F7)**
+4. Copy **`SNIPER_AI_OK26.mq5`**
+5. Open it, confirm `SA_SMT_PLACE_26`, compile **(F7)**
 6. Attach → set **LotSize** / **MaxOpenTrades** (optional **SMTReferenceSymbol**) → enable **Algo Trading**
 7. Engines on by default: **SMT**, **IMCE**, **ICE** — no RSI/MACD/Stochastic
 

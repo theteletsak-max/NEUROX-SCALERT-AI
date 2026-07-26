@@ -1,5 +1,6 @@
-SNIPER AI EA — SA_ICE_EXEC_25
+SNIPER AI — SA_SMT_PLACE_26
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK25.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK26.mq5
 
-Fixes ICE 25 < 50 block. Remove EA + re-attach after compile.
+SMT moved to RevSniper only. InstantTrend can trade again.
+Remove EA + re-attach after compile.

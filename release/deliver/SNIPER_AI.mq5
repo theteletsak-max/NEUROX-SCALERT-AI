@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_ICE_EXEC_25                                  |
-//| SNIPER AI - Execution fix: ICE floor matches real scores          |
+//| BUILD_ID: SA_SMT_PLACE_26                                  |
+//| SNIPER AI - SMT on reversal paths; InstantTrend can execute       |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "2.50"
-#property description "SNIPER AI hard engines with executable ICE floor"
-#property description "Fixes ICE 25 < 50 block — new ICE_MinScore input"
+#property version   "2.60"
+#property description "SNIPER AI SMT placed on RevSniper (not InstantTrend)"
+#property description "Fixes SMT HARD-block that stopped BTC trend trades"
 
 #include <Trade/Trade.mqh>
 
@@ -60,13 +60,15 @@ input int    MaxTotalOpenTradesAllSymbols = 9; // max open trades across ALL sym
 input double MaxLotSizeHardCap = 5.0;     // hard ceiling so sizing never goes insane
 
 input group "SMT - SMART MONEY TECHNIQUE"
-// Classic SMT: divergence vs a correlated reference (e.g. EURUSD vs GBPUSD,
-// NAS100 vs US30). Internal SMT works on one chart via sweep + structure reclaim.
+// RIGHT PLACE: SMT belongs on REVERSAL / liquidity paths (RevSniper,
+// LiquiditySweep). It must NOT hard-block InstantTrend/ContSniper — that
+// duplicated RevSniper's sweep+zone checks and killed BTC trend execution.
 
 input bool   EnableSMT                 = true;
-input string SMTReferenceSymbol        = "";   // e.g. GBPUSD.m — blank = internal SMT only
-input bool   SMTAllowInternal          = true; // sweep/reclaim SMT without a second symbol
-input bool   SMTRequireForEntry        = true;  // HARD gate
+input string SMTReferenceSymbol        = "";   // e.g. ETHUSD.m for BTC — blank = path-internal only
+input bool   SMTAllowInternal          = true;
+input bool   SMTRequireForEntry        = true;  // HARD on RevSniper/LiquiditySweep only
+input bool   SMTBlockContinuationPaths = false; // keep FALSE so InstantTrend can trade
 input int    SMTSwingLookbackBars      = 20;
 input bool   SMTFailOpenIfNoRefData    = true;
 
@@ -407,14 +409,13 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_ICE_EXEC_25");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_SMT_PLACE_26");
    Print("Mode: AGGRESSIVE INSTANT (no MPI wait)=", AggressiveInstantQuality,
          " | InstantTrend=", AllowTrendOnlyInstantEntry);
-   Print("HARD engines: SMT require=", SMTRequireForEntry,
-         " IMCE require=", IMCERequireForEntry,
-         " ICE require=", ICERequireForEntry,
-         " ICE_MinScore=", ICE_MinScore);
-   Print("If Experts still says ICE < 50: REMOVE EA from chart and re-attach OK25");
+   Print("Engines: ICE hard Min=", ICE_MinScore,
+         " | IMCE hard | SMT hard on RevSniper only (not InstantTrend)");
+   Print("SMT placement: continuation paths execute without SMT duplicate veto");
+   Print("If old blocks remain: REMOVE EA from chart and re-attach OK26");
    Print("Oscillators: RSI/MACD/Stochastic NOT used");
    Print("Trade size: LotSize=", LotSize, " UseFixedLot=", UseFixedLot,
          " RiskPercent=", RiskPercent,
@@ -6717,41 +6718,55 @@ bool SMTCrossAssetBearish()
    return (primaryHH && refLH);
 }
 
-bool SMTOK(bool buy)
+bool IsReversalSmtTag(const string strategyTag)
+{
+   return (strategyTag == "RevSniper" || strategyTag == "LiquiditySweep");
+}
+
+bool IsContinuationSmtTag(const string strategyTag)
+{
+   return (strategyTag == "InstantTrend" || strategyTag == "ContSniper" ||
+           strategyTag == "TrendPullback" || strategyTag == "FVG+OB" ||
+           strategyTag == "VolBreakout(Spec)");
+}
+
+// SMT gate — tag-aware (no duplicate global veto after InstantTrend already passed).
+bool SMTOK(bool buy, const string strategyTag)
 {
    if(!EnableSMT || !SMTRequireForEntry)
       return true;
 
-   bool cross = false;
-   bool haveRef = (SMTReferenceSymbol != "" && SMTReferenceSymbol != BrokerSymbol);
-
-   if(haveRef)
-      cross = buy ? SMTCrossAssetBullish() : SMTCrossAssetBearish();
-
-   bool internal = false;
-   if(SMTAllowInternal)
-      internal = buy ? SMTInternalBullish() : SMTInternalBearish();
-
-   if(cross || internal)
+   // Continuation / InstantTrend: do NOT hard-block here.
+   // RevSniper already embeds sweep+zone (internal SMT) — applying SMT again
+   // on InstantTrend was the bug in your Experts log.
+   if(IsContinuationSmtTag(strategyTag) && !SMTBlockContinuationPaths)
       return true;
 
-   int rec = EffectiveStructureRecency();
-   // HARD institutional SMT proxies (must still be real structure — not fail-open)
-   if((buy ? IsBullTrend() : IsBearTrend()) && TrendStrong() &&
-      RecentBOS(rec) && (ActiveOrderBlock(buy) || ActiveFVG(buy)))
-      return true;
+   // Reversal tags: path already required liq+zone. Extra cross-asset SMT
+   // only if a reference symbol is set; otherwise trust the path (no duplicate).
+   if(IsReversalSmtTag(strategyTag) || strategyTag == "")
+   {
+      bool haveRef = (SMTReferenceSymbol != "" && SMTReferenceSymbol != BrokerSymbol);
+      if(!haveRef)
+         return true; // internal SMT already inside RevSniper/LiquiditySweep
 
-   // Trend-context SMT: IMCE already classified TREND/EXPANSION + direction/ADX
-   ENUM_IMCE_CONTEXT ctx = GetIMCEContext();
-   if((ctx == IMCE_TREND_CONTINUATION || ctx == IMCE_EXPANSION_BREAKOUT) &&
-      (buy ? IsBullTrend() : IsBearTrend()) && TrendStrong() &&
-      (ActiveOrderBlock(buy) || ActiveFVG(buy) || RecentBOS(rec) || RecentCHoCH(rec)))
-      return true;
+      bool cross = buy ? SMTCrossAssetBullish() : SMTCrossAssetBearish();
+      if(cross)
+         return true;
 
-   if(EnableVerboseLogging || EnableSetupLogging)
-      Print("SMT HARD-blocked ", (buy ? "BUY" : "SELL"), " on ", BrokerSymbol,
-            " — no smart-money confirmation");
-   return false;
+      if(SMTAllowInternal && (buy ? SMTInternalBullish() : SMTInternalBearish()))
+         return true;
+
+      if(SMTFailOpenIfNoRefData)
+         return true;
+
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("SMT HARD-blocked ", strategyTag, " ", (buy ? "BUY" : "SELL"),
+               " on ", BrokerSymbol, " — cross-asset SMT failed");
+      return false;
+   }
+
+   return true;
 }
 
 //----- IMCE: Institutional Market Context Engine ---------------------//
@@ -6852,16 +6867,17 @@ bool IMCEAllows(bool buy, const string strategyTag)
 
 bool PrismInstitutionalEnginesOK(bool buy, const string strategyTag)
 {
-   // HARD engines always — AggressiveInstant only removes MPI wait, not these.
+   // ICE + IMCE hard for all paths.
+   // SMT hard only on reversal tags (see SMTOK) — not duplicated on InstantTrend.
    if(!InstitutionalConfidenceOK(buy))
-      return false;
-   if(!SMTOK(buy))
       return false;
    if(!IMCEAllows(buy, strategyTag))
       return false;
+   if(!SMTOK(buy, strategyTag))
+      return false;
 
-   if(EnableVerboseLogging || EnableSetupLogging)
-      Print("HARD engines PASSED ", strategyTag, " ", (buy ? "BUY" : "SELL"),
+   if(EnableVerboseLogging)
+      Print("Engines PASSED ", strategyTag, " ", (buy ? "BUY" : "SELL"),
             " ICE=", GetInstitutionalConfidenceScore(buy),
             " IMCE=", IMCEContextToString(GetIMCEContext()),
             " on ", BrokerSymbol);
@@ -8310,15 +8326,12 @@ void PrintSetupDiagnostics()
             " EventTighten=", eventQ,
             " MPI floor=", EffectiveMinimumMPIScore(),
             " NewsHardBlock=", EnableNewsFilter);
-      Print("NOTE: SMT=", EnableSMT, " require=", SMTRequireForEntry,
-            " IMCE=", EnableIMCE,
-            " ICE=", EnableInstitutionalConfidence, " require=", ICERequireForEntry,
-            " ICE_buy=", GetInstitutionalConfidenceScore(true),
+      Print("NOTE: ICE_buy=", GetInstitutionalConfidenceScore(true),
             " ICE_sell=", GetInstitutionalConfidenceScore(false),
+            " ICE_MinScore=", ICE_MinScore,
             " IMCE=", IMCEContextToString(GetIMCEContext()));
-      Print("NOTE: AggressiveInstantQuality=", AggressiveInstantQuality,
-            " (MPI wait OFF) | HARD SMT/IMCE/ICE REQUIRED before fire.");
-      Print("NOTE: Instant fire only after path + HARD engines pass — not soft assist.");
+      Print("NOTE: SMT on RevSniper/LiquiditySweep only | InstantTrend/ContSniper not SMT-blocked");
+      Print("NOTE: AggressiveInstantQuality=", AggressiveInstantQuality, " (MPI wait OFF)");
    }
 }
 

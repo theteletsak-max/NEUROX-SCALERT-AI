@@ -6379,21 +6379,22 @@ bool AggressiveContinuationSellSetup()
    return bos || zone || pulled || TrendStrong();
 }
 
-// Path B quality reversal: liquidity AND institutional zone.
+// Path B quality reversal: THIS is where SMT lives (sweep/CHoCH + OB/FVG).
+// Do not also hard-block InstantTrend with a second SMT gate.
 bool AggressiveReversalBuySetup()
 {
    if(!AggressiveSniperEntries)
       return false;
 
    int rec = EffectiveStructureRecency();
-   bool liq = RecentSweep(rec) || RecentCHoCH(rec);
-   bool zone = ActiveOrderBlock(true) || ActiveFVG(true);
+   bool liq = RecentSweep(rec) || RecentCHoCH(rec);   // SMT liquidity event
+   bool zone = ActiveOrderBlock(true) || ActiveFVG(true); // SMT institutional zone
 
    if(QualityGatesActive())
    {
       if(QualityNeedsTrendAndADX() && !(IsBullTrend() && TrendStrong()))
          return false;
-      return liq && zone;
+      return liq && zone; // internal SMT confirmation
    }
 
    if(NeverBlockValidSniperEntry)

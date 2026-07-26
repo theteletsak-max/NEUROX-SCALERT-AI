@@ -2,24 +2,24 @@ SNIPER AI - DOWNLOAD
 ====================
 
 EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK25.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK26.mq5
 
 ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
-BUILD_ID: SA_ICE_EXEC_25
+BUILD_ID: SA_SMT_PLACE_26
 
-Fixes Experts: ICE blocked BUY — HARD ICE 25 < 50
+Fixes Experts spam:
+  SMT HARD-blocked BUY — no smart-money confirmation
 
-Cause: old chart input still had ICE floor = 50.
-OK25:
-- New input ICE_MinScore = 25 (resets old 50)
-- ICE score boosted (trend+ADX+IMCE trend ≈ 45)
-- HARD engines kept; MPI wait still OFF
+What was wrong:
+- SMT was applied as a GLOBAL hard veto AFTER InstantTrend already passed
+- That duplicated RevSniper's sweep+zone SMT and killed BTC trend trades
 
-MUST DO:
-1. Delete old SNIPER*.ex5
-2. Compile OK25
-3. REMOVE EA from chart completely
-4. Attach SNIPER_AI_OK25 again (Inputs must show ICE_MinScore=25)
-5. Experts: BUILD_ID=SA_ICE_EXEC_25
+OK26 placement:
+- SMT lives on RevSniper / LiquiditySweep (right place)
+- InstantTrend / ContSniper are NOT SMT hard-blocked
+- ICE + IMCE still hard; MPI wait still OFF
+
+MUST: remove EA from chart, compile OK26, re-attach.
+Experts must show: BUILD_ID=SA_SMT_PLACE_26
