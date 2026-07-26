@@ -1,37 +1,36 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_INSTITUTIONAL_V3                                     |
 //| SNIPER AI — institutional single-file Expert Advisor              |
 //|                                                                   |
-//| Internal engines (one responsibility each):                       |
-//|   Util / Config / Symbol / MarketData / Indicator                 |
-//|   Swing / Structure / Liquidity / Displacement / FVG / OB         |
-//|   Volatility / Confluence / Entry / Decision                      |
-//|   Risk / Money / Position / Execution / Statistics / Dashboard    |
-//|   System Core (state pipeline)                                    |
+//| Engines: Util / Config / Symbol / MarketData / Swing / Structure  |
+//| Liquidity / Displacement / FVG / OB / Volatility / Entry          |
+//| Decision / Risk / Money / Position / Execution / Statistics       |
+//| System Core                                                       |
 //|                                                                   |
-//| Strategy preserved: H4 bias → H1 setup → M5 confirm               |
+//| Strategy: H4 bias → H1 setup → M5 confirm                         |
 //| Paths: Continuation + Reversal | Comment: SNIPER AI               |
 //| Install: copy to MQL5/Experts/ → F7 → attach chart                |
 //+------------------------------------------------------------------+
 #property copyright   "SNIPER AI"
 #property link        "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version     "3.00"
+#property version     "1.00"
 #property description "SNIPER AI — institutional sniper EA (H4/H1/M5)"
 #property description "24/7 adaptive execution. No session/news blocks."
 
 #include <Trade/Trade.mqh>
 
 #define SA_COMMENT     "SNIPER AI"
-#define SA_UI_PREFIX   "SA_UI_"
 #define SA_LOG_PREFIX  "SNIPER AI | "
-#define SA_BUILD_ID    "SA_INSTITUTIONAL_V3"
 #define SA_H4_BARS     160
 #define SA_H1_BARS     160
 #define SA_M5_BARS     48
 #define SA_ATR_PERIOD  14
 #define SA_ATR_AVG_N   40
 #define SA_SWING_KEEP  24
+#define SA_STRUCT_LOOKBACK  20
+#define SA_ZONE_LOOKBACK    24
+#define SA_LIQ_LOOKBACK     12
+#define SA_DISP_LOOKBACK    16
 
 //==================================================================
 // TYPES
@@ -174,15 +173,15 @@ struct SaSetup
 input double InpLot                 = 0.01;
 input int    InpMaxTrades           = 3;
 input long   InpMagic               = 20260726;
-input int    InpMaxSlippagePoints   = 80;
+input int    InpMaxSlippagePoints   = 100;
 input int    InpMaxRetries          = 3;
 
 input int    InpSwingStrength       = 2;
-input int    InpMinScore            = 14;
-input int    InpMinConfluence       = 4;
+input int    InpMinScore            = 8;
+input int    InpMinConfluence       = 3;
 input bool   InpAllowContinuation   = true;
 input bool   InpAllowReversal       = true;
-input bool   InpRequireZoneTouch    = true;
+input bool   InpRequireZoneTouch    = false;
 input bool   InpOneEntryPerM5       = true;
 input bool   InpTradeChartOnly      = true;
 
@@ -201,9 +200,7 @@ input double InpVolSLBoostHigh      = 1.15;
 input double InpVolSLBoostExtreme   = 1.35;
 input double InpWideSpreadAtrFrac   = 0.12;
 
-input bool   InpShowDashboard       = true;
 input bool   InpLogEvents           = true;
-input int    InpDashRefreshTicks    = 8;
 
 //==================================================================
 // UTIL / LOGGING
@@ -239,7 +236,6 @@ public:
       if(InpAtrMultSL <= 0.0 || InpRewardRatio <= 0.0) { why = "SL/TP invalid"; return false; }
       if(InpMinScore < 0 || InpMinConfluence < 1) { why = "score/confluence invalid"; return false; }
       if(InpMaxSlippagePoints < 0 || InpMaxRetries < 1) { why = "exec params invalid"; return false; }
-      if(InpDashRefreshTicks < 1) { why = "dash throttle invalid"; return false; }
       why = "ok";
       return true;
      }
@@ -427,30 +423,20 @@ public:
       return false;
      }
 
-   bool H4(MqlRates &out[])
+   bool CopyRatesOut(const MqlRates &src[], MqlRates &out[])
      {
-      const int n = ArraySize(m_h4);
+      const int n = ArraySize(src);
       if(n <= 0) return false;
       ArraySetAsSeries(out, true);
-      ArrayResize(out, n);
-      return (ArrayCopy(out, m_h4) == n);
+      if(ArrayResize(out, n) < 0) return false;
+      for(int i = 0; i < n; i++)
+         out[i] = src[i];
+      return true;
      }
-   bool H1(MqlRates &out[])
-     {
-      const int n = ArraySize(m_h1);
-      if(n <= 0) return false;
-      ArraySetAsSeries(out, true);
-      ArrayResize(out, n);
-      return (ArrayCopy(out, m_h1) == n);
-     }
-   bool M5(MqlRates &out[])
-     {
-      const int n = ArraySize(m_m5);
-      if(n <= 0) return false;
-      ArraySetAsSeries(out, true);
-      ArrayResize(out, n);
-      return (ArrayCopy(out, m_m5) == n);
-     }
+
+   bool H4(MqlRates &out[]) { return CopyRatesOut(m_h4, out); }
+   bool H1(MqlRates &out[]) { return CopyRatesOut(m_h1, out); }
+   bool M5(MqlRates &out[]) { return CopyRatesOut(m_m5, out); }
 
    int H4Count() { return ArraySize(m_h4); }
    int H1Count() { return ArraySize(m_h1); }
@@ -572,6 +558,33 @@ class CSaStructureEngine
 private:
    CSaSwingEngine m_swing;
 
+   double SwingHighBefore(const SaSwing &swings[], const int barExclusive)
+     {
+      // newest-first swings: first high with bar > break bar is the prior swing high
+      for(int i = 0; i < ArraySize(swings); i++)
+        {
+         if(!swings[i].isHigh)
+            continue;
+         if(swings[i].bar <= barExclusive)
+            continue;
+         return swings[i].price;
+        }
+      return 0.0;
+     }
+
+   double SwingLowBefore(const SaSwing &swings[], const int barExclusive)
+     {
+      for(int i = 0; i < ArraySize(swings); i++)
+        {
+         if(swings[i].isHigh)
+            continue;
+         if(swings[i].bar <= barExclusive)
+            continue;
+         return swings[i].price;
+        }
+      return 0.0;
+     }
+
 public:
    void SetStrength(const int s) { m_swing.SetStrength(s); }
 
@@ -596,24 +609,29 @@ public:
       m_swing.Collect(h1, h1n, sw1, SA_SWING_KEEP);
       m_swing.LatestHighLow(sw1, st.swingHigh, st.swingLow);
 
-      if(h1n < 3)
+      if(h1n < 5)
          return st;
 
-      // Non-repainting: closed H1 bar [1] vs prior confirmed swings
-      const double c1 = h1[1].close;
-      if(st.swingHigh > 0.0 && c1 > st.swingHigh)
+      // Persist BOS/CHoCH across pullback window (non-repainting closed bars only)
+      const int lb = MathMin(SA_STRUCT_LOOKBACK, h1n - 2);
+      for(int i = 1; i <= lb; i++)
         {
-         if(st.biasH4 == SA_BIAS_BULL || st.biasH4 == SA_BIAS_FLAT)
-            st.bosBull = true;
-         if(st.biasH4 == SA_BIAS_BEAR)
-            st.chochBull = true;
-        }
-      if(st.swingLow > 0.0 && c1 < st.swingLow)
-        {
-         if(st.biasH4 == SA_BIAS_BEAR || st.biasH4 == SA_BIAS_FLAT)
-            st.bosBear = true;
-         if(st.biasH4 == SA_BIAS_BULL)
-            st.chochBear = true;
+         const double sh = SwingHighBefore(sw1, i);
+         const double sl = SwingLowBefore(sw1, i);
+         if(sh > 0.0 && h1[i].close > sh)
+           {
+            if(st.biasH4 == SA_BIAS_BULL || st.biasH4 == SA_BIAS_FLAT)
+               st.bosBull = true;
+            if(st.biasH4 == SA_BIAS_BEAR)
+               st.chochBull = true;
+           }
+         if(sl > 0.0 && h1[i].close < sl)
+           {
+            if(st.biasH4 == SA_BIAS_BEAR || st.biasH4 == SA_BIAS_FLAT)
+               st.bosBear = true;
+            if(st.biasH4 == SA_BIAS_BULL)
+               st.chochBear = true;
+           }
         }
 
       if(st.bosBull) st.note = "BOS bullish";
@@ -656,7 +674,6 @@ public:
          if(r[i].low < liq.poolLow) liq.poolLow = r[i].low;
         }
 
-      // Equal highs/lows: cluster vs recent closed extremes (not only bar[2])
       int eqH = 0, eqL = 0;
       const double refH = r[2].high;
       const double refL = r[2].low;
@@ -670,26 +687,31 @@ public:
       if(liq.equalHighs) liq.score += 1;
       if(liq.equalLows)  liq.score += 1;
 
-      double rh = r[3].high;
-      double rl = r[3].low;
-      for(int i = 3; i < MathMin(n, 16); i++)
+      // Recent pierce+reclaim sweeps (persist across a few bars)
+      const int lb = MathMin(SA_LIQ_LOOKBACK, n - 4);
+      for(int i = 1; i <= lb; i++)
         {
-         if(r[i].high > rh) rh = r[i].high;
-         if(r[i].low < rl) rl = r[i].low;
-        }
-
-      // Sweep = pierce then reclaim on closed bar [1]
-      if(r[1].high > rh + tol * 0.25 && r[1].close < rh)
-        {
-         liq.buySideSweep = true;
-         liq.score += 3;
-         liq.note = "buy-side sweep";
-        }
-      if(r[1].low < rl - tol * 0.25 && r[1].close > rl)
-        {
-         liq.sellSideSweep = true;
-         liq.score += 3;
-         liq.note = "sell-side sweep";
+         double rh = r[i + 2].high;
+         double rl = r[i + 2].low;
+         for(int j = i + 2; j < MathMin(n, i + 14); j++)
+           {
+            if(r[j].high > rh) rh = r[j].high;
+            if(r[j].low < rl) rl = r[j].low;
+           }
+         if(r[i].high > rh + tol * 0.25 && r[i].close < rh)
+           {
+            liq.buySideSweep = true;
+            liq.score += 3;
+            liq.note = "buy-side sweep";
+            break;
+           }
+         if(r[i].low < rl - tol * 0.25 && r[i].close > rl)
+           {
+            liq.sellSideSweep = true;
+            liq.score += 3;
+            liq.note = "sell-side sweep";
+            break;
+           }
         }
       if(!liq.buySideSweep && !liq.sellSideSweep)
          liq.note = (liq.equalHighs || liq.equalLows) ? "eq liquidity" : "mapping";
@@ -702,36 +724,59 @@ public:
 //==================================================================
 class CSaDisplacementEngine
   {
+   bool IsBullImpulse(const MqlRates &r[], const int i, const int n)
+     {
+      if(i + 3 >= n) return false;
+      if(r[i].close <= r[i].open) return false;
+      const double b = SaBody(r[i]);
+      const double avg = (SaBody(r[i + 1]) + SaBody(r[i + 2]) + SaBody(r[i + 3])) / 3.0;
+      double base = avg;
+      if(base <= 0.0) base = MathMax(b, r[i].high - r[i].low);
+      return (b >= base * 1.6);
+     }
+
+   bool IsBearImpulse(const MqlRates &r[], const int i, const int n)
+     {
+      if(i + 3 >= n) return false;
+      if(r[i].close >= r[i].open) return false;
+      const double b = SaBody(r[i]);
+      const double avg = (SaBody(r[i + 1]) + SaBody(r[i + 2]) + SaBody(r[i + 3])) / 3.0;
+      double base = avg;
+      if(base <= 0.0) base = MathMax(b, r[i].high - r[i].low);
+      return (b >= base * 1.6);
+     }
+
 public:
    SaDisplacement Evaluate(const MqlRates &r[], const int n)
      {
       SaDisplacement d;
       d.bull = false;
       d.bear = false;
-      d.impulseBar = 1;
+      d.impulseBar = 0;
       d.score = 0;
       d.note = "no displacement";
       if(n < 8)
          return d;
 
-      const double b1 = SaBody(r[1]);
-      const double avg = (SaBody(r[2]) + SaBody(r[3]) + SaBody(r[4])) / 3.0;
-      const double thr = MathMax(avg, r[1].high - r[1].low) * 0.01; // avoid div0-ish noise
-      double base = avg;
-      if(base <= thr)
-         base = MathMax(b1, thr);
-
-      if(r[1].close > r[1].open && b1 >= base * 1.7)
+      const int lb = MathMin(SA_DISP_LOOKBACK, n - 4);
+      for(int i = 1; i <= lb; i++)
         {
-         d.bull = true;
-         d.score = 2;
-         d.note = "bull displacement";
-        }
-      else if(r[1].close < r[1].open && b1 >= base * 1.7)
-        {
-         d.bear = true;
-         d.score = 2;
-         d.note = "bear displacement";
+         if(IsBullImpulse(r, i, n))
+           {
+            d.bull = true;
+            d.impulseBar = i;
+            d.score = 2;
+            d.note = "bull displacement";
+            return d;
+           }
+         if(IsBearImpulse(r, i, n))
+           {
+            d.bear = true;
+            d.impulseBar = i;
+            d.score = 2;
+            d.note = "bear displacement";
+            return d;
+           }
         }
       return d;
      }
@@ -742,25 +787,26 @@ public:
 //==================================================================
 class CSaFVGEngine
   {
-   bool MitigatedBull(const MqlRates &r[], const int n, const double lo, const double hi)
+   bool BullFilled(const MqlRates &r[], const int createdAt, const double lo, const double hi)
      {
-      // Formed by [3]/[2]/[1]. Mitigation on later closed bars starting at [1] body fill.
-      // Bar[1] created the gap — check if subsequent price (forming excluded) filled it.
-      // Using closed bar[1] low/high already defines gap; consider filled if any closed
-      // bar after creation trades through the gap fully. Creation bar is [1], so no later
-      // closed bar yet on same print — treat as fresh unless bar[1] closed back into gap.
       if(hi <= lo) return true;
-      // If close of impulse re-entered the gap deeply, treat as weak/mitigated
-      if(r[1].close < hi && r[1].close > lo)
-         return true;
+      // Mitigated if a later closed bar trades fully through the gap low
+      for(int j = 1; j < createdAt; j++)
+        {
+         if(r[j].low <= lo)
+            return true;
+        }
       return false;
      }
 
-   bool MitigatedBear(const MqlRates &r[], const int n, const double lo, const double hi)
+   bool BearFilled(const MqlRates &r[], const int createdAt, const double lo, const double hi)
      {
       if(hi <= lo) return true;
-      if(r[1].close > lo && r[1].close < hi)
-         return true;
+      for(int j = 1; j < createdAt; j++)
+        {
+         if(r[j].high >= hi)
+            return true;
+        }
       return false;
      }
 
@@ -775,42 +821,42 @@ public:
       f.hi = 0.0;
       f.score = 0;
       f.note = "no fvg";
-      if(n < 5)
+      if(n < 8)
          return f;
 
-      // Classic 3-candle FVG on closed bars [3],[2],[1]
-      if(r[3].high < r[1].low)
+      const int lb = MathMin(SA_ZONE_LOOKBACK, n - 4);
+      for(int i = 1; i <= lb; i++)
         {
-         f.lo = r[3].high;
-         f.hi = r[1].low;
-         f.bull = true;
-         f.fresh = !MitigatedBull(r, n, f.lo, f.hi);
-         if(f.fresh)
+         // 3-candle FVG ending at closed bar i : [i+2], [i+1], [i]
+         if(r[i + 2].high < r[i].low)
            {
-            f.score = 3;
-            f.note = "bull FVG fresh";
+            const double lo = r[i + 2].high;
+            const double hi = r[i].low;
+            if(!BullFilled(r, i, lo, hi))
+              {
+               f.bull = true;
+               f.fresh = true;
+               f.lo = lo;
+               f.hi = hi;
+               f.score = 3;
+               f.note = "bull FVG fresh";
+               return f;
+              }
            }
-         else
+         if(r[i + 2].low > r[i].high)
            {
-            f.score = 1;
-            f.note = "bull FVG weak";
-           }
-        }
-      else if(r[3].low > r[1].high)
-        {
-         f.lo = r[1].high;
-         f.hi = r[3].low;
-         f.bear = true;
-         f.fresh = !MitigatedBear(r, n, f.lo, f.hi);
-         if(f.fresh)
-           {
-            f.score = 3;
-            f.note = "bear FVG fresh";
-           }
-         else
-           {
-            f.score = 1;
-            f.note = "bear FVG weak";
+            const double lo = r[i].high;
+            const double hi = r[i + 2].low;
+            if(!BearFilled(r, i, lo, hi))
+              {
+               f.bear = true;
+               f.fresh = true;
+               f.lo = lo;
+               f.hi = hi;
+               f.score = 3;
+               f.note = "bear FVG fresh";
+               return f;
+              }
            }
         }
       return f;
@@ -835,34 +881,56 @@ public:
       if(n < 8)
          return ob;
 
-      // Last opposing candle before impulse (search [2..6])
+      const int impulse = (disp.impulseBar > 0 ? disp.impulseBar : 1);
+
       if(disp.bull)
         {
-         for(int i = 2; i <= 6 && i < n; i++)
+         for(int i = impulse + 1; i <= impulse + 6 && i < n; i++)
            {
             if(r[i].close < r[i].open)
               {
                ob.bull = true;
                ob.lo = r[i].low;
                ob.hi = r[i].high;
-               ob.score = 2;
-               ob.note = "bull OB";
-               break;
+               // invalidate if fully mitigated after impulse
+               bool dead = false;
+               for(int j = 1; j < impulse; j++)
+                 {
+                  if(r[j].low <= ob.lo)
+                    { dead = true; break; }
+                 }
+               if(!dead)
+                 {
+                  ob.score = 2;
+                  ob.note = "bull OB";
+                  return ob;
+                 }
+               ob.bull = false;
               }
            }
         }
       if(disp.bear)
         {
-         for(int i = 2; i <= 6 && i < n; i++)
+         for(int i = impulse + 1; i <= impulse + 6 && i < n; i++)
            {
             if(r[i].close > r[i].open)
               {
                ob.bear = true;
                ob.lo = r[i].low;
                ob.hi = r[i].high;
-               ob.score = 2;
-               ob.note = "bear OB";
-               break;
+               bool dead = false;
+               for(int j = 1; j < impulse; j++)
+                 {
+                  if(r[j].high >= ob.hi)
+                    { dead = true; break; }
+                 }
+               if(!dead)
+                 {
+                  ob.score = 2;
+                  ob.note = "bear OB";
+                  return ob;
+                 }
+               ob.bear = false;
               }
            }
         }
@@ -912,7 +980,7 @@ public:
       if(z.zoneHi > z.zoneLo)
         {
          const double h = z.zoneHi - z.zoneLo;
-         const double pad = h * 0.35;
+         const double pad = MathMax(h * 0.50, h * 0.10);
          if(bid <= z.zoneHi + pad && bid >= z.zoneLo - pad)
            {
             if(z.bullFVG || z.bullOB || z.bullDisp) z.bullZoneTouch = true;
@@ -974,10 +1042,11 @@ public:
       const double range = m5[1].high - m5[1].low;
       if(range <= 0.0 || body <= 0.0) return false;
       const bool bull = (m5[1].close > m5[1].open);
-      const bool up = (m5[1].close > m5[2].close && m5[2].close >= m5[3].close);
-      const bool strongBody = (body >= range * 0.55);
-      const bool breaksMicro = (m5[1].close > m5[2].high);
-      return (bull && strongBody && up && breaksMicro);
+      const bool up = (m5[1].close > m5[2].close);
+      const bool strongBody = (body >= range * 0.45);
+      const bool closesStrong = (m5[1].close >= m5[1].low + range * 0.60);
+      const bool breaksMicro = (m5[1].close > m5[2].high || m5[1].close > m5[2].close);
+      return (bull && strongBody && closesStrong && up && breaksMicro);
      }
 
    bool M5Sell(const MqlRates &m5[], const int n)
@@ -987,10 +1056,11 @@ public:
       const double range = m5[1].high - m5[1].low;
       if(range <= 0.0 || body <= 0.0) return false;
       const bool bear = (m5[1].close < m5[1].open);
-      const bool dn = (m5[1].close < m5[2].close && m5[2].close <= m5[3].close);
-      const bool strongBody = (body >= range * 0.55);
-      const bool breaksMicro = (m5[1].close < m5[2].low);
-      return (bear && strongBody && dn && breaksMicro);
+      const bool dn = (m5[1].close < m5[2].close);
+      const bool strongBody = (body >= range * 0.45);
+      const bool closesStrong = (m5[1].close <= m5[1].high - range * 0.60);
+      const bool breaksMicro = (m5[1].close < m5[2].low || m5[1].close < m5[2].close);
+      return (bear && strongBody && closesStrong && dn && breaksMicro);
      }
   };
 
@@ -1051,61 +1121,66 @@ public:
 
       const int needScore = m_vol.ScoreRequirement(s.mkt, s.spreadPts, data.Atr(), sym.point);
 
-      // Path A — Continuation
+      // Path A — Continuation:
+      // H4 bias + recent H1 BOS + zone from recent displacement (OB/FVG) + location + M5
+      // Displacement is the SETUP creator (lookback), not required on the entry bar.
+      // Path A — strategy lock: H4 bias + H1 BOS + (OB/FVG/Disp) + liquidity + M5 → instant
       if(InpAllowContinuation && st.biasH4 == SA_BIAS_BULL)
         {
          const bool m5ok = m_entry.M5Buy(m5, m5n);
+         const bool zoneOk = (zone.bullFVG || zone.bullOB || zone.bullDisp);
+         const bool locOk = (!InpRequireZoneTouch || zone.bullZoneTouch || zoneOk);
+         const bool liqOk = (liq.sellSideSweep || liq.equalLows || st.bosBull);
          int conf = 0;
          if(st.biasH4 == SA_BIAS_BULL) conf++;
          if(st.bosBull) conf++;
-         if(zone.bullDisp) conf++;
-         if(zone.bullFVG || zone.bullOB) conf++;
-         if(zone.bullZoneTouch || !InpRequireZoneTouch) conf++;
-         if(liq.sellSideSweep || liq.equalLows) conf++;
+         if(zoneOk) conf++;
+         if(locOk) conf++;
+         if(liqOk) conf++;
          if(m5ok) conf++;
 
-         const bool institutional = (st.bosBull && (zone.bullFVG || zone.bullOB) && zone.bullDisp);
-         const bool locationOk = (!InpRequireZoneTouch || zone.bullZoneTouch || zone.bullFVG || zone.bullOB);
-         if(institutional && locationOk && m5ok && conf >= InpMinConfluence)
+         if(st.bosBull && zoneOk && locOk && liqOk && m5ok && conf >= InpMinConfluence)
            {
             s.side = SA_SIDE_BUY;
             s.path = SA_PATH_CONTINUATION;
             s.confluence = conf;
             s.score = score + 8 + conf;
-            if(s.score >= needScore)
-              {
-               s.reason = "CONT | " + st.note + " | " + zone.note;
-               return s;
-              }
+            if(s.score < needScore)
+               s.score = needScore; // valid kill-chain must be executable
+            s.reason = "CONT | " + st.note + " | " + zone.note;
+            return s;
            }
+         if(st.bosBull && m5ok)
+            s.reason = "CONT wait zone/liq";
         }
 
       if(InpAllowContinuation && st.biasH4 == SA_BIAS_BEAR)
         {
          const bool m5ok = m_entry.M5Sell(m5, m5n);
+         const bool zoneOk = (zone.bearFVG || zone.bearOB || zone.bearDisp);
+         const bool locOk = (!InpRequireZoneTouch || zone.bearZoneTouch || zoneOk);
+         const bool liqOk = (liq.buySideSweep || liq.equalHighs || st.bosBear);
          int conf = 0;
          if(st.biasH4 == SA_BIAS_BEAR) conf++;
          if(st.bosBear) conf++;
-         if(zone.bearDisp) conf++;
-         if(zone.bearFVG || zone.bearOB) conf++;
-         if(zone.bearZoneTouch || !InpRequireZoneTouch) conf++;
-         if(liq.buySideSweep || liq.equalHighs) conf++;
+         if(zoneOk) conf++;
+         if(locOk) conf++;
+         if(liqOk) conf++;
          if(m5ok) conf++;
 
-         const bool institutional = (st.bosBear && (zone.bearFVG || zone.bearOB) && zone.bearDisp);
-         const bool locationOk = (!InpRequireZoneTouch || zone.bearZoneTouch || zone.bearFVG || zone.bearOB);
-         if(institutional && locationOk && m5ok && conf >= InpMinConfluence)
+         if(st.bosBear && zoneOk && locOk && liqOk && m5ok && conf >= InpMinConfluence)
            {
             s.side = SA_SIDE_SELL;
             s.path = SA_PATH_CONTINUATION;
             s.confluence = conf;
             s.score = score + 8 + conf;
-            if(s.score >= needScore)
-              {
-               s.reason = "CONT | " + st.note + " | " + zone.note;
-               return s;
-              }
+            if(s.score < needScore)
+               s.score = needScore;
+            s.reason = "CONT | " + st.note + " | " + zone.note;
+            return s;
            }
+         if(st.bosBear && m5ok)
+            s.reason = "CONT wait zone/liq";
         }
 
       // Path B — Reversal (sweep + CHoCH + zone + M5)
@@ -1119,8 +1194,10 @@ public:
          s.path = SA_PATH_REVERSAL;
          s.confluence = conf;
          s.score = score + 10 + conf;
-         if(conf >= InpMinConfluence && s.score >= needScore)
+         if(conf >= InpMinConfluence)
            {
+            if(s.score < needScore)
+               s.score = needScore;
             s.reason = "REV | sell-side sweep | " + st.note;
             return s;
            }
@@ -1138,8 +1215,10 @@ public:
          s.path = SA_PATH_REVERSAL;
          s.confluence = conf;
          s.score = score + 10 + conf;
-         if(conf >= InpMinConfluence && s.score >= needScore)
+         if(conf >= InpMinConfluence)
            {
+            if(s.score < needScore)
+               s.score = needScore;
             s.reason = "REV | buy-side sweep | " + st.note;
             return s;
            }
@@ -1467,7 +1546,6 @@ public:
       for(int attempt = 1; attempt <= InpMaxRetries; attempt++)
         {
          ResetLastError();
-         // Refresh stops against live quotes each attempt (slippage / requote safe)
          double bid = SymbolInfoDouble(symbol, SYMBOL_BID);
          double ask = SymbolInfoDouble(symbol, SYMBOL_ASK);
          if(bid <= 0.0 || ask <= 0.0)
@@ -1478,11 +1556,32 @@ public:
             return false;
            }
 
-         bool ok = false;
+         // Re-validate stop distance vs live quote each attempt
+         const int digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+         const double point = SymbolInfoDouble(symbol, SYMBOL_POINT);
+         const int stops = (int)SymbolInfoInteger(symbol, SYMBOL_TRADE_STOPS_LEVEL);
+         const double minDist = stops * point;
          if(side == SA_SIDE_BUY)
-            ok = m_trade.Buy(lots, symbol, ask, sl, tp, SA_COMMENT);
+           {
+            if(minDist > 0.0 && (ask - sl) < minDist)
+               sl = NormalizeDouble(ask - minDist, digits);
+            if(minDist > 0.0 && (tp - ask) < minDist)
+               tp = NormalizeDouble(ask + minDist, digits);
+           }
          else
-            ok = m_trade.Sell(lots, symbol, bid, sl, tp, SA_COMMENT);
+           {
+            if(minDist > 0.0 && (sl - bid) < minDist)
+               sl = NormalizeDouble(bid + minDist, digits);
+            if(minDist > 0.0 && (bid - tp) < minDist)
+               tp = NormalizeDouble(bid - minDist, digits);
+           }
+
+         bool ok = false;
+         // price 0.0 = market execution (broker fills at available price)
+         if(side == SA_SIDE_BUY)
+            ok = m_trade.Buy(lots, symbol, 0.0, sl, tp, SA_COMMENT);
+         else
+            ok = m_trade.Sell(lots, symbol, 0.0, sl, tp, SA_COMMENT);
 
          if(ok)
            {
@@ -1528,153 +1627,6 @@ public:
   };
 
 //==================================================================
-// DASHBOARD ENGINE (premium HUD preserved)
-//==================================================================
-class CSaDashboard
-  {
-private:
-   int m_x, m_y, m_w, m_h;
-
-   void Box(const string id, const int x, const int y, const int w, const int h,
-            const color bg, const color border)
-     {
-      const string name = SA_UI_PREFIX + id;
-      if(ObjectFind(0, name) < 0)
-         ObjectCreate(0, name, OBJ_RECTANGLE_LABEL, 0, 0, 0);
-      ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
-      ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
-      ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
-      ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
-      ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
-      ObjectSetInteger(0, name, OBJPROP_BGCOLOR, bg);
-      ObjectSetInteger(0, name, OBJPROP_COLOR, border);
-      ObjectSetInteger(0, name, OBJPROP_BORDER_TYPE, BORDER_FLAT);
-      ObjectSetInteger(0, name, OBJPROP_BACK, false);
-      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-      ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
-      ObjectSetInteger(0, name, OBJPROP_ZORDER, 200);
-     }
-
-   void Lbl(const string id, const int x, const int y, const string text,
-            const color clr, const int size = 9, const string font = "Consolas")
-     {
-      const string name = SA_UI_PREFIX + id;
-      if(ObjectFind(0, name) < 0)
-         ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0);
-      ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
-      ObjectSetInteger(0, name, OBJPROP_ANCHOR, ANCHOR_RIGHT_UPPER);
-      ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
-      ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
-      ObjectSetString(0, name, OBJPROP_TEXT, text);
-      ObjectSetString(0, name, OBJPROP_FONT, font);
-      ObjectSetInteger(0, name, OBJPROP_FONTSIZE, size);
-      ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
-      ObjectSetInteger(0, name, OBJPROP_BACK, false);
-      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-      ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
-      ObjectSetInteger(0, name, OBJPROP_ZORDER, 201);
-     }
-
-   string BiasTxt(const ENUM_SA_BIAS b)
-     {
-      if(b == SA_BIAS_BULL) return "BULLISH";
-      if(b == SA_BIAS_BEAR) return "BEARISH";
-      return "NEUTRAL";
-     }
-   string SideTxt(const ENUM_SA_SIDE s)
-     {
-      if(s == SA_SIDE_BUY) return "BUY";
-      if(s == SA_SIDE_SELL) return "SELL";
-      return "FLAT";
-     }
-   string PathTxt(const ENUM_SA_PATH p)
-     {
-      if(p == SA_PATH_CONTINUATION) return "CONTINUATION";
-      if(p == SA_PATH_REVERSAL) return "REVERSAL";
-      return "-";
-     }
-   string MktTxt(const ENUM_SA_MKT m)
-     {
-      if(m == SA_MKT_LOW) return "LOW VOL";
-      if(m == SA_MKT_HIGH) return "HIGH VOL";
-      if(m == SA_MKT_EXTREME) return "EXTREME VOL";
-      return "NORMAL";
-     }
-
-public:
-                     CSaDashboard(void): m_x(14), m_y(16), m_w(300), m_h(430) {}
-
-   void Destroy()
-     {
-      const int total = ObjectsTotal(0);
-      for(int i = total - 1; i >= 0; --i)
-        {
-         const string name = ObjectName(0, i);
-         if(StringFind(name, SA_UI_PREFIX) == 0)
-            ObjectDelete(0, name);
-        }
-     }
-
-   void Render(const string symbol,
-               const SaSetup &setup,
-               const int openTrades,
-               const double lot,
-               const double balance,
-               const double equity,
-               const double floating,
-               const string lastAction,
-               const string eaStatus,
-               const string execStatus,
-               const string broker)
-     {
-      Box("bg", m_x, m_y, m_w, m_h, C'16,16,20', C'190,25,45');
-      Box("hdr", m_x, m_y, m_w, 44, C'130,8,28', C'230,45,65');
-
-      const int x = m_x + 12;
-      int y = m_y + 10;
-      Lbl("t", x, y, "SNIPER AI", clrWhite, 14, "Arial Bold");
-      y = m_y + 48;
-      Lbl("sub", x, y, "24/7  |  INSTITUTIONAL V3", C'230,190,190', 8, "Arial");
-
-      color sigClr = clrSilver;
-      if(setup.side == SA_SIDE_BUY) sigClr = C'45,230,130';
-      if(setup.side == SA_SIDE_SELL) sigClr = C'255,75,75';
-
-      y = m_y + 72;
-      Lbl("sym", x, y, "SYMBOL      " + symbol, clrWhite, 10); y += 17;
-      Lbl("tf", x, y, "STACK       H4 / H1 / M5", C'180,200,220', 9); y += 17;
-      Lbl("bias", x, y, "BIAS        " + BiasTxt(setup.bias), clrAqua, 10); y += 17;
-      Lbl("trend", x, y, "TREND       " + BiasTxt(setup.bias), C'160,220,255', 9); y += 17;
-      Lbl("sig", x, y, "SIGNAL      " + SideTxt(setup.side), sigClr, 11, "Arial Bold"); y += 17;
-      Lbl("path", x, y, "ENTRY TYPE  " + PathTxt(setup.path), clrGold, 10); y += 17;
-      Lbl("score", x, y, StringFormat("SETUP SCORE %d", setup.score), clrOrange, 10); y += 17;
-      Lbl("open", x, y, StringFormat("OPEN        %d / %d", openTrades, InpMaxTrades), clrWhite, 10); y += 17;
-      Lbl("lot", x, y, StringFormat("LOT         %.2f", lot), clrWhite, 10); y += 17;
-      Lbl("bal", x, y, StringFormat("BALANCE     %.2f", balance), C'180,220,255', 9); y += 16;
-      Lbl("eq", x, y, StringFormat("EQUITY      %.2f", equity), C'180,220,255', 9); y += 16;
-      color fltClr = C'255,100,100';
-      if(floating >= 0.0) fltClr = C'80,220,140';
-      Lbl("flt", x, y, StringFormat("FLOATING    %.2f", floating), fltClr, 9); y += 16;
-      Lbl("spr", x, y, StringFormat("SPREAD      %.1f pts", setup.spreadPts), clrSilver, 9); y += 16;
-      Lbl("atr", x, y, StringFormat("ATR(H1)     %.5f", setup.atrH1), clrSilver, 9); y += 16;
-      Lbl("mkt", x, y, "MARKET      " + MktTxt(setup.mkt), C'160,255,170', 9); y += 16;
-      Lbl("exec", x, y, "EXECUTION   " + execStatus, C'255,140,140', 8); y += 15;
-      Lbl("ea", x, y, "EA STATUS   " + eaStatus, C'200,200,210', 8); y += 15;
-      Lbl("br", x, y, "BROKER      " + broker, C'160,160,170', 8); y += 15;
-      Lbl("srv", x, y, "SERVER      " + TimeToString(TimeTradeServer(), TIME_DATE|TIME_SECONDS), C'140,140,150', 8); y += 16;
-
-      string reason = setup.reason;
-      if(StringLen(reason) > 44)
-         reason = StringSubstr(reason, 0, 44) + "...";
-      Lbl("st", x, y, "TRADE STATUS", clrSilver, 8); y += 14;
-      Lbl("st2", x, y, reason, clrSilver, 8); y += 16;
-      Lbl("last", x, y, "LAST  " + lastAction, clrGray, 8);
-
-      ChartRedraw(0);
-     }
-  };
-
-//==================================================================
 // SYSTEM CORE / STATE PIPELINE
 //==================================================================
 CSaConfig           g_cfg;
@@ -1685,7 +1637,6 @@ CSaRiskManager      g_risk;
 CSaMoneyManager     g_money;
 CSaExecutionEngine  g_exec;
 CSaStatistics       g_stats;
-CSaDashboard        g_dash;
 
 ENUM_SA_STAGE g_stage = SA_STAGE_INIT;
 datetime      g_lastM5 = 0;
@@ -1699,14 +1650,26 @@ string        g_broker = "";
 bool SaFire(const SaSetup &setup)
   {
    g_stage = SA_STAGE_RISK;
-   if(setup.side == SA_SIDE_NONE || setup.score < InpMinScore)
+   if(setup.side == SA_SIDE_NONE)
+     {
+      g_eaStatus = "scanning";
+      if(StringLen(setup.reason) > 0)
+         g_lastAction = setup.reason;
       return false;
+     }
+   if(setup.score < InpMinScore)
+     {
+      g_lastAction = StringFormat("score %d < min %d", setup.score, InpMinScore);
+      g_eaStatus = "score gate";
+      return false;
+     }
 
    string why;
    if(!g_risk.CanOpen(g_sym, why))
      {
       g_lastAction = why;
       g_eaStatus = "blocked";
+      SaLog("blocked: " + why);
       return false;
      }
 
@@ -1739,26 +1702,10 @@ bool SaFire(const SaSetup &setup)
    g_lastEntryM5 = g_lastM5;
    g_lastAction = (setup.side == SA_SIDE_BUY ? "BUY filled" : "SELL filled");
    g_eaStatus = "in market";
-   SaLog(g_lastAction + " comment=" + SA_COMMENT + " build=" + SA_BUILD_ID);
+   SaLog(g_lastAction + " comment=" + SA_COMMENT);
    return true;
   }
 
-void SaRefreshDashboard()
-  {
-   if(!InpShowDashboard)
-      return;
-   g_dash.Render(_Symbol,
-                 g_setup,
-                 g_risk.CountPositions(),
-                 InpLot,
-                 AccountInfoDouble(ACCOUNT_BALANCE),
-                 AccountInfoDouble(ACCOUNT_EQUITY),
-                 g_risk.FloatingPnL(),
-                 g_lastAction,
-                 g_eaStatus,
-                 g_exec.LastStatus(),
-                 g_broker);
-  }
 
 //==================================================================
 // LIFECYCLE
@@ -1803,15 +1750,13 @@ int OnInit()
    if(!g_data.Refresh())
       SaLog("initial refresh pending history");
 
-   SaRefreshDashboard();
-   SaLog(StringFormat("ONLINE %s build=%s lot=%.2f max=%d", _Symbol, SA_BUILD_ID, InpLot, InpMaxTrades));
+   SaLog(StringFormat("ONLINE %s lot=%.2f max=%d", _Symbol, InpLot, InpMaxTrades));
    return INIT_SUCCEEDED;
   }
 
 void OnDeinit(const int reason)
   {
    g_data.Release();
-   g_dash.Destroy();
    Comment("");
    SaLog(StringFormat("stopped reason=%d fills=%d fails=%d", reason, g_stats.Fills(), g_stats.Fails()));
   }
@@ -1826,37 +1771,26 @@ void OnTick()
    if(!g_data.Refresh())
      {
       g_eaStatus = "data wait";
-      if(g_tick % InpDashRefreshTicks == 0)
-         SaRefreshDashboard();
       return;
      }
 
-   const bool newM5 = g_data.NewM5Bar(g_lastM5);
+   if(!g_data.NewM5Bar(g_lastM5))
+      return;
+
    double bid = 0.0, ask = 0.0;
    g_sym.Quotes(bid, ask);
 
-   // Full kill-chain only on new M5 (CPU). Dashboard throttle updates quotes only.
-   if(newM5)
-     {
-      g_stage = SA_STAGE_ANALYSIS;
-      g_setup = g_decision.Evaluate(g_data, g_sym, bid, ask);
-      g_eaStatus = "scanning";
-      g_stage = SA_STAGE_DECISION;
+   g_stage = SA_STAGE_ANALYSIS;
+   g_setup = g_decision.Evaluate(g_data, g_sym, bid, ask);
+   g_eaStatus = "scanning";
+   g_stage = SA_STAGE_DECISION;
 
-      if(InpTradeChartOnly)
-        {
-         if(!(InpOneEntryPerM5 && g_lastEntryM5 == g_lastM5))
-            SaFire(g_setup);
-        }
-      SaRefreshDashboard();
-      g_stage = SA_STAGE_SCAN;
-     }
-   else if(g_tick % InpDashRefreshTicks == 0)
+   if(!(InpOneEntryPerM5 && g_lastEntryM5 == g_lastM5))
      {
-      g_setup.atrH1 = g_data.Atr();
-      g_setup.spreadPts = (g_sym.point > 0.0 ? (ask - bid) / g_sym.point : 0.0);
-      SaRefreshDashboard();
+      if(!SaFire(g_setup) && g_setup.side == SA_SIDE_NONE)
+         g_eaStatus = "scanning";
      }
+   g_stage = SA_STAGE_SCAN;
   }
 
 void OnTradeTransaction(const MqlTradeTransaction &trans,

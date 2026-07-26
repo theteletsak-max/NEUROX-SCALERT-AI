@@ -23,20 +23,17 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 | `Include/SniperAI/SA_Dashboard.mqh` | Right-corner HUD |
 | `Images/SniperAI_Watermark.bmp` | SNIPER AI branded artwork |
 
-### Install (MT5) — single file (institutional V3)
+### Install (MT5) — single file
 
-Use **[`release/deliver/SNIPER_AI.mq5`](release/deliver/SNIPER_AI.mq5)**  
-`BUILD_ID: SA_INSTITUTIONAL_V3`
+Download **[`SNIPER_AI.zip`](SNIPER_AI.zip)** (or [`SNIPER_AI.mq5`](SNIPER_AI.mq5)):
 
 1. **File → Open Data Folder** → `MQL5/Experts/`
-2. **Delete** any old `SniperAI*.mq5` / `SNIPER_AI*.mq5` files there
+2. **Delete** any old `SniperAI*.mq5` / `SNIPER_AI*.mq5` files
 3. Copy **`SNIPER_AI.mq5`**
-4. MetaEditor → Compile **(F7)** — expect 0 errors / 0 warnings
+4. MetaEditor → Compile **(F7)**
 5. Attach to chart → enable **Algo Trading**
 
-Also mirrored at repo root: [`SNIPER_AI.mq5`](SNIPER_AI.mq5)
-
-Engineering: [`docs/SNIPER_AI_V3_AUDIT.md`](docs/SNIPER_AI_V3_AUDIT.md) · [`docs/SNIPER_AI_COMPILE_FIXES.md`](docs/SNIPER_AI_COMPILE_FIXES.md)
+Instant market execution on valid M5 confirmation. No on-chart dashboard. Trade comment: `SNIPER AI`.
 
 
 ### Locked behaviour
