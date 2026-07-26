@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_FULL_UPGRADE_27                                  |
-//| SNIPER AI - FULL UPGRADE: quality-first rank + instant fallback   |
+//| BUILD_ID: SA_FULL_UPGRADE_28                                  |
+//| SNIPER AI - FULL UPGRADE: chop-safe instant fallback + quality rank |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "2.70"
-#property description "SNIPER AI full upgrade - quality rank, ICE/IMCE/SMT"
-#property description "Prefers Cont/Rev; InstantTrend fallback; per-tag stats"
+#property version   "2.80"
+#property description "SNIPER AI full upgrade - chop-safe instant, ICE/IMCE/SMT"
+#property description "Prefers Cont/Rev; InstantTrend trades in chop when trend agrees"
 
 #include <Trade/Trade.mqh>
 
@@ -79,11 +79,13 @@ input int    SMTSwingLookbackBars      = 20;
 input bool   SMTFailOpenIfNoRefData    = true;
 
 input group "IMCE - INSTITUTIONAL MARKET CONTEXT ENGINE"
-// HARD context gate — blocks chop; requires path to match context.
+// HARD context gate — blocks chop on reversal paths; continuation/InstantTrend
+// can still fire when trend+ADX agree (fixes OK27 BTC chop deadlock).
 
 input bool   EnableIMCE                = true;
 input bool   IMCERequireForEntry       = true;  // HARD gate
 input bool   IMCEBlockManipulationChop = true;
+input bool   IMCEAllowTrendContinuationsInChop = true; // InstantTrend/Cont in chop when trend agrees
 
 input group "ICE - INSTITUTIONAL CONFIDENCE ENGINE"
 // Your log: HARD ICE 25 < 50 — old saved input floor was 50.
@@ -418,14 +420,14 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_FULL_UPGRADE_27");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_FULL_UPGRADE_28");
    Print("FULL UPGRADE: PreferQuality=", PreferQualityPaths,
          " TryNextPath=", TryNextPathIfEnginesFail,
          " AdaptiveRank=", EnableAdaptivePathRanking,
          " InstantFallback=", AllowTrendOnlyInstantEntry,
          " NoMPIwait=", AggressiveInstantQuality);
    Print("Engines: ICE_MinScore=", ICE_MinScore,
-         " | IMCE hard | SMT on RevSniper only");
+         " | IMCE hard (chop override cont) | SMT on RevSniper only");
    Print("Trade size: LotSize=", LotSize, " MaxOpenTrades=", MaxOpenTrades,
          " MaxTotal=", MaxTotalOpenTradesAllSymbols);
    Print("TIP: set EntryTF to match chart (you use H4 — set EntryTF=H4)");
@@ -6790,16 +6792,15 @@ bool SMTOK(bool buy, const string strategyTag)
 ENUM_IMCE_CONTEXT GetIMCEContext()
 {
    int rec = EffectiveStructureRecency();
-   bool trap = DetectFakeBreakoutTrap(true) || DetectFakeBreakoutTrap(false);
+   bool trapBuy = DetectFakeBreakoutTrap(true);
+   bool trapSell = DetectFakeBreakoutTrap(false);
    bool sweep = RecentSweep(rec);
    bool bos = RecentBOS(rec);
    bool choch = RecentCHoCH(rec);
    bool expanding = IsVolatilityExpanding();
    bool trending = TrendStrong() && (IsBullTrend() || IsBearTrend());
 
-   if(trap && !bos)
-      return IMCE_MANIPULATION_CHOP;
-
+   // Strong trend wins over chop — avoids classifying BTC bull pullbacks as dead chop.
    if(sweep && choch)
       return IMCE_REVERSAL_LIQUIDITY;
 
@@ -6814,6 +6815,18 @@ ENUM_IMCE_CONTEXT GetIMCEContext()
 
    if(trending)
       return IMCE_TREND_CONTINUATION;
+
+   // Directional chop: trap against flow, or any trap when not trending.
+   bool chopContext = false;
+   if(!bos)
+   {
+      if(trending)
+         chopContext = (IsBullTrend() && trapBuy) || (IsBearTrend() && trapSell);
+      else
+         chopContext = trapBuy || trapSell;
+   }
+   if(chopContext)
+      return IMCE_MANIPULATION_CHOP;
 
    return IMCE_NEUTRAL;
 }
@@ -6834,19 +6847,28 @@ bool IMCEAllows(bool buy, const string strategyTag)
 
    ENUM_IMCE_CONTEXT ctx = GetIMCEContext();
 
-   if(IMCEBlockManipulationChop && ctx == IMCE_MANIPULATION_CHOP)
-   {
-      if(EnableVerboseLogging || EnableSetupLogging)
-         Print("IMCE HARD-blocked ", strategyTag, " — manipulation/chop on ", BrokerSymbol);
-      return false;
-   }
-
    bool contTag =
       (strategyTag == "ContSniper" || strategyTag == "TrendPullback" ||
        strategyTag == "InstantTrend" || strategyTag == "VolBreakout(Spec)" ||
        strategyTag == "FVG+OB");
    bool revTag =
       (strategyTag == "RevSniper" || strategyTag == "LiquiditySweep");
+
+   if(IMCEBlockManipulationChop && ctx == IMCE_MANIPULATION_CHOP)
+   {
+      bool trendAligned =
+         TrendStrong() && contTag && (buy ? IsBullTrend() : IsBearTrend());
+      if(IMCEAllowTrendContinuationsInChop && trendAligned)
+      {
+         if(EnableVerboseLogging || EnableSetupLogging)
+            Print("IMCE chop override ", strategyTag, " — trend-aligned continuation on ", BrokerSymbol);
+         return true;
+      }
+
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("IMCE HARD-blocked ", strategyTag, " — manipulation/chop on ", BrokerSymbol);
+      return false;
+   }
 
    if(ctx == IMCE_TREND_CONTINUATION || ctx == IMCE_EXPANSION_BREAKOUT)
    {
@@ -8413,7 +8435,7 @@ void PrintSetupDiagnostics()
             " ICE_buy=", GetInstitutionalConfidenceScore(true),
             " ICE_MinScore=", ICE_MinScore,
             " IMCE=", IMCEContextToString(GetIMCEContext()));
-      Print("NOTE: Rank Cont/Rev first; InstantTrend fallback; SMT on RevSniper only; MPI wait OFF");
+      Print("NOTE: Rank Cont/Rev first; InstantTrend chop-safe fallback; SMT on RevSniper only; MPI wait OFF");
    }
 }
 

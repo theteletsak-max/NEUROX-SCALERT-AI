@@ -1,2 +1,2 @@
-SA_FULL_UPGRADE_27
-Quality-first Cont/Rev, InstantTrend fallback, try-next path, per-tag stats.
+SA_FULL_UPGRADE_28
+Quality-first Cont/Rev, chop-safe InstantTrend fallback, try-next path, per-tag stats.

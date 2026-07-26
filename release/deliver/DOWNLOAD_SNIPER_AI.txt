@@ -2,25 +2,26 @@ SNIPER AI - DOWNLOAD
 ====================
 
 EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK27.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK28.mq5
 
 ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
-BUILD_ID: SA_FULL_UPGRADE_27
+BUILD_ID: SA_FULL_UPGRADE_28
 
 FULL UPGRADE:
 1. Prefers ContSniper / RevSniper when valid (quality first)
 2. InstantTrend = aggressive fallback so you still trade
 3. TryNextPathIfEnginesFail — if Cont fails ICE/IMCE, InstantTrend can still fire
-4. Adaptive ranking by per-tag win-rate (after enough trades)
-5. ICE/IMCE hard; SMT on RevSniper only; MPI wait OFF
-6. Prints per-strategy stats on load
-7. Adjustable LotSize / MaxOpenTrades
+4. IMCE chop-safe: trend-aligned InstantTrend/ContSniper can trade in chop (OK28 fix)
+5. Adaptive ranking by per-tag win-rate (after enough trades)
+6. ICE/IMCE hard; SMT on RevSniper only; MPI wait OFF
+7. Prints per-strategy stats on load
+8. Adjustable LotSize / MaxOpenTrades
 
 INSTALL:
 1. Delete old SNIPER* .mq5/.ex5
-2. Compile OK27
+2. Compile OK28
 3. REMOVE EA from chart + re-attach
 4. Set EntryTF = H4 if chart is H4
-5. Experts must show: BUILD_ID=SA_FULL_UPGRADE_27
+5. Experts must show: BUILD_ID=SA_FULL_UPGRADE_28
