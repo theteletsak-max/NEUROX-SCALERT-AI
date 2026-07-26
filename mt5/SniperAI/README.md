@@ -10,19 +10,23 @@ Aggressive institutional sniper robot:
 - Left **watermark** (`SNIPER AI`) behind candles  
 - Right-corner **dashboard**
 
-## Install
+## Easiest install — 1 file + image
 
-1. MT5 → **File → Open Data Folder**
-2. Copy the whole folder `SniperAI/` into `MQL5/Experts/SniperAI/`  
-   so you have:
-   ```
-   MQL5/Experts/SniperAI/SniperAI.mq5
-   MQL5/Experts/SniperAI/Images/SniperAI_Watermark.bmp
-   MQL5/Experts/SniperAI/Include/SniperAI/*.mqh
-   ```
-3. Open `SniperAI.mq5` in MetaEditor → **Compile (F7)**
-4. Attach **SniperAI** to your chart (any forex pair / TF for viewing)
-5. Enable **Algo Trading**
+Use the delivery pack:
+
+- [`release/SniperAI/SniperAI.mq5`](../../release/SniperAI/SniperAI.mq5) — **single file** (all code inside)
+- [`release/SniperAI/SniperAI_Watermark.bmp`](../../release/SniperAI/SniperAI_Watermark.bmp) — watermark image
+- Zip: [`release/SniperAI_SingleFile.zip`](../../release/SniperAI_SingleFile.zip)
+
+1. MT5 → **File → Open Data Folder** → `MQL5/Experts/`
+2. Copy **both** `SniperAI.mq5` + `SniperAI_Watermark.bmp` there
+3. MetaEditor → Compile **(F7)**
+4. Attach to chart → enable **Algo Trading**
+
+## Modular install (developers)
+
+1. Copy the whole folder `mt5/SniperAI/` into `MQL5/Experts/SniperAI/`
+2. Compile `SniperAI.mq5` (uses `Include/` + `Images/`)
 
 The EA reads **H4 / H1 / M5** internally; chart timeframe is for display.
 
