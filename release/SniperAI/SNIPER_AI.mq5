@@ -1,21 +1,8 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                               |
-//| BUILD_ID: SA_FIX_OK_7                                             |
-//| SNIPER AI — use THIS file (delete old SniperAI.mq5 first)         |
-//|                                                                   |
-//| Architecture (sections in this file):                             |
-//|   1. Types / Inputs                                               |
-//|   2. Symbol + Market Data Cache                                   |
-//|   3. Structure Engine (swings, BOS, CHoCH, H4 bias)                |
-//|   4. Liquidity Engine                                             |
-//|   5. Zone Engine (Displacement / OB / FVG)                        |
-//|   6. Strategy / Entry Engine                                      |
-//|   7. Risk + Position Manager                                      |
-//|   8. Execution Engine                                             |
-//|   9. Dashboard                                                    |
-//|  10. Core lifecycle                                               |
-//|                                                                   |
-//| Install: copy to MQL5/Experts/ → Compile (F7) → attach chart      |
+//| BUILD_ID: SA_COMPILE_OK_8                                         |
+//| SNIPER AI                                                         |
+//| DELETE old SniperAI.mq5 from Experts before compiling this file.  |
 //+------------------------------------------------------------------+
 #property copyright   "SNIPER AI"
 #property link        "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
@@ -36,14 +23,14 @@ enum ENUM_SA_BIAS
   {
    SA_BIAS_FLAT = 0,
    SA_BIAS_BULL = 1,
-   SA_BIAS_BEAR =-1
+   SA_BIAS_BEAR = 2
   };
 
 enum ENUM_SA_SIDE
   {
    SA_SIDE_NONE = 0,
    SA_SIDE_BUY  = 1,
-   SA_SIDE_SELL =-1
+   SA_SIDE_SELL = 2
   };
 
 enum ENUM_SA_PATH
@@ -123,14 +110,13 @@ struct SaSetup
 //==================================================================
 // 2) INPUTS
 //==================================================================
-input group "=== SNIPER AI CORE ==="
+
 input double InpLot                 = 0.01;       // Lot size
 input int    InpMaxTrades           = 3;          // Max open trades (account)
 input long   InpMagic               = 20260726;   // Magic number
 input int    InpMaxSlippagePoints   = 80;         // Max slippage (points)
 input int    InpMaxRetries          = 3;          // Execution retries
 
-input group "=== STRATEGY (precision ~70% target) ==="
 input int    InpSwingStrength       = 2;          // Swing fractal strength
 input int    InpMinScore            = 14;         // Minimum setup score (strict)
 input int    InpMinConfluence       = 4;          // Min confluence factors required
@@ -140,7 +126,6 @@ input bool   InpRequireZoneTouch    = true;       // Require price at OB/FVG zon
 input bool   InpOneEntryPerM5       = true;       // One entry per M5 bar
 input bool   InpTradeChartOnly      = true;       // Trade attached chart only
 
-input group "=== RISK ==="
 input double InpAtrMultSL           = 1.5;        // SL = ATR(H1) * mult
 input double InpRewardRatio         = 2.0;        // TP = R multiple
 input double InpBreakEvenR          = 1.0;        // BE trigger (+R)
@@ -150,13 +135,11 @@ input double InpTrailStepR          = 0.5;        // Trail step (R)
 input double InpMaxDailyDDPercent   = 0.0;        // Max daily DD % (0=off)
 input int    InpMaxConsecutiveLoss  = 0;          // Max consecutive losses (0=off)
 
-input group "=== ADAPTIVE VOLATILITY ==="
 input double InpHighVolAtrMult      = 1.8;        // ATR regime: high if > avg*this
 input double InpExtremeVolAtrMult   = 2.5;        // ATR regime: extreme
 input double InpVolSLBoostHigh      = 1.15;       // SL boost in high vol
 input double InpVolSLBoostExtreme   = 1.35;      // SL boost in extreme vol
 
-input group "=== UI / LOG ==="
 input bool   InpShowDashboard       = true;       // Show premium dashboard
 input bool   InpLogEvents           = true;       // Log important events
 input int    InpDashRefreshTicks    = 8;          // Dashboard refresh throttle
@@ -201,19 +184,19 @@ public:
       return true;
      }
 
-   double Pip() const
+   double Pip()
      {
       if(digits == 3 || digits == 5)
          return point * 10.0;
       return point;
      }
 
-   double NormPrice(const double price) const
+   double NormPrice(const double price)
      {
       return NormalizeDouble(price, digits);
      }
 
-   double NormVol(double lots) const
+   double NormVol(double lots)
      {
       lots = MathFloor(lots / volStep + 1e-12) * volStep;
       if(lots < volMin) lots = volMin;
@@ -304,7 +287,7 @@ public:
       return false;
      }
 
-   bool GetH4(MqlRates &out[]) const
+   bool GetH4(MqlRates &out[])
      {
       const int n = ArraySize(m_h4);
       ArraySetAsSeries(out, true);
@@ -313,7 +296,7 @@ public:
          out[i] = m_h4[i];
       return (n > 0);
      }
-   bool GetH1(MqlRates &out[]) const
+   bool GetH1(MqlRates &out[])
      {
       const int n = ArraySize(m_h1);
       ArraySetAsSeries(out, true);
@@ -322,7 +305,7 @@ public:
          out[i] = m_h1[i];
       return (n > 0);
      }
-   bool GetM5(MqlRates &out[]) const
+   bool GetM5(MqlRates &out[])
      {
       const int n = ArraySize(m_m5);
       ArraySetAsSeries(out, true);
@@ -331,8 +314,8 @@ public:
          out[i] = m_m5[i];
       return (n > 0);
      }
-   double Atr() const { return m_atrValue; }
-   double AtrAvg() const { return m_atrAvg; }
+   double Atr() { return m_atrValue; }
+   double AtrAvg() { return m_atrAvg; }
   };
 
 //==================================================================
@@ -666,7 +649,7 @@ private:
       return (bear && strongBody && dn && breaksMicro);
      }
 
-   ENUM_SA_MKT Regime(const double atr, const double atrAvg) const
+   ENUM_SA_MKT Regime(const double atr, const double atrAvg)
      {
       if(atrAvg <= 0.0) return SA_MKT_NORMAL;
       if(atr >= atrAvg * InpExtremeVolAtrMult) return SA_MKT_EXTREME;
@@ -1062,7 +1045,7 @@ public:
      {
       risk.ManageOpenPositions(m_trade, m_magic);
      }
-   string LastStatus() const { return m_lastStatus; }
+   string LastStatus() { return m_lastStatus; }
 
    bool Send(const string symbol, const ENUM_SA_SIDE side, const double lots,
              const double sl, const double tp, string &why)
@@ -1159,25 +1142,25 @@ private:
       ObjectSetInteger(0, name, OBJPROP_ZORDER, 201);
      }
 
-   string BiasTxt(const ENUM_SA_BIAS b) const
+   string BiasTxt(const ENUM_SA_BIAS b)
      {
       if(b == SA_BIAS_BULL) return "BULLISH";
       if(b == SA_BIAS_BEAR) return "BEARISH";
       return "NEUTRAL";
      }
-   string SideTxt(const ENUM_SA_SIDE s) const
+   string SideTxt(const ENUM_SA_SIDE s)
      {
       if(s == SA_SIDE_BUY) return "BUY";
       if(s == SA_SIDE_SELL) return "SELL";
       return "FLAT";
      }
-   string PathTxt(const ENUM_SA_PATH p) const
+   string PathTxt(const ENUM_SA_PATH p)
      {
       if(p == SA_PATH_CONTINUATION) return "CONTINUATION";
       if(p == SA_PATH_REVERSAL) return "REVERSAL";
       return "-";
      }
-   string MktTxt(const ENUM_SA_MKT m) const
+   string MktTxt(const ENUM_SA_MKT m)
      {
       if(m == SA_MKT_LOW) return "LOW VOL";
       if(m == SA_MKT_HIGH) return "HIGH VOL";
@@ -1190,10 +1173,10 @@ public:
 
    void Destroy()
      {
-      const int total = ObjectsTotal(0, 0, -1);
+      const int total = ObjectsTotal(0);
       for(int i = total - 1; i >= 0; --i)
         {
-         const string name = ObjectName(0, i, 0, -1);
+         const string name = ObjectName(0, i);
          if(StringFind(name, SA_UI_PREFIX) == 0)
             ObjectDelete(0, name);
         }
@@ -1236,7 +1219,9 @@ public:
       Lbl("lot", x, y, StringFormat("LOT         %.2f", lot), clrWhite, 10); y += 17;
       Lbl("bal", x, y, StringFormat("BALANCE     %.2f", balance), C'180,220,255', 9); y += 16;
       Lbl("eq", x, y, StringFormat("EQUITY      %.2f", equity), C'180,220,255', 9); y += 16;
-      Lbl("flt", x, y, StringFormat("FLOATING    %.2f", floating), (floating >= 0 ? C'80,220,140' : C'255,100,100'), 9); y += 16;
+      color fltClr = C'255,100,100';
+      if(floating >= 0.0) fltClr = C'80,220,140';
+      Lbl("flt", x, y, StringFormat("FLOATING    %.2f", floating), fltClr, 9); y += 16;
       Lbl("spr", x, y, StringFormat("SPREAD      %.1f pts", setup.spreadPts), clrSilver, 9); y += 16;
       Lbl("atr", x, y, StringFormat("ATR(H1)     %.5f", setup.atrH1), clrSilver, 9); y += 16;
       Lbl("mkt", x, y, "MARKET      " + MktTxt(setup.mkt), C'160,255,170', 9); y += 16;
@@ -1440,6 +1425,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
    // Track consecutive losses from closed deals of this EA
    if(trans.type != TRADE_TRANSACTION_DEAL_ADD)
       return;
+   HistorySelect(0, TimeCurrent());
    if(!HistoryDealSelect(trans.deal))
       return;
    if((long)HistoryDealGetInteger(trans.deal, DEAL_MAGIC) != InpMagic)
