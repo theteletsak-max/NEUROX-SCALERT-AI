@@ -5,25 +5,24 @@ ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
 EA file:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK18.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK19.mq5
 
 MUST SHOW AT TOP:
-  BUILD_ID: SA_EVENT_SAFE_18
+  BUILD_ID: SA_QUALITY_SNIPER_19
 
-Event-safe aggressive sniper:
-- News hard-block stays OFF (no more "can't trade" on CPI)
-- During high-impact events: QUALITY MODE (structure + trend/ADX)
-- Weak InstantTrend / fake breakout paths disabled in the event window
-- Outside events: full aggressive sniper
+Quality sniper every session:
+- Regular trading: quality signals only (trend + ADX + structure)
+- Events: same quality system, stricter MPI (still no hard news pause)
+- Instant execution only when a quality path passes
 
 STEPS:
 1. Close MetaEditor
 2. Delete ALL old Sniper/SNIPER *.mq5 and *.ex5 from MQL5/Experts
-3. Copy SNIPER_AI_OK18.mq5 into MQL5/Experts
-4. Confirm SA_EVENT_SAFE_18
+3. Copy SNIPER_AI_OK19.mq5 into MQL5/Experts
+4. Confirm SA_QUALITY_SNIPER_19
 5. Press F7
 6. Attach to chart
 7. Keep TradeComment exactly: SNIPER AI
-8. Defaults: EnableNewsFilter=false, EnableEventQualityMode=true
+8. Defaults: EnableAlwaysQualityMode=true, EnableNewsFilter=false
 9. Enable AutoTrading + Algo Trading
-10. Experts: SNIPER AI Loaded Successfully BUILD_ID=SA_EVENT_SAFE_18
+10. Experts: SNIPER AI Loaded Successfully BUILD_ID=SA_QUALITY_SNIPER_19

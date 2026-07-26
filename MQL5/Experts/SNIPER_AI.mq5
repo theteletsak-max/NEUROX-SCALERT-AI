@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_EVENT_SAFE_18                                  |
-//| SNIPER AI - Aggressive sniper + event-safe quality entries        |
+//| BUILD_ID: SA_QUALITY_SNIPER_19                                  |
+//| SNIPER AI - Quality sniper always + instant execution             |
 //| Comment: SNIPER AI | Dashboard off | No watermark resource        |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "1.80"
-#property description "SNIPER AI aggressive sniper PRISM EA"
-#property description "Trades through events, but only quality sniper setups"
+#property version   "1.90"
+#property description "SNIPER AI quality sniper PRISM EA"
+#property description "Quality signals every session; tighter in news events"
 
 #include <Trade/Trade.mqh>
 
@@ -25,24 +25,28 @@ input group "GENERAL"
 input long MagicNumber = 40001;
 input string TradeComment = "SNIPER AI";
 
-input group "AGGRESSIVE SNIPER (correct signals + instant fire)"
-// Correct sniper COMPONENTS are still detected (trend, BOS, CHoCH, sweep,
-// OB, FVG, pullback, channel). Aggressive mode fires when enough of those
-// components agree — not the old stacked all-AND that blocked every path.
-// Strategy vetoes (MPI floor, buy/sell conflict reject, HTF hard block,
-// long cooldowns) are disabled so valid sniper entries are not blocked.
+input group "QUALITY SNIPER (always on + instant fire when quality passes)"
+// Quality sniper COMPONENTS every session: trend + ADX + structure zone
+// (BOS / OB / FVG / sweep+CHoCH). Instant execution ONLY after a quality
+// path passes. Weak trend-only entries are off by default.
 
-input bool   EnableInstantSniperMode     = true;  // soft structure windows / aggressive path ORs
-input bool   AllowTrendOnlyInstantEntry  = true;  // continuation: trend + ADX is a valid aggressive sniper entry
-input bool   AggressiveSniperEntries     = true;  // use aggressive continuation + reversal sniper paths
-input bool   NeverBlockValidSniperEntry  = true;  // never veto a path that already passed sniper detection
-input bool   ResolveConflictByTrend      = true;  // on buy+sell conflict, take trend side (do not reject both)
-input double InstantPullbackATRMultiple  = 3.5;   // wider pullback band for aggressive entries
-input int    InstantStructureRecencyBars = 30;    // BOS/CHoCH/sweep stay valid longer
-input int    InstantMinimumMPIScore      = 0;     // MPI never blocks in aggressive sniper mode
-input bool   InstantTwoOfThreeLiquidity  = true;  // liquidity path: 2 of 3 (or 1 of 3 if NeverBlock)
-input bool   InstantFvgOrOb              = true;  // FVG+OB path accepts FVG or OB
-input double InstantChannelBreakATR      = 0.50;  // near-edge vol breakout allowed
+input bool   EnableAlwaysQualityMode     = true;  // quality gates every bar, not only during news
+input bool   QualityRequireStructureZone = true;  // need OB/FVG/BOS (continuation) or liq+zone (reversal)
+input bool   QualityRequireTrendAndADX   = true;  // direction + ADX must agree
+input bool   QualityDisableWeakPaths     = true;  // no InstantTrend-only / 1-of-3 soft entries
+input int    QualityMPIScore             = 40;    // minimum MPI on regular trading
+
+input bool   EnableInstantSniperMode     = true;  // recency windows / quality path helpers
+input bool   AllowTrendOnlyInstantEntry  = false; // OFF: trend+ADX alone is NOT quality
+input bool   AggressiveSniperEntries     = true;  // ContSniper / RevSniper paths
+input bool   NeverBlockValidSniperEntry  = true;  // no conflict-reject-both / news hard pause
+input bool   ResolveConflictByTrend      = true;  // on buy+sell conflict, take trend side
+input double InstantPullbackATRMultiple  = 2.5;   // quality pullback band (tighter than spray mode)
+input int    InstantStructureRecencyBars = 20;    // BOS/CHoCH/sweep recency
+input int    InstantMinimumMPIScore      = 40;    // aligns with QualityMPIScore
+input bool   InstantTwoOfThreeLiquidity  = true;  // liquidity path: need 2 of 3 always in quality mode
+input bool   InstantFvgOrOb              = true;  // FVG or OB accepted with BOS/trend
+input double InstantChannelBreakATR      = 0.25;  // tighter near-edge breakout
 
 input group "RISK"
 
@@ -91,17 +95,16 @@ input bool BlockHighImpactNews = true;   // only used if EnableNewsFilter=true
 input bool BlockMediumImpactNews = false;
 input bool NonScalpDisableNewsFilter = true;
 
-input group "EVENT SAFE QUALITY (trade through news, quality only)"
-// Does NOT block trading during CPI/NFP/FOMC. Instead raises the bar so
-// only quality sniper setups can fire in the event window (structure zone
-// + trend/ADX, weak InstantTrend-only paths disabled).
+input group "EVENT EXTRA TIGHTEN (still trades — stricter than regular quality)"
+// News hard-block stays OFF. Events use the same quality system, with a
+// higher MPI floor so only the cleanest sniper setups fire in the spike.
 
-input bool   EnableEventQualityMode       = true;  // safe mode during high-impact events
+input bool   EnableEventQualityMode       = true;  // extra tighten during high-impact events
 input bool   EventQualityAppliesToCrypto  = true;  // also tighten BTC/ETH around USD high-impact news
-input bool   EventDisableWeakPaths        = true;  // no InstantTrend-only / 1-of-3 soft entries in events
-input bool   EventRequireStructureZone    = true;  // need OB or FVG (or recent BOS for continuation)
-input bool   EventRequireTrendAndADX      = true;  // direction + ADX must agree in events
-input int    EventQualityMPIScore         = 40;    // minimum MPI during events (quality floor)
+input bool   EventDisableWeakPaths        = true;  // keep weak paths off in events
+input bool   EventRequireStructureZone    = true;
+input bool   EventRequireTrendAndADX      = true;
+input int    EventQualityMPIScore         = 50;    // stricter than regular QualityMPIScore (40)
 input int    EventMinutesBeforeNews       = 30;
 input int    EventMinutesAfterNews        = 30;
 
@@ -374,9 +377,10 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_EVENT_SAFE_18");
-   Print("Mode: aggressive sniper | EventQuality=", EnableEventQualityMode,
-         " (trades through news, quality setups only) | NeverBlock=", NeverBlockValidSniperEntry);
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_QUALITY_SNIPER_19");
+   Print("Mode: QUALITY sniper always=", EnableAlwaysQualityMode,
+         " | EventTighten=", EnableEventQualityMode,
+         " | MPI regular=", QualityMPIScore, " event=", EventQualityMPIScore);
 
    return(INIT_SUCCEEDED);
 }
@@ -6099,10 +6103,16 @@ double EffectivePullbackATRMultiple()
    return PullbackMaxATRMultiple;
 }
 
+bool EventQualityModeActive(); // forward
+bool QualityGatesActive();
+
 int EffectiveMinimumMPIScore()
 {
+   // Always-on quality floor; events tighten further.
    if(EventQualityModeActive())
-      return MathMax(EventQualityMPIScore, InstantMinimumMPIScore);
+      return MathMax(EventQualityMPIScore, QualityMPIScore);
+   if(EnableAlwaysQualityMode)
+      return MathMax(QualityMPIScore, InstantMinimumMPIScore);
    if(NeverBlockValidSniperEntry)
       return 0;
    if(EnableInstantSniperMode)
@@ -6173,13 +6183,45 @@ bool EventQualityModeActive()
    return g_EventQualityCached;
 }
 
-// Aggressive continuation sniper: correct trend + ADX (valid sniper bias).
+// Regular sessions + events: quality gates stay on when AlwaysQuality is enabled.
+bool QualityGatesActive()
+{
+   return EnableAlwaysQualityMode || EventQualityModeActive();
+}
+
+bool QualityWeakPathsDisabled()
+{
+   if(EventQualityModeActive() && EventDisableWeakPaths)
+      return true;
+   if(EnableAlwaysQualityMode && QualityDisableWeakPaths)
+      return true;
+   return false;
+}
+
+bool QualityNeedsStructureZone()
+{
+   if(EventQualityModeActive())
+      return EventRequireStructureZone;
+   if(EnableAlwaysQualityMode)
+      return QualityRequireStructureZone;
+   return false;
+}
+
+bool QualityNeedsTrendAndADX()
+{
+   if(EventQualityModeActive())
+      return EventRequireTrendAndADX;
+   if(EnableAlwaysQualityMode)
+      return QualityRequireTrendAndADX;
+   return false;
+}
+
+// InstantTrend is intentionally weak — off under quality mode.
 bool InstantTrendSniperBuySetup()
 {
    if(!EnableInstantSniperMode || !AllowTrendOnlyInstantEntry)
       return false;
-   // During events: InstantTrend alone is too weak — quality mode disables it
-   if(EventQualityModeActive() && EventDisableWeakPaths)
+   if(QualityWeakPathsDisabled())
       return false;
    if(!IsBullTrend())
       return false;
@@ -6192,7 +6234,7 @@ bool InstantTrendSniperSellSetup()
 {
    if(!EnableInstantSniperMode || !AllowTrendOnlyInstantEntry)
       return false;
-   if(EventQualityModeActive() && EventDisableWeakPaths)
+   if(QualityWeakPathsDisabled())
       return false;
    if(!IsBearTrend())
       return false;
@@ -6263,8 +6305,7 @@ bool ActiveFVG(bool buy)
    return buy ? FVG_Bull_ActiveArr[idx] : FVG_Bear_ActiveArr[idx];
 }
 
-// Correct sniper Path A (aggressive): trend + at least one real component
-// (BOS / OB / FVG / pullback / ADX). Event quality: trend+ADX + structure zone.
+// Path A quality continuation: trend (+ADX) + structure (BOS/OB/FVG).
 bool AggressiveContinuationBuySetup()
 {
    if(!AggressiveSniperEntries)
@@ -6281,12 +6322,13 @@ bool AggressiveContinuationBuySetup()
    bool bos = RecentBOS(rec);
    bool zone = ActiveOrderBlock(true) || ActiveFVG(true);
 
-   if(EventQualityModeActive())
+   if(QualityGatesActive())
    {
-      if(EventRequireTrendAndADX && !TrendStrong())
+      if(QualityNeedsTrendAndADX() && !TrendStrong())
          return false;
-      if(EventRequireStructureZone && !(zone || bos))
+      if(QualityNeedsStructureZone() && !(zone || bos))
          return false;
+      // Prefer real pullback/location when available, but BOS/zone is enough
       return true;
    }
 
@@ -6309,11 +6351,11 @@ bool AggressiveContinuationSellSetup()
    bool bos = RecentBOS(rec);
    bool zone = ActiveOrderBlock(false) || ActiveFVG(false);
 
-   if(EventQualityModeActive())
+   if(QualityGatesActive())
    {
-      if(EventRequireTrendAndADX && !TrendStrong())
+      if(QualityNeedsTrendAndADX() && !TrendStrong())
          return false;
-      if(EventRequireStructureZone && !(zone || bos))
+      if(QualityNeedsStructureZone() && !(zone || bos))
          return false;
       return true;
    }
@@ -6321,8 +6363,7 @@ bool AggressiveContinuationSellSetup()
    return bos || zone || pulled || TrendStrong();
 }
 
-// Correct sniper Path B (aggressive): liquidity event + institutional zone.
-// Event quality: always require liquidity AND zone (no weak OR).
+// Path B quality reversal: liquidity AND institutional zone.
 bool AggressiveReversalBuySetup()
 {
    if(!AggressiveSniperEntries)
@@ -6332,9 +6373,9 @@ bool AggressiveReversalBuySetup()
    bool liq = RecentSweep(rec) || RecentCHoCH(rec);
    bool zone = ActiveOrderBlock(true) || ActiveFVG(true);
 
-   if(EventQualityModeActive())
+   if(QualityGatesActive())
    {
-      if(EventRequireTrendAndADX && !(IsBullTrend() && TrendStrong()))
+      if(QualityNeedsTrendAndADX() && !(IsBullTrend() && TrendStrong()))
          return false;
       return liq && zone;
    }
@@ -6353,9 +6394,9 @@ bool AggressiveReversalSellSetup()
    bool liq = RecentSweep(rec) || RecentCHoCH(rec);
    bool zone = ActiveOrderBlock(false) || ActiveFVG(false);
 
-   if(EventQualityModeActive())
+   if(QualityGatesActive())
    {
-      if(EventRequireTrendAndADX && !(IsBearTrend() && TrendStrong()))
+      if(QualityNeedsTrendAndADX() && !(IsBearTrend() && TrendStrong()))
          return false;
       return liq && zone;
    }
@@ -6371,8 +6412,8 @@ input int SpecBreakout_ChannelLookbackBars = 20; // structure reference: recent 
 
 bool SpecVolatilityBreakoutBuySetup()
 {
-   // News spikes fake channel breaks — skip weak breakout path in event quality mode
-   if(EventQualityModeActive() && EventDisableWeakPaths)
+   // Channel spikes are low-quality without structure — off in quality mode
+   if(QualityWeakPathsDisabled())
       return false;
 
    if(!TrendStrong())
@@ -6394,7 +6435,7 @@ bool SpecVolatilityBreakoutBuySetup()
 
 bool SpecVolatilityBreakoutSellSetup()
 {
-   if(EventQualityModeActive() && EventDisableWeakPaths)
+   if(QualityWeakPathsDisabled())
       return false;
 
    if(!TrendStrong())
@@ -6462,7 +6503,7 @@ int CountConfirmingConditions(bool buy)
 // sensible threshold, is what actually reflects the manual's Part 52
 // decision flow: hard structural gates PLUS one final score check.
 
-input int MinimumMPIScore = 0; // aggressive sniper: MPI is informational; NeverBlock keeps it from vetoing entries
+input int MinimumMPIScore = 40; // quality sniper floor on regular sessions
 
 // FIX (this pass): this function used to be defined *inside* the body of
 // EvaluateSpecCompliantStrategies() below - an illegal nested function
@@ -6602,15 +6643,17 @@ void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &
    int mpiScore = CalculatePRISMScore(isBuy);
    int mpiFloor = EffectiveMinimumMPIScore();
 
-   // Event quality: raise MPI floor during CPI/NFP/etc (still trades — quality only).
-   // Outside events: NeverBlock keeps MPI from vetoing.
-   if(EventQualityModeActive())
+   // Quality sniper: MPI floor always applies when AlwaysQuality / EventQuality.
+   // This is how "quality signals over time" is enforced on every session.
+   if(QualityGatesActive())
    {
-      if(mpiScore < EventQualityMPIScore)
+      if(mpiScore < mpiFloor)
       {
          if(EnableVerboseLogging || EnableSetupLogging)
-            Print("EVENT QUALITY: MPI ", mpiScore, " < ", EventQualityMPIScore,
-                  " on ", BrokerSymbol, " - waiting for higher-quality sniper setup (not hard-blocked from news).");
+            Print("QUALITY SNIPER: MPI ", mpiScore, " < ", mpiFloor,
+                  " on ", BrokerSymbol,
+                  (EventQualityModeActive() ? " [EVENT TIGHTEN]" : " [REGULAR]"),
+                  " - waiting for quality setup.");
          return;
       }
    }
@@ -6717,11 +6760,10 @@ bool TrendPullbackBuySetup()
    double pullMul = EffectivePullbackATRMultiple();
    bool nearEma = (MathAbs(price - ema) <= atr * pullMul);
 
-   // Aggressive / Instant: trend+ADX with near-EMA or recent BOS.
-   // NeverBlock: trend+ADX alone outside events. During events: quality only.
-   if(EnableInstantSniperMode || NeverBlockValidSniperEntry)
+   // Quality mode (regular + events): need pullback or BOS — never trend-only.
+   if(EnableInstantSniperMode || NeverBlockValidSniperEntry || QualityGatesActive())
    {
-      if(EventQualityModeActive())
+      if(QualityGatesActive())
          return (nearEma || RecentBOS(EffectiveStructureRecency()));
       if(NeverBlockValidSniperEntry)
          return true;
@@ -6757,9 +6799,9 @@ bool TrendPullbackSellSetup()
    double pullMul = EffectivePullbackATRMultiple();
    bool nearEma = (MathAbs(price - ema) <= atr * pullMul);
 
-   if(EnableInstantSniperMode || NeverBlockValidSniperEntry)
+   if(EnableInstantSniperMode || NeverBlockValidSniperEntry || QualityGatesActive())
    {
-      if(EventQualityModeActive())
+      if(QualityGatesActive())
          return (nearEma || RecentBOS(EffectiveStructureRecency()));
       if(NeverBlockValidSniperEntry)
          return true;
@@ -6793,8 +6835,8 @@ bool LiquiditySweepBuySetup()
    if(EnableInstantSniperMode && InstantTwoOfThreeLiquidity)
    {
       int hits = (sweep ? 1 : 0) + (choch ? 1 : 0) + (ob ? 1 : 0);
-      int need = 2;
-      if(NeverBlockValidSniperEntry && !EventQualityModeActive())
+      int need = 2; // quality: always 2 of 3
+      if(NeverBlockValidSniperEntry && !QualityGatesActive())
          need = 1;
       return (hits >= need);
    }
@@ -6817,7 +6859,7 @@ bool LiquiditySweepSellSetup()
    {
       int hits = (sweep ? 1 : 0) + (choch ? 1 : 0) + (ob ? 1 : 0);
       int need = 2;
-      if(NeverBlockValidSniperEntry && !EventQualityModeActive())
+      if(NeverBlockValidSniperEntry && !QualityGatesActive())
          need = 1;
       return (hits >= need);
    }
@@ -6834,19 +6876,17 @@ bool FVGOrderBlockBuySetup()
    bool fvg = ActiveFVG(true);
    bool ob = ActiveOrderBlock(true);
 
-   if(EventQualityModeActive())
+   if(QualityGatesActive())
    {
-      if(EventRequireTrendAndADX && !(IsBullTrend() && TrendStrong()))
+      if(QualityNeedsTrendAndADX() && !(IsBullTrend() && TrendStrong()))
          return false;
-      // Quality: need a zone, plus BOS or both FVG+OB
-      if(EventRequireStructureZone && !(fvg || ob))
+      if(QualityNeedsStructureZone() && !(fvg || ob))
          return false;
       return (bos || (fvg && ob));
    }
 
    if(EnableInstantSniperMode && InstantFvgOrOb)
    {
-      // Instant: structure event OR strong trend, plus FVG or OB
       if(!(bos || IsBullTrend()))
          return false;
       return (fvg || ob);
@@ -6862,11 +6902,11 @@ bool FVGOrderBlockSellSetup()
    bool fvg = ActiveFVG(false);
    bool ob = ActiveOrderBlock(false);
 
-   if(EventQualityModeActive())
+   if(QualityGatesActive())
    {
-      if(EventRequireTrendAndADX && !(IsBearTrend() && TrendStrong()))
+      if(QualityNeedsTrendAndADX() && !(IsBearTrend() && TrendStrong()))
          return false;
-      if(EventRequireStructureZone && !(fvg || ob))
+      if(QualityNeedsStructureZone() && !(fvg || ob))
          return false;
       return (bos || (fvg && ob));
    }
@@ -7966,14 +8006,17 @@ void PrintSetupDiagnostics()
             " | close=", closeBar, " chHigh=", chHigh, " | SELL live=",
             (SpecVolatilityBreakoutSellSetup() ? "WOULD PASS" : "blocked"), " chLow=", chLow);
       bool eventQ = EventQualityModeActive();
-      Print("NOTE: AggressiveSniper=", AggressiveSniperEntries,
-            " NeverBlock=", NeverBlockValidSniperEntry,
-            " EventQualityACTIVE=", eventQ,
+      Print("NOTE: AlwaysQuality=", EnableAlwaysQualityMode,
+            " QualityGatesACTIVE=", QualityGatesActive(),
+            " EventTighten=", eventQ,
+            " MPI floor=", EffectiveMinimumMPIScore(),
             " NewsHardBlock=", EnableNewsFilter);
       if(eventQ)
-         Print("NOTE: High-impact event window — trading ALLOWED, but only quality sniper setups (structure + trend/ADX, weak paths off).");
+         Print("NOTE: EVENT TIGHTEN — quality sniper + higher MPI; still trading (no hard news pause).");
+      else if(EnableAlwaysQualityMode)
+         Print("NOTE: REGULAR session — quality sniper only (trend+ADX+structure). Instant fire when quality passes.");
       else
-         Print("NOTE: Outside events — aggressive sniper entries; during events quality mode tightens automatically.");
+         Print("NOTE: AlwaysQuality is OFF — paths are more aggressive.");
    }
 }
 
