@@ -25,15 +25,16 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 
 ### Install (MT5) — single file (compile-safe)
 
-Use **[`SNIPER_AI_OK15.mq5`](SNIPER_AI_OK15.mq5)**  
-`BUILD_ID: SA_BABFX_TRADE_15`
+Use **[`SNIPER_AI_OK16.mq5`](SNIPER_AI_OK16.mq5)**  
+`BUILD_ID: SA_INSTANT_16`
 
 1. Close MetaEditor
 2. **File → Open Data Folder** → `MQL5/Experts/`
 3. **Delete** any old `Sniper*` / `SNIPER*` `.mq5` / `.ex5` files
-4. Copy **`SNIPER_AI_OK15.mq5`**
-5. Open it, confirm `SA_BABFX_TRADE_15`, compile **(F7)**
+4. Copy **`SNIPER_AI_OK16.mq5`**
+5. Open it, confirm `SA_INSTANT_16`, compile **(F7)**
 6. Attach to chart → enable **Algo Trading**
+7. Keep **InstantSniperMode** / **AllowTrendOnlyInstantEntry** enabled (defaults)
 
 Also mirrored as [`SNIPER_AI.mq5`](SNIPER_AI.mq5) and [`release/deliver/SNIPER_AI.mq5`](release/deliver/SNIPER_AI.mq5).
 

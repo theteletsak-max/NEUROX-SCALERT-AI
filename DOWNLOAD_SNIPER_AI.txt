@@ -5,27 +5,31 @@ ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
 EA file:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK15.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK16.mq5
 
 MUST SHOW AT TOP:
-  BUILD_ID: SA_BABFX_TRADE_15
+  BUILD_ID: SA_INSTANT_16
 
-This is your BabFX / PRISM Sniper AI using CTrade (not raw OrderSend).
+This is BabFX / PRISM Sniper AI with InstantSniperMode ON by default.
+When your Experts log shows trend=true + ADXstrong=true (like BTCUSD.m),
+InstantTrend can open immediately — BOS/sweep/pullback are no longer required
+for that path.
 
 STEPS:
 1. Close MetaEditor
 2. Delete ALL old Sniper/SNIPER *.mq5 and *.ex5 from MQL5/Experts
-3. Copy SNIPER_AI_OK15.mq5 into MQL5/Experts
-4. Confirm SA_BABFX_TRADE_15
+3. Copy SNIPER_AI_OK16.mq5 into MQL5/Experts
+4. Confirm SA_INSTANT_16 at the top of the file
 5. Press F7
-6. Attach to a forex chart (EntryTF default M15, TrendTF H4)
+6. Attach to chart (EntryTF M15, TrendTF H4)
 7. Keep TradeComment exactly: SNIPER AI
-8. Enable AutoTrading (toolbar) AND Algo Trading in EA settings
-9. Experts should show: SNIPER AI Loaded Successfully BUILD_ID=SA_BABFX_TRADE_15
+8. Inputs: EnableInstantSniperMode=true, AllowTrendOnlyInstantEntry=true
+9. Enable AutoTrading (toolbar) AND Algo Trading in EA settings
+10. Experts should show: SNIPER AI Loaded Successfully BUILD_ID=SA_INSTANT_16
 
-Portability fixes applied to your paste:
-- removed #property strict
-- removed watermark BMP #resource (was blocking compile)
-- dashboard off
-- TradeComment locked to SNIPER AI
-- kept ExecuteBuy/ExecuteSell CTrade path with fill-mode + no-stops fallback
+What changed vs OK15:
+- InstantTrend path: trend + ADX alone can trade
+- Softer pullback / liquidity / FVG+OB / vol-breakout gates in Instant mode
+- InstantTrend bypasses the MPI score floor (so soft structure score cannot veto it)
+- Shorter BTC cooldown (30 min)
+- Diagnostics now show InstantTrend WOULD PASS -> TRADE when gated open

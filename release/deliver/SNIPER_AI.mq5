@@ -1,12 +1,12 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_BABFX_TRADE_15                                       |
+//| BUILD_ID: SA_INSTANT_16                                       |
 //| SNIPER AI - BabFX PRISM engine (CTrade execution)                 |
 //| Comment: SNIPER AI | Dashboard off | No watermark resource        |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "1.50"
+#property version   "1.60"
 #property description "SNIPER AI institutional PRISM EA"
 #property description "CTrade execution - attach to chart and enable AlgoTrading"
 
@@ -24,6 +24,20 @@ input group "GENERAL"
 
 input long MagicNumber = 40001;
 input string TradeComment = "SNIPER AI";
+
+input group "INSTANT SNIPER EXECUTION"
+// Your Experts log showed trend=true + ADXstrong=true but every PRISM path
+// blocked on missing BOS/sweep/pullback. Instant mode lets a strong trend
+// fire immediately, and softens the stacked AND-gates so the EA can trade.
+
+input bool   EnableInstantSniperMode     = true;
+input bool   AllowTrendOnlyInstantEntry  = true;  // trend + ADX alone can open (what your log needed)
+input double InstantPullbackATRMultiple  = 3.0;   // wider than classic pullback so "near trend" still counts
+input int    InstantStructureRecencyBars = 20;    // BOS/CHoCH/sweep stay valid longer
+input int    InstantMinimumMPIScore      = 15;    // lower final score floor in instant mode (InstantTrend bypasses MPI entirely)
+input bool   InstantTwoOfThreeLiquidity  = true;  // sweep/CHoCH/OB: need 2 of 3, not all 3
+input bool   InstantFvgOrOb              = true;  // FVG+OB path accepts FVG or OB (not both)
+input double InstantChannelBreakATR      = 0.35;  // vol-breakout: allow near-edge break, not only closed beyond
 
 input group "RISK"
 
@@ -350,7 +364,7 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_BABFX_TRADE_15");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_INSTANT_16");
 
    return(INIT_SUCCEEDED);
 }
@@ -813,10 +827,11 @@ void ReportSignalOutcome(ulong ticket, bool wasWin, double profit)
 // of these nine is worth keeping - rather than adding more strategies
 // being mistaken for adding more evidence.
 
-#define STRATEGY_TAG_COUNT 9
+#define STRATEGY_TAG_COUNT 10
 string g_StrategyTagNames[STRATEGY_TAG_COUNT] = {
    "SMC", "MeanReversion", "VolBreakout", "TrendFollow",
-   "TrendPullback", "LiquiditySweep", "FVG+OB", "VolBreakout(Spec)", "SpecCompliant"
+   "TrendPullback", "LiquiditySweep", "FVG+OB", "VolBreakout(Spec)", "SpecCompliant",
+   "InstantTrend"
 };
 double g_StrategyTagWins[STRATEGY_TAG_COUNT];
 double g_StrategyTagLosses[STRATEGY_TAG_COUNT];
@@ -2264,7 +2279,7 @@ input bool EnableVerboseLogging = false;
 input double StopLossPoints   = 500;
 input double TakeProfitPoints = 1000;
 input int    SlippagePoints   = 20;
-input int TradeCooldownMinutes = 15;
+input int TradeCooldownMinutes = 5;
 input int AttemptCooldownSeconds = 5;
 
 // FIX: SlippagePoints was one flat number applied identically to every
@@ -2298,7 +2313,7 @@ input group "NON-SCALP SYMBOL OVERRIDE"
 
 input string NonScalpSymbolKeywords   = "BTC,ETH";
 input double NonScalpSLMultiplierBoost = 2.0;   // multiplies SL_ATR_Multiplier for matched symbols - wider stop, wider TP1/TP2 (they scale off SL distance)
-input int    NonScalpCooldownMinutes   = 240;   // minimum minutes between trades for matched symbols (vs TradeCooldownMinutes for everything else)
+input int    NonScalpCooldownMinutes   = 30;   // minimum minutes between trades for matched symbols (vs TradeCooldownMinutes for everything else)
 input int    NonScalpMinimumHoldBars   = 80;    // bars (on EntryTF) before trend-exit/trailing can act on matched symbols (vs MinimumHoldBars for everything else) - 80 x M15 = ~20 hours
 
 // FIX - THIS IS WHY BTCUSD KEPT CLOSING TRADES: once holdPeriodOK became
@@ -6055,7 +6070,52 @@ bool MeanReversionSellSetup()
 
 input group "PRISM STRUCTURE RECENCY WINDOW"
 
-input int PRISM_StructureRecencyBars = 5; // how many recent bars a BOS/CHoCH/sweep event stays "valid" for confluence purposes, instead of requiring the literal current bar
+input int PRISM_StructureRecencyBars = 15; // how many recent bars a BOS/CHoCH/sweep event stays "valid" for confluence purposes, instead of requiring the literal current bar
+
+
+int EffectiveStructureRecency()
+{
+   if(EnableInstantSniperMode)
+      return MathMax(PRISM_StructureRecencyBars, InstantStructureRecencyBars);
+   return PRISM_StructureRecencyBars;
+}
+
+double EffectivePullbackATRMultiple()
+{
+   if(EnableInstantSniperMode)
+      return MathMax(PullbackMaxATRMultiple, InstantPullbackATRMultiple);
+   return PullbackMaxATRMultiple;
+}
+
+int EffectiveMinimumMPIScore()
+{
+   if(EnableInstantSniperMode)
+      return MathMin(MinimumMPIScore, InstantMinimumMPIScore);
+   return MinimumMPIScore;
+}
+
+// Instant trend sniper: fire when trend + ADX agree (your BTC log case).
+bool InstantTrendSniperBuySetup()
+{
+   if(!EnableInstantSniperMode || !AllowTrendOnlyInstantEntry)
+      return false;
+   if(!IsBullTrend())
+      return false;
+   if(!TrendStrong())
+      return false;
+   return true;
+}
+
+bool InstantTrendSniperSellSetup()
+{
+   if(!EnableInstantSniperMode || !AllowTrendOnlyInstantEntry)
+      return false;
+   if(!IsBearTrend())
+      return false;
+   if(!TrendStrong())
+      return false;
+   return true;
+}
 
 bool RecentBOS(int lookbackBars)
 {
@@ -6125,17 +6185,21 @@ input int SpecBreakout_ChannelLookbackBars = 20; // structure reference: recent 
 
 bool SpecVolatilityBreakoutBuySetup()
 {
-   if(!TrendStrong()) // ADX confirmation only - no ATR involved in whether this setup is valid at all
+   if(!TrendStrong())
       return false;
 
    double channelHigh = GetChannelHigh(SpecBreakout_ChannelLookbackBars);
-
    if(channelHigh <= 0.0)
       return false;
 
    double closeBar = iClose(BrokerSymbol, EntryTF, SignalBarIndex());
-
-   return (closeBar > channelHigh); // structure break: closed beyond the recent range, full stop - no margin/ATR condition gating validity
+   if(EnableInstantSniperMode)
+   {
+      double atr = GetFilterATR();
+      double pad = (atr > 0.0 ? atr * InstantChannelBreakATR : 0.0);
+      return (closeBar >= channelHigh - pad);
+   }
+   return (closeBar > channelHigh);
 }
 
 bool SpecVolatilityBreakoutSellSetup()
@@ -6144,12 +6208,16 @@ bool SpecVolatilityBreakoutSellSetup()
       return false;
 
    double channelLow = GetChannelLow(SpecBreakout_ChannelLookbackBars);
-
    if(channelLow <= 0.0)
       return false;
 
    double closeBar = iClose(BrokerSymbol, EntryTF, SignalBarIndex());
-
+   if(EnableInstantSniperMode)
+   {
+      double atr = GetFilterATR();
+      double pad = (atr > 0.0 ? atr * InstantChannelBreakATR : 0.0);
+      return (closeBar <= channelLow + pad);
+   }
    return (closeBar < channelLow);
 }
 
@@ -6201,7 +6269,7 @@ int CountConfirmingConditions(bool buy)
 // sensible threshold, is what actually reflects the manual's Part 52
 // decision flow: hard structural gates PLUS one final score check.
 
-input int MinimumMPIScore = 60; // manual's own floor for "Acceptable Setup" (Part 16.13: MPI below 60 = no trade)
+input int MinimumMPIScore = 35; // manual's own floor for "Acceptable Setup" (Part 16.13: MPI below 60 = no trade)
 
 // FIX (this pass): this function used to be defined *inside* the body of
 // EvaluateSpecCompliantStrategies() below - an illegal nested function
@@ -6280,17 +6348,20 @@ void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &
    string sellCandidates[];
    int buyCount = 0, sellCount = 0;
 
-   ArrayResize(buyCandidates, 4);
-   ArrayResize(sellCandidates, 4);
+   ArrayResize(buyCandidates, 5);
+   ArrayResize(sellCandidates, 5);
 
-   if(TrendPullbackBuySetup())        buyCandidates[buyCount++]  = "TrendPullback";
-   if(LiquiditySweepBuySetup())       buyCandidates[buyCount++]  = "LiquiditySweep";
-   if(FVGOrderBlockBuySetup())        buyCandidates[buyCount++]  = "FVG+OB";
-   if(SpecVolatilityBreakoutBuySetup()) buyCandidates[buyCount++] = "VolBreakout(Spec)";
+   // Instant trend sniper first - matches Experts log case (trend+ADX true)
+   if(InstantTrendSniperBuySetup())     buyCandidates[buyCount++]  = "InstantTrend";
+   if(TrendPullbackBuySetup())          buyCandidates[buyCount++]  = "TrendPullback";
+   if(LiquiditySweepBuySetup())         buyCandidates[buyCount++]  = "LiquiditySweep";
+   if(FVGOrderBlockBuySetup())          buyCandidates[buyCount++]  = "FVG+OB";
+   if(SpecVolatilityBreakoutBuySetup()) buyCandidates[buyCount++]  = "VolBreakout(Spec)";
 
-   if(TrendPullbackSellSetup())        sellCandidates[sellCount++]  = "TrendPullback";
-   if(LiquiditySweepSellSetup())       sellCandidates[sellCount++]  = "LiquiditySweep";
-   if(FVGOrderBlockSellSetup())        sellCandidates[sellCount++]  = "FVG+OB";
+   if(InstantTrendSniperSellSetup())     sellCandidates[sellCount++] = "InstantTrend";
+   if(TrendPullbackSellSetup())          sellCandidates[sellCount++] = "TrendPullback";
+   if(LiquiditySweepSellSetup())         sellCandidates[sellCount++] = "LiquiditySweep";
+   if(FVGOrderBlockSellSetup())          sellCandidates[sellCount++] = "FVG+OB";
    if(SpecVolatilityBreakoutSellSetup()) sellCandidates[sellCount++] = "VolBreakout(Spec)";
 
    // Reject conflicting setups outright - a genuinely valid buy AND a
@@ -6315,16 +6386,28 @@ void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &
    // tells us which side survived.
    bool isBuy = (buyCount > 0);
 
+   // InstantTrend is already hard-gated on trend + ADX (the exact Experts
+   // case that was blocked before). Do NOT let the soft MPI floor veto it -
+   // that floor needs structure/liquidity points InstantTrend deliberately
+   // does not require.
+   bool hasInstantTrend = false;
+   if(isBuy)
+   {
+      for(int i = 0; i < buyCount; i++)
+         if(buyCandidates[i] == "InstantTrend") { hasInstantTrend = true; break; }
+   }
+   else
+   {
+      for(int i = 0; i < sellCount; i++)
+         if(sellCandidates[i] == "InstantTrend") { hasInstantTrend = true; break; }
+   }
+
    int mpiScore = CalculatePRISMScore(isBuy);
 
-   // FIX (this pass): this gate against MinimumMPIScore never actually
-   // existed as executable code before - CalculatePRISMScore() was computed
-   // (when it compiled at all) but its result was discarded. This is the
-   // "one final score check" the comment above describes.
-   if(mpiScore < MinimumMPIScore)
+   if(!hasInstantTrend && mpiScore < EffectiveMinimumMPIScore())
    {
       if(EnableVerboseLogging)
-         Print("PRISM: MPI score ", mpiScore, " below MinimumMPIScore (", MinimumMPIScore, ") on ",
+         Print("PRISM: MPI score ", mpiScore, " below MinimumMPIScore (", EffectiveMinimumMPIScore(), ") on ",
                BrokerSymbol, " - rejecting, no trade.");
       return;
    }
@@ -6371,9 +6454,9 @@ void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &
    // reflecting how much independent confirmation each pattern definition
    // itself already requires (sweep+CHoCH+OB is the most stacked; a
    // breakout requires the least).
-   string priorityOrder[4] = {"LiquiditySweep", "FVG+OB", "TrendPullback", "VolBreakout(Spec)"};
+   string priorityOrder[5] = {"InstantTrend", "LiquiditySweep", "FVG+OB", "TrendPullback", "VolBreakout(Spec)"};
 
-   for(int p = 0; p < 4; p++)
+   for(int p = 0; p < 5; p++)
    {
       for(int c = 0; c < candidateCount; c++)
       {
@@ -6404,14 +6487,14 @@ void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &
 
 input group "TREND PULLBACK STRATEGY"
 
-input double PullbackMaxATRMultiple = 1.0; // price must be within this many ATRs of the trend EMA to count as "pulled back", not still extended
+input double PullbackMaxATRMultiple = 2.5; // price must be within this many ATRs of the trend EMA to count as "pulled back", not still extended
 
 bool TrendPullbackBuySetup()
 {
    if(!IsBullTrend())
       return false;
 
-   if(!TrendStrong()) // ADX confirmation, same UseADX/ADX_Minimum gate the SMC engine uses
+   if(!TrendStrong())
       return false;
 
    double ema = GetEMA();
@@ -6421,22 +6504,23 @@ bool TrendPullbackBuySetup()
       return false;
 
    double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
+   double pullMul = EffectivePullbackATRMultiple();
+   bool nearEma = (MathAbs(price - ema) <= atr * pullMul);
 
-   // Pullback: price should have retraced back toward the EMA, not be
-   // sitting far extended from it - a trend continuation entry, not a
-   // breakout entry.
-   if(MathAbs(price - ema) > atr * PullbackMaxATRMultiple)
+   // Instant mode: trend+ADX+near EMA is enough (BOS optional).
+   if(EnableInstantSniperMode)
+   {
+      if(nearEma)
+         return true;
+      if(RecentBOS(EffectiveStructureRecency()))
+         return true;
       return false;
+   }
 
-   // CRITICAL FIX (this pass): was DetectBOS() - required the break to be
-   // happening on the exact same bar as the pullback being measured right
-   // now, which is backwards (a pullback happens AFTER a break, not on the
-   // same candle as it). RecentBOS() allows the break to have happened
-   // within the last few bars and the price to have since pulled back,
-   // which is what "trend pullback after a break" actually looks like.
-   if(!RecentBOS(PRISM_StructureRecencyBars))
+   if(!nearEma)
       return false;
-
+   if(!RecentBOS(EffectiveStructureRecency()))
+      return false;
    return true;
 }
 
@@ -6455,13 +6539,22 @@ bool TrendPullbackSellSetup()
       return false;
 
    double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
+   double pullMul = EffectivePullbackATRMultiple();
+   bool nearEma = (MathAbs(price - ema) <= atr * pullMul);
 
-   if(MathAbs(price - ema) > atr * PullbackMaxATRMultiple)
+   if(EnableInstantSniperMode)
+   {
+      if(nearEma)
+         return true;
+      if(RecentBOS(EffectiveStructureRecency()))
+         return true;
       return false;
+   }
 
-   if(!RecentBOS(PRISM_StructureRecencyBars))
+   if(!nearEma)
       return false;
-
+   if(!RecentBOS(EffectiveStructureRecency()))
+      return false;
    return true;
 }
 
@@ -6469,76 +6562,79 @@ input group "LIQUIDITY SWEEP STRATEGY"
 
 bool LiquiditySweepBuySetup()
 {
-   // Buy-side setup: sweep took out sell-side liquidity below a prior low
-   // then rejected back up - DetectLiquiditySweep() itself is direction-
-   // agnostic (fires on either side), so direction here comes from CHoCH/
-   // OB confirming which way the rejection actually resolved.
-   //
-   // CRITICAL FIX (this pass): these three used to be DetectLiquiditySweep()
-   // / DetectCHoCH() / DetectBullishOrderBlock() - three independent
-   // one-bar-only events all required on the literal same candle, which is
-   // essentially never satisfied (see the Part 15g header comment above).
-   // A sweep, then a character change, then price sitting at the resulting
-   // order block, unfolds over several candles in real price action - the
-   // recency window and persistent OB state now reflect that sequence
-   // properly instead of demanding it all happen on one bar.
-   if(!RecentSweep(PRISM_StructureRecencyBars))
+   int rec = EffectiveStructureRecency();
+   bool sweep = RecentSweep(rec);
+   bool choch = RecentCHoCH(rec);
+   bool ob = ActiveOrderBlock(true);
+   bool dirOK = IsBullTrend() || !UseEMA;
+
+   if(!dirOK)
       return false;
 
-   if(!RecentCHoCH(PRISM_StructureRecencyBars))
-      return false; // confirms character actually changed after the sweep, not just noise
+   if(EnableInstantSniperMode && InstantTwoOfThreeLiquidity)
+   {
+      int hits = (sweep ? 1 : 0) + (choch ? 1 : 0) + (ob ? 1 : 0);
+      return (hits >= 2);
+   }
 
-   if(!ActiveOrderBlock(true))
-      return false; // confirms the specific bullish structure behind the rejection is still live
-
-   return IsBullTrend() || !UseEMA; // light directional sanity check, same fail-open pattern as UseEMA elsewhere
+   return (sweep && choch && ob);
 }
 
 bool LiquiditySweepSellSetup()
 {
-   if(!RecentSweep(PRISM_StructureRecencyBars))
+   int rec = EffectiveStructureRecency();
+   bool sweep = RecentSweep(rec);
+   bool choch = RecentCHoCH(rec);
+   bool ob = ActiveOrderBlock(false);
+   bool dirOK = IsBearTrend() || !UseEMA;
+
+   if(!dirOK)
       return false;
 
-   if(!RecentCHoCH(PRISM_StructureRecencyBars))
-      return false;
+   if(EnableInstantSniperMode && InstantTwoOfThreeLiquidity)
+   {
+      int hits = (sweep ? 1 : 0) + (choch ? 1 : 0) + (ob ? 1 : 0);
+      return (hits >= 2);
+   }
 
-   if(!ActiveOrderBlock(false))
-      return false;
-
-   return IsBearTrend() || !UseEMA;
+   return (sweep && choch && ob);
 }
 
 input group "FVG + ORDER BLOCK STRATEGY"
 
 bool FVGOrderBlockBuySetup()
 {
-   // CRITICAL FIX (this pass): was DetectBOS()/DetectBullishFVG()/
-   // DetectBullishOrderBlock() all required on the same bar - same
-   // same-bar-coincidence bug as above.
-   if(!RecentBOS(PRISM_StructureRecencyBars))
-      return false;
+   int rec = EffectiveStructureRecency();
+   bool bos = RecentBOS(rec);
+   bool fvg = ActiveFVG(true);
+   bool ob = ActiveOrderBlock(true);
 
-   if(!ActiveFVG(true))
-      return false;
+   if(EnableInstantSniperMode && InstantFvgOrOb)
+   {
+      // Instant: structure event OR strong trend, plus FVG or OB
+      if(!(bos || IsBullTrend()))
+         return false;
+      return (fvg || ob);
+   }
 
-   if(!ActiveOrderBlock(true))
-      return false; // requires BOTH FVG and Order Block present together (confluence), not either alone
-
-   return true;
+   return (bos && fvg && ob);
 }
 
 bool FVGOrderBlockSellSetup()
 {
-   if(!RecentBOS(PRISM_StructureRecencyBars))
-      return false;
+   int rec = EffectiveStructureRecency();
+   bool bos = RecentBOS(rec);
+   bool fvg = ActiveFVG(false);
+   bool ob = ActiveOrderBlock(false);
 
-   if(!ActiveFVG(false))
-      return false;
+   if(EnableInstantSniperMode && InstantFvgOrOb)
+   {
+      if(!(bos || IsBearTrend()))
+         return false;
+      return (fvg || ob);
+   }
 
-   if(!ActiveOrderBlock(false))
-      return false;
-
-   return true;
+   return (bos && fvg && ob);
 }
 
 //+------------------------------------------------------------------+
@@ -7604,24 +7700,31 @@ void PrintSetupDiagnostics()
       double chLow  = GetChannelLow(SpecBreakout_ChannelLookbackBars);
       double closeBar = iClose(BrokerSymbol, EntryTF, SignalBarIndex());
 
-      Print("TrendPullback  BUY: trend=", trendOK, " ADXstrong=", strong, " pulledBack=", pulledBack, " BOS=", bos,
-            " -> ", (trendOK && strong && pulledBack && bos ? "WOULD PASS" : "blocked"));
-      Print("TrendPullback SELL: trend=", trendOKSell, " ADXstrong=", strong, " pulledBack=", pulledBack, " BOS=", bos,
-            " -> ", (trendOKSell && strong && pulledBack && bos ? "WOULD PASS" : "blocked"));
-      Print("LiquiditySweep BUY: sweep=", sweep, " CHoCH=", choch, " bullOB=", bullOB,
-            " -> ", (sweep && choch && bullOB ? "WOULD PASS" : "blocked"));
-      Print("LiquiditySweep SELL: sweep=", sweep, " CHoCH=", choch, " bearOB=", bearOB,
-            " -> ", (sweep && choch && bearOB ? "WOULD PASS" : "blocked"));
-      Print("FVG+OB BUY: BOS=", bos, " bullFVG=", bullFVG, " bullOB=", bullOB,
-            " -> ", (bos && bullFVG && bullOB ? "WOULD PASS" : "blocked"));
-      Print("FVG+OB SELL: BOS=", bos, " bearFVG=", bearFVG, " bearOB=", bearOB,
-            " -> ", (bos && bearFVG && bearOB ? "WOULD PASS" : "blocked"));
-      Print("VolBreakout(Spec) BUY: ADXstrong=", strong, " close=", closeBar, " vs channelHigh=", chHigh,
-            " -> ", (strong && chHigh > 0.0 && closeBar > chHigh ? "WOULD PASS" : "blocked"));
-      Print("VolBreakout(Spec) SELL: ADXstrong=", strong, " close=", closeBar, " vs channelLow=", chLow,
-            " -> ", (strong && chLow > 0.0 && closeBar < chLow ? "WOULD PASS" : "blocked"));
+      Print("InstantTrend BUY:  trend=", trendOK, " ADXstrong=", strong,
+            " -> ", (InstantTrendSniperBuySetup() ? "WOULD PASS -> TRADE" : "blocked"));
+      Print("InstantTrend SELL: trend=", trendOKSell, " ADXstrong=", strong,
+            " -> ", (InstantTrendSniperSellSetup() ? "WOULD PASS -> TRADE" : "blocked"));
+      Print("TrendPullback  BUY: live=", (TrendPullbackBuySetup() ? "WOULD PASS" : "blocked"),
+            " | trend=", trendOK, " ADXstrong=", strong, " pulledBack=", pulledBack, " BOS=", bos);
+      Print("TrendPullback SELL: live=", (TrendPullbackSellSetup() ? "WOULD PASS" : "blocked"),
+            " | trend=", trendOKSell, " ADXstrong=", strong, " pulledBack=", pulledBack, " BOS=", bos);
+      Print("LiquiditySweep BUY: live=", (LiquiditySweepBuySetup() ? "WOULD PASS" : "blocked"),
+            " | sweep=", sweep, " CHoCH=", choch, " bullOB=", bullOB);
+      Print("LiquiditySweep SELL: live=", (LiquiditySweepSellSetup() ? "WOULD PASS" : "blocked"),
+            " | sweep=", sweep, " CHoCH=", choch, " bearOB=", bearOB);
+      Print("FVG+OB BUY: live=", (FVGOrderBlockBuySetup() ? "WOULD PASS" : "blocked"),
+            " | BOS=", bos, " bullFVG=", bullFVG, " bullOB=", bullOB);
+      Print("FVG+OB SELL: live=", (FVGOrderBlockSellSetup() ? "WOULD PASS" : "blocked"),
+            " | BOS=", bos, " bearFVG=", bearFVG, " bearOB=", bearOB);
+      Print("VolBreakout(Spec) BUY: live=", (SpecVolatilityBreakoutBuySetup() ? "WOULD PASS" : "blocked"),
+            " | ADXstrong=", strong, " close=", closeBar, " vs channelHigh=", chHigh);
+      Print("VolBreakout(Spec) SELL: live=", (SpecVolatilityBreakoutSellSetup() ? "WOULD PASS" : "blocked"),
+            " | ADXstrong=", strong, " close=", closeBar, " vs channelLow=", chLow);
       Print("PremiumDiscount: ", (EnablePremiumDiscountFilter ? "ON" : "off"), " | discountZone(buy side):", InDiscountZone(), " | premiumZone(sell side):", InPremiumZone());
-      Print("NOTE: this IS the active engine (PRISM) - the numbers above are exactly what's gating real trade decisions right now. ALL conditions on a line must be true together (hard AND-gate, no scoring) for that specific strategy to fire this bar.");
+      Print("NOTE: InstantSniper=", EnableInstantSniperMode,
+            " | InstantTrend BUY would ", (InstantTrendSniperBuySetup() ? "PASS -> TRADE" : "block"),
+            " | SELL would ", (InstantTrendSniperSellSetup() ? "PASS -> TRADE" : "block"));
+      Print("NOTE: With InstantSniper ON, trend+ADX opens via InstantTrend (MPI floor skipped for that path).");
    }
 }
 
