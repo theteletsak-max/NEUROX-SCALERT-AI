@@ -1,24 +1,17 @@
-SNIPER AI — DOWNLOAD / COMPILE
-==============================
+SNIPER AI — USE THIS FILE (UNCACHED)
+====================================
 
-FILE (use this):
-  https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/forex-trading-robot-b12d/SNIPER_AI.mq5
+https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/forex-trading-robot-b12d/SNIPER_AI_OK9.mq5
 
 TOP MUST SHOW:
   BUILD_ID: SA_COMPILE_OK_9
 
-STEPS:
-1. Close MetaEditor completely
-2. In MQL5/Experts DELETE all old:
-   SniperAI.mq5, SniperAI.ex5, SNIPER_AI.mq5, SNIPER_AI.ex5, SNIPER_AI_FIXED.mq5
-3. Save the new SNIPER_AI.mq5 into MQL5/Experts
-4. Open it in MetaEditor
-5. Confirm BUILD_ID: SA_COMPILE_OK_9
-6. Press F7
+1. Close MetaEditor
+2. Delete ALL old Sniper/SNIPER mq5+ex5 in MQL5/Experts
+3. Save SNIPER_AI_OK9.mq5 into MQL5/Experts
+4. Open it, confirm SA_COMPILE_OK_9
+5. F7
 
-ERROR CHECK DONE ON THIS BUILD:
-- removed TRADE_RETCODE_BUSY (invalid identifier)
-- removed all TRADE_RETCODE_* usage
-- removed input group / strict / LOG_LEVEL
-- fixed const object calling non-const methods (real compile error)
-- trade comment = SNIPER AI
+Fixed in this build:
+- TRADE_RETCODE_BUSY removed
+- const CSaSymbolCache method-call compile error fixed
