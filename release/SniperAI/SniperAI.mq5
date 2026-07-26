@@ -1,16 +1,14 @@
 //+------------------------------------------------------------------+
-//| SNIPER_AI_OK11.mq5                                                |
-//| BUILD_ID: SA_COMPILE_OK_11                                        |
+//| SNIPER_AI_OK12.mq5                                                |
+//| BUILD_ID: SA_COMPILE_OK_12                                        |
 //| SNIPER AI                                                         |
-//| Put in MQL5/Experts, open this file, press F7                     |
+//| ZERO includes. Raw OrderSend only. Put in Experts, press F7.      |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version   "1.00"
 #property description "SNIPER AI institutional sniper EA"
 #property description "H4 H1 M5 high precision 24/7"
-
-#include <Trade/Trade.mqh>
 
 #define SA_NAME "SNIPER AI"
 #define SA_UI   "SA_UI_"
@@ -45,7 +43,6 @@ input bool   InpLogEvents          = true;
 input int    InpDashEveryTicks     = 8;
 
 //--- globals
-CTrade   g_trade;
 int      g_atrHandle = INVALID_HANDLE;
 datetime g_lastM5 = 0;
 datetime g_lastEntryM5 = 0;
@@ -368,23 +365,72 @@ bool SaBuildStops(int side, int mkt, double atr, double &entry, double &sl, doub
    return true;
   }
 
+
+//+------------------------------------------------------------------+
+ENUM_ORDER_TYPE_FILLING SaFilling()
+  {
+   long mode = SymbolInfoInteger(_Symbol, SYMBOL_FILLING_MODE);
+   if((mode & SYMBOL_FILLING_FOK) == SYMBOL_FILLING_FOK)
+      return ORDER_FILLING_FOK;
+   if((mode & SYMBOL_FILLING_IOC) == SYMBOL_FILLING_IOC)
+      return ORDER_FILLING_IOC;
+   return ORDER_FILLING_RETURN;
+  }
+
+//+------------------------------------------------------------------+
+bool SaModify(ulong ticket, string symbol, double sl, double tp)
+  {
+   MqlTradeRequest req;
+   MqlTradeResult res;
+   ZeroMemory(req);
+   ZeroMemory(res);
+   req.action   = TRADE_ACTION_SLTP;
+   req.position = ticket;
+   req.symbol   = symbol;
+   req.sl       = sl;
+   req.tp       = tp;
+   req.magic    = (ulong)InpMagic;
+   return OrderSend(req, res);
+  }
+
 //+------------------------------------------------------------------+
 bool SaSend(int side, double lots, double sl, double tp, string &why)
   {
-   g_trade.SetExpertMagicNumber((ulong)InpMagic);
-   g_trade.SetDeviationInPoints(InpSlippage);
-   g_trade.SetAsyncMode(false);
-   g_trade.SetTypeFillingBySymbol(_Symbol);
-
    for(int attempt = 1; attempt <= InpMaxRetries; attempt++)
      {
       ResetLastError();
-      bool ok = false;
-      if(side == 1)
-         ok = g_trade.Buy(lots, _Symbol, SymbolInfoDouble(_Symbol, SYMBOL_ASK), sl, tp, SA_NAME);
-      else
-         ok = g_trade.Sell(lots, _Symbol, SymbolInfoDouble(_Symbol, SYMBOL_BID), sl, tp, SA_NAME);
+      MqlTradeRequest req;
+      MqlTradeResult res;
+      ZeroMemory(req);
+      ZeroMemory(res);
 
+      double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+      double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+      if(bid <= 0.0 || ask <= 0.0)
+        {
+         why = "no quotes";
+         g_execStatus = why;
+         if(attempt < InpMaxRetries)
+           {
+            Sleep(150 * attempt);
+            continue;
+           }
+         return false;
+        }
+
+      req.action       = TRADE_ACTION_DEAL;
+      req.symbol       = _Symbol;
+      req.volume       = lots;
+      req.type         = (side == 1 ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
+      req.price        = (side == 1 ? ask : bid);
+      req.sl           = sl;
+      req.tp           = tp;
+      req.deviation    = InpSlippage;
+      req.magic        = (ulong)InpMagic;
+      req.comment      = SA_NAME;
+      req.type_filling = SaFilling();
+
+      bool ok = OrderSend(req, res);
       if(ok)
         {
          why = "filled";
@@ -392,8 +438,7 @@ bool SaSend(int side, double lots, double sl, double tp, string &why)
          return true;
         }
 
-      int rc = (int)g_trade.ResultRetcode();
-      why = StringFormat("retcode=%d %s", rc, TradeServerReturnCodeDescription((uint)rc));
+      why = StringFormat("retcode=%d err=%d", (int)res.retcode, GetLastError());
       g_execStatus = why;
       if(attempt < InpMaxRetries)
         {
@@ -446,7 +491,7 @@ void SaManagePositions()
          if(!already)
            {
             double newSL = NormalizeDouble(open, (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS));
-            g_trade.PositionModify(ticket, newSL, tp);
+            SaModify(ticket, symbol, newSL, tp);
             sl = newSL;
            }
         }
@@ -466,13 +511,13 @@ void SaManagePositions()
               {
                double nsl = NormalizeDouble(bid - step, digits);
                if(nsl > sl + point)
-                  g_trade.PositionModify(ticket, nsl, tp);
+                  SaModify(ticket, symbol, nsl, tp);
               }
             else
               {
                double nsl = NormalizeDouble(ask + step, digits);
                if(sl == 0.0 || nsl < sl - point)
-                  g_trade.PositionModify(ticket, nsl, tp);
+                  SaModify(ticket, symbol, nsl, tp);
               }
            }
         }
@@ -480,7 +525,7 @@ void SaManagePositions()
   }
 
 //+------------------------------------------------------------------+
-void SaUiBox(string id, int x, int y, int w, int h, color bg, color border)
+void SaUiBox(string id, int x, int y, int w, int h, int bg, int border)
   {
    string name = SA_UI + id;
    if(ObjectFind(0, name) < 0)
@@ -499,7 +544,7 @@ void SaUiBox(string id, int x, int y, int w, int h, color bg, color border)
   }
 
 //+------------------------------------------------------------------+
-void SaUiLbl(string id, int x, int y, string text, color clr, int size)
+void SaUiLbl(string id, int x, int y, string text, int clr, int size)
   {
    string name = SA_UI + id;
    if(ObjectFind(0, name) < 0)
@@ -524,14 +569,14 @@ void SaDashboard()
       return;
 
    int x0 = 14, y0 = 16, w = 300, h = 410;
-   SaUiBox("bg", x0, y0, w, h, C'16,16,20', C'190,25,45');
-   SaUiBox("hdr", x0, y0, w, 42, C'130,8,28', C'230,45,65');
+   SaUiBox("bg", x0, y0, w, h, 1314832, 2955710);
+   SaUiBox("hdr", x0, y0, w, 42, 1837186, 4271590);
 
    int x = x0 + 12;
    int y = y0 + 10;
    SaUiLbl("t", x, y, SA_NAME, clrWhite, 14);
    y = y0 + 48;
-   SaUiLbl("sub", x, y, "24/7 | HIGH PRECISION", C'230,190,190', 8);
+   SaUiLbl("sub", x, y, "24/7 | HIGH PRECISION", 12500710, 8);
 
    string bias = "NEUTRAL";
    if(g_bias == 1)
@@ -540,16 +585,16 @@ void SaDashboard()
       bias = "BEARISH";
 
    string sig = "FLAT";
-   color sigClr = clrSilver;
+   int sigClr = (int)clrSilver;
    if(g_side == 1)
      {
       sig = "BUY";
-      sigClr = C'45,230,130';
+      sigClr = 8578605;
      }
    if(g_side == -1)
      {
       sig = "SELL";
-      sigClr = C'255,75,75';
+      sigClr = 4934655;
      }
 
    string path = "-";
@@ -568,27 +613,27 @@ void SaDashboard()
 
    y = y0 + 70;
    SaUiLbl("sym", x, y, "SYMBOL      " + _Symbol, clrWhite, 10); y += 17;
-   SaUiLbl("tf", x, y, "STACK       H4 / H1 / M5", C'180,200,220', 9); y += 17;
+   SaUiLbl("tf", x, y, "STACK       H4 / H1 / M5", 14469300, 9); y += 17;
    SaUiLbl("bias", x, y, "BIAS        " + bias, clrAqua, 10); y += 17;
    SaUiLbl("sig", x, y, "SIGNAL      " + sig, sigClr, 11); y += 17;
    SaUiLbl("path", x, y, "ENTRY TYPE  " + path, clrGold, 10); y += 17;
    SaUiLbl("score", x, y, StringFormat("SETUP SCORE %d", g_score), clrOrange, 10); y += 17;
    SaUiLbl("open", x, y, StringFormat("OPEN        %d / %d", SaCountMagic(), InpMaxTrades), clrWhite, 10); y += 17;
    SaUiLbl("lot", x, y, StringFormat("LOT         %.2f", InpLot), clrWhite, 10); y += 17;
-   SaUiLbl("bal", x, y, StringFormat("BALANCE     %.2f", AccountInfoDouble(ACCOUNT_BALANCE)), C'180,220,255', 9); y += 16;
-   SaUiLbl("eq", x, y, StringFormat("EQUITY      %.2f", AccountInfoDouble(ACCOUNT_EQUITY)), C'180,220,255', 9); y += 16;
+   SaUiLbl("bal", x, y, StringFormat("BALANCE     %.2f", AccountInfoDouble(ACCOUNT_BALANCE)), 16768180, 9); y += 16;
+   SaUiLbl("eq", x, y, StringFormat("EQUITY      %.2f", AccountInfoDouble(ACCOUNT_EQUITY)), 16768180, 9); y += 16;
    double fl = SaFloating();
-   color flClr = C'255,100,100';
+   int flClr = 6579455;
    if(fl >= 0.0)
-      flClr = C'80,220,140';
+      flClr = 9231440;
    SaUiLbl("fl", x, y, StringFormat("FLOATING    %.2f", fl), flClr, 9); y += 16;
    SaUiLbl("spr", x, y, StringFormat("SPREAD      %.1f pts", g_spreadPts), clrSilver, 9); y += 16;
    SaUiLbl("atr", x, y, StringFormat("ATR(H1)     %.5f", g_atr), clrSilver, 9); y += 16;
-   SaUiLbl("mkt", x, y, "MARKET      " + mkt, C'160,255,170', 9); y += 16;
-   SaUiLbl("exec", x, y, "EXECUTION   " + g_execStatus, C'255,140,140', 8); y += 15;
-   SaUiLbl("ea", x, y, "EA STATUS   " + g_eaStatus, C'200,200,210', 8); y += 15;
-   SaUiLbl("br", x, y, "BROKER      " + AccountInfoString(ACCOUNT_COMPANY), C'160,160,170', 8); y += 15;
-   SaUiLbl("srv", x, y, "SERVER      " + TimeToString(TimeTradeServer(), TIME_DATE|TIME_SECONDS), C'140,140,150', 8); y += 16;
+   SaUiLbl("mkt", x, y, "MARKET      " + mkt, 11206560, 9); y += 16;
+   SaUiLbl("exec", x, y, "EXECUTION   " + g_execStatus, 9211135, 8); y += 15;
+   SaUiLbl("ea", x, y, "EA STATUS   " + g_eaStatus, 13813960, 8); y += 15;
+   SaUiLbl("br", x, y, "BROKER      " + AccountInfoString(ACCOUNT_COMPANY), 11182240, 8); y += 15;
+   SaUiLbl("srv", x, y, "SERVER      " + TimeToString(TimeTradeServer(), (TIME_DATE|TIME_SECONDS)), 9866380, 8); y += 16;
    string rs = g_reason;
    if(StringLen(rs) > 44)
       rs = StringSubstr(rs, 0, 44) + "...";
@@ -977,10 +1022,6 @@ int OnInit()
       return INIT_FAILED;
      }
 
-   g_trade.SetExpertMagicNumber((ulong)InpMagic);
-   g_trade.SetDeviationInPoints(InpSlippage);
-   g_trade.SetAsyncMode(false);
-
    g_dayStartEquity = AccountInfoDouble(ACCOUNT_EQUITY);
    g_eaStatus = "online";
    g_lastAction = "online 24/7";
@@ -1036,26 +1077,4 @@ void OnTick()
      }
   }
 
-//+------------------------------------------------------------------+
-void OnTradeTransaction(const MqlTradeTransaction &trans,
-                        const MqlTradeRequest &request,
-                        const MqlTradeResult &result)
-  {
-   if(trans.type != TRADE_TRANSACTION_DEAL_ADD)
-      return;
-   HistorySelect(0, TimeCurrent());
-   if(!HistoryDealSelect(trans.deal))
-      return;
-   if((long)HistoryDealGetInteger(trans.deal, DEAL_MAGIC) != InpMagic)
-      return;
-   if((ENUM_DEAL_ENTRY)HistoryDealGetInteger(trans.deal, DEAL_ENTRY) != DEAL_ENTRY_OUT)
-      return;
-   double profit = HistoryDealGetDouble(trans.deal, DEAL_PROFIT)
-                   + HistoryDealGetDouble(trans.deal, DEAL_SWAP)
-                   + HistoryDealGetDouble(trans.deal, DEAL_COMMISSION);
-   if(profit < 0.0)
-      g_consecLoss++;
-   else
-      g_consecLoss = 0;
-  }
 //+------------------------------------------------------------------+

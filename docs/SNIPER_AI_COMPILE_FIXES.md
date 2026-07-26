@@ -1,19 +1,19 @@
 # SNIPER AI - MetaEditor compile surface
 
-Canonical download: `SNIPER_AI_OK11.mq5` (`BUILD_ID: SA_COMPILE_OK_11`)
+Canonical download: `SNIPER_AI_OK12.mq5` (`BUILD_ID: SA_COMPILE_OK_12`)
 
 Also mirrored as `SNIPER_AI.mq5` / `release/deliver/SNIPER_AI.mq5`.
 
-Deliberately avoided (common F7 failures):
+Deliberately avoided:
 
 | Pattern | Why avoided |
 |---------|-------------|
+| `#include <Trade/Trade.mqh>` / `CTrade` | Eliminated; raw `OrderSend` only |
 | `#property strict` | MQL4-only |
 | `input group` | Missing on older builds |
-| Negative enum literals | Some compilers reject |
-| Manual `SYMBOL_FILLING_*` bit tests | Prefer `SetTypeFillingBySymbol` |
-| Hard-coded `TRADE_RETCODE_*` (incl. BUSY) | Not portable; portable retry + `ResultComment` |
-| Non-ASCII punctuation in source | Encoding issues in some MetaEditor installs |
-| Heavy const-ref class graphs | Triggered prior `const` method errors |
+| Hard-coded `TRADE_RETCODE_*` (incl. BUSY) | Not portable |
+| Non-ASCII punctuation | Encoding issues |
+| `SetAsyncMode` / `SetTypeFillingBySymbol` | Avoid optional CTrade APIs |
+| `OnTradeTransaction` | Reduced compile surface |
 
-Expect **0 errors** on a current MetaTrader 5 MetaEditor build.
+Expect **0 errors** on MetaTrader 5 MetaEditor.
