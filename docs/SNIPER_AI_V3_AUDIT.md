@@ -1,27 +1,26 @@
-# SNIPER AI V3 — Engineering Audit & Rebuild Notes
+# SNIPER AI — Audit (EXEC FIX V4)
 
-`BUILD_ID: SA_INSTITUTIONAL_V3`
+`BUILD_ID: SA_EXEC_FIX_V4`
 
-## Audit findings (pre-rebuild) and resolutions
+## Critical execution bug (fixed)
 
-| Finding | Resolution |
-|---------|------------|
-| Rate buffers deep-copied every dashboard tick | Full kill-chain only on new M5; dash throttle updates quotes only |
-| ATR buffer recopied every tick | ATR refresh gated on H1 bar stamp |
-| Zone engine mixed Disp/FVG/OB | Split into Displacement / FVG / OB engines + compositor |
-| FVG scored even when weak | Freshness/mitigation check before full score |
-| OB only bar[2] | Search last opposing candle in [2..6] before impulse |
-| BE/trail broke after BE (risk≈0) | Recover R from TP / reward ratio |
-| `#property strict` / `input group` / neg enums | Removed (MetaEditor portability) |
-| Custom filling bitmasks / retcode enums | `SetTypeFillingBySymbol` + portable retry |
-| Multiple deliverable filenames | Canonical `SNIPER_AI.mq5` only; OK9/FIXED/v2 copies removed |
-| Comment pollution | Exact comment `SNIPER AI` |
+V3 required **BOS + displacement + OB/FVG simultaneously on H1 bar[1]**.
+
+That contradicts the sniper strategy (impulse creates zone → pullback → M5 entry).
+On pullback bars displacement is false → **zero trades**.
+
+## V4 fixes
+
+- BOS/CHoCH persisted over structure lookback (closed bars only)
+- Displacement / FVG / OB scanned over recent lookback + mitigation checks
+- Continuation uses recent displacement as zone creator, not entry-bar impulse
+- Location = pullback into OB/FVG
+- M5 confirmation kept objective/non-repainting, slightly more executable
+- Trade attempt always runs on new M5 (chart mode and fallback)
+- Dashboard/lastAction shows why a setup did not fire
+- Live stop re-validation on each execution retry
 
 ## Strategy preserved
 
-H4 bias → H1 structure / liquidity / zones → M5 confirmation  
-Continuation + Reversal · max 3 · lot 0.01 · 1.5×ATR · 2R · BE +1R · 24/7 adaptive (no news block)
-
-## Architecture (single .mq5)
-
-Config · Symbol · MarketData · Swing · Structure · Liquidity · Displacement · FVG · OB · Volatility · Entry · Decision · Risk · Money · Position · Execution · Statistics · Dashboard · System Core pipeline
+H4 bias → H1 BOS/liquidity/zones → M5 confirm  
+Continuation + Reversal · max 3 · ATR SL · 2R · BE · comment `SNIPER AI` · 24/7 adaptive
