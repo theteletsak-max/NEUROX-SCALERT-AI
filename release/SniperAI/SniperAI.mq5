@@ -1099,7 +1099,7 @@ public:
          const int rc = (int)m_trade.ResultRetcode();
          why = StringFormat("retcode=%d %s", rc, m_trade.ResultRetcodeDescription());
          m_lastStatus = why;
-         // Retry a few times on any failure (no TRADE_RETCODE_* identifiers)
+         // Retry a few times on any failure (portable retry loop)
          if(attempt < InpMaxRetries)
            {
             Sleep(150 * attempt);
