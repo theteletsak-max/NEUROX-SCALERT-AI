@@ -1,31 +1,26 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_EXEC_FIX_V4                                     |
 //| SNIPER AI — institutional single-file Expert Advisor              |
 //|                                                                   |
-//| Internal engines (one responsibility each):                       |
-//|   Util / Config / Symbol / MarketData / Indicator                 |
-//|   Swing / Structure / Liquidity / Displacement / FVG / OB         |
-//|   Volatility / Confluence / Entry / Decision                      |
-//|   Risk / Money / Position / Execution / Statistics / Dashboard    |
-//|   System Core (state pipeline)                                    |
+//| Engines: Util / Config / Symbol / MarketData / Swing / Structure  |
+//| Liquidity / Displacement / FVG / OB / Volatility / Entry          |
+//| Decision / Risk / Money / Position / Execution / Statistics       |
+//| System Core                                                       |
 //|                                                                   |
-//| Strategy preserved: H4 bias → H1 setup → M5 confirm               |
+//| Strategy: H4 bias → H1 setup → M5 confirm                         |
 //| Paths: Continuation + Reversal | Comment: SNIPER AI               |
 //| Install: copy to MQL5/Experts/ → F7 → attach chart                |
 //+------------------------------------------------------------------+
 #property copyright   "SNIPER AI"
 #property link        "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version     "4.00"
+#property version     "1.00"
 #property description "SNIPER AI — institutional sniper EA (H4/H1/M5)"
 #property description "24/7 adaptive execution. No session/news blocks."
 
 #include <Trade/Trade.mqh>
 
 #define SA_COMMENT     "SNIPER AI"
-#define SA_UI_PREFIX   "SA_UI_"
 #define SA_LOG_PREFIX  "SNIPER AI | "
-#define SA_BUILD_ID    "SA_EXEC_FIX_V4"
 #define SA_H4_BARS     160
 #define SA_H1_BARS     160
 #define SA_M5_BARS     48
@@ -205,9 +200,7 @@ input double InpVolSLBoostHigh      = 1.15;
 input double InpVolSLBoostExtreme   = 1.35;
 input double InpWideSpreadAtrFrac   = 0.12;
 
-input bool   InpShowDashboard       = true;
 input bool   InpLogEvents           = true;
-input int    InpDashRefreshTicks    = 8;
 
 //==================================================================
 // UTIL / LOGGING
@@ -243,7 +236,6 @@ public:
       if(InpAtrMultSL <= 0.0 || InpRewardRatio <= 0.0) { why = "SL/TP invalid"; return false; }
       if(InpMinScore < 0 || InpMinConfluence < 1) { why = "score/confluence invalid"; return false; }
       if(InpMaxSlippagePoints < 0 || InpMaxRetries < 1) { why = "exec params invalid"; return false; }
-      if(InpDashRefreshTicks < 1) { why = "dash throttle invalid"; return false; }
       why = "ok";
       return true;
      }
@@ -1645,153 +1637,6 @@ public:
   };
 
 //==================================================================
-// DASHBOARD ENGINE (premium HUD preserved)
-//==================================================================
-class CSaDashboard
-  {
-private:
-   int m_x, m_y, m_w, m_h;
-
-   void Box(const string id, const int x, const int y, const int w, const int h,
-            const color bg, const color border)
-     {
-      const string name = SA_UI_PREFIX + id;
-      if(ObjectFind(0, name) < 0)
-         ObjectCreate(0, name, OBJ_RECTANGLE_LABEL, 0, 0, 0);
-      ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
-      ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
-      ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
-      ObjectSetInteger(0, name, OBJPROP_XSIZE, w);
-      ObjectSetInteger(0, name, OBJPROP_YSIZE, h);
-      ObjectSetInteger(0, name, OBJPROP_BGCOLOR, bg);
-      ObjectSetInteger(0, name, OBJPROP_COLOR, border);
-      ObjectSetInteger(0, name, OBJPROP_BORDER_TYPE, BORDER_FLAT);
-      ObjectSetInteger(0, name, OBJPROP_BACK, false);
-      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-      ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
-      ObjectSetInteger(0, name, OBJPROP_ZORDER, 200);
-     }
-
-   void Lbl(const string id, const int x, const int y, const string text,
-            const color clr, const int size = 9, const string font = "Consolas")
-     {
-      const string name = SA_UI_PREFIX + id;
-      if(ObjectFind(0, name) < 0)
-         ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0);
-      ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
-      ObjectSetInteger(0, name, OBJPROP_ANCHOR, ANCHOR_RIGHT_UPPER);
-      ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
-      ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
-      ObjectSetString(0, name, OBJPROP_TEXT, text);
-      ObjectSetString(0, name, OBJPROP_FONT, font);
-      ObjectSetInteger(0, name, OBJPROP_FONTSIZE, size);
-      ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
-      ObjectSetInteger(0, name, OBJPROP_BACK, false);
-      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-      ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
-      ObjectSetInteger(0, name, OBJPROP_ZORDER, 201);
-     }
-
-   string BiasTxt(const ENUM_SA_BIAS b)
-     {
-      if(b == SA_BIAS_BULL) return "BULLISH";
-      if(b == SA_BIAS_BEAR) return "BEARISH";
-      return "NEUTRAL";
-     }
-   string SideTxt(const ENUM_SA_SIDE s)
-     {
-      if(s == SA_SIDE_BUY) return "BUY";
-      if(s == SA_SIDE_SELL) return "SELL";
-      return "FLAT";
-     }
-   string PathTxt(const ENUM_SA_PATH p)
-     {
-      if(p == SA_PATH_CONTINUATION) return "CONTINUATION";
-      if(p == SA_PATH_REVERSAL) return "REVERSAL";
-      return "-";
-     }
-   string MktTxt(const ENUM_SA_MKT m)
-     {
-      if(m == SA_MKT_LOW) return "LOW VOL";
-      if(m == SA_MKT_HIGH) return "HIGH VOL";
-      if(m == SA_MKT_EXTREME) return "EXTREME VOL";
-      return "NORMAL";
-     }
-
-public:
-                     CSaDashboard(void): m_x(14), m_y(16), m_w(300), m_h(430) {}
-
-   void Destroy()
-     {
-      const int total = ObjectsTotal(0);
-      for(int i = total - 1; i >= 0; --i)
-        {
-         const string name = ObjectName(0, i);
-         if(StringFind(name, SA_UI_PREFIX) == 0)
-            ObjectDelete(0, name);
-        }
-     }
-
-   void Render(const string symbol,
-               const SaSetup &setup,
-               const int openTrades,
-               const double lot,
-               const double balance,
-               const double equity,
-               const double floating,
-               const string lastAction,
-               const string eaStatus,
-               const string execStatus,
-               const string broker)
-     {
-      Box("bg", m_x, m_y, m_w, m_h, C'16,16,20', C'190,25,45');
-      Box("hdr", m_x, m_y, m_w, 44, C'130,8,28', C'230,45,65');
-
-      const int x = m_x + 12;
-      int y = m_y + 10;
-      Lbl("t", x, y, "SNIPER AI", clrWhite, 14, "Arial Bold");
-      y = m_y + 48;
-      Lbl("sub", x, y, "24/7  |  INSTITUTIONAL V4", C'230,190,190', 8, "Arial");
-
-      color sigClr = clrSilver;
-      if(setup.side == SA_SIDE_BUY) sigClr = C'45,230,130';
-      if(setup.side == SA_SIDE_SELL) sigClr = C'255,75,75';
-
-      y = m_y + 72;
-      Lbl("sym", x, y, "SYMBOL      " + symbol, clrWhite, 10); y += 17;
-      Lbl("tf", x, y, "STACK       H4 / H1 / M5", C'180,200,220', 9); y += 17;
-      Lbl("bias", x, y, "BIAS        " + BiasTxt(setup.bias), clrAqua, 10); y += 17;
-      Lbl("trend", x, y, "TREND       " + BiasTxt(setup.bias), C'160,220,255', 9); y += 17;
-      Lbl("sig", x, y, "SIGNAL      " + SideTxt(setup.side), sigClr, 11, "Arial Bold"); y += 17;
-      Lbl("path", x, y, "ENTRY TYPE  " + PathTxt(setup.path), clrGold, 10); y += 17;
-      Lbl("score", x, y, StringFormat("SETUP SCORE %d", setup.score), clrOrange, 10); y += 17;
-      Lbl("open", x, y, StringFormat("OPEN        %d / %d", openTrades, InpMaxTrades), clrWhite, 10); y += 17;
-      Lbl("lot", x, y, StringFormat("LOT         %.2f", lot), clrWhite, 10); y += 17;
-      Lbl("bal", x, y, StringFormat("BALANCE     %.2f", balance), C'180,220,255', 9); y += 16;
-      Lbl("eq", x, y, StringFormat("EQUITY      %.2f", equity), C'180,220,255', 9); y += 16;
-      color fltClr = C'255,100,100';
-      if(floating >= 0.0) fltClr = C'80,220,140';
-      Lbl("flt", x, y, StringFormat("FLOATING    %.2f", floating), fltClr, 9); y += 16;
-      Lbl("spr", x, y, StringFormat("SPREAD      %.1f pts", setup.spreadPts), clrSilver, 9); y += 16;
-      Lbl("atr", x, y, StringFormat("ATR(H1)     %.5f", setup.atrH1), clrSilver, 9); y += 16;
-      Lbl("mkt", x, y, "MARKET      " + MktTxt(setup.mkt), C'160,255,170', 9); y += 16;
-      Lbl("exec", x, y, "EXECUTION   " + execStatus, C'255,140,140', 8); y += 15;
-      Lbl("ea", x, y, "EA STATUS   " + eaStatus, C'200,200,210', 8); y += 15;
-      Lbl("br", x, y, "BROKER      " + broker, C'160,160,170', 8); y += 15;
-      Lbl("srv", x, y, "SERVER      " + TimeToString(TimeTradeServer(), TIME_DATE|TIME_SECONDS), C'140,140,150', 8); y += 16;
-
-      string reason = setup.reason;
-      if(StringLen(reason) > 44)
-         reason = StringSubstr(reason, 0, 44) + "...";
-      Lbl("st", x, y, "TRADE STATUS", clrSilver, 8); y += 14;
-      Lbl("st2", x, y, reason, clrSilver, 8); y += 16;
-      Lbl("last", x, y, "LAST  " + lastAction, clrGray, 8);
-
-      ChartRedraw(0);
-     }
-  };
-
-//==================================================================
 // SYSTEM CORE / STATE PIPELINE
 //==================================================================
 CSaConfig           g_cfg;
@@ -1802,7 +1647,6 @@ CSaRiskManager      g_risk;
 CSaMoneyManager     g_money;
 CSaExecutionEngine  g_exec;
 CSaStatistics       g_stats;
-CSaDashboard        g_dash;
 
 ENUM_SA_STAGE g_stage = SA_STAGE_INIT;
 datetime      g_lastM5 = 0;
@@ -1868,26 +1712,10 @@ bool SaFire(const SaSetup &setup)
    g_lastEntryM5 = g_lastM5;
    g_lastAction = (setup.side == SA_SIDE_BUY ? "BUY filled" : "SELL filled");
    g_eaStatus = "in market";
-   SaLog(g_lastAction + " comment=" + SA_COMMENT + " build=" + SA_BUILD_ID);
+   SaLog(g_lastAction + " comment=" + SA_COMMENT);
    return true;
   }
 
-void SaRefreshDashboard()
-  {
-   if(!InpShowDashboard)
-      return;
-   g_dash.Render(_Symbol,
-                 g_setup,
-                 g_risk.CountPositions(),
-                 InpLot,
-                 AccountInfoDouble(ACCOUNT_BALANCE),
-                 AccountInfoDouble(ACCOUNT_EQUITY),
-                 g_risk.FloatingPnL(),
-                 g_lastAction,
-                 g_eaStatus,
-                 g_exec.LastStatus(),
-                 g_broker);
-  }
 
 //==================================================================
 // LIFECYCLE
@@ -1932,15 +1760,13 @@ int OnInit()
    if(!g_data.Refresh())
       SaLog("initial refresh pending history");
 
-   SaRefreshDashboard();
-   SaLog(StringFormat("ONLINE %s build=%s lot=%.2f max=%d", _Symbol, SA_BUILD_ID, InpLot, InpMaxTrades));
+   SaLog(StringFormat("ONLINE %s lot=%.2f max=%d", _Symbol, InpLot, InpMaxTrades));
    return INIT_SUCCEEDED;
   }
 
 void OnDeinit(const int reason)
   {
    g_data.Release();
-   g_dash.Destroy();
    Comment("");
    SaLog(StringFormat("stopped reason=%d fills=%d fails=%d", reason, g_stats.Fills(), g_stats.Fails()));
   }
@@ -1955,47 +1781,26 @@ void OnTick()
    if(!g_data.Refresh())
      {
       g_eaStatus = "data wait";
-      if(g_tick % InpDashRefreshTicks == 0)
-         SaRefreshDashboard();
       return;
      }
 
-   const bool newM5 = g_data.NewM5Bar(g_lastM5);
+   if(!g_data.NewM5Bar(g_lastM5))
+      return;
+
    double bid = 0.0, ask = 0.0;
    g_sym.Quotes(bid, ask);
 
-   // Full kill-chain only on new M5 (CPU). Dashboard throttle updates quotes only.
-   if(newM5)
-     {
-      g_stage = SA_STAGE_ANALYSIS;
-      g_setup = g_decision.Evaluate(g_data, g_sym, bid, ask);
-      g_eaStatus = "scanning";
-      g_stage = SA_STAGE_DECISION;
+   g_stage = SA_STAGE_ANALYSIS;
+   g_setup = g_decision.Evaluate(g_data, g_sym, bid, ask);
+   g_eaStatus = "scanning";
+   g_stage = SA_STAGE_DECISION;
 
-      // Chart-symbol sniper execution on closed M5 confirmation
-      if(InpTradeChartOnly)
-        {
-         if(!(InpOneEntryPerM5 && g_lastEntryM5 == g_lastM5))
-           {
-            if(!SaFire(g_setup) && g_setup.side == SA_SIDE_NONE)
-               g_eaStatus = "scanning";
-           }
-        }
-      else
-        {
-         // Multi-symbol mode reserved — still execute chart symbol setups
-         if(!(InpOneEntryPerM5 && g_lastEntryM5 == g_lastM5))
-            SaFire(g_setup);
-        }
-      SaRefreshDashboard();
-      g_stage = SA_STAGE_SCAN;
-     }
-   else if(g_tick % InpDashRefreshTicks == 0)
+   if(!(InpOneEntryPerM5 && g_lastEntryM5 == g_lastM5))
      {
-      g_setup.atrH1 = g_data.Atr();
-      g_setup.spreadPts = (g_sym.point > 0.0 ? (ask - bid) / g_sym.point : 0.0);
-      SaRefreshDashboard();
+      if(!SaFire(g_setup) && g_setup.side == SA_SIDE_NONE)
+         g_eaStatus = "scanning";
      }
+   g_stage = SA_STAGE_SCAN;
   }
 
 void OnTradeTransaction(const MqlTradeTransaction &trans,
