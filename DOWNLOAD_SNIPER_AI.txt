@@ -1,10 +1,27 @@
-PRIMARY: release/deliver/SNIPER_AI.mq5
-BUILD_ID: SA_INSTITUTIONAL_V3
+SNIPER AI - DOWNLOAD THIS
+=========================
 
-Mirrors (identical content):
+https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK11.mq5
+
+MUST SHOW AT TOP:
+  BUILD_ID: SA_COMPILE_OK_11
+
+STEPS:
+1. Close MetaEditor completely
+2. Delete ALL old Sniper/SNIPER *.mq5 and *.ex5 from MQL5/Experts
+3. Copy SNIPER_AI_OK11.mq5 into MQL5/Experts
+4. Open it and confirm BUILD_ID: SA_COMPILE_OK_11
+5. Press F7
+
+THIS BUILD:
+- procedural MetaEditor-safe single file (no heavy class graph)
+- zero TRADE_RETCODE_* tokens (no BUSY)
+- ASCII-only source
+- no input group / #property strict / LOG_LEVEL
+- trade comment exactly: SNIPER AI
+- strategy: H4 bias -> H1 setup -> M5 entry, 24/7, max 3, lot 0.01
+
+Also mirrored as:
 - SNIPER_AI.mq5
+- release/deliver/SNIPER_AI.mq5
 - MQL5/Experts/SNIPER_AI.mq5
-- release/SniperAI/SNIPER_AI.mq5
-- release/SniperAI/SniperAI.mq5
-
-Do not keep multiple differently-named copies in MQL5/Experts/.
