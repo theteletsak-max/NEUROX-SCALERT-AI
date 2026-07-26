@@ -173,15 +173,15 @@ struct SaSetup
 input double InpLot                 = 0.01;
 input int    InpMaxTrades           = 3;
 input long   InpMagic               = 20260726;
-input int    InpMaxSlippagePoints   = 80;
+input int    InpMaxSlippagePoints   = 100;
 input int    InpMaxRetries          = 3;
 
 input int    InpSwingStrength       = 2;
-input int    InpMinScore            = 12;
+input int    InpMinScore            = 8;
 input int    InpMinConfluence       = 3;
 input bool   InpAllowContinuation   = true;
 input bool   InpAllowReversal       = true;
-input bool   InpRequireZoneTouch    = true; // pullback into OB/FVG
+input bool   InpRequireZoneTouch    = false;
 input bool   InpOneEntryPerM5       = true;
 input bool   InpTradeChartOnly      = true;
 
@@ -1124,78 +1124,63 @@ public:
       // Path A — Continuation:
       // H4 bias + recent H1 BOS + zone from recent displacement (OB/FVG) + location + M5
       // Displacement is the SETUP creator (lookback), not required on the entry bar.
+      // Path A — strategy lock: H4 bias + H1 BOS + (OB/FVG/Disp) + liquidity + M5 → instant
       if(InpAllowContinuation && st.biasH4 == SA_BIAS_BULL)
         {
          const bool m5ok = m_entry.M5Buy(m5, m5n);
-         const bool zoneOk = (zone.bullFVG || zone.bullOB);
-         const bool locOk = (!InpRequireZoneTouch || zone.bullZoneTouch);
+         const bool zoneOk = (zone.bullFVG || zone.bullOB || zone.bullDisp);
+         const bool locOk = (!InpRequireZoneTouch || zone.bullZoneTouch || zoneOk);
          const bool liqOk = (liq.sellSideSweep || liq.equalLows || st.bosBull);
          int conf = 0;
          if(st.biasH4 == SA_BIAS_BULL) conf++;
          if(st.bosBull) conf++;
-         if(zone.bullDisp) conf++;
          if(zoneOk) conf++;
          if(locOk) conf++;
          if(liqOk) conf++;
          if(m5ok) conf++;
 
-         const bool institutional = (st.bosBull && zoneOk && zone.bullDisp);
-         if(institutional && locOk && m5ok && liqOk && conf >= InpMinConfluence)
+         if(st.bosBull && zoneOk && locOk && liqOk && m5ok && conf >= InpMinConfluence)
            {
             s.side = SA_SIDE_BUY;
             s.path = SA_PATH_CONTINUATION;
             s.confluence = conf;
             s.score = score + 8 + conf;
-            if(s.score >= needScore)
-              {
-               s.reason = "CONT | " + st.note + " | " + zone.note;
-               return s;
-              }
-            s.reason = StringFormat("CONT gated score=%d need=%d", s.score, needScore);
-            s.side = SA_SIDE_NONE;
-            s.path = SA_PATH_NONE;
+            if(s.score < needScore)
+               s.score = needScore; // valid kill-chain must be executable
+            s.reason = "CONT | " + st.note + " | " + zone.note;
+            return s;
            }
-         else if(st.bosBull && m5ok)
-           {
-            s.reason = "CONT wait | zone/loc/conf";
-           }
+         if(st.bosBull && m5ok)
+            s.reason = "CONT wait zone/liq";
         }
 
       if(InpAllowContinuation && st.biasH4 == SA_BIAS_BEAR)
         {
          const bool m5ok = m_entry.M5Sell(m5, m5n);
-         const bool zoneOk = (zone.bearFVG || zone.bearOB);
-         const bool locOk = (!InpRequireZoneTouch || zone.bearZoneTouch);
+         const bool zoneOk = (zone.bearFVG || zone.bearOB || zone.bearDisp);
+         const bool locOk = (!InpRequireZoneTouch || zone.bearZoneTouch || zoneOk);
          const bool liqOk = (liq.buySideSweep || liq.equalHighs || st.bosBear);
          int conf = 0;
          if(st.biasH4 == SA_BIAS_BEAR) conf++;
          if(st.bosBear) conf++;
-         if(zone.bearDisp) conf++;
          if(zoneOk) conf++;
          if(locOk) conf++;
          if(liqOk) conf++;
          if(m5ok) conf++;
 
-         const bool institutional = (st.bosBear && zoneOk && zone.bearDisp);
-         if(institutional && locOk && m5ok && liqOk && conf >= InpMinConfluence)
+         if(st.bosBear && zoneOk && locOk && liqOk && m5ok && conf >= InpMinConfluence)
            {
             s.side = SA_SIDE_SELL;
             s.path = SA_PATH_CONTINUATION;
             s.confluence = conf;
             s.score = score + 8 + conf;
-            if(s.score >= needScore)
-              {
-               s.reason = "CONT | " + st.note + " | " + zone.note;
-               return s;
-              }
-            s.reason = StringFormat("CONT gated score=%d need=%d", s.score, needScore);
-            s.side = SA_SIDE_NONE;
-            s.path = SA_PATH_NONE;
+            if(s.score < needScore)
+               s.score = needScore;
+            s.reason = "CONT | " + st.note + " | " + zone.note;
+            return s;
            }
-         else if(st.bosBear && m5ok)
-           {
-            s.reason = "CONT wait | zone/loc/conf";
-           }
+         if(st.bosBear && m5ok)
+            s.reason = "CONT wait zone/liq";
         }
 
       // Path B — Reversal (sweep + CHoCH + zone + M5)
@@ -1209,8 +1194,10 @@ public:
          s.path = SA_PATH_REVERSAL;
          s.confluence = conf;
          s.score = score + 10 + conf;
-         if(conf >= InpMinConfluence && s.score >= needScore)
+         if(conf >= InpMinConfluence)
            {
+            if(s.score < needScore)
+               s.score = needScore;
             s.reason = "REV | sell-side sweep | " + st.note;
             return s;
            }
@@ -1228,8 +1215,10 @@ public:
          s.path = SA_PATH_REVERSAL;
          s.confluence = conf;
          s.score = score + 10 + conf;
-         if(conf >= InpMinConfluence && s.score >= needScore)
+         if(conf >= InpMinConfluence)
            {
+            if(s.score < needScore)
+               s.score = needScore;
             s.reason = "REV | buy-side sweep | " + st.note;
             return s;
            }
@@ -1588,10 +1577,11 @@ public:
            }
 
          bool ok = false;
+         // price 0.0 = market execution (broker fills at available price)
          if(side == SA_SIDE_BUY)
-            ok = m_trade.Buy(lots, symbol, ask, sl, tp, SA_COMMENT);
+            ok = m_trade.Buy(lots, symbol, 0.0, sl, tp, SA_COMMENT);
          else
-            ok = m_trade.Sell(lots, symbol, bid, sl, tp, SA_COMMENT);
+            ok = m_trade.Sell(lots, symbol, 0.0, sl, tp, SA_COMMENT);
 
          if(ok)
            {
