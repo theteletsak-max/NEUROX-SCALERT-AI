@@ -1,11 +1,11 @@
-SNIPER AI — Expert Advisor (send this)
+SNIPER AI — Expert Advisor
 
-BUILD_ID: SA_AGGRESSIVE_INST_22
-File: SNIPER_AI_OK22.mq5
+BUILD_ID: SA_AGGRESSIVE_INSTANT_23
+File: SNIPER_AI_OK23.mq5
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK22.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK23.mq5
 
 ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
-SMT/IMCE/ICE kept. Aggressive execution restored (InstantTrend lives).
+Aggressive Instant Quality — no MPI wait.

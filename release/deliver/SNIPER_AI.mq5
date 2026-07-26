@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_AGGRESSIVE_INST_22                                  |
-//| SNIPER AI - PRISM + SMT/IMCE/ICE with aggressive execution        |
+//| BUILD_ID: SA_AGGRESSIVE_INSTANT_23                                  |
+//| SNIPER AI - Aggressive Instant Quality (no MPI wait)              |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "2.20"
-#property description "SNIPER AI PRISM SMT/IMCE/ICE aggressive execution"
-#property description "Engines assist quality - do not kill instant fire"
+#property version   "2.30"
+#property description "SNIPER AI aggressive instant quality PRISM"
+#property description "No MPI wait - InstantTrend fires when trend+ADX"
 
 #include <Trade/Trade.mqh>
 
@@ -25,26 +25,27 @@ input group "GENERAL"
 input long MagicNumber = 40001;
 input string TradeComment = "SNIPER AI";
 
-input group "QUALITY SNIPER + AGGRESSIVE EXECUTION"
-// Quality components stay. Aggressive execution means InstantTrend (trend+ADX)
-// can still fire instantly — SMT/IMCE/ICE assist, they do not smother entries.
-// Your log: trend=true ADXstrong=true but InstantTrend blocked + ICE 25<50.
+input group "AGGRESSIVE INSTANT QUALITY"
+// Your log: QUALITY SNIPER MPI 35 < 40 — waiting. That wait is removed.
+// Aggressive Instant = fire as soon as a sniper path passes (InstantTrend /
+// ContSniper / RevSniper). MPI is informational only (no entry veto).
 
-input bool   EnableAlwaysQualityMode     = true;
+input bool   AggressiveInstantQuality    = true;  // MASTER: skip MPI wait, instant fire
+input bool   EnableAlwaysQualityMode     = true;  // still detect quality components
 input bool   QualityRequireStructureZone = true;
 input bool   QualityRequireTrendAndADX   = true;
-input bool   QualityDisableWeakPaths     = false; // keep InstantTrend alive
-input int    QualityMPIScore             = 25;    // was 40 — was blocking aggressive fire
+input bool   QualityDisableWeakPaths     = false;
+input int    QualityMPIScore             = 0;     // unused when AggressiveInstantQuality
 
 input bool   EnableInstantSniperMode     = true;
-input bool   AllowTrendOnlyInstantEntry  = true;  // trend+ADX instant entry ON
+input bool   AllowTrendOnlyInstantEntry  = true;  // trend+ADX = instant BUY/SELL
 input bool   AggressiveSniperEntries     = true;
 input bool   NeverBlockValidSniperEntry  = true;
 input bool   ResolveConflictByTrend      = true;
-input bool   AggressiveInstitutionalExecution = true; // soft SMT/ICE; IMCE only blocks chop
+input bool   AggressiveInstitutionalExecution = true;
 input double InstantPullbackATRMultiple  = 3.0;
 input int    InstantStructureRecencyBars = 25;
-input int    InstantMinimumMPIScore      = 25;
+input int    InstantMinimumMPIScore      = 0;
 input bool   InstantTwoOfThreeLiquidity  = true;
 input bool   InstantFvgOrOb              = true;
 input double InstantChannelBreakATR      = 0.35;
@@ -407,15 +408,13 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_AGGRESSIVE_INST_22");
-   Print("Mode: QUALITY sniper always=", EnableAlwaysQualityMode,
-         " | EventTighten=", EnableEventQualityMode,
-         " | MPI regular=", QualityMPIScore, " event=", EventQualityMPIScore);
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_AGGRESSIVE_INSTANT_23");
+   Print("Mode: AGGRESSIVE INSTANT QUALITY=", AggressiveInstantQuality,
+         " (MPI wait OFF) | InstantTrend=", AllowTrendOnlyInstantEntry);
    Print("Engines: SMT=", EnableSMT, " IMCE=", EnableIMCE,
          " ICE=", EnableInstitutionalConfidence,
-         " AggressiveInstExec=", AggressiveInstitutionalExecution,
-         " InstantTrend=", AllowTrendOnlyInstantEntry);
-   Print("Oscillators: RSI/MACD/Stochastic NOT used | ICE/SMT soft (do not smother fire)");
+         " (soft assist — do not smother fire)");
+   Print("Oscillators: RSI/MACD/Stochastic NOT used");
    Print("Trade size: LotSize=", LotSize, " UseFixedLot=", UseFixedLot,
          " RiskPercent=", RiskPercent,
          " | MaxOpenTrades/symbol=", MaxOpenTrades,
@@ -6114,13 +6113,9 @@ bool QualityGatesActive();
 
 int EffectiveMinimumMPIScore()
 {
-   // Aggressive execution: keep MPI floor modest so InstantTrend can fire.
-   if(AggressiveInstitutionalExecution)
-   {
-      if(EventQualityModeActive())
-         return MathMax(QualityMPIScore, InstantMinimumMPIScore); // no 50-wall during events
-      return MathMin(QualityMPIScore, InstantMinimumMPIScore);
-   }
+   // Aggressive Instant Quality: MPI never gates entries (floor = 0).
+   if(AggressiveInstantQuality || AggressiveInstitutionalExecution)
+      return 0;
 
    if(EventQualityModeActive())
       return MathMax(EventQualityMPIScore, QualityMPIScore);
@@ -6522,7 +6517,7 @@ int CountConfirmingConditions(bool buy)
 // sensible threshold, is what actually reflects the manual's Part 52
 // decision flow: hard structural gates PLUS one final score check.
 
-input int MinimumMPIScore = 40; // quality sniper floor on regular sessions
+input int MinimumMPIScore = 0; // unused under AggressiveInstantQuality (no MPI wait)
 
 // FIX (this pass): this function used to be defined *inside* the body of
 // EvaluateSpecCompliantStrategies() below - an illegal nested function
@@ -6962,19 +6957,21 @@ void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &
    int mpiScore = CalculatePRISMScore(isBuy);
    int mpiFloor = EffectiveMinimumMPIScore();
 
-   // Quality sniper: MPI floor always applies when AlwaysQuality / EventQuality.
-   // This is how "quality signals over time" is enforced on every session.
-   if(QualityGatesActive())
+   // AGGRESSIVE INSTANT: never wait on MPI. Path already passed → fire.
+   if(AggressiveInstantQuality)
    {
-      if(mpiScore < mpiFloor)
-      {
-         if(EnableVerboseLogging || EnableSetupLogging)
-            Print("QUALITY SNIPER: MPI ", mpiScore, " < ", mpiFloor,
-                  " on ", BrokerSymbol,
-                  (EventQualityModeActive() ? " [EVENT TIGHTEN]" : " [REGULAR]"),
-                  " - waiting for quality setup.");
-         return;
-      }
+      if(EnableVerboseLogging)
+         Print("AGGRESSIVE INSTANT: MPI=", mpiScore, " (informational only, no wait) on ",
+               BrokerSymbol);
+   }
+   else if(QualityGatesActive() && mpiFloor > 0 && mpiScore < mpiFloor)
+   {
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("QUALITY SNIPER: MPI ", mpiScore, " < ", mpiFloor,
+               " on ", BrokerSymbol,
+               (EventQualityModeActive() ? " [EVENT TIGHTEN]" : " [REGULAR]"),
+               " - waiting for quality setup.");
+      return;
    }
    else if(!NeverBlockValidSniperEntry && mpiFloor > 0 && mpiScore < mpiFloor)
    {
@@ -8332,13 +8329,14 @@ void PrintSetupDiagnostics()
             " ICE_buy=", GetInstitutionalConfidenceScore(true),
             " ICE_sell=", GetInstitutionalConfidenceScore(false),
             " IMCE=", IMCEContextToString(GetIMCEContext()));
-      Print("NOTE: AggressiveInstExec=", AggressiveInstitutionalExecution,
-            " InstantTrendAllowed=", AllowTrendOnlyInstantEntry,
-            " — engines assist, do not smother aggressive execution.");
+      Print("NOTE: AggressiveInstantQuality=", AggressiveInstantQuality,
+            " InstantTrend=", AllowTrendOnlyInstantEntry,
+            " MPI_floor=", EffectiveMinimumMPIScore(),
+            " — NO MPI wait; instant fire when a path passes.");
       if(eventQ)
-         Print("NOTE: EVENT TIGHTEN — still trading (no hard news pause).");
+         Print("NOTE: EVENT window — still trading (no hard news pause).");
       else
-         Print("NOTE: REGULAR session — instant fire when InstantTrend/ContSniper/RevSniper passes.");
+         Print("NOTE: AGGRESSIVE INSTANT session — fire ContSniper/InstantTrend/RevSniper immediately.");
    }
 }
 

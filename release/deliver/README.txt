@@ -1,6 +1,7 @@
-SNIPER AI — Aggressive Institutional Execution
-==============================================
-File: SNIPER_AI_OK22.mq5
-BUILD_ID: SA_AGGRESSIVE_INST_22
+SNIPER AI — Aggressive Instant Quality
+======================================
+BUILD_ID: SA_AGGRESSIVE_INSTANT_23
+File: SNIPER_AI_OK23.mq5
 
-SMT/IMCE/ICE assist. InstantTrend restored. ICE/SMT soft.
+No MPI wait. Instant fire when InstantTrend/ContSniper/RevSniper passes.
+Remove EA from chart and re-attach after compile (reset old inputs).
