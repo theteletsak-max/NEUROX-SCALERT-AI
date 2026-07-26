@@ -3,7 +3,8 @@
 **Bot name:** Sniper AI  
 **Identity:** Aggressive sniper  
 **Execution:** Instant — when the kill-chain passes, send the order immediately (no delay, no manual confirm, no “wait for next signal”)  
-**Status:** Strategy **SIGNED OFF** — build plan next; coding only when user says go
+**Status:** Strategy **SIGNED OFF** · v1 EA implemented under `mt5/SniperAI/`  
+**Runtime adds:** no session filter · no volatility block · 24/7 including news/events · watermark + right HUD
 
 ---
 

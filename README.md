@@ -1,63 +1,49 @@
-# NEUROX Scalper AI
+# SNIPER AI
 
-Forex scalping robot built **from scratch** — MetaTrader 5 Expert Advisor (MQL5) plus an optional Python research/backtest toolkit.
+Aggressive institutional forex sniper robot for **MetaTrader 5**.
 
-> Not financial advice. Demo-test thoroughly before any live use.
+Instant execution · 24/7 · trades through events · watermark + HUD · H4/H1/M5 kill-chain.
 
-## 1) MetaTrader 5 robot (primary)
+> Not financial advice. Demo-test before live. Forex can lose capital quickly.
 
-The live trading robot lives in [`mt5/`](mt5/):
+## Primary product — MT5 EA
+
+Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 
 | Piece | Role |
 |-------|------|
-| `NeuroX_Scalper_AI.mq5` | Main Expert Advisor |
-| `Include/NeuroX/NX_Signals.mqh` | EMA cross + RSI filter |
-| `Include/NeuroX/NX_Risk.mqh` | Risk % sizing, daily loss, spread |
-| `Include/NeuroX/NX_Trade.mqh` | Order execution |
-| `Include/NeuroX/NX_Indicators.mqh` | EMA / RSI / ATR handles |
-| `Include/NeuroX/NX_Session.mqh` | UTC session window |
+| `SniperAI.mq5` | Main Expert Advisor |
+| `Include/SniperAI/SA_Signal.mqh` | Continuation + reversal kill-chain |
+| `Include/SniperAI/SA_Structure.mqh` | Swings, BOS, CHoCH, H4 bias |
+| `Include/SniperAI/SA_Liquidity.mqh` | Sweeps / equal highs-lows |
+| `Include/SniperAI/SA_Zones.mqh` | Displacement, FVG, order blocks |
+| `Include/SniperAI/SA_Risk.mqh` | Lot / ATR SL / 2R / BE / max 3 |
+| `Include/SniperAI/SA_Trade.mqh` | Instant market orders |
+| `Include/SniperAI/SA_Watermark.mqh` | Background watermark (candles on top) |
+| `Include/SniperAI/SA_Dashboard.mqh` | Right-corner HUD |
+| `Images/SniperAI_Watermark.bmp` | SNIPER AI branded artwork |
 
-### Install
+### Install (MT5)
 
-See **[mt5/README.md](mt5/README.md)** for copy paths, compile steps, and Strategy Tester usage.
+1. **File → Open Data Folder**
+2. Copy folder `mt5/SniperAI/` → `MQL5/Experts/SniperAI/`
+3. MetaEditor → open `SniperAI.mq5` → **Compile (F7)**
+4. Attach to a forex chart → enable **Algo Trading**
 
-Short version:
+Details: [`mt5/SniperAI/README.md`](mt5/SniperAI/README.md)
 
-1. Copy `NeuroX_Scalper_AI.mq5` → MT5 `MQL5/Experts/`
-2. Copy `Include/NeuroX/` → MT5 `MQL5/Include/NeuroX/`
-3. Compile in MetaEditor (F7)
-4. Attach to EURUSD M5 (or your pair/TF), enable Algo Trading
-5. Start on **demo** / Strategy Tester
+### Locked behaviour
 
-### Strategy (from scratch)
+- Chart symbol by default (or all forex if you disable “Trade attached chart only”)
+- Max **3** open trades · lot **0.01** (input) · SL **1.5×ATR(H1)** · TP **2R** · BE **+1R**
+- **No session filter** · **no volatility block** · runs in news
+- Watermark behind candles · dashboard top-right
 
-```
-new closed bar
-   → EMA fast crosses EMA slow?
-   → RSI allows the direction?
-   → ATR large enough to scalp?
-   → inside session + risk checks pass?
-   → open trade with ATR stop & target, risk-% lot size
-```
+## Strategy docs
 
-## 2) Python research toolkit (optional)
+- [`docs/SNIPER_AI_STRATEGY.md`](docs/SNIPER_AI_STRATEGY.md)
+- [`docs/SNIPER_AI_BUILD_PLAN.md`](docs/SNIPER_AI_BUILD_PLAN.md)
 
-Offline backtests and paper replay without MetaTrader:
+## Optional Python research toolkit
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-pip install -e .
-
-neurox init-config -o config.yaml
-neurox backtest --bars 3000
-neurox backtest --csv your_ohlc.csv --export-trades trades.csv
-pytest -q
-```
-
-Config knobs: [`config.example.yaml`](config.example.yaml)
-
-## Disclaimer
-
-Forex trading involves substantial risk of loss. Backtests (especially on synthetic data) do not guarantee live results. Validate on your broker’s history and a demo account first.
+`neurox_scalper/` — offline backtests (`neurox backtest`). Not required for the MT5 robot.
