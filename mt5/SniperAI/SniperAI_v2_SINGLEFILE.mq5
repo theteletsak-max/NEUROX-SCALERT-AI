@@ -709,52 +709,98 @@ public:
       int score = liq.score + zone.score;
       if(st.bosBull || st.bosBear) score += 3;
       if(st.chochBull || st.chochBear) score += 3;
-      if(st.biasH4 != SA_BIAS_FLAT) score += 1;
+      if(st.biasH4 != SA_BIAS_FLAT) score += 2;
 
-      // Path A — continuation
+      // Higher bar in extreme vol (still allowed — precision, not block)
+      const int needScore = (s.mkt == SA_MKT_EXTREME ? InpMinScore + 3 :
+                             s.mkt == SA_MKT_HIGH     ? InpMinScore + 1 : InpMinScore);
+
+      // Path A — continuation (strict confluence for ~70% precision target)
       if(InpAllowContinuation && st.biasH4 == SA_BIAS_BULL)
         {
-         const bool structOk = (st.bosBull || zone.bullDisp || zone.bullFVG || zone.bullOB);
-         const bool zoneOk = (zone.bullZoneTouch || zone.bullFVG || zone.bullOB || zone.bullDisp || st.bosBull);
-         if(structOk && zoneOk && M5Buy(m5, m5n))
+         const bool m5ok = M5Buy(m5, m5n);
+         int conf = 0;
+         if(st.biasH4 == SA_BIAS_BULL) conf++;
+         if(st.bosBull) conf++;
+         if(zone.bullDisp) conf++;
+         if(zone.bullFVG || zone.bullOB) conf++;
+         if(zone.bullZoneTouch || !InpRequireZoneTouch) conf++;
+         if(liq.sellSideSweep || liq.equalLows) conf++; // opposing liq taken / demand
+         if(m5ok) conf++;
+
+         const bool institutional = (st.bosBull && (zone.bullFVG || zone.bullOB) && zone.bullDisp);
+         const bool locationOk = (!InpRequireZoneTouch || zone.bullZoneTouch || zone.bullFVG || zone.bullOB);
+         if(institutional && locationOk && m5ok && conf >= InpMinConfluence)
            {
             s.side = SA_SIDE_BUY;
             s.path = SA_PATH_CONTINUATION;
-            s.score = score + 5;
-            s.reason = "CONT | " + st.note + " | " + zone.note;
-            return s;
+            s.score = score + 8 + conf;
+            if(s.score >= needScore)
+              {
+               s.reason = "CONT precision | " + st.note + " | " + zone.note;
+               return s;
+              }
            }
         }
       if(InpAllowContinuation && st.biasH4 == SA_BIAS_BEAR)
         {
-         const bool structOk = (st.bosBear || zone.bearDisp || zone.bearFVG || zone.bearOB);
-         const bool zoneOk = (zone.bearZoneTouch || zone.bearFVG || zone.bearOB || zone.bearDisp || st.bosBear);
-         if(structOk && zoneOk && M5Sell(m5, m5n))
+         const bool m5ok = M5Sell(m5, m5n);
+         int conf = 0;
+         if(st.biasH4 == SA_BIAS_BEAR) conf++;
+         if(st.bosBear) conf++;
+         if(zone.bearDisp) conf++;
+         if(zone.bearFVG || zone.bearOB) conf++;
+         if(zone.bearZoneTouch || !InpRequireZoneTouch) conf++;
+         if(liq.buySideSweep || liq.equalHighs) conf++;
+         if(m5ok) conf++;
+
+         const bool institutional = (st.bosBear && (zone.bearFVG || zone.bearOB) && zone.bearDisp);
+         const bool locationOk = (!InpRequireZoneTouch || zone.bearZoneTouch || zone.bearFVG || zone.bearOB);
+         if(institutional && locationOk && m5ok && conf >= InpMinConfluence)
            {
             s.side = SA_SIDE_SELL;
             s.path = SA_PATH_CONTINUATION;
-            s.score = score + 5;
-            s.reason = "CONT | " + st.note + " | " + zone.note;
-            return s;
+            s.score = score + 8 + conf;
+            if(s.score >= needScore)
+              {
+               s.reason = "CONT precision | " + st.note + " | " + zone.note;
+               return s;
+              }
            }
         }
 
-      // Path B — reversal after sweep + CHoCH/displacement
-      if(InpAllowReversal && liq.sellSideSweep && (st.chochBull || st.bosBull || zone.bullDisp) && M5Buy(m5, m5n))
+      // Path B — reversal: sweep + CHoCH + zone + strict M5 (no weak BOS-only reverses)
+      if(InpAllowReversal && liq.sellSideSweep && st.chochBull && (zone.bullDisp || zone.bullFVG || zone.bullOB) && M5Buy(m5, m5n))
         {
+         int conf = 4; // sweep, choch, zone family, m5
+         if(zone.bullZoneTouch || zone.bullFVG) conf++;
+         if(zone.bullDisp) conf++;
          s.side = SA_SIDE_BUY;
          s.path = SA_PATH_REVERSAL;
-         s.score = score + 6;
-         s.reason = "REV | sell-side sweep | " + st.note;
-         return s;
+         s.score = score + 10 + conf;
+         if(conf >= InpMinConfluence && s.score >= needScore)
+           {
+            s.reason = "REV precision | sell-side sweep | " + st.note;
+            return s;
+           }
+         s.side = SA_SIDE_NONE;
+         s.path = SA_PATH_NONE;
         }
-      if(InpAllowReversal && liq.buySideSweep && (st.chochBear || st.bosBear || zone.bearDisp) && M5Sell(m5, m5n))
+      if(InpAllowReversal && liq.buySideSweep && st.chochBear && (zone.bearDisp || zone.bearFVG || zone.bearOB) && M5Sell(m5, m5n))
         {
+         int conf = 4;
+         if(zone.bearZoneTouch || zone.bearFVG) conf++;
+         if(zone.bearDisp) conf++;
          s.side = SA_SIDE_SELL;
          s.path = SA_PATH_REVERSAL;
-         s.score = score + 6;
-         s.reason = "REV | buy-side sweep | " + st.note;
-         return s;
+         s.score = score + 10 + conf;
+         if(conf >= InpMinConfluence && s.score >= needScore)
+           {
+            s.reason = "REV precision | buy-side sweep | " + st.note;
+            return s;
+           }
+         s.side = SA_SIDE_NONE;
+         s.path = SA_PATH_NONE;
         }
 
       s.score = score;
@@ -1186,7 +1232,7 @@ public:
       int y = m_y + 10;
       Lbl("t", x, y, "SNIPER AI", clrWhite, 14, "Arial Bold");
       y = m_y + 48;
-      Lbl("sub", x, y, "24/7  |  INSTITUTIONAL SNIPER", C'230,190,190', 8, "Arial");
+      Lbl("sub", x, y, "24/7  |  HIGH PRECISION SNIPER", C'230,190,190', 8, "Arial");
 
       color sigClr = clrSilver;
       if(setup.side == SA_SIDE_BUY) sigClr = C'45,230,130';

@@ -1111,9 +1111,10 @@ public:
          why = StringFormat("retcode=%u %s", rc, m_trade.ResultRetcodeDescription());
          m_lastStatus = why;
 
-         // Recoverable: requote / price off / busy
+         // Recoverable: requote / price off / locked / connection / timeout
          if(rc == TRADE_RETCODE_REQUOTE || rc == TRADE_RETCODE_PRICE_OFF ||
-            rc == TRADE_RETCODE_BUSY || rc == TRADE_RETCODE_CONNECTION ||
+            rc == TRADE_RETCODE_PRICE_CHANGED || rc == TRADE_RETCODE_LOCKED ||
+            rc == TRADE_RETCODE_TOO_MANY_REQUESTS || rc == TRADE_RETCODE_CONNECTION ||
             rc == TRADE_RETCODE_TIMEOUT)
            {
             Sleep(120 * attempt);
@@ -1232,7 +1233,7 @@ public:
       int y = m_y + 10;
       Lbl("t", x, y, "SNIPER AI", clrWhite, 14, "Arial Bold");
       y = m_y + 48;
-      Lbl("sub", x, y, "24/7  |  INSTITUTIONAL SNIPER", C'230,190,190', 8, "Arial");
+      Lbl("sub", x, y, "24/7  |  HIGH PRECISION SNIPER", C'230,190,190', 8, "Arial");
 
       color sigClr = clrSilver;
       if(setup.side == SA_SIDE_BUY) sigClr = C'45,230,130';
