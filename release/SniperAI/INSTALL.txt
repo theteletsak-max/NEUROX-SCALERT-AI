@@ -1,16 +1,19 @@
-SNIPER AI — Install (IMPORTANT)
-===============================
+SNIPER AI — FIX YOUR COMPILE ERROR
+=================================
 
-Your old file still has TRADE_RETCODE_BUSY.
-You MUST use this new clean file.
+MetaEditor is compiling an OLD file that still contains TRADE_RETCODE_BUSY.
 
-1. Close MetaEditor tab for the old SniperAI.mq5
-2. Delete old file from MQL5/Experts/
-3. Copy ONE of these into MQL5/Experts/:
-      - SNIPER_AI.mq5   (recommended new name)
-      - SniperAI.mq5
-4. Open the NEW file in MetaEditor
-5. Check top comment has: BUILD_ID: SA_CLEAN_NO_BUSY
-6. Compile (F7)
+DO THIS NOW:
+1. Close ALL Sniper tabs in MetaEditor
+2. Open folder: File -> Open Data Folder -> MQL5 -> Experts
+3. DELETE any old:
+   - SniperAI.mq5
+   - SniperAI.ex5
+   - SNIPER_AI.mq5
+4. Copy this NEW file into Experts:
+   SNIPER_AI_FIXED.mq5
+5. In MetaEditor: File -> Open -> SNIPER_AI_FIXED.mq5
+6. Top must show: BUILD_ID: SA_FIX_OK_7
+7. Press F7 Compile
 
-Trade comment = SNIPER AI
+If top does not show SA_FIX_OK_7, you opened the wrong file.

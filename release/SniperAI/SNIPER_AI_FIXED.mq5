@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//| SniperAI.mq5                                               |
+//| SNIPER_AI_FIXED.mq5                                               |
 //| BUILD_ID: SA_FIX_OK_7                                             |
 //| SNIPER AI — use THIS file (delete old SniperAI.mq5 first)         |
 //|                                                                   |

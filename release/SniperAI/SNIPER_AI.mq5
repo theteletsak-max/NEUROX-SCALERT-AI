@@ -1,7 +1,7 @@
 //+------------------------------------------------------------------+
-//| SniperAI.mq5                                                      |
-//| BUILD_ID: SA_CLEAN_NO_BUSY                                        |
-//| SNIPER AI — Institutional single-file Expert Advisor              |
+//| SNIPER_AI.mq5                                               |
+//| BUILD_ID: SA_FIX_OK_7                                             |
+//| SNIPER AI — use THIS file (delete old SniperAI.mq5 first)         |
 //|                                                                   |
 //| Architecture (sections in this file):                             |
 //|   1. Types / Inputs                                               |
