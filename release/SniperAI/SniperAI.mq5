@@ -1,13 +1,13 @@
 //+------------------------------------------------------------------+
-//| SNIPER_AI_OK13.mq5                                                |
-//| BUILD_ID: SA_TRADE_READY_13                                       |
+//| SNIPER_AI_OK14.mq5                                                |
+//| BUILD_ID: SA_TRADE_READY_14                                       |
 //| SNIPER AI - production execution build (no dashboard)             |
 //| Strategy: H4 bias -> H1 setup -> M5 entry | Comment: SNIPER AI    |
-//| ZERO includes. Raw OrderSend. ASCII only. Put in Experts, F7.     |
+//| Broker-safe execution. ASCII only. Put in Experts, F7.            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "1.30"
+#property version   "1.40"
 #property description "SNIPER AI institutional sniper EA"
 #property description "H4 H1 M5 precision execution 24/7"
 
@@ -40,7 +40,7 @@
 input double InpLot                = 0.01;
 input int    InpMaxTrades          = 3;
 input long   InpMagic              = 20260726;
-input int    InpSlippagePoints     = 80;
+input int    InpSlippagePoints     = 150;
 input int    InpMaxRetries         = 5;
 input int    InpRetryBaseMs        = 120;
 input int    InpSwingStrength      = 2;
@@ -66,6 +66,8 @@ input double InpExtremeVolMult     = 2.5;
 input double InpSLBoostHigh        = 1.15;
 input double InpSLBoostExtreme     = 1.35;
 input bool   InpLogEvents          = true;
+input bool   InpOpenThenStops      = true;
+input bool   InpLogEachM5          = true;
 
 //==================================================================
 // TYPES
@@ -467,12 +469,6 @@ bool SaBuildStops(const SaSymCache &c, const int side, const int mkt, const doub
    if(mkt == 3)
       boost = InpSLBoostExtreme;
 
-   double minDist = SaMaxD((double)c.stopsLevel, (double)c.freezeLevel) * c.point;
-   double stopDist = atr * InpAtrMultSL * boost;
-   double floorDist = SaMaxD(minDist, SaPip(c) * 3.0);
-   if(stopDist < floorDist)
-      stopDist = floorDist;
-
    double bid = SymbolInfoDouble(c.symbol, SYMBOL_BID);
    double ask = SymbolInfoDouble(c.symbol, SYMBOL_ASK);
    if(bid <= 0.0 || ask <= 0.0)
@@ -480,6 +476,14 @@ bool SaBuildStops(const SaSymCache &c, const int side, const int mkt, const doub
       why = "no quotes";
       return false;
      }
+
+   double spread = ask - bid;
+   double minDist = SaMaxD((double)c.stopsLevel, (double)c.freezeLevel) * c.point;
+   minDist = SaMaxD(minDist, spread + c.point);
+   double stopDist = atr * InpAtrMultSL * boost;
+   double floorDist = SaMaxD(minDist, SaPip(c) * 3.0);
+   if(stopDist < floorDist)
+      stopDist = floorDist;
 
    if(side == 1)
      {
@@ -540,37 +544,60 @@ bool SaMarginOK(const string symbol, const int side, const double lots, const do
   }
 
 //==================================================================
-// EXECUTION ENGINE (raw OrderSend)
+// EXECUTION ENGINE (broker-safe OrderSend)
 //==================================================================
-ENUM_ORDER_TYPE_FILLING SaFilling(const SaSymCache &c)
+int SaFillCandidates(const SaSymCache &c, ENUM_ORDER_TYPE_FILLING &fills[])
   {
-   if((c.fillingMode & SYMBOL_FILLING_FOK) == SYMBOL_FILLING_FOK)
-      return ORDER_FILLING_FOK;
+   ArrayResize(fills, 0);
+   int n = 0;
+   // Prefer modes advertised by the symbol, then safe fallbacks
    if((c.fillingMode & SYMBOL_FILLING_IOC) == SYMBOL_FILLING_IOC)
-      return ORDER_FILLING_IOC;
-   return ORDER_FILLING_RETURN;
+     {
+      ArrayResize(fills, n + 1);
+      fills[n++] = ORDER_FILLING_IOC;
+     }
+   if((c.fillingMode & SYMBOL_FILLING_FOK) == SYMBOL_FILLING_FOK)
+     {
+      ArrayResize(fills, n + 1);
+      fills[n++] = ORDER_FILLING_FOK;
+     }
+   // RETURN is widely accepted on forex retail
+   ArrayResize(fills, n + 1);
+   fills[n++] = ORDER_FILLING_RETURN;
+   // Ensure at least IOC/FOK tried even if bitmask empty/wrong
+   bool hasIoc = false, hasFok = false;
+   for(int i = 0; i < n; i++)
+     {
+      if(fills[i] == ORDER_FILLING_IOC) hasIoc = true;
+      if(fills[i] == ORDER_FILLING_FOK) hasFok = true;
+     }
+   if(!hasIoc)
+     {
+      ArrayResize(fills, n + 1);
+      fills[n++] = ORDER_FILLING_IOC;
+     }
+   if(!hasFok)
+     {
+      ArrayResize(fills, n + 1);
+      fills[n++] = ORDER_FILLING_FOK;
+     }
+   return n;
   }
 
 bool SaRetcodeRetryable(const uint rc)
   {
-   if(rc == SA_RC_REQUOTE)
-      return true;
-   if(rc == SA_RC_REJECT)
-      return true;
-   if(rc == SA_RC_CANCEL)
-      return true;
-   if(rc == SA_RC_TOO_MANY)
-      return true;
-   if(rc == SA_RC_TIMEOUT)
-      return true;
-   if(rc == SA_RC_PRICE_OFF)
-      return true;
-   if(rc == SA_RC_PRICE_CHANGED)
-      return true;
-   if(rc == SA_RC_CONTEXT)
-      return true;
-   if(rc == 0)
-      return true;
+   if(rc == SA_RC_REQUOTE) return true;
+   if(rc == SA_RC_REJECT) return true;
+   if(rc == SA_RC_CANCEL) return true;
+   if(rc == SA_RC_TOO_MANY) return true;
+   if(rc == SA_RC_TIMEOUT) return true;
+   if(rc == SA_RC_PRICE_OFF) return true;
+   if(rc == SA_RC_PRICE_CHANGED) return true;
+   if(rc == SA_RC_CONTEXT) return true;
+   if(rc == 10030) return true; // invalid fill -> try other filling
+   if(rc == 10016) return true; // invalid stops -> open then stops
+   if(rc == 10015) return true; // invalid price
+   if(rc == 0) return true;
    return false;
   }
 
@@ -581,16 +608,114 @@ bool SaRetcodeFilled(const uint rc)
 
 bool SaModifySLTP(const ulong ticket, const string symbol, const double sl, const double tp)
   {
+   for(int attempt = 1; attempt <= InpMaxRetries; attempt++)
+     {
+      MqlTradeRequest req;
+      MqlTradeResult res;
+      ZeroMemory(req);
+      ZeroMemory(res);
+      req.action   = TRADE_ACTION_SLTP;
+      req.position = ticket;
+      req.symbol   = symbol;
+      req.sl       = sl;
+      req.tp       = tp;
+      req.magic    = (ulong)InpMagic;
+      ResetLastError();
+      bool ok = OrderSend(req, res);
+      if(ok || SaRetcodeFilled(res.retcode))
+         return true;
+      SaLog("SLTP modify fail ticket=" + (string)ticket + " rc=" + IntegerToString((int)res.retcode) + " err=" + IntegerToString(GetLastError()));
+      if(attempt < InpMaxRetries)
+         Sleep(InpRetryBaseMs * attempt);
+     }
+   return false;
+  }
+
+bool SaFindOurPosition(const string symbol, ulong &ticket)
+  {
+   ticket = 0;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+     {
+      ulong t = PositionGetTicket(i);
+      if(t == 0 || !PositionSelectByTicket(t))
+         continue;
+      if((long)PositionGetInteger(POSITION_MAGIC) != InpMagic)
+         continue;
+      if(PositionGetString(POSITION_SYMBOL) != symbol)
+         continue;
+      ticket = t;
+      return true;
+     }
+   return false;
+  }
+
+bool SaAttachStops(const string symbol, double sl, double tp, string &why)
+  {
+   ulong ticket = 0;
+   for(int attempt = 1; attempt <= InpMaxRetries; attempt++)
+     {
+      if(!SaFindOurPosition(symbol, ticket))
+        {
+         Sleep(InpRetryBaseMs * attempt);
+         continue;
+        }
+      SaSymCache c;
+      if(!SaLoadSymbol(symbol, c))
+        {
+         why = "stops: symbol cache fail";
+         return false;
+        }
+      double bid = SymbolInfoDouble(symbol, SYMBOL_BID);
+      double ask = SymbolInfoDouble(symbol, SYMBOL_ASK);
+      double spread = ask - bid;
+      double minDist = SaMaxD((double)c.stopsLevel, (double)c.freezeLevel) * c.point;
+      minDist = SaMaxD(minDist, spread + c.point);
+      long type = PositionGetInteger(POSITION_TYPE);
+      double open = PositionGetDouble(POSITION_PRICE_OPEN);
+      if(type == POSITION_TYPE_BUY)
+        {
+         if(ask - sl < minDist) sl = SaNormPrice(c, ask - SaMaxD(minDist, c.point));
+         if(tp - ask < minDist) tp = SaNormPrice(c, ask + SaMaxD(minDist, c.point));
+         if(sl >= open) sl = SaNormPrice(c, open - SaMaxD(minDist, c.point));
+        }
+      else
+        {
+         if(sl - bid < minDist) sl = SaNormPrice(c, bid + SaMaxD(minDist, c.point));
+         if(bid - tp < minDist) tp = SaNormPrice(c, bid - SaMaxD(minDist, c.point));
+         if(sl <= open) sl = SaNormPrice(c, open + SaMaxD(minDist, c.point));
+        }
+      if(SaModifySLTP(ticket, symbol, sl, tp))
+        {
+         why = "filled+stops";
+         return true;
+        }
+      Sleep(InpRetryBaseMs * attempt);
+     }
+   why = "filled but stops not set";
+   // Position is open - count as trade executed
+   return true;
+  }
+
+bool SaOrderSendOnce(const SaSymCache &c, const int side, const double lots,
+                     const double price, const double sl, const double tp,
+                     const ENUM_ORDER_TYPE_FILLING fill, MqlTradeResult &res)
+  {
    MqlTradeRequest req;
-   MqlTradeResult res;
    ZeroMemory(req);
    ZeroMemory(res);
-   req.action   = TRADE_ACTION_SLTP;
-   req.position = ticket;
-   req.symbol   = symbol;
-   req.sl       = sl;
-   req.tp       = tp;
-   req.magic    = (ulong)InpMagic;
+   req.action       = TRADE_ACTION_DEAL;
+   req.symbol       = c.symbol;
+   req.volume       = lots;
+   req.type         = (side == 1 ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
+   req.price        = price;
+   req.sl           = sl;
+   req.tp           = tp;
+   req.deviation    = InpSlippagePoints;
+   req.magic        = (ulong)InpMagic;
+   req.comment      = SA_COMMENT;
+   req.type_filling = fill;
+   req.type_time    = ORDER_TIME_GTC;
+   ResetLastError();
    return OrderSend(req, res);
   }
 
@@ -598,105 +723,104 @@ bool SaSendMarket(const SaSymCache &c, const int side, const double lots,
                   double sl, double tp, string &why)
   {
    if(side != 1 && side != -1)
-     {
-      why = "invalid side";
-      g_execStatus = why;
-      return false;
-     }
-   if(lots <= 0.0 || sl <= 0.0 || tp <= 0.0)
-     {
-      why = "invalid order params";
-      g_execStatus = why;
-      return false;
-     }
+     { why = "invalid side"; g_execStatus = why; return false; }
+   if(lots <= 0.0)
+     { why = "invalid lots"; g_execStatus = why; return false; }
+   if(sl <= 0.0 || tp <= 0.0)
+     { why = "invalid stops"; g_execStatus = why; return false; }
    if(c.tradeMode == SYMBOL_TRADE_MODE_DISABLED)
-     {
-      why = "symbol trade disabled";
-      g_execStatus = why;
-      return false;
-     }
+     { why = "symbol trade disabled"; g_execStatus = why; return false; }
+   if(side == 1 && c.tradeMode == SYMBOL_TRADE_MODE_SHORTONLY)
+     { why = "long disabled"; g_execStatus = why; return false; }
+   if(side == -1 && c.tradeMode == SYMBOL_TRADE_MODE_LONGONLY)
+     { why = "short disabled"; g_execStatus = why; return false; }
+   if(!AccountInfoInteger(ACCOUNT_TRADE_ALLOWED))
+     { why = "account trade off"; g_execStatus = why; return false; }
+   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || !MQLInfoInteger(MQL_TRADE_ALLOWED))
+     { why = "algo trading off"; g_execStatus = why; return false; }
 
-   ENUM_ORDER_TYPE_FILLING fill = SaFilling(c);
+   ENUM_ORDER_TYPE_FILLING fills[];
+   int nf = SaFillCandidates(c, fills);
+   uint lastRc = 0;
 
    for(int attempt = 1; attempt <= InpMaxRetries; attempt++)
      {
-      ResetLastError();
-      MqlTradeRequest req;
-      MqlTradeResult res;
-      ZeroMemory(req);
-      ZeroMemory(res);
-
       double bid = SymbolInfoDouble(c.symbol, SYMBOL_BID);
       double ask = SymbolInfoDouble(c.symbol, SYMBOL_ASK);
       if(bid <= 0.0 || ask <= 0.0)
         {
          why = "no quotes";
          g_execStatus = why;
-         if(attempt < InpMaxRetries)
-           {
-            Sleep(InpRetryBaseMs * attempt);
-            continue;
-           }
-         return false;
+         Sleep(InpRetryBaseMs * attempt);
+         continue;
         }
 
+      double spread = ask - bid;
       double minDist = SaMaxD((double)c.stopsLevel, (double)c.freezeLevel) * c.point;
+      minDist = SaMaxD(minDist, spread + c.point);
+      double price = (side == 1 ? ask : bid);
+
+      // Keep stops legal vs live quotes
       if(side == 1)
         {
-         if(ask - sl < minDist)
-            sl = SaNormPrice(c, ask - SaMaxD(minDist, c.point));
-         if(tp - ask < minDist)
-            tp = SaNormPrice(c, ask + SaMaxD(minDist, c.point));
+         if(ask - sl < minDist) sl = SaNormPrice(c, ask - SaMaxD(minDist, c.point));
+         if(tp - ask < minDist) tp = SaNormPrice(c, ask + SaMaxD(minDist, c.point));
          if(sl >= ask || tp <= ask)
-           {
-            why = "stops invalid vs ask";
-            g_execStatus = why;
-            return false;
-           }
+           { why = "stops invalid vs ask"; g_execStatus = why; return false; }
         }
       else
         {
-         if(sl - bid < minDist)
-            sl = SaNormPrice(c, bid + SaMaxD(minDist, c.point));
-         if(bid - tp < minDist)
-            tp = SaNormPrice(c, bid - SaMaxD(minDist, c.point));
+         if(sl - bid < minDist) sl = SaNormPrice(c, bid + SaMaxD(minDist, c.point));
+         if(bid - tp < minDist) tp = SaNormPrice(c, bid - SaMaxD(minDist, c.point));
          if(sl <= bid || tp >= bid)
-           {
-            why = "stops invalid vs bid";
-            g_execStatus = why;
-            return false;
-           }
+           { why = "stops invalid vs bid"; g_execStatus = why; return false; }
         }
 
-      req.action       = TRADE_ACTION_DEAL;
-      req.symbol       = c.symbol;
-      req.volume       = lots;
-      req.type         = (side == 1 ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
-      req.price        = (side == 1 ? ask : bid);
-      req.sl           = sl;
-      req.tp           = tp;
-      req.deviation    = InpSlippagePoints;
-      req.magic        = (ulong)InpMagic;
-      req.comment      = SA_COMMENT;   // exactly: SNIPER AI
-      req.type_filling = fill;
-
-      bool ok = OrderSend(req, res);
-      uint rc = res.retcode;
-
-      if(ok || SaRetcodeFilled(rc))
+      for(int fi = 0; fi < nf; fi++)
         {
-         why = "filled";
-         g_execStatus = "FILLED";
-         g_lastAction = (side == 1 ? "BUY filled " : "SELL filled ") + c.symbol;
-         SaLog(g_lastAction + " lots=" + DoubleToString(lots, 2) + " comment=" + SA_COMMENT);
-         return true;
+         MqlTradeResult res;
+         // 1) Try market with SL/TP attached
+         bool ok = SaOrderSendOnce(c, side, lots, price, sl, tp, fills[fi], res);
+         lastRc = res.retcode;
+         if(ok || SaRetcodeFilled(lastRc))
+           {
+            why = "filled";
+            g_execStatus = "FILLED";
+            g_lastAction = (side == 1 ? "BUY filled " : "SELL filled ") + c.symbol;
+            SaLog(g_lastAction + " lots=" + DoubleToString(lots, 2) + " comment=" + SA_COMMENT + " fill=" + IntegerToString((int)fills[fi]));
+            return true;
+           }
+
+         // 2) Broker rejects attached stops / fill -> open flat, then attach stops
+         bool tryTwoStep = InpOpenThenStops;
+         if(lastRc == 10016 || lastRc == 10030 || lastRc == 10015 || lastRc == SA_RC_REJECT)
+            tryTwoStep = true;
+         if(tryTwoStep)
+           {
+            ZeroMemory(res);
+            ok = SaOrderSendOnce(c, side, lots, price, 0.0, 0.0, fills[fi], res);
+            lastRc = res.retcode;
+            if(ok || SaRetcodeFilled(lastRc))
+              {
+               g_execStatus = "FILLED_OPEN";
+               g_lastAction = (side == 1 ? "BUY open " : "SELL open ") + c.symbol;
+               SaLog(g_lastAction + " lots=" + DoubleToString(lots, 2) + " comment=" + SA_COMMENT + " (attach stops next)");
+               string sw;
+               SaAttachStops(c.symbol, sl, tp, sw);
+               why = "filled";
+               g_execStatus = "FILLED";
+               SaLog("execution complete " + c.symbol + " " + sw);
+               return true;
+              }
+           }
+
+         SaLog(StringFormat("order reject %s fill=%d rc=%u err=%d attempt=%d",
+                            c.symbol, (int)fills[fi], lastRc, GetLastError(), attempt));
         }
 
-      why = StringFormat("retcode=%u err=%d", rc, GetLastError());
+      why = StringFormat("retcode=%u err=%d", lastRc, GetLastError());
       g_execStatus = why;
-      SaLog("order fail " + c.symbol + " " + why + " attempt=" + IntegerToString(attempt));
-
-      if(attempt < InpMaxRetries && SaRetcodeRetryable(rc))
+      if(attempt < InpMaxRetries && SaRetcodeRetryable(lastRc))
         {
          Sleep(InpRetryBaseMs * attempt);
          continue;
@@ -1237,7 +1361,16 @@ void SaEvaluatePass(const bool newM5)
    bool allow = newM5;
    SaSetup chartSetup;
    if(SaAnalyzeSymbol(_Symbol, allow, chartSetup))
+     {
+      SaLog("TRADE EXECUTED " + _Symbol + " side=" + IntegerToString(chartSetup.side) +
+            " path=" + IntegerToString(chartSetup.path) + " score=" + IntegerToString(chartSetup.score));
       return;
+     }
+   if(InpLogEachM5)
+      SaLog(_Symbol + " M5 scan: " + chartSetup.reason +
+            " score=" + IntegerToString(chartSetup.score) +
+            " bias=" + IntegerToString(chartSetup.bias) +
+            " exec=" + g_execStatus);
 
    if(InpTradeChartOnly || !InpScanAllForex)
       return;
@@ -1310,8 +1443,20 @@ int OnInit()
    g_lastAction = "online 24/7";
    g_execStatus = "armed";
    Comment("");
-   SaLog(StringFormat("ONLINE %s build=SA_TRADE_READY_13 lot=%.2f max=%d comment=%s",
+   SaLog(StringFormat("ONLINE %s build=SA_TRADE_READY_14 lot=%.2f max=%d comment=%s",
                       _Symbol, InpLot, InpMaxTrades, SA_COMMENT));
+   if(!TerminalInfoInteger(TERMINAL_CONNECTED))
+      SaLog("WARN: terminal not connected");
+   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
+      SaLog("WARN: AutoTrading is OFF in terminal toolbar - enable it");
+   if(!MQLInfoInteger(MQL_TRADE_ALLOWED))
+      SaLog("WARN: Algo Trading disabled for this EA - allow live trading in dialog");
+   if(!AccountInfoInteger(ACCOUNT_TRADE_ALLOWED))
+      SaLog("WARN: account trading not allowed");
+   SaSymCache c0;
+   if(SaLoadSymbol(_Symbol, c0))
+      SaLog(StringFormat("symbol mode=%d filling=%d stops=%d freeze=%d",
+                         (int)c0.tradeMode, (int)c0.fillingMode, c0.stopsLevel, c0.freezeLevel));
    return INIT_SUCCEEDED;
   }
 

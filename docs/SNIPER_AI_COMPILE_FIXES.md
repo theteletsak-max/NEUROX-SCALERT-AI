@@ -1,14 +1,10 @@
-# SNIPER AI - MetaEditor / execution surface
+# SNIPER AI - compile / execution surface
 
-Canonical: `SNIPER_AI_OK13.mq5` (`BUILD_ID: SA_TRADE_READY_13`)
+Canonical: `SNIPER_AI_OK14.mq5` (`BUILD_ID: SA_TRADE_READY_14`)
 
-## Hard rules in this build
-- No `#include` / no `CTrade`
-- Raw `OrderSend` with portable numeric retcodes
-- Trade comment locked to exactly `SNIPER AI`
-- Dashboard removed (user request)
-- ASCII-only source
-
-## Strategy preserved
-H4 bias -> H1 structure/liquidity/zones -> M5 confirm
-Continuation + Reversal | max 3 | lot 0.01 | 1.5xATR | 2R | BE +1R | 24/7
+Execution:
+- Market deal via OrderSend
+- Fallback: open without stops, then TRADE_ACTION_SLTP
+- Multi filling mode retry (IOC/FOK/RETURN)
+- Trade comment locked: `SNIPER AI`
+- No chart dashboard

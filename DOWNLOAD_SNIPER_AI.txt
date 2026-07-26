@@ -1,27 +1,28 @@
 SNIPER AI - DOWNLOAD
 ====================
 
-Use the ZIP (recommended):
+ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
-Or the EA file page (Download raw file button on GitHub):
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK13.mq5
+EA file:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK14.mq5
 
 MUST SHOW AT TOP:
-  BUILD_ID: SA_TRADE_READY_13
+  BUILD_ID: SA_TRADE_READY_14
 
 STEPS:
 1. Close MetaEditor
 2. Delete ALL old Sniper/SNIPER *.mq5 and *.ex5 from MQL5/Experts
-3. Unzip / copy SNIPER_AI_OK13.mq5 into MQL5/Experts
-4. Open it and confirm SA_TRADE_READY_13
+3. Copy SNIPER_AI_OK14.mq5 into MQL5/Experts
+4. Confirm SA_TRADE_READY_14
 5. Press F7
-6. Attach to a forex chart, enable Algo Trading
+6. Attach to forex chart
+7. Enable AutoTrading (toolbar) AND allow Algo Trading in EA settings
+8. Watch Experts tab each M5 for: "M5 scan: ..." or "TRADE EXECUTED"
 
-THIS BUILD:
-- reliable market execution
-- trade comment exactly: SNIPER AI
-- dashboard removed
-- strategy preserved (H4/H1/M5 continuation + reversal)
-- BE + optional trail, max 3, lot 0.01, 24/7 adaptive
-- default: trade attached chart (InpTradeChartOnly=true)
+FIXES IN THIS BUILD:
+- open order first, then attach SL/TP (common broker requirement)
+- tries IOC / FOK / RETURN filling modes
+- spread-aware stop distance
+- higher default slippage
+- clear logs if AutoTrading is off
