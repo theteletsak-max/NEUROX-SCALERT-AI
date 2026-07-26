@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neurox-scalper-ai"
+version = "0.1.0"
+description = "NEUROX Scalper AI — forex scalping trading robot with backtest and paper trading"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "NEUROX" }]
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.1",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+neurox = "neurox_scalper.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["neurox_scalper*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
