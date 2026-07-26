@@ -1,6 +1,7 @@
-SNIPER AI — SA_SMT_PLACE_26
+SNIPER AI — FULL UPGRADE
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK26.mq5
+BUILD_ID: SA_FULL_UPGRADE_27
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK27.mq5
 
-SMT moved to RevSniper only. InstantTrend can trade again.
-Remove EA + re-attach after compile.
+Quality-first rank + InstantTrend fallback. Remove EA + re-attach after compile.
+Set EntryTF=H4 if you trade BTC on H4.

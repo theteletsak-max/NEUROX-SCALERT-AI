@@ -1,1 +1,2 @@
-SA_SMT_PLACE_26 — SMT on RevSniper; InstantTrend not SMT-blocked
+SA_FULL_UPGRADE_27
+Quality-first Cont/Rev, InstantTrend fallback, try-next path, per-tag stats.

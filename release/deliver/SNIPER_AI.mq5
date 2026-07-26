@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_SMT_PLACE_26                                  |
-//| SNIPER AI - SMT on reversal paths; InstantTrend can execute       |
+//| BUILD_ID: SA_FULL_UPGRADE_27                                  |
+//| SNIPER AI - FULL UPGRADE: quality-first rank + instant fallback   |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "2.60"
-#property description "SNIPER AI SMT placed on RevSniper (not InstantTrend)"
-#property description "Fixes SMT HARD-block that stopped BTC trend trades"
+#property version   "2.70"
+#property description "SNIPER AI full upgrade - quality rank, ICE/IMCE/SMT"
+#property description "Prefers Cont/Rev; InstantTrend fallback; per-tag stats"
 
 #include <Trade/Trade.mqh>
 
@@ -25,11 +25,17 @@ input group "GENERAL"
 input long MagicNumber = 40001;
 input string TradeComment = "SNIPER AI";
 
-input group "AGGRESSIVE INSTANT + HARD ENGINES"
-// Aggressive Instant = NO MPI wait (fire when path + engines pass).
-// SMT / IMCE / ICE are HARD gates — not soft assist.
+input group "FULL UPGRADE - QUALITY FIRST + INSTANT FALLBACK"
+// Prefers ContSniper/RevSniper when valid. InstantTrend is the aggressive
+// fallback so you still trade. Tries next path if engines reject the first.
+// MPI wait stays OFF. ICE/IMCE hard; SMT on RevSniper only.
 
-input bool   AggressiveInstantQuality    = true;  // skip MPI wait only
+input bool   AggressiveInstantQuality    = true;  // skip MPI wait
+input bool   PreferQualityPaths          = true;  // Cont/Rev before InstantTrend
+input bool   TryNextPathIfEnginesFail    = true;  // critical: don't kill bar if Cont fails engines
+input bool   EnableAdaptivePathRanking   = true;  // boost tags with proven win-rate
+input int    AdaptivePathMinTrades       = 10;    // min closed trades before win-rate ranks
+input bool   PrintPathStatsOnInit        = true;
 input bool   EnableAlwaysQualityMode     = true;
 input bool   QualityRequireStructureZone = true;
 input bool   QualityRequireTrendAndADX   = true;
@@ -37,11 +43,11 @@ input bool   QualityDisableWeakPaths     = false;
 input int    QualityMPIScore             = 0;
 
 input bool   EnableInstantSniperMode     = true;
-input bool   AllowTrendOnlyInstantEntry  = true;
+input bool   AllowTrendOnlyInstantEntry  = true;  // aggressive fallback
 input bool   AggressiveSniperEntries     = true;
 input bool   NeverBlockValidSniperEntry  = true;
 input bool   ResolveConflictByTrend      = true;
-input bool   AggressiveInstitutionalExecution = false; // OFF: no soft engine bypass
+input bool   AggressiveInstitutionalExecution = false;
 input double InstantPullbackATRMultiple  = 3.0;
 input int    InstantStructureRecencyBars = 25;
 input int    InstantMinimumMPIScore      = 0;
@@ -334,6 +340,9 @@ datetime LastApprovedSellBarTimeArr[];
 // band, so borderline noise doesn't relabel the regime every bar.
 int      RegimeLastStateArr[]; // stores MarketRegime as int, -1 = not yet set
 
+void PrintStrategyPerformanceReport(); // full upgrade: print on init
+int  PathBasePriority(const string tag);
+int  PathQualityRankScore(const string tag, const bool buy);
 
 // CopyBuffer() every single call - unlike GetEMA()/GetADX()/GetATR(),
 // which already cache once per (symbol, trading cycle) via
@@ -409,18 +418,19 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_SMT_PLACE_26");
-   Print("Mode: AGGRESSIVE INSTANT (no MPI wait)=", AggressiveInstantQuality,
-         " | InstantTrend=", AllowTrendOnlyInstantEntry);
-   Print("Engines: ICE hard Min=", ICE_MinScore,
-         " | IMCE hard | SMT hard on RevSniper only (not InstantTrend)");
-   Print("SMT placement: continuation paths execute without SMT duplicate veto");
-   Print("If old blocks remain: REMOVE EA from chart and re-attach OK26");
-   Print("Oscillators: RSI/MACD/Stochastic NOT used");
-   Print("Trade size: LotSize=", LotSize, " UseFixedLot=", UseFixedLot,
-         " RiskPercent=", RiskPercent,
-         " | MaxOpenTrades/symbol=", MaxOpenTrades,
-         " | MaxTotalAllSymbols=", MaxTotalOpenTradesAllSymbols);
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_FULL_UPGRADE_27");
+   Print("FULL UPGRADE: PreferQuality=", PreferQualityPaths,
+         " TryNextPath=", TryNextPathIfEnginesFail,
+         " AdaptiveRank=", EnableAdaptivePathRanking,
+         " InstantFallback=", AllowTrendOnlyInstantEntry,
+         " NoMPIwait=", AggressiveInstantQuality);
+   Print("Engines: ICE_MinScore=", ICE_MinScore,
+         " | IMCE hard | SMT on RevSniper only");
+   Print("Trade size: LotSize=", LotSize, " MaxOpenTrades=", MaxOpenTrades,
+         " MaxTotal=", MaxTotalOpenTradesAllSymbols);
+   Print("TIP: set EntryTF to match chart (you use H4 — set EntryTF=H4)");
+   if(PrintPathStatsOnInit)
+      PrintStrategyPerformanceReport();
 
    return(INIT_SUCCEEDED);
 }
@@ -962,16 +972,22 @@ void RecordStrategyPerformance(ulong positionTicket, bool wasWin)
 
 void PrintStrategyPerformanceReport()
 {
-   Print("==== PER-STRATEGY PERFORMANCE (all-time) ====");
+   Print("==== PER-STRATEGY PERFORMANCE (FULL UPGRADE) ====");
 
-   for(int i = 0; i < STRATEGY_TAG_COUNT; i++)
+   // Focus on live PRISM tags first
+   string liveTags[7] = {"RevSniper", "ContSniper", "LiquiditySweep", "FVG+OB",
+                         "TrendPullback", "InstantTrend", "VolBreakout(Spec)"};
+   for(int t = 0; t < 7; t++)
    {
+      int i = FindStrategyTagIndex(liveTags[t]);
+      if(i < 0) continue;
       double r = SignalWinRate(g_StrategyTagWins[i], g_StrategyTagLosses[i]);
-      Print(g_StrategyTagNames[i], ": ", FormatSignalWinRate(r, g_StrategyTagWins[i], g_StrategyTagLosses[i]),
-            " (", (int)g_StrategyTagWins[i], "W/", (int)g_StrategyTagLosses[i], "L)");
+      Print(liveTags[t], ": ", FormatSignalWinRate(r, g_StrategyTagWins[i], g_StrategyTagLosses[i]),
+            " (", (int)g_StrategyTagWins[i], "W/", (int)g_StrategyTagLosses[i], "L)",
+            " rankBase=", PathBasePriority(liveTags[t]));
    }
 
-   Print("===============================================");
+   Print("=================================================");
 }
 
 // Prints a full per-signal win-rate breakdown on demand (e.g. call from
@@ -6379,21 +6395,22 @@ bool AggressiveContinuationSellSetup()
    return bos || zone || pulled || TrendStrong();
 }
 
-// Path B quality reversal: liquidity AND institutional zone.
+// Path B quality reversal: THIS is where SMT lives (sweep/CHoCH + OB/FVG).
+// Do not also hard-block InstantTrend with a second SMT gate.
 bool AggressiveReversalBuySetup()
 {
    if(!AggressiveSniperEntries)
       return false;
 
    int rec = EffectiveStructureRecency();
-   bool liq = RecentSweep(rec) || RecentCHoCH(rec);
-   bool zone = ActiveOrderBlock(true) || ActiveFVG(true);
+   bool liq = RecentSweep(rec) || RecentCHoCH(rec);   // SMT liquidity event
+   bool zone = ActiveOrderBlock(true) || ActiveFVG(true); // SMT institutional zone
 
    if(QualityGatesActive())
    {
       if(QualityNeedsTrendAndADX() && !(IsBullTrend() && TrendStrong()))
          return false;
-      return liq && zone;
+      return liq && zone; // internal SMT confirmation
    }
 
    if(NeverBlockValidSniperEntry)
@@ -6884,6 +6901,62 @@ bool PrismInstitutionalEnginesOK(bool buy, const string strategyTag)
    return true;
 }
 
+//----- FULL UPGRADE: path quality ranking ----------------------------//
+// Lower base priority number = higher structural quality.
+// InstantTrend is intentional aggressive fallback (priority 6).
+int PathBasePriority(const string tag)
+{
+   if(!PreferQualityPaths)
+   {
+      // Aggressive-first order when quality preference is off
+      if(tag == "InstantTrend")       return 1;
+      if(tag == "ContSniper")         return 2;
+      if(tag == "RevSniper")          return 3;
+      if(tag == "LiquiditySweep")     return 4;
+      if(tag == "FVG+OB")             return 5;
+      if(tag == "TrendPullback")      return 6;
+      if(tag == "VolBreakout(Spec)")  return 7;
+      return 99;
+   }
+
+   if(tag == "RevSniper")          return 1; // most stacked SMT path
+   if(tag == "ContSniper")         return 2; // trend + structure
+   if(tag == "LiquiditySweep")     return 3;
+   if(tag == "FVG+OB")             return 4;
+   if(tag == "TrendPullback")      return 5;
+   if(tag == "InstantTrend")       return 6; // aggressive fallback
+   if(tag == "VolBreakout(Spec)")  return 7;
+   return 99;
+}
+
+int PathQualityRankScore(const string tag, const bool buy)
+{
+   int score = 1000 - PathBasePriority(tag) * 100;
+   score += GetInstitutionalConfidenceScore(buy);
+
+   int rec = EffectiveStructureRecency();
+   if(RecentBOS(rec)) score += 8;
+   if(ActiveOrderBlock(buy) || ActiveFVG(buy)) score += 8;
+   if(RecentSweep(rec) || RecentCHoCH(rec)) score += 6;
+
+   if(EnableAdaptivePathRanking)
+   {
+      int idx = FindStrategyTagIndex(tag);
+      if(idx >= 0)
+      {
+         double w = g_StrategyTagWins[idx];
+         double l = g_StrategyTagLosses[idx];
+         if((w + l) >= AdaptivePathMinTrades && (w + l) > 0.0)
+         {
+            double wr = w / (w + l);
+            score += (int)MathRound(wr * 50.0); // proven paths climb the rank
+         }
+      }
+   }
+
+   return score;
+}
+
 // The Priority Engine itself: evaluates every spec-named strategy for
 // both directions, rejects the bar entirely if valid setups disagree on
 // direction (a genuine conflict - spec says reject, not pick a side), and
@@ -7009,55 +7082,64 @@ void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &
    if(isBuy) { ArrayCopy(candidates, buyCandidates); candidateCount = buyCount; }
    else      { ArrayCopy(candidates, sellCandidates); candidateCount = sellCount; }
 
-   // Among the (already all individually valid) candidates, pick the one
-   // backed by the most independent confirming conditions - the "rank
-   // valid strategies / select strongest valid setup" step.
-   string bestTag = candidates[0];
-   int bestScore = CountConfirmingConditions(isBuy);
+   // FULL UPGRADE: rank candidates by quality, then try engines in order.
+   // Prefer ContSniper/RevSniper; InstantTrend is aggressive fallback.
+   // If ContSniper fails ICE/IMCE, TryNextPath lets InstantTrend still fire.
+   string ordered[];
+   int    orderedScores[];
+   ArrayResize(ordered, candidateCount);
+   ArrayResize(orderedScores, candidateCount);
 
-   // CountConfirmingConditions() reflects overall market context (shared
-   // across every candidate this bar), so every candidate ties on it here
-   // by construction - genuinely differentiating which STRATEGY specifically
-   // is strongest would need per-strategy confluence weighting, which the
-   // spec's "no blind score-based trading" rule deliberately rules out
-   // building as a scoring system. With only structural validity to go on,
-   // first-valid-in-priority-order is the transparent, honest tie-break:
-   // Liquidity Sweep > FVG+OB > Trend Pullback > Volatility Breakout,
-   // reflecting how much independent confirmation each pattern definition
-   // itself already requires (sweep+CHoCH+OB is the most stacked; a
-   // breakout requires the least).
-   string priorityOrder[7] = {"ContSniper", "RevSniper", "InstantTrend", "LiquiditySweep", "FVG+OB", "TrendPullback", "VolBreakout(Spec)"};
-
-   for(int p = 0; p < 7; p++)
+   for(int c = 0; c < candidateCount; c++)
    {
-      for(int c = 0; c < candidateCount; c++)
+      ordered[c] = candidates[c];
+      orderedScores[c] = PathQualityRankScore(candidates[c], isBuy);
+   }
+
+   // Sort descending by quality score (simple bubble — max 8 candidates)
+   for(int i = 0; i < candidateCount - 1; i++)
+   {
+      for(int j = i + 1; j < candidateCount; j++)
       {
-         if(candidates[c] == priorityOrder[p])
+         if(orderedScores[j] > orderedScores[i])
          {
-            bestTag = priorityOrder[p];
-            p = 7; // break outer loop too
-            break;
+            int ts = orderedScores[i]; orderedScores[i] = orderedScores[j]; orderedScores[j] = ts;
+            string tt = ordered[i]; ordered[i] = ordered[j]; ordered[j] = tt;
          }
       }
    }
 
-   // SMT + IMCE + ICE institutional layer (after strategy tag is known)
-   if(!PrismInstitutionalEnginesOK(isBuy, bestTag))
+   string bestTag = "";
+   int tried = 0;
+   for(int c = 0; c < candidateCount; c++)
    {
-      buySignal = false;
-      sellSignal = false;
-      strategyTag = "";
+      tried++;
+      if(PrismInstitutionalEnginesOK(isBuy, ordered[c]))
+      {
+         bestTag = ordered[c];
+         break;
+      }
+      if(!TryNextPathIfEnginesFail)
+         break;
+   }
+
+   if(bestTag == "")
+   {
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("FULL UPGRADE: ", candidateCount, " path(s) valid but engines rejected all on ",
+               BrokerSymbol, " (", (isBuy ? "BUY" : "SELL"), ")");
       return;
    }
 
    if(isBuy) { buySignal = true;  strategyTag = bestTag; }
    else      { sellSignal = true; strategyTag = bestTag; }
 
-   if(EnableVerboseLogging || EnableSetupLogging)
-      Print("PRISM+SMT/IMCE/ICE approved ", (isBuy ? "BUY" : "SELL"),
-            " [", bestTag, "] ICE=", GetInstitutionalConfidenceScore(isBuy),
-            " IMCE=", IMCEContextToString(GetIMCEContext()),
-            " on ", BrokerSymbol);
+   Print("FULL UPGRADE FIRE ", (isBuy ? "BUY" : "SELL"),
+         " [", bestTag, "] rank=", PathQualityRankScore(bestTag, isBuy),
+         " ICE=", GetInstitutionalConfidenceScore(isBuy),
+         " IMCE=", IMCEContextToString(GetIMCEContext()),
+         " tried=", tried, "/", candidateCount,
+         " on ", BrokerSymbol);
 }
 
 //+------------------------------------------------------------------+
@@ -8326,12 +8408,12 @@ void PrintSetupDiagnostics()
             " EventTighten=", eventQ,
             " MPI floor=", EffectiveMinimumMPIScore(),
             " NewsHardBlock=", EnableNewsFilter);
-      Print("NOTE: ICE_buy=", GetInstitutionalConfidenceScore(true),
-            " ICE_sell=", GetInstitutionalConfidenceScore(false),
+      Print("NOTE: FULL UPGRADE PreferQuality=", PreferQualityPaths,
+            " TryNextPath=", TryNextPathIfEnginesFail,
+            " ICE_buy=", GetInstitutionalConfidenceScore(true),
             " ICE_MinScore=", ICE_MinScore,
             " IMCE=", IMCEContextToString(GetIMCEContext()));
-      Print("NOTE: SMT on RevSniper/LiquiditySweep only | InstantTrend/ContSniper not SMT-blocked");
-      Print("NOTE: AggressiveInstantQuality=", AggressiveInstantQuality, " (MPI wait OFF)");
+      Print("NOTE: Rank Cont/Rev first; InstantTrend fallback; SMT on RevSniper only; MPI wait OFF");
    }
 }
 

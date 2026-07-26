@@ -2,24 +2,25 @@ SNIPER AI - DOWNLOAD
 ====================
 
 EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK26.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK27.mq5
 
 ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
-BUILD_ID: SA_SMT_PLACE_26
+BUILD_ID: SA_FULL_UPGRADE_27
 
-Fixes Experts spam:
-  SMT HARD-blocked BUY — no smart-money confirmation
+FULL UPGRADE:
+1. Prefers ContSniper / RevSniper when valid (quality first)
+2. InstantTrend = aggressive fallback so you still trade
+3. TryNextPathIfEnginesFail — if Cont fails ICE/IMCE, InstantTrend can still fire
+4. Adaptive ranking by per-tag win-rate (after enough trades)
+5. ICE/IMCE hard; SMT on RevSniper only; MPI wait OFF
+6. Prints per-strategy stats on load
+7. Adjustable LotSize / MaxOpenTrades
 
-What was wrong:
-- SMT was applied as a GLOBAL hard veto AFTER InstantTrend already passed
-- That duplicated RevSniper's sweep+zone SMT and killed BTC trend trades
-
-OK26 placement:
-- SMT lives on RevSniper / LiquiditySweep (right place)
-- InstantTrend / ContSniper are NOT SMT hard-blocked
-- ICE + IMCE still hard; MPI wait still OFF
-
-MUST: remove EA from chart, compile OK26, re-attach.
-Experts must show: BUILD_ID=SA_SMT_PLACE_26
+INSTALL:
+1. Delete old SNIPER* .mq5/.ex5
+2. Compile OK27
+3. REMOVE EA from chart + re-attach
+4. Set EntryTF = H4 if chart is H4
+5. Experts must show: BUILD_ID=SA_FULL_UPGRADE_27
