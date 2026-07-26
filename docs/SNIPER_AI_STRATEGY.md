@@ -25,6 +25,7 @@
 | Management | SL / TP / Break-even only |
 | Forbidden | Grid, martingale, trailing, partials, self-optimising AI |
 | AI role | Assist ranking / labelling only — never bypass rules |
+| Slot priority | **Instant if slot free**; if several qualify same pass → **highest score first** |
 
 ---
 
