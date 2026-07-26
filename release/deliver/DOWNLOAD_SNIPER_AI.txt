@@ -1,27 +1,20 @@
 SNIPER AI - DOWNLOAD
 ====================
 
+EA:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK24.mq5
+
 ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
-EA file:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK23.mq5
+BUILD_ID: SA_HARD_ENGINES_24
 
-MUST SHOW AT TOP:
-  BUILD_ID: SA_AGGRESSIVE_INSTANT_23
+Why soft before? That was wrong for what you asked.
+OK24:
+- Aggressive Instant = NO MPI wait only
+- SMT = HARD
+- IMCE = HARD
+- ICE = HARD (min 25)
+- Fire only when path + HARD engines pass
 
-Fixes your log:
-  QUALITY SNIPER: MPI 35 < 40 ... waiting for quality setup
-
-OK23 = Aggressive Instant Quality:
-- MPI wait REMOVED (score is informational only)
-- InstantTrend fires on trend+ADX immediately
-- SMT/IMCE/ICE still assist (soft)
-- LotSize / MaxOpenTrades still adjustable
-
-IMPORTANT:
-1. Delete ALL old SNIPER*.ex5 / .mq5 from Experts
-2. Copy OK23, compile F7
-3. REMOVE EA from chart, re-attach OK23 (reset inputs)
-4. Experts must show: BUILD_ID=SA_AGGRESSIVE_INSTANT_23
-5. Must show: AGGRESSIVE INSTANT QUALITY=true (MPI wait OFF)
+Remove EA from chart and re-attach after compile (reset inputs).

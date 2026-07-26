@@ -1,7 +1,2 @@
-SNIPER AI — Aggressive Instant Quality
-======================================
-BUILD_ID: SA_AGGRESSIVE_INSTANT_23
-File: SNIPER_AI_OK23.mq5
-
-No MPI wait. Instant fire when InstantTrend/ContSniper/RevSniper passes.
-Remove EA from chart and re-attach after compile (reset old inputs).
+BUILD_ID: SA_HARD_ENGINES_24
+SMT/IMCE/ICE are HARD gates. Aggressive Instant = no MPI wait only.
