@@ -11,8 +11,8 @@
 #property description "Trades 24/7 including news/high volatility. No session filter."
 #property strict
 
-// Watermark must sit next to this .mq5 (same Experts folder)
-#resource "SniperAI_Watermark.bmp"
+// Watermark disabled for now (re-enable later with #resource + InpShowWatermark=true)
+// #resource "SniperAI_Watermark.bmp"
 
 #include <Trade/Trade.mqh>
 

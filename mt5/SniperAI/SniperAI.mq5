@@ -11,8 +11,8 @@
 #property description "Trades 24/7 including news/high volatility. No session filter."
 #property strict
 
-// Watermark image (candles render above via OBJPROP_BACK)
-#resource "Images\\SniperAI_Watermark.bmp"
+// Watermark disabled for now (re-enable later with #resource + InpShowWatermark=true)
+// #resource "Images\\SniperAI_Watermark.bmp"
 
 #include "Include/SniperAI/SA_Util.mqh"
 #include "Include/SniperAI/SA_Signal.mqh"
