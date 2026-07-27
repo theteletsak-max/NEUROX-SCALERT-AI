@@ -2,38 +2,47 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK35.mq5
-BUILD_ID: SA_PRISM_REVERSAL_35
+File:     SNIPER_AI_OK36.mq5
+BUILD_ID: SA_PRISM_REV_CORRECT_36
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK35.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK36.mq5
 
-Raw / Save As:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK35.mq5
+Raw:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK36.mq5
 
 ──────────────────────────────────────
-EARLY MARKET REVERSAL (OK35)
+CORRECT REVERSAL DETECTION
 ──────────────────────────────────────
-• RevSniper fires on sweep/CHoCH + OB/FVG
-• Does NOT wait for full EMA+ADX trend flip
-• IMCE soft-allows Rev inside trend if stack is strong
-• ICE gets early-reversal bonus so score can clear 25
-• Cont/Instant still aggressive for trend continuation
+BUY  RevSniper ONLY if:
+  1. Sell-side liquidity swept (LOWS taken)
+  2. Bullish OB or FVG zone
+  3. Reclaim confirm (CHoCH / displacement / reclaim candle)
+  4. No fake-breakout trap in BUY direction
 
-Look for Experts:
-  REV EARLY BUY/SELL stack OK ...
-  IMCE early-reversal PASS RevSniper ...
+SELL RevSniper ONLY if:
+  1. Buy-side liquidity swept (HIGHS taken)
+  2. Bearish OB or FVG zone
+  3. Reclaim confirm
+  4. No trap in SELL direction
+
+Experts will show:
+  REV VALIDATE BUY: PASS — OK correctSweep=Y zone=Y reclaim=Y ...
   ULTRA CORE FIRE BUY [RevSniper] ...
+
+or:
+  REV VALIDATE BUY: FAIL — need sell-side sweep (lows taken)
+
+Cont/Instant still aggressive for trend continuation.
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
-1. Delete ALL old SNIPER* .mq5/.ex5
-2. Copy OK35 → F7 (0 errors, 0 warnings)
-3. Remove EA from ALL charts → re-attach OK35
-4. EntryTF = H4 on H4 charts
-5. Experts: BUILD_ID=SA_PRISM_REVERSAL_35
-6. Algo Trading ON
+1. Delete ALL old SNIPER*
+2. Compile OK36 (F7)
+3. Remove EA all charts → re-attach
+4. EntryTF=H4 on H4 charts
+5. Experts: BUILD_ID=SA_PRISM_REV_CORRECT_36
 ══════════════════════════════════════

@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_REVERSAL_35                                |
-//| SNIPER AI - early market reversal sniper + aggressive Cont       |
+//| BUILD_ID: SA_PRISM_REV_CORRECT_36                             |
+//| SNIPER AI - correct-side reversal detection + reclaim confirm    |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "3.50"
-#property description "SNIPER AI early market reversal - Rev fires on sweep+zone"
-#property description "No wait for full trend flip; Cont/Instant still aggressive"
+#property version   "3.60"
+#property description "SNIPER AI correct reversal - sell-side sweep for BUY, reclaim required"
+#property description "Early flip without wrong-side noise; Cont/Instant still aggressive"
 
 #include <Trade/Trade.mqh>
 
@@ -39,14 +39,19 @@ input bool   BeastCaptureSignalSnapshot      = true;  // record MPI/ICE at decis
 input bool   EnableBeastDashboard            = true;  // rich HUD when EnableDashboard=true
 
 input group "MARKET REVERSAL SNIPER"
-// Early reversal: fire RevSniper on sweep/CHoCH + OB/FVG WITHOUT waiting
-// for full EMA+ADX trend flip (that was making reversals too late).
+// Correct reversal: BUY only after sell-side liquidity (lows) swept + reclaim.
+// SELL only after buy-side liquidity (highs) swept + reclaim.
+// Early = no full ADX wait; Correct = right side + zone + reclaim confirmation.
 
-input bool   EnableEarlyMarketReversal       = true;  // catch flips earlier
+input bool   EnableEarlyMarketReversal       = true;  // catch flips before full trend ADX
 input bool   ReversalRequireTrendADX         = false; // false = don't wait for new trend+ADX
-input bool   ReversalAcceptCHoCHOrSweep      = true;  // either liquidity event qualifies for path
-input bool   ReversalIMCESoftInTrend         = true;  // allow Rev in TREND context if stack is strong
-input int    ReversalStructureRecencyBars    = 30;    // lookback for sweep/CHoCH on reversals
+input bool   ReversalAcceptCHoCHOrSweep      = true;  // CHoCH can help reclaim confirm
+input bool   ReversalIMCESoftInTrend         = true;  // allow Rev in TREND if stack is strong
+input int    ReversalStructureRecencyBars    = 30;    // lookback for sweep/CHoCH
+input bool   ReversalRequireCorrectSideSweep = true;  // BUY needs lows swept; SELL needs highs swept
+input bool   ReversalRequireReclaimConfirm   = true;  // CHoCH or displacement or reclaim candle
+input bool   ReversalRequireZone             = true;  // OB or FVG in trade direction
+input bool   ReversalLogValidation           = true;  // print why Rev passed/failed
 
 input group "PRISM ULTRA CORE v11"
 // Low-latency cached pipeline. Aggressive fire AFTER path+engines approve.
@@ -457,13 +462,15 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_REVERSAL_35");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_REV_CORRECT_36");
+   Print("REVERSAL CORRECT: CorrectSideSweep=", ReversalRequireCorrectSideSweep,
+         " ReclaimConfirm=", ReversalRequireReclaimConfirm,
+         " Early=", EnableEarlyMarketReversal,
+         " RevNeedTrendADX=", ReversalRequireTrendADX);
    Print("PRISM ULTRA SNIPER: AggressiveFire=", UltraAggressiveFire,
          " AggressiveInstitutional=", AggressiveInstitutionalExecution,
-         " EarlyReversal=", EnableEarlyMarketReversal,
-         " RevNeedTrendADX=", ReversalRequireTrendADX,
          " CooldownMin=", TradeCooldownMinutes, "/", NonScalpCooldownMinutes);
-   Print("REVERSAL: sweep/CHoCH + OB/FVG can fire before full trend flip");
+   Print("REVERSAL: BUY=sell-side sweep+reclaim | SELL=buy-side sweep+reclaim");
    Print("PRISM BEAST: BeastMode=", EnableBeastMode,
          " SniperMode=", EnableSniperMode,
          " UnifiedStructure=", BeastUseUnifiedStructure,
@@ -4836,52 +4843,195 @@ input double LiquiditySweep_MinDepthATRMultiple = 0.1; // CHANGED: was 0.0 - sam
 // really just ordinary directional strength.
 input double LiquiditySweep_MinWickRatio = 0.33; // the piercing wick must be at least this fraction of the bar's total high-low range
 
-bool DetectLiquiditySweep()
+bool IsBuySideLiquiditySweepAtBar(const int bar)
 {
-   double currentHigh = iHigh(BrokerSymbol, EntryTF, 1);
-   double currentLow  = iLow(BrokerSymbol, EntryTF, 1);
-
-   double previousHigh = GetRecentHigh();
-   double previousLow  = GetRecentLow();
-
-   if(previousHigh == EMPTY_VALUE || previousLow == EMPTY_VALUE)
+   // Sweep of highs → bearish reversal fuel (SELL)
+   if(bar < 1)
       return false;
 
-   double close = iClose(BrokerSymbol, EntryTF, 1);
+   double currentHigh = iHigh(BrokerSymbol, EntryTF, bar);
+   double currentLow  = iLow(BrokerSymbol, EntryTF, bar);
+   double close = iClose(BrokerSymbol, EntryTF, bar);
    double barRange = currentHigh - currentLow;
+   if(barRange <= 0.0)
+      return false;
+
+   // Prior swing high from bars after this bar
+   double previousHigh = iHigh(BrokerSymbol, EntryTF, bar + 1);
+   for(int j = bar + 2; j <= bar + 6; j++)
+   {
+      double h = iHigh(BrokerSymbol, EntryTF, j);
+      if(h > previousHigh) previousHigh = h;
+   }
 
    double atr = GetFilterATR();
    double minSweepDepth = (atr > 0.0) ? (atr * LiquiditySweep_MinDepthATRMultiple) : 0.0;
 
-   // Buy-side liquidity sweep
-   if(currentHigh > previousHigh + minSweepDepth && close < previousHigh)
+   if(!(currentHigh > previousHigh + minSweepDepth && close < previousHigh))
+      return false;
+
+   double wick = currentHigh - MathMax(close, previousHigh);
+   return (wick / barRange >= LiquiditySweep_MinWickRatio);
+}
+
+bool IsSellSideLiquiditySweepAtBar(const int bar)
+{
+   // Sweep of lows → bullish reversal fuel (BUY)
+   if(bar < 1)
+      return false;
+
+   double currentHigh = iHigh(BrokerSymbol, EntryTF, bar);
+   double currentLow  = iLow(BrokerSymbol, EntryTF, bar);
+   double close = iClose(BrokerSymbol, EntryTF, bar);
+   double barRange = currentHigh - currentLow;
+   if(barRange <= 0.0)
+      return false;
+
+   double previousLow = iLow(BrokerSymbol, EntryTF, bar + 1);
+   for(int j = bar + 2; j <= bar + 6; j++)
    {
-      double wick = currentHigh - MathMax(close, previousHigh);
-      if(barRange <= 0.0 || wick / barRange >= LiquiditySweep_MinWickRatio)
-      {
-         if(EnableVerboseLogging) Print("Buy-side liquidity sweep detected");
-         int sIdx = GetSymbolIndex(BrokerSymbol);
-         if(sIdx >= 0 && sIdx < ArraySize(LastSweepTrueBarTimeArr))
-            LastSweepTrueBarTimeArr[sIdx] = iTime(BrokerSymbol, EntryTF, 1);
-         return true;
-      }
+      double l = iLow(BrokerSymbol, EntryTF, j);
+      if(l < previousLow) previousLow = l;
    }
 
-   // Sell-side liquidity sweep
-   if(currentLow < previousLow - minSweepDepth && close > previousLow)
+   double atr = GetFilterATR();
+   double minSweepDepth = (atr > 0.0) ? (atr * LiquiditySweep_MinDepthATRMultiple) : 0.0;
+
+   if(!(currentLow < previousLow - minSweepDepth && close > previousLow))
+      return false;
+
+   double wick = MathMin(close, previousLow) - currentLow;
+   return (wick / barRange >= LiquiditySweep_MinWickRatio);
+}
+
+bool DetectLiquiditySweep()
+{
+   bool buySide = IsBuySideLiquiditySweepAtBar(1);
+   bool sellSide = IsSellSideLiquiditySweepAtBar(1);
+
+   if(buySide || sellSide)
    {
-      double wick = MathMin(close, previousLow) - currentLow;
-      if(barRange <= 0.0 || wick / barRange >= LiquiditySweep_MinWickRatio)
-      {
-         if(EnableVerboseLogging) Print("Sell-side liquidity sweep detected");
-         int sIdx = GetSymbolIndex(BrokerSymbol);
-         if(sIdx >= 0 && sIdx < ArraySize(LastSweepTrueBarTimeArr))
-            LastSweepTrueBarTimeArr[sIdx] = iTime(BrokerSymbol, EntryTF, 1);
-         return true;
-      }
+      if(EnableVerboseLogging)
+         Print(buySide ? "Buy-side liquidity sweep detected"
+                       : "Sell-side liquidity sweep detected");
+      int sIdx = GetSymbolIndex(BrokerSymbol);
+      if(sIdx >= 0 && sIdx < ArraySize(LastSweepTrueBarTimeArr))
+         LastSweepTrueBarTimeArr[sIdx] = iTime(BrokerSymbol, EntryTF, 1);
+      return true;
    }
+   return false;
+}
+
+// Directional sweep recency for CORRECT reversal signals.
+// buy=true  → need sell-side liquidity taken (lows swept)
+// buy=false → need buy-side liquidity taken (highs swept)
+bool RecentDirectionalSweep(const bool buy, const int lookbackBars)
+{
+   int lb = MathMax(lookbackBars, 1);
+   for(int i = 1; i <= lb; i++)
+   {
+      if(buy && IsSellSideLiquiditySweepAtBar(i))
+         return true;
+      if(!buy && IsBuySideLiquiditySweepAtBar(i))
+         return true;
+   }
+
+   // Stop-hunt is the stricter same-side signature
+   if(buy && DetectStopHunt(false))
+      return true;
+   if(!buy && DetectStopHunt(true))
+      return true;
 
    return false;
+}
+
+bool ReversalReclaimConfirm(const bool buy, const int rec)
+{
+   // Reclaim / structure shift in trade direction
+   if(RecentCHoCH(rec))
+      return true;
+   if(GetDisplacementScore(buy) >= 5)
+      return true;
+
+   // Reclaim candle on last closed bar
+   double o = iOpen(BrokerSymbol, EntryTF, 1);
+   double c = iClose(BrokerSymbol, EntryTF, 1);
+   if(buy && c > o)
+      return true;
+   if(!buy && c < o)
+      return true;
+
+   // Inducement in reversal direction (if available)
+   if(DetectInducement(buy))
+      return true;
+
+   return false;
+}
+
+// Master validator: correct-side sweep + zone + reclaim = real reversal signal
+bool MarketReversalSignalOK(const bool buy, string &detail)
+{
+   detail = "";
+   int rec = (EnableEarlyMarketReversal
+              ? MathMax(EffectiveStructureRecency(), ReversalStructureRecencyBars)
+              : EffectiveStructureRecency());
+
+   bool correctSweep = RecentDirectionalSweep(buy, rec);
+   bool anySweep = RecentSweep(rec);
+   bool choch = RecentCHoCH(rec);
+   bool zone = ActiveOrderBlock(buy) || ActiveFVG(buy);
+   bool reclaim = ReversalReclaimConfirm(buy, rec);
+   bool trap = DetectFakeBreakoutTrap(buy);
+
+   bool sweepOK = ReversalRequireCorrectSideSweep ? correctSweep
+                  : (ReversalAcceptCHoCHOrSweep ? (anySweep || choch) : anySweep);
+   bool zoneOK = ReversalRequireZone ? zone : true;
+   bool reclaimOK = ReversalRequireReclaimConfirm ? reclaim : true;
+
+   if(trap)
+   {
+      detail = "blocked: fake-breakout trap in trade direction";
+      return false;
+   }
+   if(!sweepOK)
+   {
+      detail = buy ? "need sell-side sweep (lows taken)" : "need buy-side sweep (highs taken)";
+      return false;
+   }
+   if(!zoneOK)
+   {
+      detail = "need OB/FVG zone in trade direction";
+      return false;
+   }
+   if(!reclaimOK)
+   {
+      detail = "need reclaim (CHoCH / displacement / reclaim candle)";
+      return false;
+   }
+
+   if(!ReversalRequireTrendADX)
+   {
+      detail = StringFormat("OK correctSweep=%s zone=%s reclaim=%s CHoCH=%s",
+                            correctSweep ? "Y" : "N",
+                            zone ? "Y" : "N",
+                            reclaim ? "Y" : "N",
+                            choch ? "Y" : "N");
+      return true;
+   }
+
+   if(buy && !(IsBullTrend() && TrendStrong()))
+   {
+      detail = "trend+ADX not yet bullish";
+      return false;
+   }
+   if(!buy && !(IsBearTrend() && TrendStrong()))
+   {
+      detail = "trend+ADX not yet bearish";
+      return false;
+   }
+
+   detail = "OK with trend+ADX";
+   return true;
 }
 
 //================ STOP HUNT DETECTION (NEW) =========================//
@@ -6497,50 +6647,19 @@ bool AggressiveContinuationSellSetup()
    return bos || zone || pulled || TrendStrong();
 }
 
-// Path B — MARKET REVERSAL sniper.
-// Early mode: liquidity (sweep/CHoCH) + zone (OB/FVG) is enough.
-// Do NOT wait for full bull/bear ADX flip — that made reversals too late.
+// Path B — CORRECT MARKET REVERSAL sniper.
+// BUY  = sell-side liquidity swept (lows) + bullish zone + reclaim
+// SELL = buy-side liquidity swept (highs) + bearish zone + reclaim
 bool AggressiveReversalBuySetup()
 {
    if(!AggressiveSniperEntries)
       return false;
 
-   int rec = (EnableEarlyMarketReversal
-              ? MathMax(EffectiveStructureRecency(), ReversalStructureRecencyBars)
-              : EffectiveStructureRecency());
-   bool sweep = RecentSweep(rec);
-   bool choch = RecentCHoCH(rec);
-   bool liq = ReversalAcceptCHoCHOrSweep ? (sweep || choch) : (sweep && choch);
-   bool zone = ActiveOrderBlock(true) || ActiveFVG(true);
-
-   if(!(liq && zone))
-   {
-      if(NeverBlockValidSniperEntry && EnableEarlyMarketReversal)
-         return (sweep || choch) && zone; // still need zone
-      if(NeverBlockValidSniperEntry)
-         return (liq || zone) && (IsBullTrend() || liq);
-      return false;
-   }
-
-   // Early reversal: stack present → qualify (engines still hard-check)
-   if(EnableEarlyMarketReversal && !ReversalRequireTrendADX)
-   {
-      if(EnableVerboseLogging || EnableSetupLogging)
-         Print("REV EARLY BUY stack OK sweep=", sweep, " CHoCH=", choch,
-               " zone=", zone, " on ", BrokerSymbol);
-      return true;
-   }
-
-   if(QualityGatesActive())
-   {
-      if(QualityNeedsTrendAndADX() && !(IsBullTrend() && TrendStrong()))
-         return false;
-      return true;
-   }
-
-   if(NeverBlockValidSniperEntry)
-      return (IsBullTrend() || liq);
-   return true;
+   string detail = "";
+   bool ok = MarketReversalSignalOK(true, detail);
+   if(ReversalLogValidation && (EnableVerboseLogging || EnableSetupLogging))
+      Print("REV VALIDATE BUY: ", (ok ? "PASS" : "FAIL"), " — ", detail, " on ", BrokerSymbol);
+   return ok;
 }
 
 bool AggressiveReversalSellSetup()
@@ -6548,41 +6667,11 @@ bool AggressiveReversalSellSetup()
    if(!AggressiveSniperEntries)
       return false;
 
-   int rec = (EnableEarlyMarketReversal
-              ? MathMax(EffectiveStructureRecency(), ReversalStructureRecencyBars)
-              : EffectiveStructureRecency());
-   bool sweep = RecentSweep(rec);
-   bool choch = RecentCHoCH(rec);
-   bool liq = ReversalAcceptCHoCHOrSweep ? (sweep || choch) : (sweep && choch);
-   bool zone = ActiveOrderBlock(false) || ActiveFVG(false);
-
-   if(!(liq && zone))
-   {
-      if(NeverBlockValidSniperEntry && EnableEarlyMarketReversal)
-         return (sweep || choch) && zone;
-      if(NeverBlockValidSniperEntry)
-         return (liq || zone) && (IsBearTrend() || liq);
-      return false;
-   }
-
-   if(EnableEarlyMarketReversal && !ReversalRequireTrendADX)
-   {
-      if(EnableVerboseLogging || EnableSetupLogging)
-         Print("REV EARLY SELL stack OK sweep=", sweep, " CHoCH=", choch,
-               " zone=", zone, " on ", BrokerSymbol);
-      return true;
-   }
-
-   if(QualityGatesActive())
-   {
-      if(QualityNeedsTrendAndADX() && !(IsBearTrend() && TrendStrong()))
-         return false;
-      return true;
-   }
-
-   if(NeverBlockValidSniperEntry)
-      return (IsBearTrend() || liq);
-   return true;
+   string detail = "";
+   bool ok = MarketReversalSignalOK(false, detail);
+   if(ReversalLogValidation && (EnableVerboseLogging || EnableSetupLogging))
+      Print("REV VALIDATE SELL: ", (ok ? "PASS" : "FAIL"), " — ", detail, " on ", BrokerSymbol);
+   return ok;
 }
 
 input group "SPEC-COMPLIANT VOLATILITY BREAKOUT"
@@ -7248,6 +7337,18 @@ int GetInstitutionalConfidenceScore(bool buy)
       s.trend && s.trendStrong)
       score += 15;
 
+   // Early market reversal: liquidity stack can score before EMA/ADX fully flips
+   if(EnableEarlyMarketReversal)
+   {
+      int rec = MathMax(EffectiveStructureRecency(), ReversalStructureRecencyBars);
+      bool liq = RecentSweep(rec) || RecentCHoCH(rec);
+      bool zone = ActiveOrderBlock(buy) || ActiveFVG(buy);
+      if(liq && zone)
+         score += 15;
+      if(ctx == IMCE_REVERSAL_LIQUIDITY)
+         score += 10;
+   }
+
    if(score > 100) score = 100;
    return score;
 }
@@ -7477,12 +7578,13 @@ bool IMCEAllows(bool buy, const string strategyTag)
          int rec = (EnableEarlyMarketReversal
                     ? MathMax(EffectiveStructureRecency(), ReversalStructureRecencyBars)
                     : EffectiveStructureRecency());
-         bool sweep = RecentSweep(rec);
+         bool sweep = RecentDirectionalSweep(buy, rec);
          bool choch = RecentCHoCH(rec);
          bool zone = ActiveOrderBlock(buy) || ActiveFVG(buy);
-         bool strongStack = sweep && (choch || zone);
+         bool reclaim = ReversalReclaimConfirm(buy, rec);
+         bool strongStack = sweep && (choch || zone) && reclaim;
          bool softStack = EnableEarlyMarketReversal && ReversalIMCESoftInTrend &&
-                          ((sweep || choch) && zone);
+                          sweep && zone && reclaim;
 
          if(!(strongStack || softStack))
          {
@@ -7541,50 +7643,29 @@ PRISM_MarketIntel PRISM_GetMarketIntel(bool buy)
    return m;
 }
 
-// Unified reversal stack — early mode catches flips before full trend ADX.
-// Early: (sweep OR CHoCH) + (OB OR FVG OR CHoCH). Classic: sweep + (CHoCH/OB/FVG).
+// Unified reversal stack — CORRECT directional validation.
 bool PRISMReversalQualityOK(bool buy)
 {
    if(!EnableBeastMode || !BeastRequireReversalStack)
       return true;
 
-   int rec = (EnableEarlyMarketReversal
-              ? MathMax(EffectiveStructureRecency(), ReversalStructureRecencyBars)
-              : EffectiveStructureRecency());
-   bool sweep = RecentSweep(rec);
-   bool choch = RecentCHoCH(rec);
-   bool zone = ActiveOrderBlock(buy) || ActiveFVG(buy);
-
-   if(EnableEarlyMarketReversal && ReversalAcceptCHoCHOrSweep)
-   {
-      // Early flip: liquidity event + institutional zone (CHoCH can count as both)
-      if(!((sweep || choch) && (zone || choch)))
-         return false;
-   }
-   else
-   {
-      if(!sweep)
-         return false;
-      if(!(choch || zone))
-         return false;
-   }
+   string detail = "";
+   if(!MarketReversalSignalOK(buy, detail))
+      return false;
 
    if(BeastMinReversalLiquidityScore > 0)
    {
+      int rec = (EnableEarlyMarketReversal
+                 ? MathMax(EffectiveStructureRecency(), ReversalStructureRecencyBars)
+                 : EffectiveStructureRecency());
       int liq = GetLiquiditySweepQualityScore();
-      if(liq == 0 && sweep)
+      if(liq == 0 && RecentDirectionalSweep(buy, rec))
          liq = 8;
-      if(liq == 0 && choch && EnableEarlyMarketReversal)
-         liq = 6; // CHoCH-led early reversal credit
+      if(liq == 0 && RecentCHoCH(rec) && EnableEarlyMarketReversal)
+         liq = 6;
       if(liq < BeastMinReversalLiquidityScore)
          return false;
    }
-
-   // Only block trap in the SAME direction as the proposed reversal entry
-   if(buy && DetectFakeBreakoutTrap(true))
-      return false;
-   if(!buy && DetectFakeBreakoutTrap(false))
-      return false;
 
    return true;
 }
@@ -9055,7 +9136,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_REVERSAL_35\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_REV_CORRECT_36\n",
          "=============================================="
       );
       return;
@@ -9077,7 +9158,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_REVERSAL_35\n",
+         "BUILD: SA_PRISM_REV_CORRECT_36\n",
          "=========================================="
       );
       return;

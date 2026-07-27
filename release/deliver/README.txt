@@ -1,2 +1,2 @@
-SA_PRISM_REVERSAL_35
-Early market reversal sniper + aggressive Cont/Instant.
+SA_PRISM_REV_CORRECT_36
+Correct-side reversal detection with reclaim confirmation.
