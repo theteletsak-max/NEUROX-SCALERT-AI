@@ -2,29 +2,29 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK50.mq5
-BUILD_ID: SA_PRISM_SPREADFREE_50
+File:     SNIPER_AI_OK51.mq5
+BUILD_ID: SA_PRISM_DEFENDPLUS_51
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK50.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK51.mq5
 
 ──────────────────────────────────────
-SPREAD = NEVER BLOCKS (default)
+NEW (#7 #8 #9 #12)
 ──────────────────────────────────────
-EnableSpreadFilter = false  → trade even if spread is high
-MaxSpreadPoints    = 10000  → only if you turn filter ON (0=unlimited)
+#7 DefensePreTP1AdverseBE     — BE after adverse wick once price recovers to entry
+#8 DefenseMAE_StopEnabled     — close if loss ≥ 1.25×ATR before TP1
+#9 EventICE_MinScoreBoost=8   — raise ICE floor in news windows (still trades)
+#12 Slippage profiles         — FX 20 / Gold 80 / Crypto 150 points
 
-Open trades still managed (ladder/BE/trail/defense) either way.
-
-Retained: OK49 audit · OK48 Cont/Rev-only · BOS lookback · open caps
+Retained: spread-free · Cont/Rev-only · BOS lookback · audit · open caps
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. Delete old SNIPER*
-2. Copy SNIPER_AI_OK50.mq5 → MQL5/Experts/
-3. F7 — confirm SA_PRISM_SPREADFREE_50
+2. Copy SNIPER_AI_OK51.mq5 → MQL5/Experts/
+3. F7 — confirm SA_PRISM_DEFENDPLUS_51
 4. Re-attach · EntryTF=H4 on H4
-5. Experts: BUILD_ID=SA_PRISM_SPREADFREE_50
+5. Experts: BUILD_ID=SA_PRISM_DEFENDPLUS_51

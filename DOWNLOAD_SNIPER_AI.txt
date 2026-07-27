@@ -1,11 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK50.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK51.mq5
 
-BUILD_ID: SA_PRISM_SPREADFREE_50
+BUILD_ID: SA_PRISM_DEFENDPLUS_51
 Comment:  SNIPER AI
 
-Spread filter OFF by default — high spread does not block entries.
-OK49 audit + Cont/Rev-only + BOS lookback retained.
+Defend+: pre-TP1 BE, MAE stop, event ICE boost, FX/Gold/Crypto slippage profiles.
+OK50 spread-free + Cont/Rev-only retained.
 
-INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_SPREADFREE_50
+INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_DEFENDPLUS_51

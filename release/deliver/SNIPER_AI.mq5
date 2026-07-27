@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_SPREADFREE_50                              |
-//| SNIPER AI - spread never blocks entries (optional filter OFF)    |
+//| BUILD_ID: SA_PRISM_DEFENDPLUS_51                              |
+//| SNIPER AI - mid-BE + MAE stop + event ICE + slip profiles        |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.00"
-#property description "SNIPER AI spread-free: high spread does not block execution"
-#property description "EnableSpreadFilter=false by default | OK49 audit retained"
+#property version   "5.10"
+#property description "SNIPER AI defend+: pre-TP1 BE, MAE cut, event ICE boost, slip profiles"
+#property description "Spread-free OK50 + audit + Cont/Rev-only retained"
 
 #include <Trade/Trade.mqh>
 
@@ -201,6 +201,7 @@ input bool   EventDisableWeakPaths        = true;  // keep weak paths off in eve
 input bool   EventRequireStructureZone    = true;
 input bool   EventRequireTrendAndADX      = true;
 input int    EventQualityMPIScore         = 50;    // stricter than regular QualityMPIScore (40)
+input int    EventICE_MinScoreBoost       = 8;     // #9: raise ICE floor by this during events (0=off)
 input int    EventMinutesBeforeNews       = 30;
 input int    EventMinutesAfterNews        = 30;
 
@@ -477,15 +478,18 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_SPREADFREE_50");
-   Print("SPREADFREE50: EnableSpreadFilter=", EnableSpreadFilter,
-         " MaxSpreadPoints=", MaxSpreadPoints, " (false or Max<=0 = never block on spread)");
-   Print("AUDITFIX: directional CHoCH | TP2 retry | lot=actualSL | HistorySelect");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_DEFENDPLUS_51");
+   Print("DEFENDPLUS51: PreTP1BE=", DefensePreTP1AdverseBE,
+         " MAE_ATR=", DefenseMAE_ATR,
+         " EventICE_Boost=", EventICE_MinScoreBoost,
+         " SlipProfiles=", EnableSlippageProfiles,
+         " FX/Gold/Crypto=", ForexSlippagePoints, "/", GoldSlippagePoints, "/", CryptoSlippagePoints);
+   Print("SPREADFREE: EnableSpreadFilter=", EnableSpreadFilter,
+         " (false = never block on spread)");
    Print("BESTNEXT: DirectionalBOS lookback=", DirectionalBOS_LookbackBars,
          " | BestPathsOnly=", BestPathsOnly);
    Print("OPENCAPS: Enforce=", EnforceOpenTradeCaps,
-         " MaxOpen=", MaxOpenTrades, " MaxTotal=", MaxTotalOpenTradesAllSymbols,
-         " MaxPerCcy=", MaxOpenTradesPerCurrency, " (0=unlimited)");
+         " MaxOpen=", MaxOpenTrades, " MaxTotal=", MaxTotalOpenTradesAllSymbols);
    Print("MARKET DEFENSE: ON=", EnableMarketDefense,
          " DrawdownShield=", EnableDrawdownProtection);
    Print("QUALITY+LADDER: BestQuality=", BestQualitySetups,
@@ -2483,22 +2487,33 @@ input int    SlippagePoints   = 20;
 input int TradeCooldownMinutes = 0;   // 0 = no wait after fill (MaxOpenTrades is the limit)
 input int AttemptCooldownSeconds = 1;
 
-// FIX: SlippagePoints was one flat number applied identically to every
-// symbol - "20 points" means something completely different on EURUSD
-// (a fraction of a pip) versus BTCUSD (potentially many dollars, or
-// conversely a meaningless rounding error, depending on the broker's point
-// size for that symbol). NonScalpSlippageMultiplier widens the effective
-// deviation specifically for symbols matched by NonScalpSymbolKeywords
-// (BTC/ETH by default), the same targeted-exception pattern already used
-// for their stop distance/cooldown/hold-time elsewhere in this file.
-input double NonScalpSlippageMultiplier = 5.0;
+// #12 Broker filling / slippage profiles (per instrument class)
+input group "SLIPPAGE PROFILES (#12)"
+input bool   EnableSlippageProfiles     = true;   // use FX/Gold/Crypto deviation presets
+input int    ForexSlippagePoints        = 20;     // majors / crosses
+input int    GoldSlippagePoints         = 80;     // XAU / XAG style
+input int    CryptoSlippagePoints       = 150;    // BTC/ETH when NonScalp match
+input double NonScalpSlippageMultiplier = 5.0;    // fallback if profiles OFF (legacy)
 
 int GetEffectiveSlippagePoints()
 {
+   if(EnableSlippageProfiles)
+   {
+      if(IsNonScalpSymbol())
+         return MathMax(1, CryptoSlippagePoints);
+      string sym = BrokerSymbol;
+      StringToUpper(sym);
+      if(StringFind(sym, "XAU") >= 0 || StringFind(sym, "GOLD") >= 0 ||
+         StringFind(sym, "XAG") >= 0 || StringFind(sym, "SILVER") >= 0)
+         return MathMax(1, GoldSlippagePoints);
+      return MathMax(1, ForexSlippagePoints);
+   }
+
+   // Legacy path
    if(IsNonScalpSymbol())
       return (int)MathRound(SlippagePoints * NonScalpSlippageMultiplier);
 
-   return SlippagePoints;
+   return MathMax(1, SlippagePoints);
 }
 
 input group "NON-SCALP SYMBOL OVERRIDE"
@@ -2587,6 +2602,15 @@ input double DefenseRetraceATR              = 0.70;  // ATR retrace from peak th
 input double DefenseRetraceLockFraction     = 0.50;  // lock this fraction of peak favorable move
 input bool   DefenseRequireInProfitToClose  = false; // if true, hard-reversal close only when already green
 input bool   DefenseLogActions              = true;  // print DEFEND actions to Experts
+
+// #7 mid-path BE before TP1 (lighter than full close)
+input bool   DefensePreTP1AdverseBE         = true;  // lock BE pre-TP1 on adverse move (wick pressure)
+input double DefensePreTP1AdverseATR        = 0.55;  // adverse ATR from entry that arms pre-TP1 BE
+input bool   DefensePreTP1RequireProfitTiny = false; // if true, only BE when back near flat/green
+
+// #8 MAE hard cut before TP1
+input bool   DefenseMAE_StopEnabled         = true;  // close if floating loss exceeds MAE ATR
+input double DefenseMAE_ATR                 = 1.25;  // max adverse excursion in ATR before TP1 (0=off)
 
 //================ TRADE STATE TRACKING (for TP1/TP2/TP3) ============//
 // MT5 positions only carry one SL and one TP natively - there's no built-in
@@ -8068,11 +8092,17 @@ bool InstitutionalConfidenceOK(bool buy)
       return true;
 
    int ice = GetInstitutionalConfidenceScore(buy);
-   if(ice < ICE_MinScore)
+   // #9: soft-tighten ICE floor in event windows (still trades — higher bar only)
+   int floor = ICE_MinScore;
+   if(EventQualityModeActive() && EventICE_MinScoreBoost > 0)
+      floor = ICE_MinScore + EventICE_MinScoreBoost;
+
+   if(ice < floor)
    {
       if(EnableVerboseLogging || EnableSetupLogging)
          Print("ICE HARD-blocked ", (buy ? "BUY" : "SELL"), " on ", BrokerSymbol,
-               " — ICE ", ice, " < ICE_MinScore ", ICE_MinScore);
+               " — ICE ", ice, " < floor ", floor,
+               (EventQualityModeActive() ? " [EVENT]" : ""));
       return false;
    }
    return true;
@@ -8295,6 +8325,47 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
       }
    }
 
+   const bool preTP1 = (stateIndex < 0) || !TradeStates[stateIndex].tp1Taken;
+   double adverseMove = isBuy ? (openPrice - price) : (price - openPrice);
+
+   // --- #8 MAE hard cut before TP1 ---
+   if(DefenseMAE_StopEnabled && preTP1 && DefenseMAE_ATR > 0.0 && atr > 0.0)
+   {
+      if(adverseMove >= atr * DefenseMAE_ATR)
+      {
+         if(DefenseLogActions)
+            Print("DEFEND MAE: adverse ", DoubleToString(adverseMove / atr, 2),
+                  " ATR ≥ ", DoubleToString(DefenseMAE_ATR, 2),
+                  " — closing ticket ", ticket);
+         trade.PositionClose(ticket);
+         return true;
+      }
+   }
+
+   // --- #7 Mid-path BE before TP1 (adverse wick pressure, lighter than close) ---
+   if(DefensePreTP1AdverseBE && preTP1 && atr > 0.0 && DefensePreTP1AdverseATR > 0.0)
+   {
+      bool adverseEnough = (adverseMove >= atr * DefensePreTP1AdverseATR);
+      bool profitOK = true;
+      if(DefensePreTP1RequireProfitTiny)
+         profitOK = inProfit || adverseMove <= atr * 0.10;
+      if(adverseEnough && profitOK)
+      {
+         // Only lock BE once price has recovered to flat/green (avoid locking into a worse SL)
+         bool atOrAboveEntry = isBuy ? (price >= openPrice) : (price <= openPrice);
+         if(atOrAboveEntry)
+         {
+            bool needBE = isBuy ? (currentSL < openPrice) : (currentSL > openPrice || currentSL == 0.0);
+            if(needBE && trade.PositionModify(ticket, openPrice, currentTP))
+            {
+               currentSL = openPrice;
+               if(DefenseLogActions)
+                  Print("DEFEND BE: pre-TP1 adverse recover — locked breakeven ticket ", ticket);
+            }
+         }
+      }
+   }
+
    // --- 1) Hard opposing reversal stack → close ---
    if(DefenseCloseOnHardReversal)
    {
@@ -8313,7 +8384,6 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
    // --- 2) Fake-breakout trap against our direction (pre-TP1) → close ---
    if(DefenseCloseOnTrapAgainst && DetectFakeBreakoutTrap(isBuy))
    {
-      bool preTP1 = (stateIndex < 0) || !TradeStates[stateIndex].tp1Taken;
       if(preTP1)
       {
          if(DefenseLogActions)
@@ -10004,7 +10074,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_SPREADFREE_50\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_DEFENDPLUS_51\n",
          "=============================================="
       );
       return;
@@ -10026,7 +10096,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_SPREADFREE_50\n",
+         "BUILD: SA_PRISM_DEFENDPLUS_51\n",
          "=========================================="
       );
       return;
