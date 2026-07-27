@@ -3196,7 +3196,7 @@ bool ExecuteSell()
    // See the matching comment in ExecuteBuy() - cheap re-check that the
    // basic trend direction hasn't already reversed between decision and
    // execution.
-   if(!IsBearTrend())
+   if(!IsBearTrend() && !(UltraAggressiveFire || NeverBlockValidSniperEntry))
    {
       if(EnableVerboseLogging)
          Print("SELL aborted: trend no longer bearish at execution time.");

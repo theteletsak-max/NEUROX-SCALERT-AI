@@ -2,26 +2,25 @@ SNIPER AI - DOWNLOAD
 ====================
 
 EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK30.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK31.mq5
 
 ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
-BUILD_ID: SA_PRISM_ULTRA_30
+BUILD_ID: SA_PRISM_ULTRA_AGGRO_31
 
-PRISM ULTRA CORE v11:
-1. Ultra cycle cache — structure + Beast Score computed once per cycle (zero redundant calc)
-2. Smart tick filter — skip re-eval when bid/ask unchanged
-3. Beast Score Engine — 18-component institutional score + Confidence %
-4. Sniper Entry Engine — HTF/confluence/liquidity/premium/momentum checklist
-5. Explainable rejects — every blocked trade logs ULTRA REJECT reason
-6. Health monitor — decision latency + A/R counters on dashboard
-7. Keeps OK29 Beast Mode + OK28 chop-safe InstantTrend
-8. Aggressive fire ONLY after Ultra sniper approval
+ULTRA AGGRESSIVE (bugfix):
+1. UltraAggressiveFire=true — ContSniper/InstantTrend FIRE after engines pass
+2. Beast Score / Confidence are LOG-ONLY (defaults 0 — no hard floor)
+3. Smart tick filter fixed — new bars never skipped
+4. ExecuteBuy/Sell no longer abort on momentary EMA wick under aggro
+5. Post-loss cooldown soft when NeverBlockValidSniperEntry
+6. Keeps ICE/IMCE/SMT + chop-safe InstantTrend + reversal quality
+7. Ultra caches still on — zero redundant calc
 
 INSTALL:
 1. Delete old SNIPER* .mq5/.ex5
-2. Compile OK30
+2. Compile OK31
 3. REMOVE EA from chart + re-attach
 4. Set EntryTF = H4 if chart is H4
-5. Experts must show: BUILD_ID=SA_PRISM_ULTRA_30
+5. Experts must show: BUILD_ID=SA_PRISM_ULTRA_AGGRO_31

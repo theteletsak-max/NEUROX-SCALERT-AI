@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_ULTRA_30                                   |
-//| SNIPER AI - P.R.I.S.M. ULTRA CORE v11: cached, sniper, explainable |
+//| BUILD_ID: SA_PRISM_ULTRA_AGGRO_31                             |
+//| SNIPER AI - ULTRA CORE: aggressive fire after path approval       |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "3.00"
-#property description "SNIPER AI PRISM Ultra Core v11 - cached low-latency sniper"
-#property description "Beast score, sniper entry, explainable gates, zero redundant calc"
+#property version   "3.10"
+#property description "SNIPER AI Ultra Aggressive - caches + fire after path approval"
+#property description "Beast Score logged, not blocking Cont/Instant; explainable rejects"
 
 #include <Trade/Trade.mqh>
 
@@ -44,17 +44,19 @@ input bool   BeastCaptureSignalSnapshot      = true;  // record MPI/ICE at decis
 input bool   EnableBeastDashboard            = true;  // rich HUD when EnableDashboard=true
 
 input group "PRISM ULTRA CORE v11"
-// Low-latency cached pipeline. One structure/score calc per cycle.
-// Sniper entry checklist + explainable reject reasons. Aggressive fire after approval.
+// Low-latency cached pipeline. Aggressive fire AFTER path+engines approve.
+// Beast Score / Confidence are logged for quality — they do NOT hard-block
+// ContSniper/InstantTrend when UltraAggressiveFire=true (default).
 
 input bool   EnableUltraCore                 = true;  // master Ultra Core switch
 input bool   UltraCycleCache                 = true;  // cache structure/score per cycle
-input bool   UltraSmartTickFilter            = true;  // skip re-eval when bid/ask unchanged
-input bool   UltraSniperEntryGate            = true;  // institutional sniper checklist before fire
-input int    UltraMinBeastScore              = 55;    // 0=off; Beast Score floor before entry
-input int    UltraMinConfidencePct           = 50;    // 0=off; final confidence % floor
+input bool   UltraSmartTickFilter            = true;  // skip re-eval when bid/ask+bar unchanged
+input bool   UltraSniperEntryGate            = true;  // checklist (soft on Cont/Instant when aggressive)
+input bool   UltraAggressiveFire             = true;  // CRITICAL: fire after engines pass — score is log-only
+input int    UltraMinBeastScore              = 0;     // 0=off (aggressive). Raise only if you want hard floor
+input int    UltraMinConfidencePct           = 0;     // 0=off (aggressive). Raise only if you want hard floor
 input bool   UltraInstantTrendSoftGates      = true;  // InstantTrend skips HTF-only hard fail
-input bool   UltraLogRejectReasons           = true;  // explain every rejection
+input bool   UltraLogRejectReasons           = true;  // explain every hard rejection
 input bool   UltraHealthMonitor              = true;  // track decision latency + health
 input bool   EnableUltraDashboard            = true;  // Ultra HUD (latency, score, last reject)
 
@@ -448,8 +450,9 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_ULTRA_30");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_ULTRA_AGGRO_31");
    Print("PRISM ULTRA: UltraCore=", EnableUltraCore,
+         " AggressiveFire=", UltraAggressiveFire,
          " CycleCache=", UltraCycleCache,
          " SniperEntry=", UltraSniperEntryGate,
          " MinBeastScore=", UltraMinBeastScore,
@@ -2945,7 +2948,9 @@ bool ExecuteBuy()
    // (that would risk a different result than what actually triggered
    // this call and defeat the point of the pending-snapshot fix), just a
    // sanity check that the basic direction hasn't already reversed.
-   if(!IsBullTrend())
+   // Sanity: direction still agrees — skip abort in UltraAggressiveFire
+   // (path+engines already approved; price can wick without flipping EMA).
+   if(!IsBullTrend() && !(UltraAggressiveFire || NeverBlockValidSniperEntry))
    {
       if(EnableVerboseLogging)
          Print("BUY aborted: trend no longer bullish at execution time.");
@@ -3399,7 +3404,9 @@ bool CooldownFinished()
    if(TimeCurrent() - LastTradeTimeArr[symIdx] < cooldownMinutes * 60)
       return false;
 
-   if(PostLossCooldownMinutes > 0 &&
+   // Aggressive sniper: don't stall after a loss — post-loss cooldown soft
+   if(!NeverBlockValidSniperEntry &&
+      PostLossCooldownMinutes > 0 &&
       LastTradeWasLossArr[symIdx] &&
       (TimeCurrent() - LastLossCloseTimeArr[symIdx] < PostLossCooldownMinutes * 60))
    {
@@ -6874,39 +6881,72 @@ PRISMBeastScore UltraGetBeastScore(bool buy, const string strategyTag)
 }
 
 // Sniper Entry Engine — institutional checklist with explainable fails.
-// InstantTrend can soft-skip HTF-only when UltraInstantTrendSoftGates=true.
+// AGGRESSIVE MODE (UltraAggressiveFire / NeverBlockValidSniperEntry):
+// ContSniper + InstantTrend are NOT hard-blocked by Beast/Conf floors —
+// engines (ICE/IMCE/SMT) already approved the path. Fire immediately.
+// Reversal tags still need the liquidity stack. Score is always logged.
 bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
 {
    failReason = "";
    if(!EnableUltraCore || !UltraSniperEntryGate)
       return true;
 
-   PRISMStructureSnapshot s = PRISM_GetStructureSnapshot(buy);
    PRISMBeastScore beast = UltraGetBeastScore(buy, strategyTag);
    bool soft = (UltraInstantTrendSoftGates && strategyTag == "InstantTrend");
+   bool contTag = PRISM_IsContinuationTag(strategyTag);
+   bool revTag = PRISM_IsReversalTag(strategyTag);
+   bool aggro = UltraAggressiveFire || NeverBlockValidSniperEntry || AggressiveInstantQuality;
 
-   // 1. HTF / bias alignment
-   if(!s.trend)
+   // Hard stop only: no ATR → cannot size risk.
+   if(GetFilterATR() <= 0.0)
    {
-      failReason = "HTF/trend bias not aligned";
-      return false;
-   }
-   if(!soft && EnableHTFConfirmation && !s.htfConfirms)
-   {
-      failReason = "HTF confirmation gate failed";
+      failReason = "risk: ATR unavailable";
       return false;
    }
 
-   // 2. Institutional confluence (OB or FVG or BOS for cont; stack for rev)
-   if(PRISM_IsReversalTag(strategyTag))
+   // AGGRESSIVE: Cont/Instant already passed path + ICE/IMCE → FIRE
+   if(contTag && aggro)
+   {
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("ULTRA AGGRO PASS ", strategyTag,
+               " Beast=", beast.overall, " Conf=", beast.confidencePct, "%",
+               " (score log-only, engines already passed) on ", BrokerSymbol);
+      return true;
+   }
+
+   PRISMStructureSnapshot s = PRISM_GetStructureSnapshot(buy);
+
+   // Reversal: keep quality stack even in aggressive mode
+   if(revTag)
    {
       if(!PRISMReversalQualityOK(buy))
       {
          failReason = "reversal: liquidity+structure stack failed";
          return false;
       }
+      if(!s.sweep)
+      {
+         failReason = "liquidity confirmation missing";
+         return false;
+      }
+      if(aggro)
+         return true; // stack OK — fire reversal sniper
    }
-   else if(!soft)
+
+   // Non-aggressive quality path (UltraAggressiveFire=false)
+   if(!s.trend)
+   {
+      failReason = "trend bias not aligned";
+      return false;
+   }
+
+   if(!soft && EnableHTFConfirmation && !s.htfConfirms)
+   {
+      failReason = "HTF confirmation gate failed";
+      return false;
+   }
+
+   if(!soft)
    {
       if(!(s.bos || s.ob || s.fvg || s.trendStrong))
       {
@@ -6920,24 +6960,6 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
       return false;
    }
 
-   // 3. Liquidity confirmation for reversals
-   if(PRISM_IsReversalTag(strategyTag) && !s.sweep)
-   {
-      failReason = "liquidity confirmation missing";
-      return false;
-   }
-
-   // 4. SMT for reversals (already gated in SMTOK — soft check here)
-   if(PRISM_IsReversalTag(strategyTag) && EnableSMT && SMTRequireForEntry)
-   {
-      if(!(buy ? SMTInternalBullish() : SMTInternalBearish()) &&
-         StringLen(SMTReferenceSymbol) == 0)
-      {
-         // Internal SMT already required by path; don't double-kill InstantTrend
-      }
-   }
-
-   // 5. Premium/Discount when filter enabled
    if(EnablePremiumDiscountFilter && !NeverBlockValidSniperEntry)
    {
       if(buy && !InDiscountZone())
@@ -6952,14 +6974,12 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
       }
    }
 
-   // 6. Momentum / displacement soft for InstantTrend
    if(!soft && DetectFakeBreakoutTrap(buy))
    {
       failReason = "entry candle: fake breakout trap in trade direction";
       return false;
    }
 
-   // 7. Beast score floor
    if(UltraMinBeastScore > 0 && beast.overall < UltraMinBeastScore)
    {
       failReason = "BeastScore " + IntegerToString(beast.overall) +
@@ -6967,18 +6987,10 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
       return false;
    }
 
-   // 8. Confidence %
    if(UltraMinConfidencePct > 0 && beast.confidencePct < UltraMinConfidencePct)
    {
       failReason = "Confidence " + IntegerToString(beast.confidencePct) +
                    "% < UltraMinConfidencePct " + IntegerToString(UltraMinConfidencePct);
-      return false;
-   }
-
-   // 9. Risk sanity
-   if(GetFilterATR() <= 0.0)
-   {
-      failReason = "risk: ATR unavailable";
       return false;
    }
 
@@ -6990,12 +7002,18 @@ bool UltraSmartTickUnchanged()
    if(!EnableUltraCore || !UltraSmartTickFilter)
       return false;
 
+   // BUGFIX: must also match current bar — otherwise a new bar at same bid/ask
+   // would be skipped and miss the sniper entry window.
+   static datetime s_lastBar = 0;
+   datetime bar = iTime(BrokerSymbol, EntryTF, 0);
    double bid = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
    double ask = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
-   if(bid == g_UltraLastBid && ask == g_UltraLastAsk &&
+
+   if(bar == s_lastBar && bid == g_UltraLastBid && ask == g_UltraLastAsk &&
       g_UltraLastDecision != "IDLE" && g_UltraLastDecision != "")
       return true;
 
+   s_lastBar = bar;
    g_UltraLastBid = bid;
    g_UltraLastAsk = ask;
    return false;
@@ -8873,7 +8891,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_ULTRA_30\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_ULTRA_AGGRO_31\n",
          "=============================================="
       );
       return;
@@ -8895,7 +8913,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_ULTRA_30\n",
+         "BUILD: SA_PRISM_ULTRA_AGGRO_31\n",
          "=========================================="
       );
       return;

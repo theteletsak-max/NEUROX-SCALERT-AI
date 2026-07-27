@@ -1,7 +1,7 @@
-SNIPER AI — PRISM ULTRA CORE v11
+SNIPER AI — ULTRA AGGRESSIVE
 
-BUILD_ID: SA_PRISM_ULTRA_30
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK30.mq5
+BUILD_ID: SA_PRISM_ULTRA_AGGRO_31
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK31.mq5
 
-Cached low-latency sniper + Beast Score + explainable rejects. Remove EA + re-attach after compile.
+Aggressive fire after path+engines approve. Beast Score logged, not blocking. Re-attach after compile.
 Set EntryTF=H4 if you trade BTC on H4.
