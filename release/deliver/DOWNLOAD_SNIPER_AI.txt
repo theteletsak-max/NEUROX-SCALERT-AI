@@ -1,11 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK39.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK40.mq5
 
-BUILD_ID: SA_PRISM_PROFIT_SURE_39
+BUILD_ID: SA_PRISM_BUGFIX_40
 Comment:  SNIPER AI
 
-SURE PROFIT LADDER: TP1 → lock SL into profit → TP2 → lock further → TP3 / trail.
-Broker TP starts at TP3 so the ladder cannot be cut short.
+BUGFIX build: false TP touch, SL lock not loosened, failed-partial retry,
+stagnation skip after TP1, broker TP clear for trail, stop-hunt score polarity.
 
-INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_PROFIT_SURE_39
+INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_BUGFIX_40

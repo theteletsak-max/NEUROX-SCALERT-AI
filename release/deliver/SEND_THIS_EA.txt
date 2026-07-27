@@ -2,39 +2,38 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK39.mq5
-BUILD_ID: SA_PRISM_PROFIT_SURE_39
+File:     SNIPER_AI_OK40.mq5
+BUILD_ID: SA_PRISM_BUGFIX_40
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK39.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK40.mq5
 
 Raw:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK39.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK40.mq5
 
 ──────────────────────────────────────
-SURE AGGRESSIVE PROFIT LADDER
+BUGFIXES IN THIS BUILD
 ──────────────────────────────────────
-TP1 hit → SL locks INTO profit (80%) → remainder MUST hunt TP2
-TP2 hit → SL locks further (85%) → remainder → TP3 / ATR trail
-Broker opens with far TP3 so trade is NOT cut off at TP2
+1. False TP1/TP2 on pre-entry bar wicks — gated by barsHeld
+2. Trail no longer loosens just-locked SL (skip same tick + re-read SL)
+3. After TP2+trail, broker TP is cleared to 0 (was stuck at TP3)
+4. Failed partial close does NOT advance ladder (retries next tick)
+5. TP2 min-lot dust remainder closes full (mirrored TP1)
+6. Stagnation exit skips after TP1 lock (was killing runners)
+7. EnableTP3Runner=false honored (TP2 as final target)
+8. DetectStopHunt score polarity fixed for BUY/SELL
 
-Forced ON (ForceSureProfitLadder=true) even if fixed management was on.
-Bar-touch detection so TP hits are not missed on wicks.
-
-Experts:
-  TP1 hit ... — locking profit, remainder → TP2
-  SURE LADDER: TP1 secured → now hunting TP2
-  SURE LADDER: TP2 secured → trailing runner / hunting TP3
-  PROFIT LOCK: ticket ... SL→... TP→...
+Profit ladder still ON:
+  TP1 → lock SL into profit → TP2 → lock further → TP3 / trail
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. Delete ALL old SNIPER*
-2. Compile OK39 (F7)
+2. Compile OK40 (F7) — expect 0 errors, 0 warnings
 3. Remove EA all charts → re-attach
 4. EntryTF=H4 on H4 charts
-5. Experts: BUILD_ID=SA_PRISM_PROFIT_SURE_39
+5. Experts: BUILD_ID=SA_PRISM_BUGFIX_40
 ══════════════════════════════════════

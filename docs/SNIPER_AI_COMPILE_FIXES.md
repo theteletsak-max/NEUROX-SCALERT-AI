@@ -47,3 +47,17 @@ Makes the aggressive TP ladder reliable:
 Flow: TP1 → lock SL into profit → TP2 → lock further → TP3 / trail
 
 File: `SNIPER_AI_OK39.mq5`
+
+## OK40 — bugfix (`SA_PRISM_BUGFIX_40`)
+
+Confirmed defects fixed:
+1. `LevelTouchedForTP` no longer credits pre-entry bar wicks (barsHeld gate)
+2. Trailing skipped same tick as ladder lock; live SL re-read (no loosen)
+3. `ApplyProfitLockSL(..., 0, true)` clears broker TP for trail runners
+4. Failed `PositionClosePartial` does not set tp1Taken/tp2Taken
+5. TP2 min-lot remainder path closes full (mirror TP1)
+6. Stagnation exit skipped after TP1 profit lock
+7. `EnableTP3Runner=false` → TP2 is final target
+8. `DetectStopHunt` score polarity corrected for BUY/SELL
+
+File: `SNIPER_AI_OK40.mq5`

@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_PROFIT_SURE_39                             |
-//| SNIPER AI - sure profit ladder: TP1 lock SL → TP2 → TP3 → trail |
+//| BUILD_ID: SA_PRISM_BUGFIX_40                                  |
+//| SNIPER AI - bugfix: sure ladder + no false TP / SL loosen     |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "3.90"
-#property description "SNIPER AI sure profit lock - TP hit auto-secures SL then runs to next TP"
-#property description "Broker TP set far (TP3) so EA ladder TP1→TP2→TP3 cannot be cut short"
+#property version   "4.00"
+#property description "SNIPER AI bugfix - profit ladder TP touch, SL lock, stagnation, partial flags"
+#property description "TP1 lock→TP2→TP3 sure ladder with confirmed defect fixes"
 
 #include <Trade/Trade.mqh>
 
@@ -466,7 +466,9 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_PROFIT_SURE_39");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_BUGFIX_40");
+   Print("BUGFIX40: false-TP touch gated | SL lock not loosened by trail |");
+   Print("  failed-partial does not advance ladder | stagnation skips after TP1 |");
    Print("SURE PROFIT LADDER: Force=", ForceSureProfitLadder,
          " Aggressive=", AggressiveProfitLadder,
          " SecureOnTP=", SecureProfitOnTPHit,
@@ -2754,31 +2756,34 @@ double InitialBrokerTP(const bool isBuy, const double entry,
    return isBuy ? (entry + tp2Distance) : (entry - tp2Distance);
 }
 
-bool LevelTouchedForTP(const bool isBuy, const double level, const double price)
+// BUGFIX40: never credit pre-entry bar wicks as TP hits (was firing TP1/TP2
+// instantly on new trades when prior bar already swept the level).
+// barsHeld==0 (same bar as entry): live price only.
+// barsHeld>=1: may use forming bar 0 wick.
+// barsHeld>=2: may also use completed bar 1 wick.
+bool LevelTouchedForTP(const bool isBuy, const double level, const double price, const int barsHeld)
 {
    if(isBuy)
    {
       if(price >= level)
          return true;
-      if(DetectTPByBarTouch)
-      {
-         double hi = iHigh(BrokerSymbol, EntryTF, 0);
-         double hi1 = iHigh(BrokerSymbol, EntryTF, 1);
-         if(hi >= level || hi1 >= level)
-            return true;
-      }
+      if(!DetectTPByBarTouch)
+         return false;
+      if(barsHeld >= 1 && iHigh(BrokerSymbol, EntryTF, 0) >= level)
+         return true;
+      if(barsHeld >= 2 && iHigh(BrokerSymbol, EntryTF, 1) >= level)
+         return true;
       return false;
    }
 
    if(price <= level)
       return true;
-   if(DetectTPByBarTouch)
-   {
-      double lo = iLow(BrokerSymbol, EntryTF, 0);
-      double lo1 = iLow(BrokerSymbol, EntryTF, 1);
-      if(lo <= level || lo1 <= level)
-         return true;
-   }
+   if(!DetectTPByBarTouch)
+      return false;
+   if(barsHeld >= 1 && iLow(BrokerSymbol, EntryTF, 0) <= level)
+      return true;
+   if(barsHeld >= 2 && iLow(BrokerSymbol, EntryTF, 1) <= level)
+      return true;
    return false;
 }
 
@@ -3745,7 +3750,8 @@ bool ApplyProfitLockSL(const ulong ticket,
                        const double openPrice,
                        const double tpLevelHit,
                        const double fraction,
-                       const double nextTP)
+                       const double nextTP,
+                       const bool applyTP)
 {
    if(!PositionSelectByTicket(ticket))
       return false;
@@ -3761,8 +3767,12 @@ bool ApplyProfitLockSL(const ulong ticket,
          ? ((curSL < openPrice) ? openPrice : curSL)
          : ((curSL > openPrice || curSL == 0.0) ? openPrice : curSL);
 
+   // BUGFIX40: applyTP=true allows nextTP=0 to CLEAR broker TP for trailing.
+   // Old code only set TP when nextTP>0, so trail runners kept TP3 and got cut.
    double newTP = curTP;
-   if(ExtendTPAfterLock && nextTP > 0.0)
+   if(applyTP)
+      newTP = nextTP;
+   else if(ExtendTPAfterLock && nextTP > 0.0)
       newTP = nextTP;
 
    if(MathAbs(newSL - curSL) < SymbolInfoDouble(BrokerSymbol, SYMBOL_POINT) &&
@@ -3993,8 +4003,10 @@ void ManageOpenTrades()
 
 
       //================ TP1 SCALE-OUT + PROFIT LOCK → TP2 ================//
-      // Hit TP1 → bank partial → lock SL into profit → remainder runs to TP2.
-      // ForceSureProfitLadder keeps this ON even if UseFixedTradeManagement=true.
+      // BUGFIX40: no false pre-entry TP touch; failed partial does not advance;
+      // EnableTP3Runner honored for post-TP1 broker TP; skip trail same tick.
+
+      bool ladderActedThisTick = false;
 
       if(ProfitLadderActive())
       {
@@ -4003,7 +4015,7 @@ void ManageOpenTrades()
       if(stateIndex >= 0 && !TradeStates[stateIndex].tp1Taken)
       {
          bool tp1Hit = LevelTouchedForTP((type == POSITION_TYPE_BUY),
-                                         TradeStates[stateIndex].tp1Price, price);
+                                         TradeStates[stateIndex].tp1Price, price, barsHeld);
 
          if(tp1Hit)
          {
@@ -4018,7 +4030,7 @@ void ManageOpenTrades()
                closeVolume = MathFloor(closeVolume / volumeStep) * volumeStep;
 
             double remainder = currentVolume - closeVolume;
-            bool partialDone = false;
+            bool advanceLadder = false;
 
             if(closeVolume >= minVolume && remainder >= minVolume)
             {
@@ -4026,12 +4038,12 @@ void ManageOpenTrades()
                {
                   Print("TP1 hit: closed ", DoubleToString(closeVolume,2),
                         " lots of ticket ", ticket, " — locking profit, remainder → TP2");
-                  partialDone = true;
+                  advanceLadder = true;
                }
                else
                {
                   Print("TP1 partial close failed on ticket ", ticket, ": ",
-                        trade.ResultRetcodeDescription());
+                        trade.ResultRetcodeDescription(), " — will retry next tick");
                }
             }
             else if(remainder < minVolume && currentVolume >= minVolume && closeVolume >= minVolume)
@@ -4046,39 +4058,43 @@ void ManageOpenTrades()
             }
             else
             {
+               // Min lot: cannot partial — still lock SL and advance (intentional)
                Print("TP1 hit at min lot — locking SL into profit, advancing to TP2: ", ticket);
+               advanceLadder = true;
             }
 
-            TradeStates[stateIndex].tp1Taken = true;
-            PersistTradeState(stateIndex);
+            if(advanceLadder)
+            {
+               TradeStates[stateIndex].tp1Taken = true;
+               PersistTradeState(stateIndex);
 
-            // Secure profit on remainder; keep broker TP at far TP3 so TP2 can still fire
-            double nextTP = TradeStates[stateIndex].tp3Price;
-            if(nextTP <= 0.0)
-               nextTP = TradeStates[stateIndex].tp2Price;
-            ApplyProfitLockSL(ticket,
-                              (type == POSITION_TYPE_BUY),
-                              openPrice,
-                              TradeStates[stateIndex].tp1Price,
-                              LockProfitAtTP1_Fraction,
-                              nextTP);
+               // Honor EnableTP3Runner: if false, broker TP becomes TP2 (final)
+               double nextTP = TradeStates[stateIndex].tp2Price;
+               if(EnableTP3Runner && TradeStates[stateIndex].tp3Price > 0.0)
+                  nextTP = TradeStates[stateIndex].tp3Price;
 
-            Print("SURE LADDER: TP1 secured → now hunting TP2 on ticket ", ticket);
-            if(partialDone && EnableVerboseLogging)
-               Print("TP1 ladder armed for ticket ", ticket);
+               ApplyProfitLockSL(ticket,
+                                 (type == POSITION_TYPE_BUY),
+                                 openPrice,
+                                 TradeStates[stateIndex].tp1Price,
+                                 LockProfitAtTP1_Fraction,
+                                 nextTP,
+                                 true);
+               ladderActedThisTick = true;
+               Print("SURE LADDER: TP1 secured → now hunting TP2 on ticket ", ticket);
+            }
          }
       }
 
 
 
       //================ TP2 SCALE-OUT + PROFIT LOCK → TP3 / TRAIL =========//
-      // Hit TP2 → bank more → lock SL further → remainder → TP3 or trail.
-
       if(stateIndex >= 0 && TradeStates[stateIndex].tp1Taken && !TradeStates[stateIndex].tp2Taken
-         && EnableTP3Runner && TradeStates[stateIndex].tp2Price > 0.0)
+         && TradeStates[stateIndex].tp2Price > 0.0)
       {
+         // When EnableTP3Runner=false, TP2 is the final target: lock + leave TP at TP2
          bool tp2Hit = LevelTouchedForTP((type == POSITION_TYPE_BUY),
-                                         TradeStates[stateIndex].tp2Price, price);
+                                         TradeStates[stateIndex].tp2Price, price, barsHeld);
 
          if(tp2Hit)
          {
@@ -4093,75 +4109,112 @@ void ManageOpenTrades()
                closeVolume2 = MathFloor(closeVolume2 / volumeStep2) * volumeStep2;
 
             double remainder2 = currentVolume2 - closeVolume2;
-            bool splitOK = (closeVolume2 >= minVolume2 && remainder2 >= minVolume2);
+            bool advanceTP2 = false;
 
-            if(splitOK)
+            if(closeVolume2 >= minVolume2 && remainder2 >= minVolume2)
             {
-               if(!trade.PositionClosePartial(ticket, closeVolume2))
-               {
-                  Print("TP2 partial close failed on ticket ", ticket, ": ",
-                        trade.ResultRetcodeDescription());
-               }
-               else
+               if(trade.PositionClosePartial(ticket, closeVolume2))
                {
                   Print("TP2 hit: closed ", DoubleToString(closeVolume2,2),
                         " lots of ticket ", ticket, " — locking more profit, runner → TP3/trail");
+                  advanceTP2 = true;
+               }
+               else
+               {
+                  Print("TP2 partial close failed on ticket ", ticket, ": ",
+                        trade.ResultRetcodeDescription(), " — will retry next tick");
+               }
+            }
+            else if(remainder2 < minVolume2 && currentVolume2 >= minVolume2 && closeVolume2 >= minVolume2)
+            {
+               // BUGFIX40: mirror TP1 — can't leave dust remainder
+               if(trade.PositionClose(ticket))
+               {
+                  Print("TP2 hit but position too small to split - closed in full: ", ticket);
+                  TradeStates[stateIndex].tp2Taken = true;
+                  DeleteTradeStateGlobals(ticket);
+                  continue;
                }
             }
             else
             {
                Print("TP2 hit at min lot — lock SL further, activate runner: ", ticket);
+               advanceTP2 = true;
             }
 
-            TradeStates[stateIndex].tp2Taken = true;
-            PersistTradeState(stateIndex);
-
-            if(PositionSelectByTicket(ticket))
+            if(advanceTP2)
             {
-               double nextTP = 0.0;
-               if(EnableTrailing)
+               TradeStates[stateIndex].tp2Taken = true;
+               PersistTradeState(stateIndex);
+
+               if(PositionSelectByTicket(ticket))
                {
-                  nextTP = 0.0;
-                  ApplyProfitLockSL(ticket,
-                                    (type == POSITION_TYPE_BUY),
-                                    openPrice,
-                                    TradeStates[stateIndex].tp2Price,
-                                    LockProfitAtTP2_Fraction,
-                                    nextTP);
-                  if(PositionSelectByTicket(ticket))
+                  if(!EnableTP3Runner)
                   {
-                     double curSL2 = PositionGetDouble(POSITION_SL);
-                     double tp1Lock = TradeStates[stateIndex].tp1Price;
-                     bool needRaise = (type == POSITION_TYPE_BUY)
-                        ? (curSL2 < tp1Lock)
-                        : (curSL2 == 0.0 || curSL2 > tp1Lock);
-                     if(needRaise)
-                        trade.PositionModify(ticket, tp1Lock, 0.0);
+                     // TP2 is final — secure profit, keep/set TP at TP2 (or leave closed path)
+                     ApplyProfitLockSL(ticket,
+                                       (type == POSITION_TYPE_BUY),
+                                       openPrice,
+                                       TradeStates[stateIndex].tp2Price,
+                                       LockProfitAtTP2_Fraction,
+                                       TradeStates[stateIndex].tp2Price,
+                                       true);
+                     Print("SURE LADDER: TP2 secured as final target on ticket ", ticket);
                   }
-                  Print("SURE LADDER: TP2 secured → trailing runner on ticket ", ticket);
-               }
-               else
-               {
-                  nextTP = TradeStates[stateIndex].tp3Price;
-                  ApplyProfitLockSL(ticket,
-                                    (type == POSITION_TYPE_BUY),
-                                    openPrice,
-                                    TradeStates[stateIndex].tp2Price,
-                                    LockProfitAtTP2_Fraction,
-                                    nextTP);
-                  if(PositionSelectByTicket(ticket))
+                  else if(EnableTrailing)
                   {
-                     double curSL2 = PositionGetDouble(POSITION_SL);
-                     double tp1Lock = TradeStates[stateIndex].tp1Price;
-                     double curTP2 = PositionGetDouble(POSITION_TP);
-                     bool needRaise = (type == POSITION_TYPE_BUY)
-                        ? (curSL2 < tp1Lock)
-                        : (curSL2 == 0.0 || curSL2 > tp1Lock);
-                     if(needRaise)
-                        trade.PositionModify(ticket, tp1Lock, curTP2);
+                     // BUGFIX40: always clear broker TP (applyTP + nextTP=0)
+                     ApplyProfitLockSL(ticket,
+                                       (type == POSITION_TYPE_BUY),
+                                       openPrice,
+                                       TradeStates[stateIndex].tp2Price,
+                                       LockProfitAtTP2_Fraction,
+                                       0.0,
+                                       true);
+                     if(PositionSelectByTicket(ticket))
+                     {
+                        double curSL2 = PositionGetDouble(POSITION_SL);
+                        double tp1Lock = TradeStates[stateIndex].tp1Price;
+                        bool needRaise = (type == POSITION_TYPE_BUY)
+                           ? (curSL2 < tp1Lock)
+                           : (curSL2 == 0.0 || curSL2 > tp1Lock);
+                        if(needRaise)
+                           trade.PositionModify(ticket, tp1Lock, 0.0);
+                        else
+                        {
+                           // Ensure TP is cleared even when SL already above TP1
+                           double curTP2 = PositionGetDouble(POSITION_TP);
+                           if(curTP2 > 0.0)
+                              trade.PositionModify(ticket, curSL2, 0.0);
+                        }
+                     }
+                     Print("SURE LADDER: TP2 secured → trailing runner on ticket ", ticket);
                   }
-                  Print("SURE LADDER: TP2 secured → hunting TP3 on ticket ", ticket);
+                  else
+                  {
+                     double nextTP = TradeStates[stateIndex].tp3Price;
+                     ApplyProfitLockSL(ticket,
+                                       (type == POSITION_TYPE_BUY),
+                                       openPrice,
+                                       TradeStates[stateIndex].tp2Price,
+                                       LockProfitAtTP2_Fraction,
+                                       nextTP,
+                                       true);
+                     if(PositionSelectByTicket(ticket))
+                     {
+                        double curSL2 = PositionGetDouble(POSITION_SL);
+                        double tp1Lock = TradeStates[stateIndex].tp1Price;
+                        double curTP2 = PositionGetDouble(POSITION_TP);
+                        bool needRaise = (type == POSITION_TYPE_BUY)
+                           ? (curSL2 < tp1Lock)
+                           : (curSL2 == 0.0 || curSL2 > tp1Lock);
+                        if(needRaise)
+                           trade.PositionModify(ticket, tp1Lock, curTP2);
+                     }
+                     Print("SURE LADDER: TP2 secured → hunting TP3 on ticket ", ticket);
+                  }
                }
+               ladderActedThisTick = true;
             }
          }
       }
@@ -4170,14 +4223,13 @@ void ManageOpenTrades()
 
 
       //================ STAGNATION EXIT (UPGRADE) =================//
-      // A trade that has been open a long time but never made meaningful
-      // favorable progress isn't "patiently held" - it's just tying up
-      // margin and a trade slot for nothing. Checked only once the
-      // position is older than StagnationLookbackBars: if its favorable
-      // excursion (best price move in its own favor since entry) hasn't
-      // reached StagnationProgressATRMultiple x ATR, it gets closed.
+      // BUGFIX40: skip once TP1 profit is locked — current P/L distance is NOT
+      // MFE and was killing pullback runners after a successful TP1 bank.
 
-      if(EnableStagnationExit && barsHeld >= StagnationLookbackBars)
+      int stagState = FindTradeState(ticket);
+      bool profitAlreadyLocked = (stagState >= 0 && TradeStates[stagState].tp1Taken);
+
+      if(EnableStagnationExit && barsHeld >= StagnationLookbackBars && !profitAlreadyLocked)
       {
          double atrNow = GetFilterATR();
 
@@ -4217,18 +4269,22 @@ void ManageOpenTrades()
 
 
       //================ TRAILING STOP =================//
-      // Distance comes from ATR (EnableATRTrailing) when available, or the
-      // fixed TrailingPoints otherwise. Also gated behind
-      // !UseFixedTradeManagement explicitly, not just EnableTrailing's
-      // default, so fixed mode can never trail even if EnableTrailing is
-      // later turned on for some other reason.
+      // BUGFIX40: skip same tick as ladder lock (stale currentSL was loosening
+      // the just-secured profit SL). Re-read live SL before comparing.
 
       // Trail always after TP1 profit-lock (aggressive); otherwise wait for hold period
       int trailStateGate = FindTradeState(ticket);
       bool trailAfterLock = (ProfitLadderActive() && trailStateGate >= 0 &&
                              TradeStates[trailStateGate].tp1Taken);
-      if((!UseFixedTradeManagement || ForceSureProfitLadder) && EnableTrailing && (holdPeriodOK || trailAfterLock))
+      if(!ladderActedThisTick &&
+         (!UseFixedTradeManagement || ForceSureProfitLadder) &&
+         EnableTrailing && (holdPeriodOK || trailAfterLock))
       {
+         // Refresh SL/TP after possible ladder modifies earlier in this loop
+         if(!PositionSelectByTicket(ticket))
+            continue;
+         currentSL = PositionGetDouble(POSITION_SL);
+         currentTP = PositionGetDouble(POSITION_TP);
 
          double newSL;
 
@@ -4240,7 +4296,6 @@ void ManageOpenTrades()
 
             if(atr > 0.0)
             {
-               // After TP1 profit-lock, trail tighter to protect secured gains
                bool afterTP1 = trailAfterLock;
                double trailMult = (ProfitLadderActive() && afterTP1)
                   ? AggressiveTrailATRMult
@@ -9039,7 +9094,9 @@ int CalculateTradeScore(bool buy)
    // a confirmed stop-hunt candle is stronger evidence than an ordinary
    // sweep. Shares the sweep win/loss stat since it's the same underlying
    // signal family, just a higher-conviction variant of it.
-   if(DetectStopHunt(buy))
+   // BUGFIX40: DetectStopHunt(true)=buy-side (highs). For a BUY score we need
+   // sell-side (lows) hunt — was rewarding the wrong polarity.
+   if(DetectStopHunt(buy ? false : true))
       score += (int)MathRound(10 * SignalWeightMultiplier(SigStat_Sweep_Win, SigStat_Sweep_Loss));
 
    // NEW: inducement - a shallow, fast-reversing liquidity grab in the
@@ -9332,7 +9389,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_PROFIT_SURE_39\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_BUGFIX_40\n",
          "=============================================="
       );
       return;
@@ -9354,7 +9411,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_PROFIT_SURE_39\n",
+         "BUILD: SA_PRISM_BUGFIX_40\n",
          "=========================================="
       );
       return;
