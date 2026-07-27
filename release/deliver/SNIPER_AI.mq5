@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_BESTNEXT_48                                |
-//| SNIPER AI - BOS lookback + Cont/Rev-only + OK47 open caps        |
+//| BUILD_ID: SA_PRISM_AUDITFIX_49                                |
+//| SNIPER AI - full audit fixes (CHoCH dir + TP2 retry + lot/ticket)|
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "4.80"
-#property description "SNIPER AI best-next: directional BOS lookback + Cont/Rev only"
-#property description "Open caps + polarity + ladder/defense retained"
+#property version   "4.90"
+#property description "SNIPER AI audit-fix: directional CHoCH reclaim + TP2 lock retry"
+#property description "Lot uses actual SL | HistorySelect ticket resolve | OK48 retained"
 
 #include <Trade/Trade.mqh>
 
@@ -293,6 +293,7 @@ bool     CHoCH_StateInitializedArr[];
 datetime DiagLastBarTimeArr[];
 datetime LastBOSTrueBarTimeArr[];
 datetime LastCHoCHTrueBarTimeArr[];
+bool     LastCHoCHWasBullArr[]; // AUDITFIX49: direction of last confirmed CHoCH (for reclaim polarity)
 datetime LastSweepTrueBarTimeArr[]; // CRITICAL FIX (this pass): DetectLiquiditySweep() was being required to coincide on the exact same bar as CHoCH/OB in the live PRISM strategy setups - see the fix at LiquiditySweepBuySetup()/SellSetup() for the full explanation.
 
 // FIX: DetectCHoCH() is called from many places inside a single decision
@@ -476,9 +477,10 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_BESTNEXT_48");
-   Print("BESTNEXT48: DirectionalBOS lookback=", DirectionalBOS_LookbackBars,
-         " | BestPathsOnly=", BestPathsOnly, " (Cont+Rev only when true)");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_AUDITFIX_49");
+   Print("AUDITFIX49: directional CHoCH reclaim | TP2 lock retry | lot=actualSL | HistorySelect ticket");
+   Print("BESTNEXT: DirectionalBOS lookback=", DirectionalBOS_LookbackBars,
+         " | BestPathsOnly=", BestPathsOnly);
    Print("OPENCAPS: Enforce=", EnforceOpenTradeCaps,
          " MaxOpen=", MaxOpenTrades, " MaxTotal=", MaxTotalOpenTradesAllSymbols,
          " MaxPerCcy=", MaxOpenTradesPerCurrency, " (0=unlimited)");
@@ -550,6 +552,7 @@ void ResizePerSymbolTrackingArrays()
    ArrayResize(DiagLastBarTimeArr, n);
    ArrayResize(LastBOSTrueBarTimeArr, n);
    ArrayResize(LastCHoCHTrueBarTimeArr, n);
+   ArrayResize(LastCHoCHWasBullArr, n);
    ArrayResize(LastSweepTrueBarTimeArr, n);
    ArrayResize(CHoCH_CacheCycleArr, n);
    ArrayResize(CHoCH_CacheResultArr, n);
@@ -619,6 +622,7 @@ void ResizePerSymbolTrackingArrays()
       DiagLastBarTimeArr[i]         = 0;
       LastBOSTrueBarTimeArr[i]      = 0;
       LastCHoCHTrueBarTimeArr[i]    = 0;
+      LastCHoCHWasBullArr[i]        = false;
       LastSweepTrueBarTimeArr[i]    = 0;
       CHoCH_CacheCycleArr[i]        = -1;
       CHoCH_CacheResultArr[i]       = false;
@@ -3008,6 +3012,15 @@ bool CheckTradeStops(double entry,double &sl,double &tp)
 
 ulong ResolvePositionTicket(ulong orderTicket)
 {
+   // AUDITFIX49: ensure history is loaded before HistoryOrderSelect
+   if(orderTicket == 0)
+      return 0;
+
+   datetime from = TimeCurrent() - 86400;
+   datetime to   = TimeCurrent() + 60;
+   if(!HistorySelect(from, to))
+      HistorySelect(0, TimeCurrent() + 60);
+
    if(HistoryOrderSelect(orderTicket))
    {
       ulong posId = (ulong)HistoryOrderGetInteger(orderTicket, ORDER_POSITION_ID);
@@ -3249,7 +3262,7 @@ bool ExecuteBuy()
       CheckTradeStops(ask, sl, tp); // re-validate the adjusted tp against broker minimums too
    }
 
-   double lot = CalculateLotSize(slDistance);
+   double lot = CalculateLotSize(actualSLDistance);
 
    if(lot <= 0)
    {
@@ -3501,7 +3514,7 @@ bool ExecuteSell()
       CheckTradeStops(bid, sl, tp);
    }
 
-   double lot = CalculateLotSize(slDistance);
+   double lot = CalculateLotSize(actualSLDistance);
 
    if(lot <= 0)
    {
@@ -4437,6 +4450,40 @@ void ManageOpenTrades()
                {
                   Print("SAFE: TP2 lock FAILED on ticket ", ticket,
                         " — will retry next tick (flag not set)");
+               }
+            }
+         }
+      }
+
+      // AUDITFIX49: TP2 lock retry (mirror TP1 SAFE42) when partial done but SL not locked
+      if(stateIndex >= 0 && TradeStates[stateIndex].tp2Taken && SecureProfitOnTPHit)
+      {
+         if(PositionSelectByTicket(ticket))
+         {
+            double liveSL2 = PositionGetDouble(POSITION_SL);
+            double wantSL2 = ComputeProfitLockSL((type == POSITION_TYPE_BUY), openPrice,
+                                                 TradeStates[stateIndex].tp2Price,
+                                                 LockProfitAtTP2_Fraction, liveSL2);
+            bool needsLock2 = (type == POSITION_TYPE_BUY)
+               ? (liveSL2 < wantSL2 - SymbolInfoDouble(BrokerSymbol, SYMBOL_POINT))
+               : (liveSL2 == 0.0 || liveSL2 > wantSL2 + SymbolInfoDouble(BrokerSymbol, SYMBOL_POINT));
+            if(needsLock2)
+            {
+               double nextTP2 = 0.0;
+               bool applyTP = true;
+               if(!EnableTP3Runner)
+                  nextTP2 = TradeStates[stateIndex].tp2Price;
+               else if(EnableTrailing)
+                  nextTP2 = 0.0;
+               else
+                  nextTP2 = TradeStates[stateIndex].tp3Price;
+
+               if(ApplyProfitLockSL(ticket, (type == POSITION_TYPE_BUY), openPrice,
+                                    TradeStates[stateIndex].tp2Price,
+                                    LockProfitAtTP2_Fraction, nextTP2, applyTP))
+               {
+                  ladderActedThisTick = true;
+                  Print("SAFE: retried TP2 profit lock OK on ticket ", ticket);
                }
             }
          }
@@ -5449,7 +5496,8 @@ int MostRecentWrongSideSweepBar(const bool buy, const int lookbackBars)
    int lb = MathMax(lookbackBars, 1);
    for(int i = 1; i <= lb; i++)
    {
-      // Wrong side = continuation fuel, not reversal
+      // Wrong side for BUY entry = highs swept (bearish fuel) — adverse to open longs too
+      // Wrong side for SELL entry = lows swept (bullish fuel) — adverse to open shorts too
       if(buy && IsBuySideLiquiditySweepAtBar(i))
          return i;
       if(!buy && IsSellSideLiquiditySweepAtBar(i))
@@ -5469,7 +5517,8 @@ bool RecentDirectionalSweep(const bool buy, const int lookbackBars)
 
 bool ReversalReclaimConfirm(const bool buy, const int rec)
 {
-   bool choch = RecentCHoCH(rec);
+   // AUDITFIX49: directional CHoCH only — undirected flip no longer counts as reclaim
+   bool choch = RecentDirectionalCHoCH(buy, rec);
    bool disp = (GetDisplacementScore(buy) >= 5);
    bool inducement = DetectInducement(buy);
    bool stopHunt = buy ? DetectStopHunt(false) : DetectStopHunt(true);
@@ -6081,6 +6130,9 @@ bool DetectCHoCH()
             {
                result = true;
                LastCHoCHTrueBarTimeArr[idx] = currentBarTime;
+               // AUDITFIX49: lock direction of THIS confirmed CHoCH for reclaim polarity
+               if(idx < ArraySize(LastCHoCHWasBullArr))
+                  LastCHoCHWasBullArr[idx] = currentBullTrend;
 
                if(EnableVerboseLogging)
                   Print(currentBullTrend ? "Bullish CHoCH detected" : "Bearish CHoCH detected", " on ", BrokerSymbol);
@@ -7099,6 +7151,23 @@ bool RecentCHoCH(int lookbackBars)
    return (bars >= 0 && bars <= lookbackBars);
 }
 
+// AUDITFIX49: CHoCH reclaim must match trade direction (bull CHoCH for BUY, bear for SELL)
+bool RecentDirectionalCHoCH(const bool buy, const int lookbackBars)
+{
+   if(!RecentCHoCH(lookbackBars))
+      return false;
+
+   int idx = GetSymbolIndex(BrokerSymbol);
+   if(idx < 0 || idx >= ArraySize(LastCHoCHWasBullArr))
+   {
+      // Fallback: require live EMA side if direction history missing
+      return buy ? IsBullTrend() : IsBearTrend();
+   }
+
+   // If CHoCH is firing THIS cycle, DetectCHoCH already set LastCHoCHWasBullArr
+   return buy ? LastCHoCHWasBullArr[idx] : !LastCHoCHWasBullArr[idx];
+}
+
 bool RecentSweep(int lookbackBars)
 {
    if(DetectLiquiditySweep())
@@ -7412,7 +7481,8 @@ PRISMStructureSnapshot PRISM_GetStructureSnapshot(bool buy, int recency)
    s.rec = (recency >= 0 ? recency : EffectiveStructureRecency());
    // BUGCLEAN46: ICE/MPI snapshot must be SAME-DIRECTION — not any-side BOS/sweep
    s.bos = StructureDirectionalBOS(buy);
-   s.choch = RecentCHoCH(s.rec);
+   // AUDITFIX49: directional CHoCH in snapshot (HP/ICE polarity)
+   s.choch = RecentDirectionalCHoCH(buy, s.rec);
    s.sweep = RecentDirectionalSweep(buy, s.rec);
    s.ob = ActiveOrderBlock(buy);
    s.fvg = ActiveFVG(buy);
@@ -7967,7 +8037,7 @@ int GetInstitutionalConfidenceScore(bool buy)
    {
       int rec = MathMax(EffectiveStructureRecency(), ReversalStructureRecencyBars);
       // BUGCLEAN46: correct-side sweep only (BUY=lows, SELL=highs)
-      bool liq = RecentDirectionalSweep(buy, rec) || RecentCHoCH(rec);
+      bool liq = RecentDirectionalSweep(buy, rec) || RecentDirectionalCHoCH(buy, rec);
       bool zone = ActiveOrderBlock(buy) || ActiveFVG(buy);
       if(liq && zone)
          score += 15;
@@ -8005,9 +8075,9 @@ bool SMTInternalBullish()
    int rec = EffectiveStructureRecency();
    // SIGNAL OK45: directional sell-side sweep (lows), not any-side RecentSweep
    bool swept = RecentDirectionalSweep(true, rec);
-   bool reclaim = RecentCHoCH(rec) || StructureDirectionalBOS(true) ||
+   bool reclaim = RecentDirectionalCHoCH(true, rec) || StructureDirectionalBOS(true) ||
                   ActiveOrderBlock(true) || ActiveFVG(true);
-   return swept && reclaim && (IsBullTrend() || RecentCHoCH(rec));
+   return swept && reclaim && (IsBullTrend() || RecentDirectionalCHoCH(true, rec));
 }
 
 bool SMTInternalBearish()
@@ -8015,9 +8085,9 @@ bool SMTInternalBearish()
    int rec = EffectiveStructureRecency();
    // SIGNAL OK45: directional buy-side sweep (highs), not any-side RecentSweep
    bool swept = RecentDirectionalSweep(false, rec);
-   bool reclaim = RecentCHoCH(rec) || StructureDirectionalBOS(false) ||
+   bool reclaim = RecentDirectionalCHoCH(false, rec) || StructureDirectionalBOS(false) ||
                   ActiveOrderBlock(false) || ActiveFVG(false);
-   return swept && reclaim && (IsBearTrend() || RecentCHoCH(rec));
+   return swept && reclaim && (IsBearTrend() || RecentDirectionalCHoCH(false, rec));
 }
 
 bool SMTCrossAssetBullish()
@@ -8352,7 +8422,7 @@ bool IMCEAllows(bool buy, const string strategyTag)
                     ? MathMax(EffectiveStructureRecency(), ReversalStructureRecencyBars)
                     : EffectiveStructureRecency());
          bool sweep = RecentDirectionalSweep(buy, rec);
-         bool choch = RecentCHoCH(rec);
+         bool choch = RecentDirectionalCHoCH(buy, rec);
          bool zone = ActiveOrderBlock(buy) || ActiveFVG(buy);
          bool reclaim = ReversalReclaimConfirm(buy, rec);
          bool strongStack = sweep && (choch || zone) && reclaim;
@@ -9921,7 +9991,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_BESTNEXT_48\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_AUDITFIX_49\n",
          "=============================================="
       );
       return;
@@ -9943,7 +10013,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_BESTNEXT_48\n",
+         "BUILD: SA_PRISM_AUDITFIX_49\n",
          "=========================================="
       );
       return;

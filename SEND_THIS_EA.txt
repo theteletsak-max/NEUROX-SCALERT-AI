@@ -2,33 +2,39 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK48.mq5
-BUILD_ID: SA_PRISM_BESTNEXT_48
+File:     SNIPER_AI_OK49.mq5
+BUILD_ID: SA_PRISM_AUDITFIX_49
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK48.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK49.mq5
 
 ──────────────────────────────────────
-BEST-NEXT 48
+FULL AUDIT → FIXES (OK49)
 ──────────────────────────────────────
-1) DirectionalBOS_LookbackBars = 12
-   Cont/ICE/IMCE use same-direction BOS within last N bars
-   (not only the current bar)
+FIXED:
+  • Rev reclaim CHoCH now DIRECTIONAL (bull for BUY, bear for SELL)
+  • TP2 profit-lock retry (mirror TP1 SAFE path)
+  • Lot sizing uses actual SL after broker widen
+  • ResolvePositionTicket calls HistorySelect first
 
-2) BestPathsOnly = true
-   ContSniper + RevSniper ONLY
-   InstantTrend / Pullback / Liq / FVG+OB / VolBreakout OFF
-   Set false to restore secondary paths
+CONFIRMED OK (not bugs):
+  • Cont/Rev polarity · BestPathsOnly · BOS lookback
+  • ICE/IMCE hard gates · open caps · ladder/trail no-loosen
+  • Adverse-sweep defense BE polarity (highs adverse to longs)
+  • TradeComment SNIPER AI · EntryTF holds
 
-Retained: OK47 open caps · polarity · ladder · trail/BE · defense · ICE/IMCE/SMT
+KNOWN LIMITATIONS (not bugs):
+  • Period loss baselines reset on EA restart
+  • Cont Ultra early-pass skips Beast floors (by design)
+  • Dead legacy StrongBuySetup still in file (not live)
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. Delete old SNIPER*
-2. Copy SNIPER_AI_OK48.mq5 → MQL5/Experts/
-3. F7 — confirm SA_PRISM_BESTNEXT_48
-4. Re-attach · EntryTF=H4 on H4 charts
-5. Experts: BUILD_ID=SA_PRISM_BESTNEXT_48
+2. Copy SNIPER_AI_OK49.mq5 → MQL5/Experts/
+3. F7 — confirm SA_PRISM_AUDITFIX_49
+4. Re-attach · EntryTF=H4 on H4
+5. Experts: BUILD_ID=SA_PRISM_AUDITFIX_49

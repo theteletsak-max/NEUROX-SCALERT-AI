@@ -25,20 +25,20 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 
 ### Install (MT5) — single file (compile-safe)
 
-Use **[`SNIPER_AI_OK48.mq5`](SNIPER_AI_OK48.mq5)**  
-`BUILD_ID: SA_PRISM_BESTNEXT_48`
+Use **[`SNIPER_AI_OK49.mq5`](SNIPER_AI_OK49.mq5)**  
+`BUILD_ID: SA_PRISM_AUDITFIX_49`
 
 1. Close MetaEditor
 2. **File → Open Data Folder** → `MQL5/Experts/`
 3. **Delete** any old `Sniper*` / `SNIPER*` `.mq5` / `.ex5` files
-4. Copy **`SNIPER_AI_OK48.mq5`**
-5. Open it, confirm `SA_PRISM_BESTNEXT_48`, compile **(F7)**
+4. Copy **`SNIPER_AI_OK49.mq5`**
+5. Open it, confirm `SA_PRISM_AUDITFIX_49`, compile **(F7)**
 6. Attach → set **EntryTF** (H4 if chart is H4) / **LotSize** / **MaxOpenTrades** → enable **Algo Trading**
 7. Engines on by default: **SMT**, **IMCE**, **ICE** — Cont/Rev only when `BestPathsOnly=true`
 
 Also mirrored as [`SNIPER_AI.mq5`](SNIPER_AI.mq5) and [`release/deliver/SNIPER_AI.mq5`](release/deliver/SNIPER_AI.mq5).
 
-**OK48 best-next:** Directional BOS lookback (12 bars) + ContSniper/RevSniper-only mode. Open caps + polarity + ladder/defense retained.
+**OK49 audit-fix:** Directional CHoCH reclaim · TP2 lock retry · lot uses actual SL · HistorySelect ticket resolve. OK48 BOS lookback + Cont/Rev-only retained.
 
 See [`DOWNLOAD_SNIPER_AI.txt`](DOWNLOAD_SNIPER_AI.txt) · [`docs/SNIPER_AI_COMPILE_FIXES.md`](docs/SNIPER_AI_COMPILE_FIXES.md)
 

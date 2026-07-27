@@ -1,11 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK48.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK49.mq5
 
-BUILD_ID: SA_PRISM_BESTNEXT_48
+BUILD_ID: SA_PRISM_AUDITFIX_49
 Comment:  SNIPER AI
 
-Best-next: directional BOS lookback (12) + Cont/Rev only (BestPathsOnly).
-OK47 open caps + polarity + ladder/defense retained.
+Full-code audit fixes: directional CHoCH reclaim, TP2 lock retry, actual-SL lots, HistorySelect tickets.
+OK48 BestPathsOnly + BOS lookback retained.
 
-INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_BESTNEXT_48
+INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_AUDITFIX_49
