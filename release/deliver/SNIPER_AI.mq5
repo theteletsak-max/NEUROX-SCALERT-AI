@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_HP_33                                      |
-//| SNIPER AI - high-probability Ultra: no spam, fire on quality     |
+//| BUILD_ID: SA_PRISM_SNIPER_34                                  |
+//| SNIPER AI - aggressive sniper fire (1-2 min), 0 warnings         |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "3.30"
-#property description "SNIPER AI high-probability - Cont/Rev preferred, Instant fallback"
-#property description "No cooldown spam; silent waits; aggressive fire after engines"
+#property version   "3.40"
+#property description "SNIPER AI aggressive sniper - Cont/Instant fire fast, 0 warnings"
+#property description "Beast Ultra; 1-2 min sniper window; no long-to-double warning"
 
 #include <Trade/Trade.mqh>
 
@@ -64,23 +64,23 @@ input bool   EnableAdaptivePathRanking   = true;  // boost tags with proven win-
 input int    AdaptivePathMinTrades       = 10;    // min closed trades before win-rate ranks
 input bool   PrintPathStatsOnInit        = true;
 input bool   EnableAlwaysQualityMode     = true;
-input bool   QualityRequireStructureZone = true;
-input bool   QualityRequireTrendAndADX   = true;
+input bool   QualityRequireStructureZone = false; // OFF: sniper Cont fires on trend+ADX without waiting for OB/FVG
+input bool   QualityRequireTrendAndADX   = true;  // keep trend strength for high-prob sniper
 input bool   QualityDisableWeakPaths     = false;
 input int    QualityMPIScore             = 0;
 
 input bool   EnableInstantSniperMode     = true;
-input bool   AllowTrendOnlyInstantEntry  = true;  // aggressive fallback
+input bool   AllowTrendOnlyInstantEntry  = true;  // aggressive InstantTrend fallback
 input bool   AggressiveSniperEntries     = true;
 input bool   NeverBlockValidSniperEntry  = true;
 input bool   ResolveConflictByTrend      = true;
-input bool   AggressiveInstitutionalExecution = false;
+input bool   AggressiveInstitutionalExecution = true; // sniper: Cont/Rev don't stall on extra zone waits
 input double InstantPullbackATRMultiple  = 3.0;
-input int    InstantStructureRecencyBars = 25;
+input int    InstantStructureRecencyBars = 30;     // wider window so setups qualify within 1-2 min
 input int    InstantMinimumMPIScore      = 0;
 input bool   InstantTwoOfThreeLiquidity  = true;
 input bool   InstantFvgOrOb              = true;
-input double InstantChannelBreakATR      = 0.35;
+input double InstantChannelBreakATR      = 0.50;  // slightly looser channel pad for faster breakouts
 
 input group "TRADE SIZE & LIMITS (adjustable)"
 // Change these in EA Inputs after attach — they are live settings.
@@ -447,12 +447,13 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_HP_33");
-   Print("PRISM ULTRA: UltraCore=", EnableUltraCore,
-         " AggressiveFire=", UltraAggressiveFire,
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_SNIPER_34");
+   Print("PRISM ULTRA SNIPER: AggressiveFire=", UltraAggressiveFire,
+         " AggressiveInstitutional=", AggressiveInstitutionalExecution,
+         " StructureZoneRequired=", QualityRequireStructureZone,
          " HighProb=", UltraHighProbability,
-         " CycleCache=", UltraCycleCache,
          " CooldownMin=", TradeCooldownMinutes, "/", NonScalpCooldownMinutes);
+   Print("SNIPER: tick-level detection ON — expects fire within ~1-2 min when trend+ADX align");
    Print("PRISM BEAST: BeastMode=", EnableBeastMode,
          " SniperMode=", EnableSniperMode,
          " UnifiedStructure=", BeastUseUnifiedStructure,
@@ -6846,7 +6847,7 @@ PRISMBeastScore UltraComputeBeastScore(bool buy, const string strategyTag)
 
    b.confirmation = MathMin(conf * 2, 12);
    b.executionQuality = (GetFilterATR() > 0.0) ? 8 : 0;
-   double spr = SymbolInfoInteger(BrokerSymbol, SYMBOL_SPREAD);
+   double spr = (double)SymbolInfoInteger(BrokerSymbol, SYMBOL_SPREAD);
    if(spr > 0 && spr < 50) b.executionQuality += 2;
 
    b.institutional = MathMin(ice / 8, 12);
@@ -6943,12 +6944,29 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
    }
 
    // AGGRESSIVE: Cont/Instant already passed path + ICE/IMCE → FIRE
+   // High-prob: Cont/Rev still fire; InstantTrend stays fallback (ranking prefers Cont/Rev)
    if(contTag && aggro)
    {
+      if(UltraHighProbability && UltraHP_MinConfirmations > 0 &&
+         strategyTag != "InstantTrend")
+      {
+         int conf = CountConfirmingConditions(buy);
+         if(conf < UltraHP_MinConfirmations)
+         {
+            // Soft: Cont without enough confirms — still allow under UltraAggressiveFire
+            // but log so you can see quality. InstantTrend never blocked here.
+            if(EnableVerboseLogging || EnableSetupLogging)
+               Print("ULTRA HP soft: ", strategyTag, " conf=", conf,
+                     " < ", UltraHP_MinConfirmations, " (still firing — UltraAggressiveFire) on ",
+                     BrokerSymbol);
+         }
+      }
+
       if(EnableVerboseLogging || EnableSetupLogging)
          Print("ULTRA AGGRO PASS ", strategyTag,
                " Beast=", beast.overall, " Conf=", beast.confidencePct, "%",
-               " (score log-only, engines already passed) on ", BrokerSymbol);
+               (UltraHighProbability ? " HP=ON" : ""),
+               " (engines already passed) on ", BrokerSymbol);
       return true;
    }
 
@@ -7629,6 +7647,18 @@ int PathQualityRankScore(const string tag, const bool buy)
 
    if(EnableUltraCore)
       score += UltraGetBeastScore(buy, tag).overall / 2;
+
+   // High-probability: strongly prefer Cont/Rev over InstantTrend when both valid
+   if(UltraHighProbability)
+   {
+      if(tag == "ContSniper" || tag == "RevSniper")
+         score += 100;
+      else if(tag == "LiquiditySweep" || tag == "FVG+OB")
+         score += 40;
+      else if(tag == "InstantTrend")
+         score -= 15; // still fires as fallback via TryNextPath
+      score += CountConfirmingConditions(buy) * 8;
+   }
 
    if(EnableAdaptivePathRanking)
    {
@@ -8939,7 +8969,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_HP_33\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_SNIPER_34\n",
          "=============================================="
       );
       return;
@@ -8961,7 +8991,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_HP_33\n",
+         "BUILD: SA_PRISM_SNIPER_34\n",
          "=========================================="
       );
       return;

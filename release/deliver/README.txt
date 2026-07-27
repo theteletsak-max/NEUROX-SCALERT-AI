@@ -1,2 +1,2 @@
-SA_PRISM_HP_33
-High-prob Ultra: no cooldown spam, Cont/Rev preferred, Instant fallback.
+SA_PRISM_SNIPER_34
+Aggressive sniper, 0 warnings, fast Cont/Instant fire.

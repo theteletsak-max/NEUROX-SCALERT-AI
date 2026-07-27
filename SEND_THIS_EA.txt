@@ -2,36 +2,34 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK33.mq5
-BUILD_ID: SA_PRISM_HP_33
+File:     SNIPER_AI_OK34.mq5
+BUILD_ID: SA_PRISM_SNIPER_34
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK33.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK34.mq5
 
 Raw / Save As:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK33.mq5
-
-ZIP:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK34.mq5
 
 ──────────────────────────────────────
-FIXES IN OK33 (your cooldown spam)
+OK34 FIXES
 ──────────────────────────────────────
-• Cooldown no longer prints ULTRA REJECT every tick
-• TradeCooldownMinutes = 0 / NonScalp = 0 — fire when setup ready
-• MaxOpenTrades limits risk (not idle waiting)
-• High-probability prefers Cont/Rev; InstantTrend = fallback
-• Reject logs throttled to 1× per bar
+• 0 errors, 0 warnings (fixed long→double spread cast)
+• Aggressive sniper entries ON
+• Structure zone wait OFF — Cont fires on trend+ADX
+• AggressiveInstitutionalExecution = true
+• Cooldown = 0 — can fire within 1–2 minutes
+• InstantTrend fallback still live
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. Delete ALL old SNIPER* .mq5/.ex5
-2. Copy OK33 → MetaEditor → F7
-3. REMOVE EA from every chart → re-attach OK33
-4. EntryTF = H4 on BTC/XAU H4 charts
-5. Experts must show: BUILD_ID=SA_PRISM_HP_33
-6. Enable Algo Trading
+2. Copy OK34 → F7 → must show: 0 errors, 0 warnings
+3. Remove EA from ALL charts → re-attach OK34
+4. EntryTF = H4 on H4 charts
+5. Experts: BUILD_ID=SA_PRISM_SNIPER_34
+6. Algo Trading ON
 ══════════════════════════════════════

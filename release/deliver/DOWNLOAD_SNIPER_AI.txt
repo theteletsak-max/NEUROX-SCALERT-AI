@@ -2,24 +2,15 @@ SNIPER AI - DOWNLOAD
 ====================
 
 EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK33.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK34.mq5
 
-ZIP:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
+Raw:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK34.mq5
 
-BUILD_ID: SA_PRISM_HP_33
+BUILD_ID: SA_PRISM_SNIPER_34
 
-OK33 — HIGH PROBABILITY + NO SPAM:
-1. Fixed ULTRA REJECT cooldown flood (your screenshot)
-2. TradeCooldownMinutes=0 — no idle block after fills
-3. HighProb ranking: Cont/Rev first, InstantTrend fallback
-4. Reject reasons throttled 1x per bar
-5. UltraAggressiveFire + ICE/IMCE/SMT still on
-6. Rev liquidity floor fixed (from OK32)
+• Fixed MetaEditor warning (long→double)
+• Aggressive sniper fire — Cont/Instant within ~1-2 min when trend+ADX
+• No cooldown spam · UltraAggressiveFire · Beast Ultra
 
-INSTALL:
-1. Delete old SNIPER*
-2. Compile OK33
-3. Remove EA from ALL charts + re-attach
-4. EntryTF=H4 if H4 chart
-5. Experts: BUILD_ID=SA_PRISM_HP_33
+INSTALL: delete old SNIPER* → compile OK34 → remove EA → re-attach → EntryTF=H4
