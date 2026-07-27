@@ -7248,6 +7248,18 @@ int GetInstitutionalConfidenceScore(bool buy)
       s.trend && s.trendStrong)
       score += 15;
 
+   // Early market reversal: liquidity stack can score before EMA/ADX fully flips
+   if(EnableEarlyMarketReversal)
+   {
+      int rec = MathMax(EffectiveStructureRecency(), ReversalStructureRecencyBars);
+      bool liq = RecentSweep(rec) || RecentCHoCH(rec);
+      bool zone = ActiveOrderBlock(buy) || ActiveFVG(buy);
+      if(liq && zone)
+         score += 15;
+      if(ctx == IMCE_REVERSAL_LIQUIDITY)
+         score += 10;
+   }
+
    if(score > 100) score = 100;
    return score;
 }

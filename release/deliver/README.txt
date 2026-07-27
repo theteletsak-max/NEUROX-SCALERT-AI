@@ -1,2 +1,2 @@
-SA_PRISM_SNIPER_34
-Aggressive sniper, 0 warnings, fast Cont/Instant fire.
+SA_PRISM_REVERSAL_35
+Early market reversal sniper + aggressive Cont/Instant.

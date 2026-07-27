@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_SNIPER_34                                  |
-//| SNIPER AI - aggressive sniper fire (1-2 min), 0 warnings         |
+//| BUILD_ID: SA_PRISM_REVERSAL_35                                |
+//| SNIPER AI - early market reversal sniper + aggressive Cont       |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "3.40"
-#property description "SNIPER AI aggressive sniper - Cont/Instant fire fast, 0 warnings"
-#property description "Beast Ultra; 1-2 min sniper window; no long-to-double warning"
+#property version   "3.50"
+#property description "SNIPER AI early market reversal - Rev fires on sweep+zone"
+#property description "No wait for full trend flip; Cont/Instant still aggressive"
 
 #include <Trade/Trade.mqh>
 
@@ -32,11 +32,21 @@ input group "PRISM BEAST MODE ENGINE"
 input bool   EnableBeastMode                 = true;  // unified PRISM beast pipeline
 input bool   EnableSniperMode                = true;  // aggressive fire when beast gates pass
 input bool   BeastUseUnifiedStructure        = true;  // MPI/ICE/rank share one structure snapshot
-input bool   BeastRequireReversalStack       = true;  // RevSniper/LiquiditySweep need sweep+CHoCH/zone
-input int    BeastMinReversalLiquidityScore  = 5;     // 0=off; floor vs sweep quality (max 15) — was 30 BUG
+input bool   BeastRequireReversalStack       = true;  // RevSniper/LiquiditySweep need liquidity stack
+input int    BeastMinReversalLiquidityScore  = 5;     // 0=off; floor vs sweep quality (max 15)
 input bool   BeastDuplicateBarGuard          = true;  // one approval per bar per direction
 input bool   BeastCaptureSignalSnapshot      = true;  // record MPI/ICE at decision time
 input bool   EnableBeastDashboard            = true;  // rich HUD when EnableDashboard=true
+
+input group "MARKET REVERSAL SNIPER"
+// Early reversal: fire RevSniper on sweep/CHoCH + OB/FVG WITHOUT waiting
+// for full EMA+ADX trend flip (that was making reversals too late).
+
+input bool   EnableEarlyMarketReversal       = true;  // catch flips earlier
+input bool   ReversalRequireTrendADX         = false; // false = don't wait for new trend+ADX
+input bool   ReversalAcceptCHoCHOrSweep      = true;  // either liquidity event qualifies for path
+input bool   ReversalIMCESoftInTrend         = true;  // allow Rev in TREND context if stack is strong
+input int    ReversalStructureRecencyBars    = 30;    // lookback for sweep/CHoCH on reversals
 
 input group "PRISM ULTRA CORE v11"
 // Low-latency cached pipeline. Aggressive fire AFTER path+engines approve.
@@ -447,13 +457,13 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_SNIPER_34");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_REVERSAL_35");
    Print("PRISM ULTRA SNIPER: AggressiveFire=", UltraAggressiveFire,
          " AggressiveInstitutional=", AggressiveInstitutionalExecution,
-         " StructureZoneRequired=", QualityRequireStructureZone,
-         " HighProb=", UltraHighProbability,
+         " EarlyReversal=", EnableEarlyMarketReversal,
+         " RevNeedTrendADX=", ReversalRequireTrendADX,
          " CooldownMin=", TradeCooldownMinutes, "/", NonScalpCooldownMinutes);
-   Print("SNIPER: tick-level detection ON — expects fire within ~1-2 min when trend+ADX align");
+   Print("REVERSAL: sweep/CHoCH + OB/FVG can fire before full trend flip");
    Print("PRISM BEAST: BeastMode=", EnableBeastMode,
          " SniperMode=", EnableSniperMode,
          " UnifiedStructure=", BeastUseUnifiedStructure,
@@ -6487,27 +6497,50 @@ bool AggressiveContinuationSellSetup()
    return bos || zone || pulled || TrendStrong();
 }
 
-// Path B quality reversal: THIS is where SMT lives (sweep/CHoCH + OB/FVG).
-// Do not also hard-block InstantTrend with a second SMT gate.
+// Path B — MARKET REVERSAL sniper.
+// Early mode: liquidity (sweep/CHoCH) + zone (OB/FVG) is enough.
+// Do NOT wait for full bull/bear ADX flip — that made reversals too late.
 bool AggressiveReversalBuySetup()
 {
    if(!AggressiveSniperEntries)
       return false;
 
-   int rec = EffectiveStructureRecency();
-   bool liq = RecentSweep(rec) || RecentCHoCH(rec);   // SMT liquidity event
-   bool zone = ActiveOrderBlock(true) || ActiveFVG(true); // SMT institutional zone
+   int rec = (EnableEarlyMarketReversal
+              ? MathMax(EffectiveStructureRecency(), ReversalStructureRecencyBars)
+              : EffectiveStructureRecency());
+   bool sweep = RecentSweep(rec);
+   bool choch = RecentCHoCH(rec);
+   bool liq = ReversalAcceptCHoCHOrSweep ? (sweep || choch) : (sweep && choch);
+   bool zone = ActiveOrderBlock(true) || ActiveFVG(true);
+
+   if(!(liq && zone))
+   {
+      if(NeverBlockValidSniperEntry && EnableEarlyMarketReversal)
+         return (sweep || choch) && zone; // still need zone
+      if(NeverBlockValidSniperEntry)
+         return (liq || zone) && (IsBullTrend() || liq);
+      return false;
+   }
+
+   // Early reversal: stack present → qualify (engines still hard-check)
+   if(EnableEarlyMarketReversal && !ReversalRequireTrendADX)
+   {
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("REV EARLY BUY stack OK sweep=", sweep, " CHoCH=", choch,
+               " zone=", zone, " on ", BrokerSymbol);
+      return true;
+   }
 
    if(QualityGatesActive())
    {
       if(QualityNeedsTrendAndADX() && !(IsBullTrend() && TrendStrong()))
          return false;
-      return liq && zone; // internal SMT confirmation
+      return true;
    }
 
    if(NeverBlockValidSniperEntry)
-      return (liq || zone) && (IsBullTrend() || liq);
-   return liq && zone;
+      return (IsBullTrend() || liq);
+   return true;
 }
 
 bool AggressiveReversalSellSetup()
@@ -6515,20 +6548,41 @@ bool AggressiveReversalSellSetup()
    if(!AggressiveSniperEntries)
       return false;
 
-   int rec = EffectiveStructureRecency();
-   bool liq = RecentSweep(rec) || RecentCHoCH(rec);
+   int rec = (EnableEarlyMarketReversal
+              ? MathMax(EffectiveStructureRecency(), ReversalStructureRecencyBars)
+              : EffectiveStructureRecency());
+   bool sweep = RecentSweep(rec);
+   bool choch = RecentCHoCH(rec);
+   bool liq = ReversalAcceptCHoCHOrSweep ? (sweep || choch) : (sweep && choch);
    bool zone = ActiveOrderBlock(false) || ActiveFVG(false);
+
+   if(!(liq && zone))
+   {
+      if(NeverBlockValidSniperEntry && EnableEarlyMarketReversal)
+         return (sweep || choch) && zone;
+      if(NeverBlockValidSniperEntry)
+         return (liq || zone) && (IsBearTrend() || liq);
+      return false;
+   }
+
+   if(EnableEarlyMarketReversal && !ReversalRequireTrendADX)
+   {
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("REV EARLY SELL stack OK sweep=", sweep, " CHoCH=", choch,
+               " zone=", zone, " on ", BrokerSymbol);
+      return true;
+   }
 
    if(QualityGatesActive())
    {
       if(QualityNeedsTrendAndADX() && !(IsBearTrend() && TrendStrong()))
          return false;
-      return liq && zone;
+      return true;
    }
 
    if(NeverBlockValidSniperEntry)
-      return (liq || zone) && (IsBearTrend() || liq);
-   return liq && zone;
+      return (IsBearTrend() || liq);
+   return true;
 }
 
 input group "SPEC-COMPLIANT VOLATILITY BREAKOUT"
@@ -7418,11 +7472,28 @@ bool IMCEAllows(bool buy, const string strategyTag)
 
    if(ctx == IMCE_TREND_CONTINUATION || ctx == IMCE_EXPANSION_BREAKOUT)
    {
-      if(revTag && !(RecentSweep(EffectiveStructureRecency()) && RecentCHoCH(EffectiveStructureRecency())))
+      if(revTag)
       {
-         if(EnableVerboseLogging || EnableSetupLogging)
-            Print("IMCE HARD-blocked reversal in trend/expansion: ", strategyTag);
-         return false;
+         int rec = (EnableEarlyMarketReversal
+                    ? MathMax(EffectiveStructureRecency(), ReversalStructureRecencyBars)
+                    : EffectiveStructureRecency());
+         bool sweep = RecentSweep(rec);
+         bool choch = RecentCHoCH(rec);
+         bool zone = ActiveOrderBlock(buy) || ActiveFVG(buy);
+         bool strongStack = sweep && (choch || zone);
+         bool softStack = EnableEarlyMarketReversal && ReversalIMCESoftInTrend &&
+                          ((sweep || choch) && zone);
+
+         if(!(strongStack || softStack))
+         {
+            if(EnableVerboseLogging || EnableSetupLogging)
+               Print("IMCE HARD-blocked reversal in trend/expansion: ", strategyTag);
+            return false;
+         }
+         if(EnableEarlyMarketReversal && (EnableVerboseLogging || EnableSetupLogging))
+            Print("IMCE early-reversal PASS ", strategyTag,
+                  " sweep=", sweep, " CHoCH=", choch, " zone=", zone,
+                  " ctx=", IMCEContextToString(ctx), " on ", BrokerSymbol);
       }
       if(contTag && !(buy ? IsBullTrend() : IsBearTrend()))
       {
@@ -7470,31 +7541,46 @@ PRISM_MarketIntel PRISM_GetMarketIntel(bool buy)
    return m;
 }
 
-// Unified reversal stack — one definition for RevSniper/LiquiditySweep.
-// Requires: RecentSweep + (CHoCH or OB/FVG). Liquidity score floor is
-// calibrated to GetLiquiditySweepQualityScore() range (0/5/10/15).
-// If RecentSweep is true but bar-1 score is 0 (sweep was a few bars ago),
-// credit a baseline so recency-valid sweeps are not falsely killed.
+// Unified reversal stack — early mode catches flips before full trend ADX.
+// Early: (sweep OR CHoCH) + (OB OR FVG OR CHoCH). Classic: sweep + (CHoCH/OB/FVG).
 bool PRISMReversalQualityOK(bool buy)
 {
    if(!EnableBeastMode || !BeastRequireReversalStack)
       return true;
 
-   PRISMStructureSnapshot s = PRISM_GetStructureSnapshot(buy);
-   if(!s.sweep)
-      return false;
-   if(!(s.choch || s.ob || s.fvg))
-      return false;
+   int rec = (EnableEarlyMarketReversal
+              ? MathMax(EffectiveStructureRecency(), ReversalStructureRecencyBars)
+              : EffectiveStructureRecency());
+   bool sweep = RecentSweep(rec);
+   bool choch = RecentCHoCH(rec);
+   bool zone = ActiveOrderBlock(buy) || ActiveFVG(buy);
+
+   if(EnableEarlyMarketReversal && ReversalAcceptCHoCHOrSweep)
+   {
+      // Early flip: liquidity event + institutional zone (CHoCH can count as both)
+      if(!((sweep || choch) && (zone || choch)))
+         return false;
+   }
+   else
+   {
+      if(!sweep)
+         return false;
+      if(!(choch || zone))
+         return false;
+   }
 
    if(BeastMinReversalLiquidityScore > 0)
    {
       int liq = GetLiquiditySweepQualityScore();
-      if(liq == 0 && s.sweep)
-         liq = 8; // recency-validated sweep (RecentSweep), not only bar-1
+      if(liq == 0 && sweep)
+         liq = 8;
+      if(liq == 0 && choch && EnableEarlyMarketReversal)
+         liq = 6; // CHoCH-led early reversal credit
       if(liq < BeastMinReversalLiquidityScore)
          return false;
    }
 
+   // Only block trap in the SAME direction as the proposed reversal entry
    if(buy && DetectFakeBreakoutTrap(true))
       return false;
    if(!buy && DetectFakeBreakoutTrap(false))
@@ -8969,7 +9055,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_SNIPER_34\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_REVERSAL_35\n",
          "=============================================="
       );
       return;
@@ -8991,7 +9077,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_SNIPER_34\n",
+         "BUILD: SA_PRISM_REVERSAL_35\n",
          "=========================================="
       );
       return;

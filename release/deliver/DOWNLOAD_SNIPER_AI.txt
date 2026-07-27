@@ -2,15 +2,16 @@ SNIPER AI - DOWNLOAD
 ====================
 
 EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK34.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK35.mq5
 
 Raw:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK34.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK35.mq5
 
-BUILD_ID: SA_PRISM_SNIPER_34
+BUILD_ID: SA_PRISM_REVERSAL_35
 
-• Fixed MetaEditor warning (long→double)
-• Aggressive sniper fire — Cont/Instant within ~1-2 min when trend+ADX
-• No cooldown spam · UltraAggressiveFire · Beast Ultra
+Early market reversal sniper:
+- RevSniper on liquidity stack without waiting for trend flip
+- Cont/Instant still aggressive
+- EnableEarlyMarketReversal=true by default
 
-INSTALL: delete old SNIPER* → compile OK34 → remove EA → re-attach → EntryTF=H4
+INSTALL: delete old SNIPER* → compile OK35 → re-attach all charts → EntryTF=H4

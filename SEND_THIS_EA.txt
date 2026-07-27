@@ -2,34 +2,38 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK34.mq5
-BUILD_ID: SA_PRISM_SNIPER_34
+File:     SNIPER_AI_OK35.mq5
+BUILD_ID: SA_PRISM_REVERSAL_35
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK34.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK35.mq5
 
 Raw / Save As:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK34.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK35.mq5
 
 ──────────────────────────────────────
-OK34 FIXES
+EARLY MARKET REVERSAL (OK35)
 ──────────────────────────────────────
-• 0 errors, 0 warnings (fixed long→double spread cast)
-• Aggressive sniper entries ON
-• Structure zone wait OFF — Cont fires on trend+ADX
-• AggressiveInstitutionalExecution = true
-• Cooldown = 0 — can fire within 1–2 minutes
-• InstantTrend fallback still live
+• RevSniper fires on sweep/CHoCH + OB/FVG
+• Does NOT wait for full EMA+ADX trend flip
+• IMCE soft-allows Rev inside trend if stack is strong
+• ICE gets early-reversal bonus so score can clear 25
+• Cont/Instant still aggressive for trend continuation
+
+Look for Experts:
+  REV EARLY BUY/SELL stack OK ...
+  IMCE early-reversal PASS RevSniper ...
+  ULTRA CORE FIRE BUY [RevSniper] ...
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. Delete ALL old SNIPER* .mq5/.ex5
-2. Copy OK34 → F7 → must show: 0 errors, 0 warnings
-3. Remove EA from ALL charts → re-attach OK34
+2. Copy OK35 → F7 (0 errors, 0 warnings)
+3. Remove EA from ALL charts → re-attach OK35
 4. EntryTF = H4 on H4 charts
-5. Experts: BUILD_ID=SA_PRISM_SNIPER_34
+5. Experts: BUILD_ID=SA_PRISM_REVERSAL_35
 6. Algo Trading ON
 ══════════════════════════════════════
