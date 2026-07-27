@@ -1,7 +1,6 @@
-SNIPER AI — ULTRA AGGRESSIVE
+SNIPER AI — STRATEGY VERIFIED
 
-BUILD_ID: SA_PRISM_ULTRA_AGGRO_31
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK31.mq5
+BUILD_ID: SA_PRISM_STRATEGY_32
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK32.mq5
 
-Aggressive fire after path+engines approve. Beast Score logged, not blocking. Re-attach after compile.
-Set EntryTF=H4 if you trade BTC on H4.
+Cont/Rev/Instant all live. Reversal liquidity bug fixed. Re-attach after compile. EntryTF=H4 for BTC H4.

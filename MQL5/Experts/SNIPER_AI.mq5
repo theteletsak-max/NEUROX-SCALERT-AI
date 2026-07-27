@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_ULTRA_AGGRO_31                             |
-//| SNIPER AI - ULTRA CORE: aggressive fire after path approval       |
+//| BUILD_ID: SA_PRISM_STRATEGY_32                                |
+//| SNIPER AI - strategy-verified Ultra: Cont/Rev/Instant all live    |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "3.10"
-#property description "SNIPER AI Ultra Aggressive - caches + fire after path approval"
-#property description "Beast Score logged, not blocking Cont/Instant; explainable rejects"
+#property version   "3.20"
+#property description "SNIPER AI strategy-verified - Cont/Rev/Instant live, Ultra Aggro"
+#property description "Reversal liquidity floor fixed; mark bar only after fill"
 
 #include <Trade/Trade.mqh>
 
@@ -33,7 +33,7 @@ input bool   EnableBeastMode                 = true;  // unified PRISM beast pip
 input bool   EnableSniperMode                = true;  // aggressive fire when beast gates pass
 input bool   BeastUseUnifiedStructure        = true;  // MPI/ICE/rank share one structure snapshot
 input bool   BeastRequireReversalStack       = true;  // RevSniper/LiquiditySweep need sweep+CHoCH/zone
-input int    BeastMinReversalLiquidityScore  = 30;    // 0=off; liquidity quality floor for reversals
+input int    BeastMinReversalLiquidityScore  = 5;     // 0=off; floor vs sweep quality (max 15) — was 30 BUG
 input bool   BeastDuplicateBarGuard          = true;  // one approval per bar per direction
 input bool   BeastCaptureSignalSnapshot      = true;  // record MPI/ICE at decision time
 input bool   EnableBeastDashboard            = true;  // rich HUD when EnableDashboard=true
@@ -445,7 +445,7 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_ULTRA_AGGRO_31");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_STRATEGY_32");
    Print("PRISM ULTRA: UltraCore=", EnableUltraCore,
          " AggressiveFire=", UltraAggressiveFire,
          " CycleCache=", UltraCycleCache,
@@ -3486,7 +3486,7 @@ bool CheckSpread()
 // a real open position just because of its size would be the more
 // dangerous choice.
 
-input double IgnoreTradesAboveLots = 0.015; // positions larger than this are still managed, just not counted/displayed
+input double IgnoreTradesAboveLots = 100.0; // only ignore absurd sizes; was 0.015 and bypassed MaxOpenTrades when LotSize raised
 
 int CountOpenTrades()
 {
@@ -7419,7 +7419,11 @@ PRISM_MarketIntel PRISM_GetMarketIntel(bool buy)
    return m;
 }
 
-// Unified reversal stack — one definition for RevSniper/LiquiditySweep/IMCE/SMT.
+// Unified reversal stack — one definition for RevSniper/LiquiditySweep.
+// Requires: RecentSweep + (CHoCH or OB/FVG). Liquidity score floor is
+// calibrated to GetLiquiditySweepQualityScore() range (0/5/10/15).
+// If RecentSweep is true but bar-1 score is 0 (sweep was a few bars ago),
+// credit a baseline so recency-valid sweeps are not falsely killed.
 bool PRISMReversalQualityOK(bool buy)
 {
    if(!EnableBeastMode || !BeastRequireReversalStack)
@@ -7431,9 +7435,14 @@ bool PRISMReversalQualityOK(bool buy)
    if(!(s.choch || s.ob || s.fvg))
       return false;
 
-   int liq = GetLiquiditySweepQualityScore();
-   if(BeastMinReversalLiquidityScore > 0 && liq < BeastMinReversalLiquidityScore)
-      return false;
+   if(BeastMinReversalLiquidityScore > 0)
+   {
+      int liq = GetLiquiditySweepQualityScore();
+      if(liq == 0 && s.sweep)
+         liq = 8; // recency-validated sweep (RecentSweep), not only bar-1
+      if(liq < BeastMinReversalLiquidityScore)
+         return false;
+   }
 
    if(buy && DetectFakeBreakoutTrap(true))
       return false;
@@ -7500,7 +7509,8 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
    }
 
    UltraSetApprove(strategyTag, grade, beast.overall, beast.confidencePct);
-   MarkSignalApproved(buy);
+   // Do NOT MarkSignalApproved here — only after a successful fill so a
+   // failed send can still retry on the same bar (BeastDuplicateBarGuard).
    if(EnableBeastMode && BeastCaptureSignalSnapshot)
       CapturePendingSignalSnapshot(buy, strategyTag);
    return true;
@@ -8896,7 +8906,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_ULTRA_AGGRO_31\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_STRATEGY_32\n",
          "=============================================="
       );
       return;
@@ -8918,7 +8928,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_ULTRA_AGGRO_31\n",
+         "BUILD: SA_PRISM_STRATEGY_32\n",
          "=========================================="
       );
       return;
@@ -9237,7 +9247,11 @@ void InstantExecution()
 
       Print("BUY approved (", BrokerSymbol, ") [", strategyTag, "]");
       g_PendingStrategyTag = strategyTag;
-      ExecuteBuy();
+      if(ExecuteBuy())
+      {
+         if(EnableBeastMode && BeastDuplicateBarGuard)
+            MarkSignalApproved(true);
+      }
       if(EnableUltraCore && UltraHealthMonitor)
       {
          g_UltraLastDecisionMs = (long)GetTickCount() - g_UltraDecisionStartMs;
@@ -9253,7 +9267,11 @@ void InstantExecution()
 
       Print("SELL approved (", BrokerSymbol, ") [", strategyTag, "]");
       g_PendingStrategyTag = strategyTag;
-      ExecuteSell();
+      if(ExecuteSell())
+      {
+         if(EnableBeastMode && BeastDuplicateBarGuard)
+            MarkSignalApproved(false);
+      }
       if(EnableUltraCore && UltraHealthMonitor)
       {
          g_UltraLastDecisionMs = (long)GetTickCount() - g_UltraDecisionStartMs;

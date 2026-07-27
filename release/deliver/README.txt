@@ -1,2 +1,2 @@
-SA_PRISM_ULTRA_AGGRO_31
-Ultra Aggressive: fire Cont/Instant after engines; Beast Score log-only; tick-filter bugfix.
+SA_PRISM_STRATEGY_32
+Strategy-verified: Cont/Instant aggressive, Rev liquidity floor fixed, fill-then-mark.

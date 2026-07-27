@@ -2,26 +2,25 @@ SNIPER AI - DOWNLOAD
 ====================
 
 EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK31.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK32.mq5
 
 ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
-BUILD_ID: SA_PRISM_ULTRA_AGGRO_31
+BUILD_ID: SA_PRISM_STRATEGY_32
 
-ULTRA AGGRESSIVE (compile-safe + bugfix):
-0. Fixed struct order / default-param redeclarations (MetaEditor clean)
-1. UltraAggressiveFire=true — ContSniper/InstantTrend FIRE after engines pass
-2. Beast Score / Confidence are LOG-ONLY (defaults 0 — no hard floor)
-3. Smart tick filter fixed — new bars never skipped
-4. ExecuteBuy/Sell no longer abort on momentary EMA wick under aggro
-5. Post-loss cooldown soft when NeverBlockValidSniperEntry
-6. Keeps ICE/IMCE/SMT + chop-safe InstantTrend + reversal quality
-7. Ultra caches still on — zero redundant calc
+STRATEGY VERIFIED:
+1. ContSniper / InstantTrend — aggressive fire after ICE/IMCE (UltraAggressiveFire)
+2. RevSniper / LiquiditySweep — FIXED (liquidity floor was 30, max score is 15)
+3. Quality-first rank + try-next-path
+4. Chop-safe InstantTrend · SMT on Rev only · no RSI/MACD/Stoch
+5. Mark bar only AFTER successful fill (retry-safe)
+6. IgnoreTradesAboveLots fixed so MaxOpenTrades works with adjustable lots
+7. News hard filter OFF · adjustable LotSize / MaxOpenTrades
 
 INSTALL:
 1. Delete old SNIPER* .mq5/.ex5
-2. Compile OK31
-3. REMOVE EA from chart + re-attach
-4. Set EntryTF = H4 if chart is H4
-5. Experts must show: BUILD_ID=SA_PRISM_ULTRA_AGGRO_31
+2. Compile OK32 (F7) — 0 errors
+3. REMOVE EA + re-attach
+4. EntryTF = H4 if chart is H4
+5. Experts: BUILD_ID=SA_PRISM_STRATEGY_32
