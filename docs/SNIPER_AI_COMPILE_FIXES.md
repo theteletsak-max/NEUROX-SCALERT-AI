@@ -73,3 +73,16 @@ File: `SNIPER_AI_OK40.mq5`
 - Retains OK40 ladder bugfixes + sure TP1→lock→TP2→TP3
 
 File: `SNIPER_AI_OK41.mq5`
+
+## OK42 — safety audit (`SA_PRISM_SAFE_42`)
+
+Money-safety fixes after OK41 audit:
+1. TP1/TP2 flags only advance after lock success (or partial-done + lock retry)
+2. Lock retry every tick if SL not yet secured
+3. No-stops fallback uses InitialBrokerTP (TP3), not TP2
+4. Cont requires BOS/OB/FVG (not pullback alone)
+5. InstantTrend HTF gate before early return
+6. Ultra early-pass ContSniper only
+7. BestQuality HP confirms independent of UltraHighProbability
+
+File: `SNIPER_AI_OK42.mq5`

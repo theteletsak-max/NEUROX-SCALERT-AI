@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_BEST_QUALITY_41                            |
-//| SNIPER AI - best quality setups + sure profit ladder + bugfixes  |
+//| BUILD_ID: SA_PRISM_SAFE_42                                    |
+//| SNIPER AI - safety audit: lock must succeed, no unprotected risk |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "4.10"
-#property description "SNIPER AI best quality - Cont/Rev structure required, Instant fallback only"
-#property description "Sure TP1 lock→TP2→TP3 ladder + OK40 bugfixes retained"
+#property version   "4.20"
+#property description "SNIPER AI safety - profit lock verified, fallback TP3, quality Cont/Rev"
+#property description "Best quality setups + sure ladder + confirmed money-safety fixes"
 
 #include <Trade/Trade.mqh>
 
@@ -467,18 +467,15 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_BEST_QUALITY_41");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_SAFE_42");
+   Print("SAFE42: lock-before-flag | fallback broker TP3 | Cont needs BOS/OB/FVG |");
+   Print("  Instant HTF gate | ContSniper-only Ultra early pass | HP on BestQuality");
    Print("BEST QUALITY: BestQualitySetups=", BestQualitySetups,
          " StructZone=", QualityRequireStructureZone,
          " HP_Confirms=", UltraHP_MinConfirmations,
-         " ICE_Min=", ICE_MinScore,
-         " BeastFloor=", UltraMinBeastScore,
-         " ConfFloor=", UltraMinConfidencePct);
-   Print("BUGFIX40 retained: false-TP gated | SL lock safe | partial retry | stag skip");
+         " ICE_Min=", ICE_MinScore);
    Print("SURE PROFIT LADDER: Force=", ForceSureProfitLadder,
          " SecureOnTP=", SecureProfitOnTPHit,
-         " LockTP1=", LockProfitAtTP1_Fraction,
-         " LockTP2=", LockProfitAtTP2_Fraction,
          " Trailing=", EnableTrailing);
    Print("REVERSAL CORRECT SIGNALS: CorrectSideSweep=", ReversalRequireCorrectSideSweep,
          " StrictReclaim=", ReversalStrictCorrectSignal,
@@ -3264,13 +3261,19 @@ bool ExecuteBuy()
 
                double curPrice = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
                double retrySL = curPrice - slDistance;
-               double retryTP = curPrice + tp2Distance;
+               // SAFE42: far TP3 so sure ladder is not cut at TP2
+               double retryTP1 = curPrice + slDistance * TP1_RR_Ratio;
+               double retryTP2 = curPrice + slDistance * TP2_RR_Ratio;
+               double retryTP3 = curPrice + slDistance * TP3_RR_Ratio;
+               double retryTP = InitialBrokerTP(true, curPrice, slDistance * TP2_RR_Ratio,
+                                               slDistance * TP3_RR_Ratio, retryTP2, retryTP3);
                CheckTradeStops(curPrice, retrySL, retryTP);
 
                if(trade.PositionModify(newTicket, retrySL, retryTP))
                {
                   stopsAttached = true;
                   sl = retrySL; tp = retryTP;
+                  tp1Price = retryTP1; tp2Price = retryTP2; tp3Price = retryTP3;
                }
             }
          }
@@ -3480,13 +3483,19 @@ bool ExecuteSell()
 
                double curPrice = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
                double retrySL = curPrice + slDistance;
-               double retryTP = curPrice - tp2Distance;
+               // SAFE42: far TP3 so sure ladder is not cut at TP2
+               double retryTP1 = curPrice - slDistance * TP1_RR_Ratio;
+               double retryTP2 = curPrice - slDistance * TP2_RR_Ratio;
+               double retryTP3 = curPrice - slDistance * TP3_RR_Ratio;
+               double retryTP = InitialBrokerTP(false, curPrice, slDistance * TP2_RR_Ratio,
+                                               slDistance * TP3_RR_Ratio, retryTP2, retryTP3);
                CheckTradeStops(curPrice, retrySL, retryTP);
 
                if(trade.PositionModify(newTicket, retrySL, retryTP))
                {
                   stopsAttached = true;
                   sl = retrySL; tp = retryTP;
+                  tp1Price = retryTP1; tp2Price = retryTP2; tp3Price = retryTP3;
                }
             }
          }
@@ -4034,6 +4043,7 @@ void ManageOpenTrades()
 
             double remainder = currentVolume - closeVolume;
             bool advanceLadder = false;
+            bool didPartial = false;
 
             if(closeVolume >= minVolume && remainder >= minVolume)
             {
@@ -4042,6 +4052,7 @@ void ManageOpenTrades()
                   Print("TP1 hit: closed ", DoubleToString(closeVolume,2),
                         " lots of ticket ", ticket, " — locking profit, remainder → TP2");
                   advanceLadder = true;
+                  didPartial = true;
                }
                else
                {
@@ -4068,23 +4079,62 @@ void ManageOpenTrades()
 
             if(advanceLadder)
             {
-               TradeStates[stateIndex].tp1Taken = true;
-               PersistTradeState(stateIndex);
-
-               // Honor EnableTP3Runner: if false, broker TP becomes TP2 (final)
+               // SAFE42: lock must succeed; if partial already done, still set flag
+               // so we never partial twice — lock retries via needsLock path below.
                double nextTP = TradeStates[stateIndex].tp2Price;
                if(EnableTP3Runner && TradeStates[stateIndex].tp3Price > 0.0)
                   nextTP = TradeStates[stateIndex].tp3Price;
 
-               ApplyProfitLockSL(ticket,
+               bool locked = ApplyProfitLockSL(ticket,
                                  (type == POSITION_TYPE_BUY),
                                  openPrice,
                                  TradeStates[stateIndex].tp1Price,
                                  LockProfitAtTP1_Fraction,
                                  nextTP,
                                  true);
-               ladderActedThisTick = true;
-               Print("SURE LADDER: TP1 secured → now hunting TP2 on ticket ", ticket);
+               if(locked || didPartial)
+               {
+                  TradeStates[stateIndex].tp1Taken = true;
+                  PersistTradeState(stateIndex);
+                  ladderActedThisTick = true;
+                  if(locked)
+                     Print("SURE LADDER: TP1 secured → now hunting TP2 on ticket ", ticket);
+                  else
+                     Print("SAFE: TP1 partial done, lock pending retry on ticket ", ticket);
+               }
+               else
+               {
+                  Print("SAFE: TP1 lock FAILED on ticket ", ticket,
+                        " — will retry next tick (flag not set)");
+               }
+            }
+         }
+      }
+
+      // SAFE42: if TP1 was marked earlier but SL never locked, retry lock every tick
+      if(stateIndex >= 0 && TradeStates[stateIndex].tp1Taken && SecureProfitOnTPHit)
+      {
+         if(PositionSelectByTicket(ticket))
+         {
+            double liveSL = PositionGetDouble(POSITION_SL);
+            double wantSL = ComputeProfitLockSL((type == POSITION_TYPE_BUY), openPrice,
+                                                TradeStates[stateIndex].tp1Price,
+                                                LockProfitAtTP1_Fraction, liveSL);
+            bool needsLock = (type == POSITION_TYPE_BUY)
+               ? (liveSL < wantSL - SymbolInfoDouble(BrokerSymbol, SYMBOL_POINT))
+               : (liveSL == 0.0 || liveSL > wantSL + SymbolInfoDouble(BrokerSymbol, SYMBOL_POINT));
+            if(needsLock && !TradeStates[stateIndex].tp2Taken)
+            {
+               double nextTP = TradeStates[stateIndex].tp2Price;
+               if(EnableTP3Runner && TradeStates[stateIndex].tp3Price > 0.0)
+                  nextTP = TradeStates[stateIndex].tp3Price;
+               if(ApplyProfitLockSL(ticket, (type == POSITION_TYPE_BUY), openPrice,
+                                    TradeStates[stateIndex].tp1Price,
+                                    LockProfitAtTP1_Fraction, nextTP, true))
+               {
+                  ladderActedThisTick = true;
+                  Print("SAFE: retried TP1 profit lock OK on ticket ", ticket);
+               }
             }
          }
       }
@@ -4113,6 +4163,7 @@ void ManageOpenTrades()
 
             double remainder2 = currentVolume2 - closeVolume2;
             bool advanceTP2 = false;
+            bool didPartial2 = false;
 
             if(closeVolume2 >= minVolume2 && remainder2 >= minVolume2)
             {
@@ -4121,6 +4172,7 @@ void ManageOpenTrades()
                   Print("TP2 hit: closed ", DoubleToString(closeVolume2,2),
                         " lots of ticket ", ticket, " — locking more profit, runner → TP3/trail");
                   advanceTP2 = true;
+                  didPartial2 = true;
                }
                else
                {
@@ -4147,27 +4199,24 @@ void ManageOpenTrades()
 
             if(advanceTP2)
             {
-               TradeStates[stateIndex].tp2Taken = true;
-               PersistTradeState(stateIndex);
-
+               bool lockOK = false;
                if(PositionSelectByTicket(ticket))
                {
                   if(!EnableTP3Runner)
                   {
-                     // TP2 is final — secure profit, keep/set TP at TP2 (or leave closed path)
-                     ApplyProfitLockSL(ticket,
+                     lockOK = ApplyProfitLockSL(ticket,
                                        (type == POSITION_TYPE_BUY),
                                        openPrice,
                                        TradeStates[stateIndex].tp2Price,
                                        LockProfitAtTP2_Fraction,
                                        TradeStates[stateIndex].tp2Price,
                                        true);
-                     Print("SURE LADDER: TP2 secured as final target on ticket ", ticket);
+                     if(lockOK)
+                        Print("SURE LADDER: TP2 secured as final target on ticket ", ticket);
                   }
                   else if(EnableTrailing)
                   {
-                     // BUGFIX40: always clear broker TP (applyTP + nextTP=0)
-                     ApplyProfitLockSL(ticket,
+                     lockOK = ApplyProfitLockSL(ticket,
                                        (type == POSITION_TYPE_BUY),
                                        openPrice,
                                        TradeStates[stateIndex].tp2Price,
@@ -4182,21 +4231,25 @@ void ManageOpenTrades()
                            ? (curSL2 < tp1Lock)
                            : (curSL2 == 0.0 || curSL2 > tp1Lock);
                         if(needRaise)
-                           trade.PositionModify(ticket, tp1Lock, 0.0);
+                        {
+                           if(trade.PositionModify(ticket, tp1Lock, 0.0))
+                              lockOK = true;
+                        }
                         else
                         {
-                           // Ensure TP is cleared even when SL already above TP1
                            double curTP2 = PositionGetDouble(POSITION_TP);
                            if(curTP2 > 0.0)
                               trade.PositionModify(ticket, curSL2, 0.0);
+                           lockOK = true; // SL already at/above TP1
                         }
                      }
-                     Print("SURE LADDER: TP2 secured → trailing runner on ticket ", ticket);
+                     if(lockOK)
+                        Print("SURE LADDER: TP2 secured → trailing runner on ticket ", ticket);
                   }
                   else
                   {
                      double nextTP = TradeStates[stateIndex].tp3Price;
-                     ApplyProfitLockSL(ticket,
+                     lockOK = ApplyProfitLockSL(ticket,
                                        (type == POSITION_TYPE_BUY),
                                        openPrice,
                                        TradeStates[stateIndex].tp2Price,
@@ -4214,10 +4267,25 @@ void ManageOpenTrades()
                         if(needRaise)
                            trade.PositionModify(ticket, tp1Lock, curTP2);
                      }
-                     Print("SURE LADDER: TP2 secured → hunting TP3 on ticket ", ticket);
+                     if(lockOK)
+                        Print("SURE LADDER: TP2 secured → hunting TP3 on ticket ", ticket);
                   }
                }
-               ladderActedThisTick = true;
+
+               // SAFE42: mark taken if lock OK OR partial already done (avoid double partial)
+               if(lockOK || didPartial2)
+               {
+                  TradeStates[stateIndex].tp2Taken = true;
+                  PersistTradeState(stateIndex);
+                  ladderActedThisTick = true;
+                  if(!lockOK)
+                     Print("SAFE: TP2 partial done, lock pending — ticket ", ticket);
+               }
+               else
+               {
+                  Print("SAFE: TP2 lock FAILED on ticket ", ticket,
+                        " — will retry next tick (flag not set)");
+               }
             }
          }
       }
@@ -6859,10 +6927,10 @@ bool AggressiveContinuationBuySetup()
    {
       if(QualityNeedsTrendAndADX() && !TrendStrong())
          return false;
-      // BEST QUALITY: Cont needs structure (BOS/OB/FVG) or tight pullback — not trend alone
+      // BEST/SAFE: Cont needs real structure (BOS or OB/FVG) — pullback alone is not enough
       if(BestQualitySetups || QualityNeedsStructureZone())
       {
-         if(!(zone || bos || pulled))
+         if(!(zone || bos))
             return false;
          return true;
       }
@@ -6899,7 +6967,7 @@ bool AggressiveContinuationSellSetup()
          return false;
       if(BestQualitySetups || QualityNeedsStructureZone())
       {
-         if(!(zone || bos || pulled))
+         if(!(zone || bos))
             return false;
          return true;
       }
@@ -7355,8 +7423,8 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
       return false;
    }
 
-   // BEST QUALITY: Cont/Rev need enough confirming conditions (HARD)
-   if(BestQualitySetups && UltraHighProbability && UltraHP_MinConfirmations > 0 &&
+   // SAFE42: BestQuality alone enforces HP confirms (not only when UltraHighProbability)
+   if(BestQualitySetups && UltraHP_MinConfirmations > 0 &&
       (strategyTag == "ContSniper" || strategyTag == "RevSniper"))
    {
       int conf = CountConfirmingConditions(buy);
@@ -7387,15 +7455,21 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
          failReason = "InstantTrend: trend not strong enough for quality fallback";
          return false;
       }
+      // SAFE42: HTF confirm before Instant early-return (was dead code after aggro return)
+      PRISMStructureSnapshot sIT = PRISM_GetStructureSnapshot(buy);
+      if(!sIT.htfConfirms)
+      {
+         failReason = "InstantTrend: HTF not confirming";
+         return false;
+      }
    }
 
-   // Cont path after quality checks — fire when engines already passed
-   if(contTag && aggro && strategyTag != "InstantTrend")
+   // SAFE42: only ContSniper gets early Ultra pass — not TrendPullback/FVG+OB/VolBreakout
+   if(strategyTag == "ContSniper" && aggro)
    {
       if(EnableVerboseLogging || EnableSetupLogging)
-         Print("ULTRA QUALITY PASS ", strategyTag,
-               " Beast=", beast.overall, " Conf=", beast.confidencePct, "%",
-               " HP=ON on ", BrokerSymbol);
+         Print("ULTRA QUALITY PASS ContSniper Beast=", beast.overall,
+               " Conf=", beast.confidencePct, "% HP=ON on ", BrokerSymbol);
       return true;
    }
 
@@ -9464,7 +9538,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_BEST_QUALITY_41\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_SAFE_42\n",
          "=============================================="
       );
       return;
@@ -9486,7 +9560,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_BEST_QUALITY_41\n",
+         "BUILD: SA_PRISM_SAFE_42\n",
          "=========================================="
       );
       return;

@@ -1,11 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK41.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK42.mq5
 
-BUILD_ID: SA_PRISM_BEST_QUALITY_41
+BUILD_ID: SA_PRISM_SAFE_42
 Comment:  SNIPER AI
 
-BEST QUALITY: Cont/Rev need structure + HP confirms; InstantTrend is fallback only.
-Sure profit ladder + OK40 bugfixes retained.
+SAFETY: lock verified before ladder advance, fallback TP3, Cont needs structure,
+Instant HTF gate, ContSniper-only Ultra early pass. Quality + profit ladder kept.
 
-INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_BEST_QUALITY_41
+INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_SAFE_42

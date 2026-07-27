@@ -25,20 +25,20 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 
 ### Install (MT5) — single file (compile-safe)
 
-Use **[`SNIPER_AI_OK41.mq5`](SNIPER_AI_OK41.mq5)**  
-`BUILD_ID: SA_PRISM_BEST_QUALITY_41`
+Use **[`SNIPER_AI_OK42.mq5`](SNIPER_AI_OK42.mq5)**  
+`BUILD_ID: SA_PRISM_SAFE_42`
 
 1. Close MetaEditor
 2. **File → Open Data Folder** → `MQL5/Experts/`
 3. **Delete** any old `Sniper*` / `SNIPER*` `.mq5` / `.ex5` files
-4. Copy **`SNIPER_AI_OK41.mq5`**
-5. Open it, confirm `SA_PRISM_BEST_QUALITY_41`, compile **(F7)**
+4. Copy **`SNIPER_AI_OK42.mq5`**
+5. Open it, confirm `SA_PRISM_SAFE_42`, compile **(F7)**
 6. Attach → set **LotSize** / **MaxOpenTrades** (optional **SMTReferenceSymbol**) → enable **Algo Trading**
 7. Engines on by default: **SMT**, **IMCE**, **ICE** — no RSI/MACD/Stochastic
 
 Also mirrored as [`SNIPER_AI.mq5`](SNIPER_AI.mq5) and [`release/deliver/SNIPER_AI.mq5`](release/deliver/SNIPER_AI.mq5).
 
-**Best quality setups:** Cont/Rev require structure + HP confirmations; InstantTrend is strong fallback only. Sure TP1→lock→TP2→TP3 ladder and OK40 bugfixes retained.
+**OK42 safety:** profit lock verified/retried, fallback broker TP at TP3, Cont needs BOS/OB/FVG, Instant HTF gate, ContSniper-only Ultra early pass. Best quality + sure ladder retained.
 
 See [`DOWNLOAD_SNIPER_AI.txt`](DOWNLOAD_SNIPER_AI.txt) · [`docs/SNIPER_AI_COMPILE_FIXES.md`](docs/SNIPER_AI_COMPILE_FIXES.md)
 
