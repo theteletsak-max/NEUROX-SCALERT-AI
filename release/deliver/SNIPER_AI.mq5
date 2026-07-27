@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_FULL_UPGRADE_28                                  |
-//| SNIPER AI - FULL UPGRADE: chop-safe instant fallback + quality rank |
+//| BUILD_ID: SA_PRISM_BEAST_29                                   |
+//| SNIPER AI - P.R.I.S.M. BEAST MODE: unified engines, no duplicates |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "2.80"
-#property description "SNIPER AI full upgrade - chop-safe instant, ICE/IMCE/SMT"
-#property description "Prefers Cont/Rev; InstantTrend trades in chop when trend agrees"
+#property version   "2.90"
+#property description "SNIPER AI PRISM Beast Mode - unified quality + sniper execution"
+#property description "20-engine stack, no duplicate gates, reversal quality"
 
 #include <Trade/Trade.mqh>
 
@@ -29,6 +29,19 @@ input group "FULL UPGRADE - QUALITY FIRST + INSTANT FALLBACK"
 // Prefers ContSniper/RevSniper when valid. InstantTrend is the aggressive
 // fallback so you still trade. Tries next path if engines reject the first.
 // MPI wait stays OFF. ICE/IMCE hard; SMT on RevSniper only.
+
+input group "PRISM BEAST MODE ENGINE"
+// Master quality stack: one structure read, one gate pipeline, sniper execution.
+// Reversal paths get extra liquidity/stack checks. No duplicate BOS/CHoCH vetoes.
+
+input bool   EnableBeastMode                 = true;  // unified PRISM beast pipeline
+input bool   EnableSniperMode                = true;  // aggressive fire when beast gates pass
+input bool   BeastUseUnifiedStructure        = true;  // MPI/ICE/rank share one structure snapshot
+input bool   BeastRequireReversalStack       = true;  // RevSniper/LiquiditySweep need sweep+CHoCH/zone
+input int    BeastMinReversalLiquidityScore  = 30;    // 0=off; liquidity quality floor for reversals
+input bool   BeastDuplicateBarGuard          = true;  // one approval per bar per direction
+input bool   BeastCaptureSignalSnapshot      = true;  // record MPI/ICE at decision time
+input bool   EnableBeastDashboard            = true;  // rich HUD when EnableDashboard=true
 
 input bool   AggressiveInstantQuality    = true;  // skip MPI wait
 input bool   PreferQualityPaths          = true;  // Cont/Rev before InstantTrend
@@ -420,14 +433,18 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_FULL_UPGRADE_28");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_BEAST_29");
+   Print("PRISM BEAST: BeastMode=", EnableBeastMode,
+         " SniperMode=", EnableSniperMode,
+         " UnifiedStructure=", BeastUseUnifiedStructure,
+         " ReversalStack=", BeastRequireReversalStack);
    Print("FULL UPGRADE: PreferQuality=", PreferQualityPaths,
          " TryNextPath=", TryNextPathIfEnginesFail,
          " AdaptiveRank=", EnableAdaptivePathRanking,
          " InstantFallback=", AllowTrendOnlyInstantEntry,
          " NoMPIwait=", AggressiveInstantQuality);
    Print("Engines: ICE_MinScore=", ICE_MinScore,
-         " | IMCE hard (chop override cont) | SMT on RevSniper only");
+         " | IMCE hard (chop override cont) | SMT on RevSniper | BEAST unified");
    Print("Trade size: LotSize=", LotSize, " MaxOpenTrades=", MaxOpenTrades,
          " MaxTotal=", MaxTotalOpenTradesAllSymbols);
    Print("TIP: set EntryTF to match chart (you use H4 — set EntryTF=H4)");
@@ -2748,25 +2765,31 @@ ulong ResolvePositionTicket(ulong orderTicket)
 SignalSnapshot PendingSignalSnapshot;
 bool PendingSignalSnapshotValid = false;
 
-void CapturePendingSignalSnapshot(bool buy)
+void CapturePendingSignalSnapshot(bool buy, string strategyTag = "")
 {
+   PRISMStructureSnapshot s = PRISM_GetStructureSnapshot(buy);
+
    PendingSignalSnapshot.ticket          = 0;
    PendingSignalSnapshot.isBuy           = buy;
-   PendingSignalSnapshot.score           = CalculateTradeScore(buy);
-   PendingSignalSnapshot.requiredScore   = GetEffectiveMinimumScore();
-   PendingSignalSnapshot.trendOK         = buy ? IsBullTrend() : IsBearTrend();
-   PendingSignalSnapshot.htfOK           = HTFConfirms(buy);
+   PendingSignalSnapshot.score           = CalculatePRISMScore(buy);
+   PendingSignalSnapshot.requiredScore   = EffectiveMinimumMPIScore();
+   PendingSignalSnapshot.trendOK         = s.trend;
+   PendingSignalSnapshot.htfOK           = s.htfConfirms;
    PendingSignalSnapshot.confluenceOK    = HasStructureConfluence(buy);
    PendingSignalSnapshot.mtfConfluenceOK = HasHTFStructureConfluence(buy);
-   PendingSignalSnapshot.bosPresent      = DetectBOS();
-   PendingSignalSnapshot.chochPresent    = DetectCHoCH();
-   PendingSignalSnapshot.sweepPresent    = DetectLiquiditySweep();
-   PendingSignalSnapshot.fvgPresent      = buy ? DetectBullishFVG() : DetectBearishFVG();
-   PendingSignalSnapshot.obPresent       = buy ? DetectBullishOrderBlock() : DetectBearishOrderBlock();
+   PendingSignalSnapshot.bosPresent      = s.bos;
+   PendingSignalSnapshot.chochPresent    = s.choch;
+   PendingSignalSnapshot.sweepPresent    = s.sweep;
+   PendingSignalSnapshot.fvgPresent      = s.fvg;
+   PendingSignalSnapshot.obPresent       = s.ob;
    PendingSignalSnapshot.volExpanding    = IsVolatilityExpanding();
    PendingSignalSnapshot.regime          = GetMarketRegime();
 
    PendingSignalSnapshotValid = true;
+
+   if(EnableBeastMode && strategyTag != "" && (EnableVerboseLogging || EnableSetupLogging))
+      Print("BEAST snapshot: ", strategyTag, " grade=", PRISMGetTradeGrade(buy, strategyTag),
+            " MPI=", PendingSignalSnapshot.score);
 }
 
 void RecordSignalSnapshot(ulong ticket, bool buy)
@@ -6148,18 +6171,33 @@ int EffectiveMinimumMPIScore()
    return MinimumMPIScore;
 }
 
-// High-impact event window detector — does NOT block trading.
-// Used only to switch into quality-sniper mode (CPI/NFP/FOMC, etc.).
-bool IsHighImpactEventWindow()
+// Shared calendar currency resolver — used by news hard-block + event quality.
+void PRISM_GetSymbolCurrencies(string &baseCcy, string &quoteCcy)
 {
-   string baseCcy  = StringSubstr(BrokerSymbol, 0, 3);
-   string quoteCcy = "";
+   baseCcy = StringSubstr(BrokerSymbol, 0, 3);
    if(StringLen(BrokerSymbol) >= 6)
       quoteCcy = StringSubstr(BrokerSymbol, 3, 3);
    else
       quoteCcy = StringSubstr(BrokerSymbol, StringLen(BrokerSymbol) - 3, 3);
+}
 
-   // BTCUSD.m / ETHUSD.m: treat USD quote high-impact as relevant when enabled
+bool PRISM_CalendarCurrencyRelevant(const string eventCurrency,
+                                    const string baseCcy,
+                                    const string quoteCcy,
+                                    const bool cryptoUsd)
+{
+   return (eventCurrency == baseCcy) ||
+          (eventCurrency == quoteCcy) ||
+          (cryptoUsd && eventCurrency == "USD");
+}
+
+// High-impact event window detector — does NOT block trading.
+// Used only to switch into quality-sniper mode (CPI/NFP/FOMC, etc.).
+bool IsHighImpactEventWindow()
+{
+   string baseCcy, quoteCcy;
+   PRISM_GetSymbolCurrencies(baseCcy, quoteCcy);
+
    bool cryptoUsd = (EventQualityAppliesToCrypto && IsNonScalpSymbol() &&
                      (StringFind(BrokerSymbol, "USD") >= 0 || quoteCcy == "USD"));
 
@@ -6183,12 +6221,7 @@ bool IsHighImpactEventWindow()
       if(!CalendarCountryById(event.country_id, country))
          continue;
 
-      bool currencyHit =
-         (country.currency == baseCcy) ||
-         (country.currency == quoteCcy) ||
-         (cryptoUsd && country.currency == "USD");
-
-      if(currencyHit)
+      if(PRISM_CalendarCurrencyRelevant(country.currency, baseCcy, quoteCcy, cryptoUsd))
          return true;
    }
    return false;
@@ -6490,6 +6523,54 @@ bool SpecVolatilityBreakoutSellSetup()
    return (closeBar < channelLow);
 }
 
+void CapturePendingSignalSnapshot(bool buy, string strategyTag = "");
+bool IsDuplicateSignal(bool buy);
+void MarkSignalApproved(bool buy);
+
+//================ PRISM BEAST: UNIFIED STRUCTURE SNAPSHOT ============//
+// Single structure read shared by MPI, ICE, and path ranking — eliminates
+// 3-5 duplicate BOS/CHoCH/sweep calls per bar.
+
+struct PRISMStructureSnapshot
+{
+   int  rec;
+   bool bos;
+   bool choch;
+   bool sweep;
+   bool ob;
+   bool fvg;
+   bool trend;
+   bool trendStrong;
+   bool htfConfirms;
+};
+
+PRISMStructureSnapshot PRISM_GetStructureSnapshot(bool buy, int recency = -1)
+{
+   PRISMStructureSnapshot s;
+   s.rec = (recency >= 0 ? recency : EffectiveStructureRecency());
+   s.bos = RecentBOS(s.rec);
+   s.choch = RecentCHoCH(s.rec);
+   s.sweep = RecentSweep(s.rec);
+   s.ob = ActiveOrderBlock(buy);
+   s.fvg = ActiveFVG(buy);
+   s.trend = (buy ? IsBullTrend() : IsBearTrend());
+   s.trendStrong = TrendStrong();
+   s.htfConfirms = HTFConfirms(buy);
+   return s;
+}
+
+bool PRISM_IsReversalTag(const string tag)
+{
+   return (tag == "RevSniper" || tag == "LiquiditySweep");
+}
+
+bool PRISM_IsContinuationTag(const string tag)
+{
+   return (tag == "ContSniper" || tag == "TrendPullback" ||
+           tag == "InstantTrend" || tag == "VolBreakout(Spec)" ||
+           tag == "FVG+OB");
+}
+
 // Counts how many independent confirming conditions are true for a given
 // direction - used ONLY to break ties among setups that are ALREADY each
 // individually fully valid (every one of their own hard gates already
@@ -6499,26 +6580,17 @@ bool SpecVolatilityBreakoutSellSetup()
 // setup" in the spec.
 int CountConfirmingConditions(bool buy)
 {
+   PRISMStructureSnapshot s = PRISM_GetStructureSnapshot(buy, PRISM_StructureRecencyBars);
    int n = 0;
 
-   if(buy ? IsBullTrend() : IsBearTrend()) n++;
-   if(TrendStrong()) n++;
+   if(s.trend) n++;
+   if(s.trendStrong) n++;
+   if(s.bos) n++;
+   if(s.choch) n++;
+   if(s.sweep) n++;
+   if(s.fvg) n++;
+   if(s.ob) n++;
 
-   // CRITICAL FIX (this pass): was the raw one-bar Detect*() calls - see
-   // the "SAME-BAR COINCIDENCE BUG" header above. Using the same
-   // recency-tolerant/persistent-state checks the setups themselves now
-   // use, so the tie-break reflects the same structure that actually
-   // qualified each candidate instead of re-reading a stricter, mostly-
-   // false picture.
-   if(RecentBOS(PRISM_StructureRecencyBars)) n++;
-   if(RecentCHoCH(PRISM_StructureRecencyBars)) n++;
-   if(RecentSweep(PRISM_StructureRecencyBars)) n++;
-   if(ActiveFVG(buy)) n++;
-   if(ActiveOrderBlock(buy)) n++;
-
-   // PRISM feature: trading near a genuine prior D1/W1 liquidity level is
-   // independent supporting evidence, same category as the checks above -
-   // counted here (ranking only), not as a separate blocking gate.
    if(GetLiquidityProximityScore(buy) > 0) n++;
 
    return n;
@@ -6548,58 +6620,33 @@ input int MinimumMPIScore = 0; // unused under AggressiveInstantQuality (no MPI 
 
 int CalculatePRISMScore(bool buy)
 {
+   PRISMStructureSnapshot s =
+      PRISM_GetStructureSnapshot(buy, PRISM_StructureRecencyBars);
+
    int score = 0;
 
-   // Trend Strength (0-20)
-   if(buy ? IsBullTrend() : IsBearTrend()) score += 10;
-   if(TrendStrong())                       score += 5;
-   if(HTFConfirms(buy))                    score += 5;
+   if(s.trend) score += 10;
+   if(s.trendStrong) score += 5;
+   if(s.htfConfirms) score += 5;
 
-   // Market Structure (0-20)
-   // CRITICAL FIX (this pass): was the raw one-bar DetectBOS()/DetectCHoCH()
-   // - meant this component scored 0/20 almost every time even on a bar
-   // where the qualifying strategy setup (using the new recency-tolerant
-   // checks) legitimately fired, dragging the MPI score down toward the
-   // MinimumMPIScore cutoff for no real reason. Using the same
-   // recency-tolerant read the setups themselves now use.
-   if(RecentBOS(PRISM_StructureRecencyBars))   score += 10;
-   if(RecentCHoCH(PRISM_StructureRecencyBars)) score += 10;
+   if(s.bos) score += 10;
+   if(s.choch) score += 10;
 
-   // Liquidity (0-15) - reuses the existing sweep quality scorer directly
    score += GetLiquiditySweepQualityScore();
 
-   // Momentum (0-15) - ATR expansion as the existing momentum proxy
    if(IsVolatilityExpanding()) score += 15;
 
-   // Institutional Confirmation (0-10) - Order Block freshness + scaled FVG quality
-   // UPGRADE (this pass): a stale, already-mitigated order block used to
-   // score identically to a fresh, untouched one (+5 flat either way).
-   // Now uses IsOrderBlockFreshAndValid() so only a zone price hasn't
-   // already traded back through counts at full weight; a mitigated zone
-   // scores 0 here instead of silently padding the MPI total.
    if(IsOrderBlockFreshAndValid(buy)) score += 5;
    score += (int)MathRound(GetFVGQualityScore(buy) / 3.0);
 
-   // Entry Location (0-10) - premium/discount alignment + liquidity proximity
    if(buy ? InDiscountZone() : InPremiumZone()) score += 5;
    score += MathMin(GetLiquidityProximityScore(buy), 5);
 
-   // Risk Quality (0-10) - basic sanity that a real stop distance exists;
-   // the full risk approval (position sizing, drawdown, exposure) still
-   // happens downstream in RiskManagementOK()/TradeProtectionOK() before
-   // any order is placed, so this category isn't duplicating that - it's
-   // just confirming there's usable volatility data to size risk from.
    if(GetFilterATR() > 0.0) score += 10;
 
-   // Manipulation Penalty (subtracts, not part of the 0-100 budget above) -
-   // UPGRADE (this pass): a recent fake breakout/inducement in THIS trade's
-   // direction (price broke out, then snapped back within a few bars) means
-   // the last attempt at this same move already failed. Previously nothing
-   // in the scoring engine distinguished "clean first break" from "second
-   // attempt right after a trap" - both scored identically.
    if(DetectFakeBreakoutTrap(buy)) score -= 15;
 
-   return score; // roughly 0-100, can dip slightly negative when a trap penalty applies to an otherwise-weak setup
+   return score;
 }
 
 //+------------------------------------------------------------------+
@@ -6622,24 +6669,22 @@ ENUM_IMCE_CONTEXT GetIMCEContext(); // defined below — used by SMTOK hard gate
 //----- ICE: Institutional Confidence Engine (0-100) ------------------//
 int GetInstitutionalConfidenceScore(bool buy)
 {
+   PRISMStructureSnapshot s = PRISM_GetStructureSnapshot(buy);
    int score = 0;
-   int rec = EffectiveStructureRecency();
 
-   // Weighted so a real trend sniper (trend+ADX) is executable, not stuck at 25 forever
-   if(buy ? IsBullTrend() : IsBearTrend()) score += 15;
-   if(TrendStrong())                       score += 15;
-   if(RecentBOS(rec))                      score += 12;
-   if(RecentCHoCH(rec))                    score += 10;
-   if(RecentSweep(rec))                    score += 12;
-   if(ActiveOrderBlock(buy))               score += 12;
-   if(ActiveFVG(buy))                      score += 10;
-   if(GetDisplacementScore(buy) >= 5)      score += 8;
-   if(HTFConfirms(buy))                    score += 5;
+   if(s.trend) score += 15;
+   if(s.trendStrong) score += 15;
+   if(s.bos) score += 12;
+   if(s.choch) score += 10;
+   if(s.sweep) score += 12;
+   if(s.ob) score += 12;
+   if(s.fvg) score += 10;
+   if(GetDisplacementScore(buy) >= 5) score += 8;
+   if(s.htfConfirms) score += 5;
 
-   // IMCE alignment bonus — your log had IMCE=TREND_CONTINUATION with ICE=25
    ENUM_IMCE_CONTEXT ctx = GetIMCEContext();
    if((ctx == IMCE_TREND_CONTINUATION || ctx == IMCE_EXPANSION_BREAKOUT) &&
-      (buy ? IsBullTrend() : IsBearTrend()) && TrendStrong())
+      s.trend && s.trendStrong)
       score += 15;
 
    if(score > 100) score = 100;
@@ -6739,14 +6784,12 @@ bool SMTCrossAssetBearish()
 
 bool IsReversalSmtTag(const string strategyTag)
 {
-   return (strategyTag == "RevSniper" || strategyTag == "LiquiditySweep");
+   return PRISM_IsReversalTag(strategyTag);
 }
 
 bool IsContinuationSmtTag(const string strategyTag)
 {
-   return (strategyTag == "InstantTrend" || strategyTag == "ContSniper" ||
-           strategyTag == "TrendPullback" || strategyTag == "FVG+OB" ||
-           strategyTag == "VolBreakout(Spec)");
+   return PRISM_IsContinuationTag(strategyTag);
 }
 
 // SMT gate — tag-aware (no duplicate global veto after InstantTrend already passed).
@@ -6847,12 +6890,8 @@ bool IMCEAllows(bool buy, const string strategyTag)
 
    ENUM_IMCE_CONTEXT ctx = GetIMCEContext();
 
-   bool contTag =
-      (strategyTag == "ContSniper" || strategyTag == "TrendPullback" ||
-       strategyTag == "InstantTrend" || strategyTag == "VolBreakout(Spec)" ||
-       strategyTag == "FVG+OB");
-   bool revTag =
-      (strategyTag == "RevSniper" || strategyTag == "LiquiditySweep");
+   bool contTag = PRISM_IsContinuationTag(strategyTag);
+   bool revTag  = PRISM_IsReversalTag(strategyTag);
 
    if(IMCEBlockManipulationChop && ctx == IMCE_MANIPULATION_CHOP)
    {
@@ -6904,8 +6943,113 @@ bool IMCEAllows(bool buy, const string strategyTag)
    return true;
 }
 
+//----- PRISM BEAST: Market Intelligence + Reversal Quality -------------//
+struct PRISM_MarketIntel
+{
+   MarketRegime regime;
+   ENUM_IMCE_CONTEXT imce;
+   bool eventWindow;
+   bool volExpanding;
+   bool dailyBullBias;
+   bool weeklyBullBias;
+   bool htfBull;
+};
+
+PRISM_MarketIntel PRISM_GetMarketIntel(bool buy)
+{
+   PRISM_MarketIntel m;
+   m.regime = GetMarketRegime();
+   m.imce = GetIMCEContext();
+   m.eventWindow = EventQualityModeActive();
+   m.volExpanding = IsVolatilityExpanding();
+   m.htfBull = HTFTrendBullish();
+
+   double price = buy
+      ? SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK)
+      : SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
+   double pdMid = (GetPreviousDayHigh() + GetPreviousDayLow()) / 2.0;
+   double pwMid = (GetPreviousWeekHigh() + GetPreviousWeekLow()) / 2.0;
+   m.dailyBullBias = (pdMid > 0.0 && price > pdMid);
+   m.weeklyBullBias = (pwMid > 0.0 && price > pwMid);
+   return m;
+}
+
+// Unified reversal stack — one definition for RevSniper/LiquiditySweep/IMCE/SMT.
+bool PRISMReversalQualityOK(bool buy)
+{
+   if(!EnableBeastMode || !BeastRequireReversalStack)
+      return true;
+
+   PRISMStructureSnapshot s = PRISM_GetStructureSnapshot(buy);
+   if(!s.sweep)
+      return false;
+   if(!(s.choch || s.ob || s.fvg))
+      return false;
+
+   int liq = GetLiquiditySweepQualityScore();
+   if(BeastMinReversalLiquidityScore > 0 && liq < BeastMinReversalLiquidityScore)
+      return false;
+
+   if(buy && DetectFakeBreakoutTrap(true))
+      return false;
+   if(!buy && DetectFakeBreakoutTrap(false))
+      return false;
+
+   return true;
+}
+
+string PRISMGetTradeGrade(bool buy, const string strategyTag)
+{
+   int mpi = CalculatePRISMScore(buy);
+   int ice = GetInstitutionalConfidenceScore(buy);
+   int conf = CountConfirmingConditions(buy);
+   int total = mpi + ice + conf * 5;
+
+   if(PRISM_IsReversalTag(strategyTag) && !PRISMReversalQualityOK(buy))
+      return "D";
+
+   if(total >= 170) return "A+";
+   if(total >= 140) return "A";
+   if(total >= 110) return "B";
+   if(total >= 80)  return "C";
+   return "D";
+}
+
+bool PRISMFinalizeApproval(bool buy, const string strategyTag)
+{
+   if(EnableBeastMode && BeastDuplicateBarGuard && IsDuplicateSignal(buy))
+   {
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("BEAST: duplicate bar guard suppressed ", (buy ? "BUY" : "SELL"),
+               " on ", BrokerSymbol);
+      return false;
+   }
+
+   if(EnableBeastMode && EnableSniperMode)
+   {
+      string grade = PRISMGetTradeGrade(buy, strategyTag);
+      Print("BEAST SNIPER ", (buy ? "BUY" : "SELL"), " [", strategyTag, "] grade=",
+            grade, " MPI=", CalculatePRISMScore(buy),
+            " ICE=", GetInstitutionalConfidenceScore(buy),
+            " conf=", CountConfirmingConditions(buy),
+            " IMCE=", IMCEContextToString(GetIMCEContext()));
+   }
+
+   MarkSignalApproved(buy);
+   if(EnableBeastMode && BeastCaptureSignalSnapshot)
+      CapturePendingSignalSnapshot(buy, strategyTag);
+   return true;
+}
+
 bool PrismInstitutionalEnginesOK(bool buy, const string strategyTag)
 {
+   if(EnableBeastMode && PRISM_IsReversalTag(strategyTag) && !PRISMReversalQualityOK(buy))
+   {
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("BEAST: reversal stack insufficient for ", strategyTag, " on ", BrokerSymbol);
+      return false;
+   }
+
    // ICE + IMCE hard for all paths.
    // SMT hard only on reversal tags (see SMTOK) — not duplicated on InstantTrend.
    if(!InstitutionalConfidenceOK(buy))
@@ -6953,13 +7097,16 @@ int PathBasePriority(const string tag)
 
 int PathQualityRankScore(const string tag, const bool buy)
 {
+   PRISMStructureSnapshot s = PRISM_GetStructureSnapshot(buy);
    int score = 1000 - PathBasePriority(tag) * 100;
    score += GetInstitutionalConfidenceScore(buy);
 
-   int rec = EffectiveStructureRecency();
-   if(RecentBOS(rec)) score += 8;
-   if(ActiveOrderBlock(buy) || ActiveFVG(buy)) score += 8;
-   if(RecentSweep(rec) || RecentCHoCH(rec)) score += 6;
+   if(s.bos) score += 8;
+   if(s.ob || s.fvg) score += 8;
+   if(s.sweep || s.choch) score += 6;
+
+   if(PRISM_IsReversalTag(tag) && PRISMReversalQualityOK(buy))
+      score += 20;
 
    if(EnableAdaptivePathRanking)
    {
@@ -7116,6 +7263,8 @@ void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &
    {
       ordered[c] = candidates[c];
       orderedScores[c] = PathQualityRankScore(candidates[c], isBuy);
+      if(EnableBeastMode)
+         orderedScores[c] += CountConfirmingConditions(isBuy); // tie-break boost
    }
 
    // Sort descending by quality score (simple bubble — max 8 candidates)
@@ -7148,7 +7297,7 @@ void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &
    if(bestTag == "")
    {
       if(EnableVerboseLogging || EnableSetupLogging)
-         Print("FULL UPGRADE: ", candidateCount, " path(s) valid but engines rejected all on ",
+         Print("PRISM BEAST: ", candidateCount, " path(s) valid but engines rejected all on ",
                BrokerSymbol, " (", (isBuy ? "BUY" : "SELL"), ")");
       return;
    }
@@ -7156,8 +7305,9 @@ void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &
    if(isBuy) { buySignal = true;  strategyTag = bestTag; }
    else      { sellSignal = true; strategyTag = bestTag; }
 
-   Print("FULL UPGRADE FIRE ", (isBuy ? "BUY" : "SELL"),
-         " [", bestTag, "] rank=", PathQualityRankScore(bestTag, isBuy),
+   Print("PRISM BEAST FIRE ", (isBuy ? "BUY" : "SELL"),
+         " [", bestTag, "] grade=", PRISMGetTradeGrade(isBuy, bestTag),
+         " rank=", PathQualityRankScore(bestTag, isBuy),
          " ICE=", GetInstitutionalConfidenceScore(isBuy),
          " IMCE=", IMCEContextToString(GetIMCEContext()),
          " tried=", tried, "/", candidateCount,
@@ -8233,6 +8383,28 @@ void CreateDashboard()
    if(!EnableDashboard)
       return;
 
+   if(EnableBeastMode && EnableBeastDashboard)
+   {
+      PRISM_MarketIntel intel = PRISM_GetMarketIntel(true);
+      Comment(
+         "========== SNIPER AI PRISM BEAST ==========\n",
+         "Chart: ", BrokerSymbol, " | EntryTF: ", EnumToString(EntryTF), "\n",
+         "Open: ", IntegerToString(CountOpenTrades()),
+         " / ", IntegerToString(MaxOpenTrades), "\n",
+         "Regime: ", EnumToString(intel.regime),
+         " | IMCE: ", IMCEContextToString(intel.imce), "\n",
+         "MPI buy: ", IntegerToString(CalculatePRISMScore(true)),
+         " | ICE buy: ", IntegerToString(GetInstitutionalConfidenceScore(true)), "\n",
+         "Daily bias: ", (intel.dailyBullBias ? "BULL" : "BEAR"),
+         " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
+         "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
+         " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
+         "BUILD: SA_PRISM_BEAST_29\n",
+         "=========================================="
+      );
+      return;
+   }
+
    Comment(
       "============================\n",
       "      SNIPER AI\n",
@@ -8430,12 +8602,13 @@ void PrintSetupDiagnostics()
             " EventTighten=", eventQ,
             " MPI floor=", EffectiveMinimumMPIScore(),
             " NewsHardBlock=", EnableNewsFilter);
-      Print("NOTE: FULL UPGRADE PreferQuality=", PreferQualityPaths,
+      Print("NOTE: PRISM BEAST PreferQuality=", PreferQualityPaths,
             " TryNextPath=", TryNextPathIfEnginesFail,
             " ICE_buy=", GetInstitutionalConfidenceScore(true),
             " ICE_MinScore=", ICE_MinScore,
-            " IMCE=", IMCEContextToString(GetIMCEContext()));
-      Print("NOTE: Rank Cont/Rev first; InstantTrend chop-safe fallback; SMT on RevSniper only; MPI wait OFF");
+            " IMCE=", IMCEContextToString(GetIMCEContext()),
+            " grade=", PRISMGetTradeGrade(true, "ContSniper"));
+      Print("NOTE: Rank Cont/Rev first; chop-safe InstantTrend; reversal stack quality; MPI wait OFF");
    }
 }
 
@@ -8526,6 +8699,9 @@ void InstantExecution()
 
    if(buySignal)
    {
+      if(EnableBeastMode && !PRISMFinalizeApproval(true, strategyTag))
+         return;
+
       Print("BUY approved (", BrokerSymbol, ") [", strategyTag, "]");
       g_PendingStrategyTag = strategyTag;
       ExecuteBuy();
@@ -8534,6 +8710,9 @@ void InstantExecution()
 
    if(sellSignal)
    {
+      if(EnableBeastMode && !PRISMFinalizeApproval(false, strategyTag))
+         return;
+
       Print("SELL approved (", BrokerSymbol, ") [", strategyTag, "]");
       g_PendingStrategyTag = strategyTag;
       ExecuteSell();
@@ -8583,8 +8762,8 @@ bool NewsTradingAllowed()
    if(NonScalpDisableNewsFilter && IsNonScalpSymbol())
       return true;
 
-   string baseCcy  = StringSubstr(BrokerSymbol, 0, 3);
-   string quoteCcy = StringSubstr(BrokerSymbol, 3, 3);
+   string baseCcy, quoteCcy;
+   PRISM_GetSymbolCurrencies(baseCcy, quoteCcy);
 
    datetime from = TimeCurrent() - MinutesAfterNews  * 60;
    datetime to   = TimeCurrent() + MinutesBeforeNews * 60;
@@ -8594,7 +8773,7 @@ bool NewsTradingAllowed()
    int total = CalendarValueHistory(values, from, to, NULL, NULL);
 
    if(total <= 0)
-      return true; // no calendar data available - fail safe, don't block trading
+      return true;
 
    for(int i = 0; i < total; i++)
    {
@@ -8608,7 +8787,7 @@ bool NewsTradingAllowed()
       if(!CalendarCountryById(event.country_id, country))
          continue;
 
-      if(country.currency != baseCcy && country.currency != quoteCcy)
+      if(!PRISM_CalendarCurrencyRelevant(country.currency, baseCcy, quoteCcy, false))
          continue;
 
       if(event.importance == CALENDAR_IMPORTANCE_HIGH && BlockHighImpactNews)

@@ -1,2 +1,2 @@
-SA_FULL_UPGRADE_28
-Quality-first Cont/Rev, chop-safe InstantTrend fallback, try-next path, per-tag stats.
+SA_PRISM_BEAST_29
+PRISM Beast Mode: unified engines, reversal quality, sniper execution, no duplicate gates.

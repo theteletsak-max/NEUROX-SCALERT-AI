@@ -2,26 +2,26 @@ SNIPER AI - DOWNLOAD
 ====================
 
 EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK28.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK29.mq5
 
 ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
-BUILD_ID: SA_FULL_UPGRADE_28
+BUILD_ID: SA_PRISM_BEAST_29
 
-FULL UPGRADE:
-1. Prefers ContSniper / RevSniper when valid (quality first)
-2. InstantTrend = aggressive fallback so you still trade
-3. TryNextPathIfEnginesFail — if Cont fails ICE/IMCE, InstantTrend can still fire
-4. IMCE chop-safe: trend-aligned InstantTrend/ContSniper can trade in chop (OK28 fix)
-5. Adaptive ranking by per-tag win-rate (after enough trades)
-6. ICE/IMCE hard; SMT on RevSniper only; MPI wait OFF
-7. Prints per-strategy stats on load
-8. Adjustable LotSize / MaxOpenTrades
+PRISM BEAST MODE (20-engine stack):
+1. Unified structure snapshot — MPI/ICE/rank share one BOS/CHoCH/sweep read (no duplicates)
+2. Market intelligence — regime + IMCE + daily/weekly bias + event mode
+3. Reversal quality stack — sweep + CHoCH/zone + liquidity score for RevSniper
+4. Sniper execution — fires when beast gates pass; duplicate bar guard
+5. Trade grades A+ to D logged on every fire
+6. Chop-safe InstantTrend fallback (from OK28)
+7. ICE/IMCE/SMT hard; SMT on RevSniper only; MPI wait OFF
+8. Rich beast dashboard when EnableDashboard=true
 
 INSTALL:
 1. Delete old SNIPER* .mq5/.ex5
-2. Compile OK28
+2. Compile OK29
 3. REMOVE EA from chart + re-attach
 4. Set EntryTF = H4 if chart is H4
-5. Experts must show: BUILD_ID=SA_FULL_UPGRADE_28
+5. Experts must show: BUILD_ID=SA_PRISM_BEAST_29
