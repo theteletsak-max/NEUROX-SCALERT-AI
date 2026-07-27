@@ -7046,7 +7046,6 @@ bool AggressiveContinuationBuySetup()
    if(!IsBullTrend())
       return false;
 
-   int rec = EffectiveStructureRecency();
    double ema = GetEMA();
    double atr = GetFilterATR();
    double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
@@ -7085,7 +7084,6 @@ bool AggressiveContinuationSellSetup()
    if(!IsBearTrend())
       return false;
 
-   int rec = EffectiveStructureRecency();
    double ema = GetEMA();
    double atr = GetFilterATR();
    double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
