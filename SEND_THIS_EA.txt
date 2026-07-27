@@ -1,6 +1,51 @@
-SNIPER AI — STRATEGY VERIFIED
+══════════════════════════════════════
+        SNIPER AI  —  EXPERT ADVISOR
+══════════════════════════════════════
 
+File:     SNIPER_AI_OK32.mq5
 BUILD_ID: SA_PRISM_STRATEGY_32
+Comment:  SNIPER AI
+Platform: MetaTrader 5
+
+DOWNLOAD EA:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK32.mq5
 
-Cont/Rev/Instant all live. Reversal liquidity bug fixed. Re-attach after compile. EntryTF=H4 for BTC H4.
+(Raw / Save As):
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK32.mq5
+
+ZIP:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
+
+──────────────────────────────────────
+INSTALL (MT5)
+──────────────────────────────────────
+1. Download SNIPER_AI_OK32.mq5
+2. MT5 → File → Open Data Folder → MQL5\Experts\
+3. Delete ALL old SNIPER* / Sniper* .mq5 and .ex5
+4. Copy SNIPER_AI_OK32.mq5 into Experts
+5. MetaEditor → open file → F7 (Compile) → 0 errors
+6. Remove old EA from chart → drag OK32 onto chart
+7. Inputs: EntryTF = H4 (if chart is H4)
+8. Enable Algo Trading
+9. Experts log must show:
+   BUILD_ID=SA_PRISM_STRATEGY_32
+
+──────────────────────────────────────
+DEFAULTS (ready to trade demo)
+──────────────────────────────────────
+LotSize              0.01
+MaxOpenTrades        3
+UltraAggressiveFire  true
+ICE_MinScore         25
+EnableNewsFilter     false
+TradeComment         SNIPER AI
+
+──────────────────────────────────────
+WHAT IT DOES
+──────────────────────────────────────
+• ContSniper / InstantTrend — aggressive fire
+• RevSniper — liquidity stack (fixed)
+• ICE + IMCE + SMT (SMT on Rev only)
+• No RSI / MACD / Stochastic
+• Quality rank + try-next-path
+══════════════════════════════════════
