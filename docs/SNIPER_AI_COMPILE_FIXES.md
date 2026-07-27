@@ -86,3 +86,15 @@ Money-safety fixes after OK41 audit:
 7. BestQuality HP confirms independent of UltraHighProbability
 
 File: `SNIPER_AI_OK42.mq5`
+
+## OK43 — market defense (`SA_PRISM_DEFEND_43`)
+
+Open trades defend against the market:
+- Hard opposite RevSniper → close
+- Fake-breakout trap against position → close (pre-TP1) or BE
+- Adverse wrong-side sweep → lock BE
+- IMCE manipulation chop while green → lock BE
+- Peak MFE retrace → lock fraction of peak profit
+- `EnableDrawdownProtection=true` by default
+
+File: `SNIPER_AI_OK43.mq5`

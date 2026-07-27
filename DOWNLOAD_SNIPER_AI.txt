@@ -1,11 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK42.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK43.mq5
 
-BUILD_ID: SA_PRISM_SAFE_42
+BUILD_ID: SA_PRISM_DEFEND_43
 Comment:  SNIPER AI
 
-SAFETY: lock verified before ladder advance, fallback TP3, Cont needs structure,
-Instant HTF gate, ContSniper-only Ultra early pass. Quality + profit ladder kept.
+MARKET DEFENSE: closes/locks on opposite reversal, trap, adverse sweep, chop, peak retrace.
+Drawdown shield ON. Quality setups + sure profit ladder retained.
 
-INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_SAFE_42
+INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_DEFEND_43

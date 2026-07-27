@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_SAFE_42                                    |
-//| SNIPER AI - safety audit: lock must succeed, no unprotected risk |
+//| BUILD_ID: SA_PRISM_DEFEND_43                                  |
+//| SNIPER AI - market defense: protect vs flip, chop, trap, DD     |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "4.20"
-#property description "SNIPER AI safety - profit lock verified, fallback TP3, quality Cont/Rev"
-#property description "Best quality setups + sure ladder + confirmed money-safety fixes"
+#property version   "4.30"
+#property description "SNIPER AI market defense - auto-protect vs adverse structure, chop, traps"
+#property description "Best quality + sure ladder + safety locks + drawdown shield"
 
 #include <Trade/Trade.mqh>
 
@@ -467,16 +467,17 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_SAFE_42");
-   Print("SAFE42: lock-before-flag | fallback broker TP3 | Cont needs BOS/OB/FVG |");
-   Print("  Instant HTF gate | ContSniper-only Ultra early pass | HP on BestQuality");
-   Print("BEST QUALITY: BestQualitySetups=", BestQualitySetups,
-         " StructZone=", QualityRequireStructureZone,
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_DEFEND_43");
+   Print("MARKET DEFENSE: ON=", EnableMarketDefense,
+         " HardRevClose=", DefenseCloseOnHardReversal,
+         " AdverseSweepBE=", DefenseLockBEOnAdverseSweep,
+         " ChopBE=", DefenseTightenOnChop,
+         " TrapClose=", DefenseCloseOnTrapAgainst,
+         " PeakRetrace=", DefenseRetraceLockFromPeak,
+         " DrawdownShield=", EnableDrawdownProtection);
+   Print("SAFE+QUALITY: BestQuality=", BestQualitySetups,
          " HP_Confirms=", UltraHP_MinConfirmations,
-         " ICE_Min=", ICE_MinScore);
-   Print("SURE PROFIT LADDER: Force=", ForceSureProfitLadder,
-         " SecureOnTP=", SecureProfitOnTPHit,
-         " Trailing=", EnableTrailing);
+         " ForceLadder=", ForceSureProfitLadder);
    Print("REVERSAL CORRECT SIGNALS: CorrectSideSweep=", ReversalRequireCorrectSideSweep,
          " StrictReclaim=", ReversalStrictCorrectSignal,
          " RejectWrongSide=", ReversalRejectWrongSideRecent,
@@ -1763,7 +1764,7 @@ double GetCurrentDrawdown()
 // Set EnableDrawdownProtection back to true if you want this safety net
 // again.
 
-input bool EnableDrawdownProtection = false;
+input bool EnableDrawdownProtection = true;  // DEFEND: block new risk + emergency close on max DD
 
 input bool EnableEmergencyCloseOnDrawdown = true;
 
@@ -2516,6 +2517,21 @@ input bool   DetectTPByBarTouch       = true;  // count TP hit if bar high/low t
 input double AggressiveTrailATRMult   = 1.5;   // tight ATR trail after TP1 locks profit
 input bool   BrokerTPStartsAtTP3      = true;  // open with far TP3 so EA owns TP1/TP2 ladder steps
 
+input group "MARKET DEFENSE ENGINE"
+// Defends open trades against the market flipping, chopping, or trapping.
+// Runs every tick in ManageOpenTrades — can lock BE, tighten SL, or close.
+
+input bool   EnableMarketDefense            = true;  // master defense switch
+input bool   DefenseCloseOnHardReversal     = true;  // opposite correct RevSniper stack → close
+input bool   DefenseLockBEOnAdverseSweep    = true;  // wrong-side sweep vs our trade → lock BE
+input bool   DefenseTightenOnChop           = true;  // IMCE manipulation/chop while in profit → BE
+input bool   DefenseCloseOnTrapAgainst      = true;  // fake-breakout trap in our direction → close if pre-TP1
+input bool   DefenseRetraceLockFromPeak     = true;  // retrace from MFE → lock portion of peak profit
+input double DefenseRetraceATR              = 0.70;  // ATR retrace from peak that triggers lock
+input double DefenseRetraceLockFraction     = 0.50;  // lock this fraction of peak favorable move
+input bool   DefenseRequireInProfitToClose  = false; // if true, hard-reversal close only when already green
+input bool   DefenseLogActions              = true;  // print DEFEND actions to Experts
+
 //================ TRADE STATE TRACKING (for TP1/TP2/TP3) ============//
 // MT5 positions only carry one SL and one TP natively - there's no built-in
 // concept of "close half here, let the rest run to a further target." This
@@ -2535,6 +2551,7 @@ struct TradeState
    bool   tp1Taken;
    bool   tp2Taken; // UPGRADE: TP2 scale-out / TP3 runner activation flag
    string strategyTag; // NEW - which strategy (SMC/MeanReversion/TrendPullback/etc) actually produced this trade, for per-strategy performance tracking (Part 15i)
+   double peakFavorable; // DEFEND: best favorable price excursion from entry (absolute price)
 };
 
 // NEW - set right before ExecuteBuy()/ExecuteSell() is called in
@@ -2569,6 +2586,7 @@ void PersistTradeState(int index)
    GlobalVariableSet(prefix + "_buy",    TradeStates[index].isBuy    ? 1.0 : 0.0);
    GlobalVariableSet(prefix + "_taken",  TradeStates[index].tp1Taken ? 1.0 : 0.0);
    GlobalVariableSet(prefix + "_taken2", TradeStates[index].tp2Taken ? 1.0 : 0.0);
+   GlobalVariableSet(prefix + "_mfe",    TradeStates[index].peakFavorable);
 }
 
 void DeleteTradeStateGlobals(ulong ticket)
@@ -2581,6 +2599,7 @@ void DeleteTradeStateGlobals(ulong ticket)
    GlobalVariableDel(prefix + "_buy");
    GlobalVariableDel(prefix + "_taken");
    GlobalVariableDel(prefix + "_taken2");
+   GlobalVariableDel(prefix + "_mfe");
 }
 
 void RegisterTradeState(ulong ticket, double tp1Price, double tp2Price, double tp3Price, bool isBuy)
@@ -2596,6 +2615,7 @@ void RegisterTradeState(ulong ticket, double tp1Price, double tp2Price, double t
    TradeStates[n].tp1Taken    = false;
    TradeStates[n].tp2Taken    = false;
    TradeStates[n].strategyTag = g_PendingStrategyTag;
+   TradeStates[n].peakFavorable = 0.0;
 
    PersistTradeState(n);
 }
@@ -2648,6 +2668,9 @@ void RestoreTradeStates()
       TradeStates[n].isBuy    = (GlobalVariableGet(buyKey) > 0.5);
       TradeStates[n].tp1Taken = (GlobalVariableGet(takenKey) > 0.5);
       TradeStates[n].tp2Taken = GlobalVariableCheck(taken2Key) ? (GlobalVariableGet(taken2Key) > 0.5) : false;
+      string mfeKey = prefix + IntegerToString(ticket) + "_mfe";
+      TradeStates[n].peakFavorable = GlobalVariableCheck(mfeKey) ? GlobalVariableGet(mfeKey) : 0.0;
+      TradeStates[n].strategyTag = "";
    }
 
    Print("Restored ", ArraySize(TradeStates), " TP1 trade state(s) from persistent storage.");
@@ -3822,6 +3845,11 @@ input bool   EnableStagnationExit      = true;
 input int    StagnationLookbackBars    = 150; // only checked once a trade has been open at least this many EntryTF bars
 input double StagnationProgressATRMultiple = 0.5; // if the position's favorable excursion hasn't reached this many ATRs by then, it's judged stagnant and closed
 
+// Forward — implemented with Market Defense Engine (after IMCE/trap helpers)
+bool MarketDefendOpenPosition(const ulong ticket, const long type, const double openPrice,
+                              const double price, double &currentSL, double &currentTP,
+                              const int stateIndex);
+
 //================ MANAGE OPEN TRADES ===============================//
 
 void ManageOpenTrades()
@@ -3958,6 +3986,20 @@ void ManageOpenTrades()
          Print("Max hold time reached (", barsHeld, " bars) - closing ticket ", ticket);
          trade.PositionClose(ticket);
          continue;
+      }
+
+      //================ MARKET DEFENSE =================//
+      // Protect open trades against flips, chop, traps, and peak retrace.
+      int defendState = FindTradeState(ticket);
+      if(EnableMarketDefense)
+      {
+         if(MarketDefendOpenPosition(ticket, type, openPrice, price, currentSL, currentTP, defendState))
+            continue; // position closed by defense
+         // refresh after possible SL modify
+         if(!PositionSelectByTicket(ticket))
+            continue;
+         currentSL = PositionGetDouble(POSITION_SL);
+         currentTP = PositionGetDouble(POSITION_TP);
       }
 
 
@@ -7413,7 +7455,6 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
 
    PRISMBeastScore beast = UltraGetBeastScore(buy, strategyTag);
    bool soft = (UltraInstantTrendSoftGates && strategyTag == "InstantTrend" && !BestQualitySetups);
-   bool contTag = PRISM_IsContinuationTag(strategyTag);
    bool revTag = PRISM_IsReversalTag(strategyTag);
    bool aggro = UltraAggressiveFire || NeverBlockValidSniperEntry || AggressiveInstantQuality;
 
@@ -7939,6 +7980,145 @@ string IMCEContextToString(ENUM_IMCE_CONTEXT ctx)
    if(ctx == IMCE_EXPANSION_BREAKOUT) return "EXPANSION_BREAKOUT";
    if(ctx == IMCE_MANIPULATION_CHOP)  return "MANIPULATION_CHOP";
    return "NEUTRAL";
+}
+
+//================ MARKET DEFENSE ENGINE ==============================//
+// Returns true if the position was CLOSED by defense (caller must continue).
+bool MarketDefendOpenPosition(const ulong ticket, const long type, const double openPrice,
+                              const double price, double &currentSL, double &currentTP,
+                              const int stateIndex)
+{
+   if(!EnableMarketDefense)
+      return false;
+   if(!PositionSelectByTicket(ticket))
+      return false;
+
+   const bool isBuy = (type == POSITION_TYPE_BUY);
+   const bool inProfit = isBuy ? (price > openPrice) : (price < openPrice);
+   double atr = GetFilterATR();
+   int rec = EffectiveStructureRecency();
+
+   // --- Track peak favorable excursion (MFE) ---
+   if(stateIndex >= 0)
+   {
+      double peak = TradeStates[stateIndex].peakFavorable;
+      if(peak <= 0.0)
+         peak = openPrice;
+      if(isBuy && price > peak)
+         peak = price;
+      if(!isBuy && price < peak)
+         peak = price;
+      if(peak != TradeStates[stateIndex].peakFavorable)
+      {
+         TradeStates[stateIndex].peakFavorable = peak;
+         PersistTradeState(stateIndex);
+      }
+   }
+
+   // --- 1) Hard opposing reversal stack → close ---
+   if(DefenseCloseOnHardReversal)
+   {
+      string detail = "";
+      bool oppositeRev = MarketReversalSignalOK(!isBuy, detail);
+      if(oppositeRev && (!DefenseRequireInProfitToClose || inProfit))
+      {
+         if(DefenseLogActions)
+            Print("DEFEND CLOSE: hard opposite reversal vs ", (isBuy ? "BUY" : "SELL"),
+                  " ticket ", ticket, " — ", detail);
+         trade.PositionClose(ticket);
+         return true;
+      }
+   }
+
+   // --- 2) Fake-breakout trap against our direction (pre-TP1) → close ---
+   if(DefenseCloseOnTrapAgainst && DetectFakeBreakoutTrap(isBuy))
+   {
+      bool preTP1 = (stateIndex < 0) || !TradeStates[stateIndex].tp1Taken;
+      if(preTP1)
+      {
+         if(DefenseLogActions)
+            Print("DEFEND CLOSE: fake-breakout trap against ", (isBuy ? "BUY" : "SELL"),
+                  " ticket ", ticket);
+         trade.PositionClose(ticket);
+         return true;
+      }
+      // After TP1: lock at least BE instead of full close
+      if(inProfit)
+      {
+         bool needBE = isBuy ? (currentSL < openPrice) : (currentSL > openPrice || currentSL == 0.0);
+         if(needBE && trade.PositionModify(ticket, openPrice, currentTP))
+         {
+            currentSL = openPrice;
+            if(DefenseLogActions)
+               Print("DEFEND BE: trap after TP1 — locked breakeven on ticket ", ticket);
+         }
+      }
+   }
+
+   // --- 3) Adverse (wrong-side) sweep → lock breakeven ---
+   if(DefenseLockBEOnAdverseSweep && inProfit)
+   {
+      int wrongBar = MostRecentWrongSideSweepBar(isBuy, MathMax(rec, 8));
+      int correctBar = MostRecentCorrectSweepBar(isBuy, MathMax(rec, 8));
+      // Wrong-side more recent than our fuel → market turning against us
+      if(wrongBar > 0 && (correctBar == 0 || wrongBar < correctBar))
+      {
+         bool needBE = isBuy ? (currentSL < openPrice) : (currentSL > openPrice || currentSL == 0.0);
+         if(needBE && trade.PositionModify(ticket, openPrice, currentTP))
+         {
+            currentSL = openPrice;
+            if(DefenseLogActions)
+               Print("DEFEND BE: adverse sweep vs ", (isBuy ? "BUY" : "SELL"),
+                     " — locked breakeven ticket ", ticket);
+         }
+      }
+   }
+
+   // --- 4) Manipulation chop while in profit → lock BE ---
+   if(DefenseTightenOnChop && inProfit)
+   {
+      ENUM_IMCE_CONTEXT ctx = GetIMCEContext();
+      if(ctx == IMCE_MANIPULATION_CHOP)
+      {
+         bool needBE = isBuy ? (currentSL < openPrice) : (currentSL > openPrice || currentSL == 0.0);
+         if(needBE && trade.PositionModify(ticket, openPrice, currentTP))
+         {
+            currentSL = openPrice;
+            if(DefenseLogActions)
+               Print("DEFEND BE: IMCE chop — locked breakeven ticket ", ticket);
+         }
+      }
+   }
+
+   // --- 5) Retrace from peak MFE → lock fraction of peak profit ---
+   if(DefenseRetraceLockFromPeak && stateIndex >= 0 && atr > 0.0)
+   {
+      double peak = TradeStates[stateIndex].peakFavorable;
+      if(peak > 0.0)
+      {
+         double peakMove = isBuy ? (peak - openPrice) : (openPrice - peak);
+         double giveBack = isBuy ? (peak - price) : (price - peak);
+         if(peakMove > 0.0 && giveBack >= atr * DefenseRetraceATR)
+         {
+            double lockMove = peakMove * MathMax(0.0, MathMin(DefenseRetraceLockFraction, 1.0));
+            double lockSL = isBuy ? (openPrice + lockMove) : (openPrice - lockMove);
+            lockSL = NormalizeTradePrice(lockSL);
+            bool better = isBuy
+               ? (lockSL > currentSL && lockSL < price)
+               : ((currentSL == 0.0 || lockSL < currentSL) && lockSL > price);
+            if(better && trade.PositionModify(ticket, lockSL, currentTP))
+            {
+               currentSL = lockSL;
+               if(DefenseLogActions)
+                  Print("DEFEND LOCK: peak retrace — SL→", DoubleToString(lockSL,
+                        (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+                        " ticket ", ticket);
+            }
+         }
+      }
+   }
+
+   return false;
 }
 
 bool IMCEAllows(bool buy, const string strategyTag)
@@ -9538,7 +9718,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_SAFE_42\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_DEFEND_43\n",
          "=============================================="
       );
       return;
@@ -9560,7 +9740,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_SAFE_42\n",
+         "BUILD: SA_PRISM_DEFEND_43\n",
          "=========================================="
       );
       return;

@@ -2,36 +2,41 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK42.mq5
-BUILD_ID: SA_PRISM_SAFE_42
+File:     SNIPER_AI_OK43.mq5
+BUILD_ID: SA_PRISM_DEFEND_43
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK42.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK43.mq5
 
 Raw:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK42.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK43.mq5
 
 ──────────────────────────────────────
-SAFETY AUDIT FIXES (OK42)
+MARKET DEFENSE (ON by default)
 ──────────────────────────────────────
-1. Profit lock must succeed (or retry) — flag not set on bare lock fail
-2. After partial, never partial twice; lock retries every tick if needed
-3. No-stops fallback attaches far TP3 (not TP2) — ladder stays intact
-4. ContSniper needs BOS or OB/FVG (pullback alone not enough)
-5. InstantTrend HTF confirm enforced before fire
-6. Ultra early-pass only for ContSniper (not weak FVG/TrendPullback)
-7. BestQuality HP confirms always on (not only with UltraHighProbability)
+Defends every open trade against the market:
+1. Hard opposite RevSniper stack → CLOSE
+2. Fake-breakout trap against position → CLOSE (pre-TP1) or BE
+3. Adverse (wrong-side) liquidity sweep → lock BREAKEVEN
+4. IMCE manipulation chop while green → lock BREAKEVEN
+5. Peak profit retrace (≥0.7 ATR) → lock 50% of peak move
+6. Drawdown shield ON — emergency close + block new risk
 
-Retains: best quality setups + sure TP1→lock→TP2→TP3 + OK40 bugfixes
+Also keeps: best quality setups + sure TP1→lock→TP2→TP3 + OK42 safety
+
+Experts:
+  DEFEND CLOSE: hard opposite reversal ...
+  DEFEND BE: adverse sweep / IMCE chop ...
+  DEFEND LOCK: peak retrace — SL→...
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. Delete ALL old SNIPER*
-2. Compile OK42 (F7) — expect 0 errors, 0 warnings
+2. Compile OK43 (F7)
 3. Remove EA all charts → re-attach
 4. EntryTF=H4 on H4 charts
-5. Experts: BUILD_ID=SA_PRISM_SAFE_42
+5. Experts: BUILD_ID=SA_PRISM_DEFEND_43
 ══════════════════════════════════════
