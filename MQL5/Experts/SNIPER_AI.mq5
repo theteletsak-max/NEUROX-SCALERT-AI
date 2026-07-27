@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_AUDITFIX_49                                |
-//| SNIPER AI - full audit fixes (CHoCH dir + TP2 retry + lot/ticket)|
+//| BUILD_ID: SA_PRISM_SPREADFREE_50                              |
+//| SNIPER AI - spread never blocks entries (optional filter OFF)    |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "4.90"
-#property description "SNIPER AI audit-fix: directional CHoCH reclaim + TP2 lock retry"
-#property description "Lot uses actual SL | HistorySelect ticket resolve | OK48 retained"
+#property version   "5.00"
+#property description "SNIPER AI spread-free: high spread does not block execution"
+#property description "EnableSpreadFilter=false by default | OK49 audit retained"
 
 #include <Trade/Trade.mqh>
 
@@ -477,8 +477,10 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_AUDITFIX_49");
-   Print("AUDITFIX49: directional CHoCH reclaim | TP2 lock retry | lot=actualSL | HistorySelect ticket");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_SPREADFREE_50");
+   Print("SPREADFREE50: EnableSpreadFilter=", EnableSpreadFilter,
+         " MaxSpreadPoints=", MaxSpreadPoints, " (false or Max<=0 = never block on spread)");
+   Print("AUDITFIX: directional CHoCH | TP2 retry | lot=actualSL | HistorySelect");
    Print("BESTNEXT: DirectionalBOS lookback=", DirectionalBOS_LookbackBars,
          " | BestPathsOnly=", BestPathsOnly);
    Print("OPENCAPS: Enforce=", EnforceOpenTradeCaps,
@@ -3720,13 +3722,23 @@ bool CooldownFinished()
 
 //================ PROTECTION SETTINGS ==============================//
 
-input double MaxSpreadPoints = 10000;
+input group "SPREAD (optional — OFF = trade anyway)"
+// Your request: trade even when spread is high.
+// EnableSpreadFilter=false → never blocks on spread.
+// MaxSpreadPoints<=0 also means unlimited when filter is ON.
+
+input bool   EnableSpreadFilter = false;  // OFF: high spread does NOT block entries
+input double MaxSpreadPoints    = 10000;  // only used if EnableSpreadFilter=true (0=unlimited)
 
 
 //================ CHECK SPREAD =====================================//
 
 bool CheckSpread()
 {
+   // SPREADFREE50: default OFF — always allow execution regardless of spread
+   if(!EnableSpreadFilter || MaxSpreadPoints <= 0.0)
+      return true;
+
    double ask = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
    double bid = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
    double point = SymbolInfoDouble(BrokerSymbol, SYMBOL_POINT);
@@ -3739,7 +3751,8 @@ bool CheckSpread()
    if(spread > MaxSpreadPoints)
    {
       if(EnableVerboseLogging)
-         Print("Trading blocked: Spread too high");
+         Print("Trading blocked: Spread too high (", DoubleToString(spread,1),
+               " > ", DoubleToString(MaxSpreadPoints,1), ")");
       return false;
    }
 
@@ -9991,7 +10004,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_AUDITFIX_49\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_SPREADFREE_50\n",
          "=============================================="
       );
       return;
@@ -10013,7 +10026,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_AUDITFIX_49\n",
+         "BUILD: SA_PRISM_SPREADFREE_50\n",
          "=========================================="
       );
       return;

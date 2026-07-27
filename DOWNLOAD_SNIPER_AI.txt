@@ -1,11 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK49.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK50.mq5
 
-BUILD_ID: SA_PRISM_AUDITFIX_49
+BUILD_ID: SA_PRISM_SPREADFREE_50
 Comment:  SNIPER AI
 
-Full-code audit fixes: directional CHoCH reclaim, TP2 lock retry, actual-SL lots, HistorySelect tickets.
-OK48 BestPathsOnly + BOS lookback retained.
+Spread filter OFF by default — high spread does not block entries.
+OK49 audit + Cont/Rev-only + BOS lookback retained.
 
-INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_AUDITFIX_49
+INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_SPREADFREE_50
