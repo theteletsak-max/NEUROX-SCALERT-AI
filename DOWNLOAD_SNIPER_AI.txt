@@ -1,10 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK47.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK48.mq5
 
-BUILD_ID: SA_PRISM_OPENCAPS_47
+BUILD_ID: SA_PRISM_BESTNEXT_48
 Comment:  SNIPER AI
 
-Open-trade caps fully adjustable in Inputs (0=unlimited). OK46 polarity retained.
+Best-next: directional BOS lookback (12) + Cont/Rev only (BestPathsOnly).
+OK47 open caps + polarity + ladder/defense retained.
 
-INSTALL: delete old SNIPER* → F7 → re-attach → set MaxOpenTrades → BUILD_ID=SA_PRISM_OPENCAPS_47
+INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_BESTNEXT_48

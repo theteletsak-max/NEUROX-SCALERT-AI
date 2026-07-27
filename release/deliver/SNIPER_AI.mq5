@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_OPENCAPS_47                                |
-//| SNIPER AI - adjustable open-trade caps (0=unlimited) + OK46      |
+//| BUILD_ID: SA_PRISM_BESTNEXT_48                                |
+//| SNIPER AI - BOS lookback + Cont/Rev-only + OK47 open caps        |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "4.70"
-#property description "SNIPER AI open-trade caps fully adjustable in Inputs"
-#property description "Per-symbol / account / currency caps — 0=unlimited"
+#property version   "4.80"
+#property description "SNIPER AI best-next: directional BOS lookback + Cont/Rev only"
+#property description "Open caps + polarity + ladder/defense retained"
 
 #include <Trade/Trade.mqh>
 
@@ -77,9 +77,10 @@ input bool   UltraHighProbability            = true;  // prefer Cont/Rev; Instan
 input int    UltraHP_MinConfirmations        = 4;     // Cont/Rev HARD min confirms when BestQualitySetups
 
 input bool   BestQualitySetups           = true;  // MASTER: structure Cont/Rev + hard HP + Instant fallback
+input bool   BestPathsOnly               = true;  // BEST-NEXT: ContSniper + RevSniper ONLY (no Instant/secondary)
 input bool   AggressiveInstantQuality    = true;  // skip MPI wait once path approved
 input bool   PreferQualityPaths          = true;  // Cont/Rev before InstantTrend
-input bool   TryNextPathIfEnginesFail    = true;  // Cont fail engines → try Instant fallback
+input bool   TryNextPathIfEnginesFail    = true;  // Cont fail engines → try Instant fallback (ignored if BestPathsOnly)
 input bool   EnableAdaptivePathRanking   = true;  // boost tags with proven win-rate
 input int    AdaptivePathMinTrades       = 10;    // min closed trades before win-rate ranks
 input bool   PrintPathStatsOnInit        = true;
@@ -90,7 +91,7 @@ input bool   QualityDisableWeakPaths     = true;  // BEST: suppress weak VolBrea
 input int    QualityMPIScore             = 0;
 
 input bool   EnableInstantSniperMode     = true;
-input bool   AllowTrendOnlyInstantEntry  = true;  // last-resort fallback only (ranked last)
+input bool   AllowTrendOnlyInstantEntry  = true;  // last-resort fallback (OFF when BestPathsOnly)
 input bool   AggressiveSniperEntries     = true;
 input bool   NeverBlockValidSniperEntry  = true;  // don't veto approved Cont/Rev
 input bool   ResolveConflictByTrend      = true;
@@ -101,6 +102,7 @@ input int    InstantMinimumMPIScore      = 0;
 input bool   InstantTwoOfThreeLiquidity  = true;
 input bool   InstantFvgOrOb              = true;
 input double InstantChannelBreakATR      = 0.35;
+input int    DirectionalBOS_LookbackBars = 12;    // BEST-NEXT: same-dir BOS within N bars (1=current only)
 
 input group "TRADE SIZE & LIMITS (adjustable)"
 // Change these in EA Inputs after attach — they are live settings.
@@ -474,8 +476,12 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_OPENCAPS_47");
-   Print("OPENCAPS47: open-trade limits fully adjustable (0=unlimited) | Enforce=", EnforceOpenTradeCaps);
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_BESTNEXT_48");
+   Print("BESTNEXT48: DirectionalBOS lookback=", DirectionalBOS_LookbackBars,
+         " | BestPathsOnly=", BestPathsOnly, " (Cont+Rev only when true)");
+   Print("OPENCAPS: Enforce=", EnforceOpenTradeCaps,
+         " MaxOpen=", MaxOpenTrades, " MaxTotal=", MaxTotalOpenTradesAllSymbols,
+         " MaxPerCcy=", MaxOpenTradesPerCurrency, " (0=unlimited)");
    Print("MARKET DEFENSE: ON=", EnableMarketDefense,
          " DrawdownShield=", EnableDrawdownProtection);
    Print("QUALITY+LADDER: BestQuality=", BestQualitySetups,
@@ -5247,6 +5253,66 @@ bool DetectDirectionalBOS(ENUM_TIMEFRAMES tf, bool buy)
       return (close2 >= swingLow && close1 < swingLow - minBreakMargin);
 }
 
+// BEST-NEXT48: same-direction BOS checked at a specific closed bar (lookback-capable).
+bool IsDirectionalBOSAtBar(ENUM_TIMEFRAMES tf, const bool buy, const int bar)
+{
+   if(bar < 1)
+      return false;
+
+   int swingStart = bar + 2;
+   int swingEnd = bar + 2 + MathMax(SwingBars * 2, 6);
+   if(Bars(BrokerSymbol, tf) <= swingEnd)
+      return false;
+
+   double atr = GetFilterATR();
+   double minBreakMargin = (atr > 0.0) ? (atr * BOS_MinBreakATRMultiple) : 0.0;
+   double close1 = iClose(BrokerSymbol, tf, bar);
+   double close2 = iClose(BrokerSymbol, tf, bar + 1);
+
+   if(buy)
+   {
+      double swingHigh = iHigh(BrokerSymbol, tf, swingStart);
+      for(int j = swingStart + 1; j <= swingEnd; j++)
+      {
+         double h = iHigh(BrokerSymbol, tf, j);
+         if(h > swingHigh) swingHigh = h;
+      }
+      return (close2 <= swingHigh && close1 > swingHigh + minBreakMargin);
+   }
+
+   double swingLow = iLow(BrokerSymbol, tf, swingStart);
+   for(int j = swingStart + 1; j <= swingEnd; j++)
+   {
+      double l = iLow(BrokerSymbol, tf, j);
+      if(l < swingLow) swingLow = l;
+   }
+   return (close2 >= swingLow && close1 < swingLow - minBreakMargin);
+}
+
+bool RecentDirectionalBOS(const bool buy, const int lookbackBars)
+{
+   int lb = MathMax(lookbackBars, 1);
+   // Prefer current-bar DetectDirectionalBOS (uses confirmed swing helpers)
+   if(DetectDirectionalBOS(EntryTF, buy))
+      return true;
+
+   for(int i = 1; i <= lb; i++)
+   {
+      if(IsDirectionalBOSAtBar(EntryTF, buy, i))
+         return true;
+   }
+   return false;
+}
+
+// Live Cont/ICE/IMCE structure BOS — lookback when DirectionalBOS_LookbackBars > 1
+bool StructureDirectionalBOS(const bool buy)
+{
+   int lb = DirectionalBOS_LookbackBars;
+   if(lb <= 1)
+      return DetectDirectionalBOS(EntryTF, buy);
+   return RecentDirectionalBOS(buy, lb);
+}
+
 input group "MULTI-TIMEFRAME SMC CONFLUENCE"
 
 input bool EnableMTFStructureConfluence = false; // require a same-direction BOS on HigherTimeframe, not just EntryTF
@@ -6977,6 +7043,8 @@ bool QualityNeedsTrendAndADX()
 // InstantTrend is intentionally weak — off under quality mode.
 bool InstantTrendSniperBuySetup()
 {
+   if(BestPathsOnly)
+      return false; // BEST-NEXT48: Cont/Rev only
    if(!EnableInstantSniperMode || !AllowTrendOnlyInstantEntry)
       return false;
    // Aggressive institutional execution: InstantTrend stays alive.
@@ -6992,6 +7060,8 @@ bool InstantTrendSniperBuySetup()
 
 bool InstantTrendSniperSellSetup()
 {
+   if(BestPathsOnly)
+      return false; // BEST-NEXT48: Cont/Rev only
    if(!EnableInstantSniperMode || !AllowTrendOnlyInstantEntry)
       return false;
    if(QualityWeakPathsDisabled() && !AggressiveInstitutionalExecution)
@@ -7079,7 +7149,7 @@ bool AggressiveContinuationBuySetup()
    bool pulled = (ema != EMPTY_VALUE && atr > 0.0 &&
                   MathAbs(price - ema) <= atr * EffectivePullbackATRMultiple());
    // SIGNAL OK45: Cont BUY needs bullish BOS — not any-direction DetectBOS/RecentBOS
-   bool bos = DetectDirectionalBOS(EntryTF, true);
+   bool bos = StructureDirectionalBOS(true);
    bool zone = ActiveOrderBlock(true) || ActiveFVG(true);
 
    if(QualityGatesActive())
@@ -7117,7 +7187,7 @@ bool AggressiveContinuationSellSetup()
    bool pulled = (ema != EMPTY_VALUE && atr > 0.0 &&
                   MathAbs(price - ema) <= atr * EffectivePullbackATRMultiple());
    // SIGNAL OK45: Cont SELL needs bearish BOS — not any-direction DetectBOS/RecentBOS
-   bool bos = DetectDirectionalBOS(EntryTF, false);
+   bool bos = StructureDirectionalBOS(false);
    bool zone = ActiveOrderBlock(false) || ActiveFVG(false);
 
    if(QualityGatesActive())
@@ -7341,7 +7411,7 @@ PRISMStructureSnapshot PRISM_GetStructureSnapshot(bool buy, int recency)
    PRISMStructureSnapshot s;
    s.rec = (recency >= 0 ? recency : EffectiveStructureRecency());
    // BUGCLEAN46: ICE/MPI snapshot must be SAME-DIRECTION — not any-side BOS/sweep
-   s.bos = DetectDirectionalBOS(EntryTF, buy);
+   s.bos = StructureDirectionalBOS(buy);
    s.choch = RecentCHoCH(s.rec);
    s.sweep = RecentDirectionalSweep(buy, s.rec);
    s.ob = ActiveOrderBlock(buy);
@@ -7935,7 +8005,7 @@ bool SMTInternalBullish()
    int rec = EffectiveStructureRecency();
    // SIGNAL OK45: directional sell-side sweep (lows), not any-side RecentSweep
    bool swept = RecentDirectionalSweep(true, rec);
-   bool reclaim = RecentCHoCH(rec) || DetectDirectionalBOS(EntryTF, true) ||
+   bool reclaim = RecentCHoCH(rec) || StructureDirectionalBOS(true) ||
                   ActiveOrderBlock(true) || ActiveFVG(true);
    return swept && reclaim && (IsBullTrend() || RecentCHoCH(rec));
 }
@@ -7945,7 +8015,7 @@ bool SMTInternalBearish()
    int rec = EffectiveStructureRecency();
    // SIGNAL OK45: directional buy-side sweep (highs), not any-side RecentSweep
    bool swept = RecentDirectionalSweep(false, rec);
-   bool reclaim = RecentCHoCH(rec) || DetectDirectionalBOS(EntryTF, false) ||
+   bool reclaim = RecentCHoCH(rec) || StructureDirectionalBOS(false) ||
                   ActiveOrderBlock(false) || ActiveFVG(false);
    return swept && reclaim && (IsBearTrend() || RecentCHoCH(rec));
 }
@@ -8063,8 +8133,8 @@ ENUM_IMCE_CONTEXT GetIMCEContext()
    // BUGCLEAN46: trend/expansion BOS must match trend direction
    bool bull = IsBullTrend();
    bool bear = IsBearTrend();
-   bool bos = bull ? DetectDirectionalBOS(EntryTF, true)
-                   : (bear ? DetectDirectionalBOS(EntryTF, false) : RecentBOS(rec));
+   bool bos = bull ? StructureDirectionalBOS(true)
+                   : (bear ? StructureDirectionalBOS(false) : RecentBOS(rec));
    bool choch = RecentCHoCH(rec);
    bool expanding = IsVolatilityExpanding();
    bool trending = TrendStrong() && (bull || bear);
@@ -8312,7 +8382,7 @@ bool IMCEAllows(bool buy, const string strategyTag)
    if(ctx == IMCE_REVERSAL_LIQUIDITY)
    {
       // BUGCLEAN46: Cont needs SAME-DIRECTION BOS to survive reversal context
-      if(contTag && !DetectDirectionalBOS(EntryTF, buy) && strategyTag != "InstantTrend")
+      if(contTag && !StructureDirectionalBOS(buy) && strategyTag != "InstantTrend")
       {
          if(EnableVerboseLogging || EnableSetupLogging)
             Print("IMCE HARD-blocked continuation in reversal context: ", strategyTag);
@@ -8573,21 +8643,28 @@ void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &
 
    // Aggressive sniper paths first (correct components, aggressive ORs),
    // then classic PRISM names.
+   // BEST-NEXT48: BestPathsOnly → ContSniper + RevSniper only
    if(AggressiveContinuationBuySetup()) buyCandidates[buyCount++] = "ContSniper";
    if(AggressiveReversalBuySetup())     buyCandidates[buyCount++] = "RevSniper";
-   if(InstantTrendSniperBuySetup())     buyCandidates[buyCount++] = "InstantTrend";
-   if(TrendPullbackBuySetup())          buyCandidates[buyCount++] = "TrendPullback";
-   if(LiquiditySweepBuySetup())         buyCandidates[buyCount++] = "LiquiditySweep";
-   if(FVGOrderBlockBuySetup())          buyCandidates[buyCount++] = "FVG+OB";
-   if(SpecVolatilityBreakoutBuySetup()) buyCandidates[buyCount++] = "VolBreakout(Spec)";
+   if(!BestPathsOnly)
+   {
+      if(InstantTrendSniperBuySetup())     buyCandidates[buyCount++] = "InstantTrend";
+      if(TrendPullbackBuySetup())          buyCandidates[buyCount++] = "TrendPullback";
+      if(LiquiditySweepBuySetup())         buyCandidates[buyCount++] = "LiquiditySweep";
+      if(FVGOrderBlockBuySetup())          buyCandidates[buyCount++] = "FVG+OB";
+      if(SpecVolatilityBreakoutBuySetup()) buyCandidates[buyCount++] = "VolBreakout(Spec)";
+   }
 
    if(AggressiveContinuationSellSetup()) sellCandidates[sellCount++] = "ContSniper";
    if(AggressiveReversalSellSetup())     sellCandidates[sellCount++] = "RevSniper";
-   if(InstantTrendSniperSellSetup())     sellCandidates[sellCount++] = "InstantTrend";
-   if(TrendPullbackSellSetup())          sellCandidates[sellCount++] = "TrendPullback";
-   if(LiquiditySweepSellSetup())         sellCandidates[sellCount++] = "LiquiditySweep";
-   if(FVGOrderBlockSellSetup())          sellCandidates[sellCount++] = "FVG+OB";
-   if(SpecVolatilityBreakoutSellSetup()) sellCandidates[sellCount++] = "VolBreakout(Spec)";
+   if(!BestPathsOnly)
+   {
+      if(InstantTrendSniperSellSetup())     sellCandidates[sellCount++] = "InstantTrend";
+      if(TrendPullbackSellSetup())          sellCandidates[sellCount++] = "TrendPullback";
+      if(LiquiditySweepSellSetup())         sellCandidates[sellCount++] = "LiquiditySweep";
+      if(FVGOrderBlockSellSetup())          sellCandidates[sellCount++] = "FVG+OB";
+      if(SpecVolatilityBreakoutSellSetup()) sellCandidates[sellCount++] = "VolBreakout(Spec)";
+   }
 
    // Conflict: never block both sides in aggressive sniper — take trend side.
    if(buyCount > 0 && sellCount > 0)
@@ -8781,19 +8858,19 @@ bool TrendPullbackBuySetup()
    if(EnableInstantSniperMode || NeverBlockValidSniperEntry || QualityGatesActive())
    {
       if(QualityGatesActive())
-         return (nearEma || DetectDirectionalBOS(EntryTF, true));
+         return (nearEma || StructureDirectionalBOS(true));
       if(NeverBlockValidSniperEntry)
          return true;
       if(nearEma)
          return true;
-      if(DetectDirectionalBOS(EntryTF, true))
+      if(StructureDirectionalBOS(true))
          return true;
       return false;
    }
 
    if(!nearEma)
       return false;
-   if(!DetectDirectionalBOS(EntryTF, true))
+   if(!StructureDirectionalBOS(true))
       return false;
    return true;
 }
@@ -8819,19 +8896,19 @@ bool TrendPullbackSellSetup()
    if(EnableInstantSniperMode || NeverBlockValidSniperEntry || QualityGatesActive())
    {
       if(QualityGatesActive())
-         return (nearEma || DetectDirectionalBOS(EntryTF, false));
+         return (nearEma || StructureDirectionalBOS(false));
       if(NeverBlockValidSniperEntry)
          return true;
       if(nearEma)
          return true;
-      if(DetectDirectionalBOS(EntryTF, false))
+      if(StructureDirectionalBOS(false))
          return true;
       return false;
    }
 
    if(!nearEma)
       return false;
-   if(!DetectDirectionalBOS(EntryTF, false))
+   if(!StructureDirectionalBOS(false))
       return false;
    return true;
 }
@@ -8888,7 +8965,7 @@ input group "FVG + ORDER BLOCK STRATEGY"
 
 bool FVGOrderBlockBuySetup()
 {
-   bool bos = DetectDirectionalBOS(EntryTF, true);
+   bool bos = StructureDirectionalBOS(true);
    bool fvg = ActiveFVG(true);
    bool ob = ActiveOrderBlock(true);
 
@@ -8913,7 +8990,7 @@ bool FVGOrderBlockBuySetup()
 
 bool FVGOrderBlockSellSetup()
 {
-   bool bos = DetectDirectionalBOS(EntryTF, false);
+   bool bos = StructureDirectionalBOS(false);
    bool fvg = ActiveFVG(false);
    bool ob = ActiveOrderBlock(false);
 
@@ -9844,7 +9921,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_OPENCAPS_47\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_BESTNEXT_48\n",
          "=============================================="
       );
       return;
@@ -9866,7 +9943,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_OPENCAPS_47\n",
+         "BUILD: SA_PRISM_BESTNEXT_48\n",
          "=========================================="
       );
       return;

@@ -2,34 +2,33 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK47.mq5
-BUILD_ID: SA_PRISM_OPENCAPS_47
+File:     SNIPER_AI_OK48.mq5
+BUILD_ID: SA_PRISM_BESTNEXT_48
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK47.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK48.mq5
 
 ──────────────────────────────────────
-OPEN TRADES CAPS (Inputs — adjustable)
+BEST-NEXT 48
 ──────────────────────────────────────
-EnforceOpenTradeCaps         = true   (false = ignore all open-count caps)
-MaxOpenTrades                = 3      (THIS symbol; 0 = unlimited)
-MaxTotalOpenTradesAllSymbols = 9      (all symbols; 0 = unlimited)
-MaxOpenTradesPerCurrency     = 4      (shared USD/EUR/…; 0 = off)
+1) DirectionalBOS_LookbackBars = 12
+   Cont/ICE/IMCE use same-direction BOS within last N bars
+   (not only the current bar)
 
-Change live in EA Inputs after attach — no recompile needed for values.
+2) BestPathsOnly = true
+   ContSniper + RevSniper ONLY
+   InstantTrend / Pullback / Liq / FVG+OB / VolBreakout OFF
+   Set false to restore secondary paths
 
-──────────────────────────────────────
-RETAINED FROM OK46
-──────────────────────────────────────
-Polarity bugclean · BestQuality · ladder · trail/BE · defense · ICE/IMCE/SMT
+Retained: OK47 open caps · polarity · ladder · trail/BE · defense · ICE/IMCE/SMT
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
-1. Delete old SNIPER* .mq5/.ex5
-2. Copy SNIPER_AI_OK47.mq5 → MQL5/Experts/
-3. Compile (F7) — confirm SA_PRISM_OPENCAPS_47
-4. Re-attach → set MaxOpenTrades / MaxTotal as you want
-5. Experts: BUILD_ID=SA_PRISM_OPENCAPS_47
+1. Delete old SNIPER*
+2. Copy SNIPER_AI_OK48.mq5 → MQL5/Experts/
+3. F7 — confirm SA_PRISM_BESTNEXT_48
+4. Re-attach · EntryTF=H4 on H4 charts
+5. Experts: BUILD_ID=SA_PRISM_BESTNEXT_48
