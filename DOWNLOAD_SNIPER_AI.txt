@@ -9,7 +9,8 @@ https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compi
 
 BUILD_ID: SA_PRISM_ULTRA_AGGRO_31
 
-ULTRA AGGRESSIVE (bugfix):
+ULTRA AGGRESSIVE (compile-safe + bugfix):
+0. Fixed struct order / default-param redeclarations (MetaEditor clean)
 1. UltraAggressiveFire=true — ContSniper/InstantTrend FIRE after engines pass
 2. Beast Score / Confidence are LOG-ONLY (defaults 0 — no hard floor)
 3. Smart tick filter fixed — new bars never skipped

@@ -25,11 +25,6 @@ input group "GENERAL"
 input long MagicNumber = 40001;
 input string TradeComment = "SNIPER AI";
 
-input group "FULL UPGRADE - QUALITY FIRST + INSTANT FALLBACK"
-// Prefers ContSniper/RevSniper when valid. InstantTrend is the aggressive
-// fallback so you still trade. Tries next path if engines reject the first.
-// MPI wait stays OFF. ICE/IMCE hard; SMT on RevSniper only.
-
 input group "PRISM BEAST MODE ENGINE"
 // Master quality stack: one structure read, one gate pipeline, sniper execution.
 // Reversal paths get extra liquidity/stack checks. No duplicate BOS/CHoCH vetoes.
@@ -752,6 +747,29 @@ struct SignalSnapshot
 };
 
 SignalSnapshot SignalSnapshots[];
+
+// PRISM structure snapshot — MUST be declared before CapturePendingSignalSnapshot().
+struct PRISMStructureSnapshot
+{
+   int  rec;
+   bool bos;
+   bool choch;
+   bool sweep;
+   bool ob;
+   bool fvg;
+   bool trend;
+   bool trendStrong;
+   bool htfConfirms;
+};
+
+PRISMStructureSnapshot PRISM_GetStructureSnapshot(bool buy, int recency = -1);
+string PRISMGetTradeGrade(bool buy, const string strategyTag);
+int CalculatePRISMScore(bool buy);
+int EffectiveMinimumMPIScore();
+bool HasStructureConfluence(bool buy);
+bool HasHTFStructureConfluence(bool buy);
+bool IsVolatilityExpanding();
+MarketRegime GetMarketRegime();
 
 // NOTE: RecordSignalSnapshot() itself is defined in Part 6, alongside the
 // PendingSignalSnapshot mechanism (fix #6) - it needs to be able to reuse
@@ -3196,7 +3214,7 @@ bool ExecuteSell()
    // See the matching comment in ExecuteBuy() - cheap re-check that the
    // basic trend direction hasn't already reversed between decision and
    // execution.
-   if(!IsBearTrend())
+   if(!IsBearTrend() && !(UltraAggressiveFire || NeverBlockValidSniperEntry))
    {
       if(EnableVerboseLogging)
          Print("SELL aborted: trend no longer bearish at execution time.");
@@ -6550,26 +6568,13 @@ bool SpecVolatilityBreakoutSellSetup()
    return (closeBar < channelLow);
 }
 
-void CapturePendingSignalSnapshot(bool buy, string strategyTag = "");
 bool IsDuplicateSignal(bool buy);
 void MarkSignalApproved(bool buy);
 
 //================ PRISM BEAST: UNIFIED STRUCTURE SNAPSHOT ============//
 // Single structure read shared by MPI, ICE, and path ranking — eliminates
 // 3-5 duplicate BOS/CHoCH/sweep calls per bar.
-
-struct PRISMStructureSnapshot
-{
-   int  rec;
-   bool bos;
-   bool choch;
-   bool sweep;
-   bool ob;
-   bool fvg;
-   bool trend;
-   bool trendStrong;
-   bool htfConfirms;
-};
+// (struct PRISMStructureSnapshot declared near SignalSnapshot above)
 
 //================ PRISM ULTRA CORE v11 — CACHE / BEAST SCORE / SNIPER =//
 // Design goals: zero redundant calc, explainable rejects, sniper quality,
@@ -6648,7 +6653,7 @@ void UltraSetApprove(const string tag, const string grade, const int beast, cons
    g_UltraApproveCount++;
 }
 
-PRISMStructureSnapshot PRISM_GetStructureSnapshot(bool buy, int recency = -1)
+PRISMStructureSnapshot PRISM_GetStructureSnapshot(bool buy, int recency)
 {
    if(EnableUltraCore && UltraCycleCache)
    {
@@ -7113,7 +7118,7 @@ int CalculatePRISMScore(bool buy)
 //|  SMT + IMCE + INSTITUTIONAL CONFIDENCE ENGINE (PRISM layer)      |
 //+------------------------------------------------------------------+
 
-int GetDisplacementScore(bool buy); // defined later in displacement module
+// GetDisplacementScore forward-declared in Ultra Core section above
 
 // ENUM_IMCE_CONTEXT + PRISM_MarketIntel declared above in Ultra Core section
 
@@ -9270,8 +9275,10 @@ void InstantExecution()
    {
       if(idx < ArraySize(DiagLastBarTimeArr) && DiagLastBarTimeArr[idx] != currentBarTime)
       {
-         Print("No valid setup (", BrokerSymbol,
-               EnableUltraCore && g_UltraLastReject != "" ? ") — " + g_UltraLastReject : ")");
+         if(EnableUltraCore && g_UltraLastReject != "")
+            Print("No valid setup (", BrokerSymbol, ") — ", g_UltraLastReject);
+         else
+            Print("No valid setup (", BrokerSymbol, ")");
       }
 
       PrintSetupDiagnostics();
