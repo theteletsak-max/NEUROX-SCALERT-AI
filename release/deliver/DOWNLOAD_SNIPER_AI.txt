@@ -1,14 +1,11 @@
-SNIPER AI - DOWNLOAD
-====================
+SNIPER AI — DOWNLOAD
 
-EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK36.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK37.mq5
 
-BUILD_ID: SA_PRISM_REV_CORRECT_36
+BUILD_ID: SA_PRISM_REV_CORRECT_37
+Comment:  SNIPER AI
 
-Correct reversal signals:
-- BUY needs sell-side sweep (lows) + zone + reclaim
-- SELL needs buy-side sweep (highs) + zone + reclaim
-- Validates and logs PASS/FAIL reason
+CORRECT SIGNALS: BUY needs lows swept + strong reclaim; SELL needs highs swept + strong reclaim.
+Rejects wrong-side / continuation traps. Plain candle alone is not enough.
 
-INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_REV_CORRECT_36
+INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_REV_CORRECT_37

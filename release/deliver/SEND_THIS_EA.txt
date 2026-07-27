@@ -2,47 +2,52 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK36.mq5
-BUILD_ID: SA_PRISM_REV_CORRECT_36
+File:     SNIPER_AI_OK37.mq5
+BUILD_ID: SA_PRISM_REV_CORRECT_37
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK36.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK37.mq5
 
 Raw:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK36.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK37.mq5
 
 ──────────────────────────────────────
-CORRECT REVERSAL DETECTION
+CORRECT REVERSAL SIGNALS ONLY
 ──────────────────────────────────────
-BUY  RevSniper ONLY if:
+BUY  RevSniper fires ONLY if ALL pass:
   1. Sell-side liquidity swept (LOWS taken)
-  2. Bullish OB or FVG zone
-  3. Reclaim confirm (CHoCH / displacement / reclaim candle)
-  4. No fake-breakout trap in BUY direction
+  2. Wrong-side (highs) sweep is NOT more recent
+  3. Bullish OB or FVG zone
+  4. Strong reclaim (CHoCH / displacement / stop-hunt / inducement)
+     — plain candle alone is NOT enough
+  5. No fake-breakout trap in BUY direction
 
-SELL RevSniper ONLY if:
+SELL RevSniper fires ONLY if ALL pass:
   1. Buy-side liquidity swept (HIGHS taken)
-  2. Bearish OB or FVG zone
-  3. Reclaim confirm
-  4. No trap in SELL direction
+  2. Wrong-side (lows) sweep is NOT more recent
+  3. Bearish OB or FVG zone
+  4. Strong reclaim
+  5. No trap in SELL direction
 
 Experts will show:
-  REV VALIDATE BUY: PASS — OK correctSweep=Y zone=Y reclaim=Y ...
+  REV VALIDATE BUY: PASS — OK correctSweep=Y@3 wrongSide=N zone=Y reclaim=Y ...
   ULTRA CORE FIRE BUY [RevSniper] ...
 
-or:
-  REV VALIDATE BUY: FAIL — need sell-side sweep (lows taken)
+or FAIL reasons:
+  need sell-side sweep (lows taken)
+  blocked: wrong-side (highs) sweep recent — continuation not BUY rev
+  need strong reclaim (CHoCH / displacement / stop-hunt / inducement)
 
-Cont/Instant still aggressive for trend continuation.
+Cont/Instant still aggressive for true trend continuation.
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. Delete ALL old SNIPER*
-2. Compile OK36 (F7)
+2. Compile OK37 (F7)
 3. Remove EA all charts → re-attach
 4. EntryTF=H4 on H4 charts
-5. Experts: BUILD_ID=SA_PRISM_REV_CORRECT_36
+5. Experts: BUILD_ID=SA_PRISM_REV_CORRECT_37
 ══════════════════════════════════════

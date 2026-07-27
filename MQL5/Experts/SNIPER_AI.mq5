@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_REV_CORRECT_36                             |
-//| SNIPER AI - correct-side reversal detection + reclaim confirm    |
+//| BUILD_ID: SA_PRISM_REV_CORRECT_37                             |
+//| SNIPER AI - correct reversal signals only (anti-continuation)    |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "3.60"
-#property description "SNIPER AI correct reversal - sell-side sweep for BUY, reclaim required"
-#property description "Early flip without wrong-side noise; Cont/Instant still aggressive"
+#property version   "3.70"
+#property description "SNIPER AI correct reversal signals - right-side sweep + strict reclaim"
+#property description "Rejects wrong-side/continuation traps; Cont/Instant still aggressive"
 
 #include <Trade/Trade.mqh>
 
@@ -39,9 +39,10 @@ input bool   BeastCaptureSignalSnapshot      = true;  // record MPI/ICE at decis
 input bool   EnableBeastDashboard            = true;  // rich HUD when EnableDashboard=true
 
 input group "MARKET REVERSAL SNIPER"
-// Correct reversal: BUY only after sell-side liquidity (lows) swept + reclaim.
-// SELL only after buy-side liquidity (highs) swept + reclaim.
-// Early = no full ADX wait; Correct = right side + zone + reclaim confirmation.
+// CORRECT signals only:
+// BUY  = sell-side sweep (lows taken) + bullish zone + strong reclaim
+// SELL = buy-side sweep (highs taken) + bearish zone + strong reclaim
+// Rejects wrong-side / continuation traps (opposite sweep more recent).
 
 input bool   EnableEarlyMarketReversal       = true;  // catch flips before full trend ADX
 input bool   ReversalRequireTrendADX         = false; // false = don't wait for new trend+ADX
@@ -49,8 +50,11 @@ input bool   ReversalAcceptCHoCHOrSweep      = true;  // CHoCH can help reclaim 
 input bool   ReversalIMCESoftInTrend         = true;  // allow Rev in TREND if stack is strong
 input int    ReversalStructureRecencyBars    = 30;    // lookback for sweep/CHoCH
 input bool   ReversalRequireCorrectSideSweep = true;  // BUY needs lows swept; SELL needs highs swept
-input bool   ReversalRequireReclaimConfirm   = true;  // CHoCH or displacement or reclaim candle
+input bool   ReversalRequireReclaimConfirm   = true;  // CHoCH / displacement / stop-hunt / inducement
 input bool   ReversalRequireZone             = true;  // OB or FVG in trade direction
+input bool   ReversalStrictCorrectSignal     = true;  // plain candle alone is NOT enough reclaim
+input bool   ReversalRejectWrongSideRecent   = true;  // block if opposite sweep is more recent
+input bool   ReversalPreferStopHunt          = false; // true = require stop-hunt candle (stricter)
 input bool   ReversalLogValidation           = true;  // print why Rev passed/failed
 
 input group "PRISM ULTRA CORE v11"
@@ -462,9 +466,11 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_REV_CORRECT_36");
-   Print("REVERSAL CORRECT: CorrectSideSweep=", ReversalRequireCorrectSideSweep,
-         " ReclaimConfirm=", ReversalRequireReclaimConfirm,
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_REV_CORRECT_37");
+   Print("REVERSAL CORRECT SIGNALS: CorrectSideSweep=", ReversalRequireCorrectSideSweep,
+         " StrictReclaim=", ReversalStrictCorrectSignal,
+         " RejectWrongSide=", ReversalRejectWrongSideRecent,
+         " PreferStopHunt=", ReversalPreferStopHunt,
          " Early=", EnableEarlyMarketReversal,
          " RevNeedTrendADX=", ReversalRequireTrendADX);
    Print("PRISM ULTRA SNIPER: AggressiveFire=", UltraAggressiveFire,
@@ -4925,50 +4931,75 @@ bool DetectLiquiditySweep()
 // Directional sweep recency for CORRECT reversal signals.
 // buy=true  → need sell-side liquidity taken (lows swept)
 // buy=false → need buy-side liquidity taken (highs swept)
-bool RecentDirectionalSweep(const bool buy, const int lookbackBars)
+// Returns most-recent bar index of that side sweep, or 0 if none.
+int MostRecentCorrectSweepBar(const bool buy, const int lookbackBars)
 {
    int lb = MathMax(lookbackBars, 1);
    for(int i = 1; i <= lb; i++)
    {
       if(buy && IsSellSideLiquiditySweepAtBar(i))
-         return true;
+         return i;
       if(!buy && IsBuySideLiquiditySweepAtBar(i))
-         return true;
+         return i;
    }
-
-   // Stop-hunt is the stricter same-side signature
+   // Stop-hunt is stricter same-side signature (bar 1)
    if(buy && DetectStopHunt(false))
-      return true;
+      return 1;
    if(!buy && DetectStopHunt(true))
-      return true;
+      return 1;
+   return 0;
+}
 
-   return false;
+int MostRecentWrongSideSweepBar(const bool buy, const int lookbackBars)
+{
+   int lb = MathMax(lookbackBars, 1);
+   for(int i = 1; i <= lb; i++)
+   {
+      // Wrong side = continuation fuel, not reversal
+      if(buy && IsBuySideLiquiditySweepAtBar(i))
+         return i;
+      if(!buy && IsSellSideLiquiditySweepAtBar(i))
+         return i;
+   }
+   if(buy && DetectStopHunt(true))
+      return 1;
+   if(!buy && DetectStopHunt(false))
+      return 1;
+   return 0;
+}
+
+bool RecentDirectionalSweep(const bool buy, const int lookbackBars)
+{
+   return (MostRecentCorrectSweepBar(buy, lookbackBars) > 0);
 }
 
 bool ReversalReclaimConfirm(const bool buy, const int rec)
 {
-   // Reclaim / structure shift in trade direction
-   if(RecentCHoCH(rec))
-      return true;
-   if(GetDisplacementScore(buy) >= 5)
+   bool choch = RecentCHoCH(rec);
+   bool disp = (GetDisplacementScore(buy) >= 5);
+   bool inducement = DetectInducement(buy);
+   bool stopHunt = buy ? DetectStopHunt(false) : DetectStopHunt(true);
+
+   // Strong reclaim signatures (always valid)
+   if(choch || disp || inducement || stopHunt)
       return true;
 
-   // Reclaim candle on last closed bar
-   double o = iOpen(BrokerSymbol, EntryTF, 1);
-   double c = iClose(BrokerSymbol, EntryTF, 1);
-   if(buy && c > o)
-      return true;
-   if(!buy && c < o)
-      return true;
-
-   // Inducement in reversal direction (if available)
-   if(DetectInducement(buy))
-      return true;
+   // Plain reclaim candle alone is weak — only allowed when StrictCorrect is OFF
+   if(!ReversalStrictCorrectSignal)
+   {
+      double o = iOpen(BrokerSymbol, EntryTF, 1);
+      double c = iClose(BrokerSymbol, EntryTF, 1);
+      if(buy && c > o)
+         return true;
+      if(!buy && c < o)
+         return true;
+   }
 
    return false;
 }
 
-// Master validator: correct-side sweep + zone + reclaim = real reversal signal
+// Master validator: correct-side sweep + zone + strong reclaim = CORRECT signal
+// Rejects wrong-side / continuation traps so RevSniper does not fire the wrong way.
 bool MarketReversalSignalOK(const bool buy, string &detail)
 {
    detail = "";
@@ -4976,12 +5007,15 @@ bool MarketReversalSignalOK(const bool buy, string &detail)
               ? MathMax(EffectiveStructureRecency(), ReversalStructureRecencyBars)
               : EffectiveStructureRecency());
 
-   bool correctSweep = RecentDirectionalSweep(buy, rec);
+   int correctBar = MostRecentCorrectSweepBar(buy, rec);
+   int wrongBar = MostRecentWrongSideSweepBar(buy, rec);
+   bool correctSweep = (correctBar > 0);
    bool anySweep = RecentSweep(rec);
    bool choch = RecentCHoCH(rec);
    bool zone = ActiveOrderBlock(buy) || ActiveFVG(buy);
    bool reclaim = ReversalReclaimConfirm(buy, rec);
    bool trap = DetectFakeBreakoutTrap(buy);
+   bool stopHunt = buy ? DetectStopHunt(false) : DetectStopHunt(true);
 
    bool sweepOK = ReversalRequireCorrectSideSweep ? correctSweep
                   : (ReversalAcceptCHoCHOrSweep ? (anySweep || choch) : anySweep);
@@ -4998,6 +5032,20 @@ bool MarketReversalSignalOK(const bool buy, string &detail)
       detail = buy ? "need sell-side sweep (lows taken)" : "need buy-side sweep (highs taken)";
       return false;
    }
+   // Anti-continuation: opposite sweep as-recent or more-recent = wrong signal
+   if(ReversalRejectWrongSideRecent && wrongBar > 0 &&
+      (correctBar == 0 || wrongBar <= correctBar))
+   {
+      detail = buy
+         ? "blocked: wrong-side (highs) sweep recent — continuation not BUY rev"
+         : "blocked: wrong-side (lows) sweep recent — continuation not SELL rev";
+      return false;
+   }
+   if(ReversalPreferStopHunt && !stopHunt)
+   {
+      detail = "need stop-hunt candle (PreferStopHunt=true)";
+      return false;
+   }
    if(!zoneOK)
    {
       detail = "need OB/FVG zone in trade direction";
@@ -5005,17 +5053,21 @@ bool MarketReversalSignalOK(const bool buy, string &detail)
    }
    if(!reclaimOK)
    {
-      detail = "need reclaim (CHoCH / displacement / reclaim candle)";
+      detail = ReversalStrictCorrectSignal
+         ? "need strong reclaim (CHoCH / displacement / stop-hunt / inducement)"
+         : "need reclaim (CHoCH / displacement / reclaim candle)";
       return false;
    }
 
    if(!ReversalRequireTrendADX)
    {
-      detail = StringFormat("OK correctSweep=%s zone=%s reclaim=%s CHoCH=%s",
-                            correctSweep ? "Y" : "N",
+      detail = StringFormat("OK correctSweep=Y@%d wrongSide=%s zone=%s reclaim=%s CHoCH=%s stopHunt=%s",
+                            correctBar,
+                            (wrongBar > 0 ? IntegerToString(wrongBar) : "N"),
                             zone ? "Y" : "N",
                             reclaim ? "Y" : "N",
-                            choch ? "Y" : "N");
+                            choch ? "Y" : "N",
+                            stopHunt ? "Y" : "N");
       return true;
    }
 
@@ -5030,7 +5082,7 @@ bool MarketReversalSignalOK(const bool buy, string &detail)
       return false;
    }
 
-   detail = "OK with trend+ADX";
+   detail = "OK with trend+ADX + correct-side stack";
    return true;
 }
 
@@ -6647,9 +6699,10 @@ bool AggressiveContinuationSellSetup()
    return bos || zone || pulled || TrendStrong();
 }
 
-// Path B — CORRECT MARKET REVERSAL sniper.
-// BUY  = sell-side liquidity swept (lows) + bullish zone + reclaim
-// SELL = buy-side liquidity swept (highs) + bearish zone + reclaim
+// Path B — CORRECT MARKET REVERSAL sniper (signals only when stack is right).
+// BUY  = sell-side liquidity swept (lows) more recently than highs + bullish zone + strong reclaim
+// SELL = buy-side liquidity swept (highs) more recently than lows + bearish zone + strong reclaim
+// Rejects wrong-side/continuation traps and weak candle-only reclaim.
 bool AggressiveReversalBuySetup()
 {
    if(!AggressiveSniperEntries)
@@ -9136,7 +9189,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_REV_CORRECT_36\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_REV_CORRECT_37\n",
          "=============================================="
       );
       return;
@@ -9158,7 +9211,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_REV_CORRECT_36\n",
+         "BUILD: SA_PRISM_REV_CORRECT_37\n",
          "=========================================="
       );
       return;
