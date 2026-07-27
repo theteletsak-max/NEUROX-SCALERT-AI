@@ -2,29 +2,38 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK51.mq5
-BUILD_ID: SA_PRISM_DEFENDPLUS_51
+File:     SNIPER_AI_OK52.mq5
+BUILD_ID: SA_PRISM_AUDITOK_52
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK51.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK52.mq5
 
 ──────────────────────────────────────
-NEW (#7 #8 #9 #12)
+FULL CODE AUDIT → OK52
 ──────────────────────────────────────
-#7 DefensePreTP1AdverseBE     — BE after adverse wick once price recovers to entry
-#8 DefenseMAE_StopEnabled     — close if loss ≥ 1.25×ATR before TP1
-#9 EventICE_MinScoreBoost=8   — raise ICE floor in news windows (still trades)
-#12 Slippage profiles         — FX 20 / Gold 80 / Crypto 150 points
+LIVE PATH: PASS (Cont/Rev, ICE/IMCE, execute, caps, spread-free)
 
-Retained: spread-free · Cont/Rev-only · BOS lookback · audit · open caps
+FIXED from OK51 audit:
+  #7 Pre-TP1 BE was DEAD (adverse + recover could not both be true)
+  → sticky peakAdverse arm, then BE when price recovers to entry
+
+CONFIRMED OK:
+  Cont/Rev polarity · BOS lookback · directional CHoCH
+  MAE stop · event ICE boost · slip profiles
+  Ladder TP1/TP2 retry · trail no-loosen · open caps
+  OnInit/OnDeinit · TradeComment SNIPER AI · HistorySelect
+
+LIMITATIONS (not bugs):
+  Period loss baselines reset on EA restart
+  Dead legacy StrongBuySetup still in file (not live)
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. Delete old SNIPER*
-2. Copy SNIPER_AI_OK51.mq5 → MQL5/Experts/
-3. F7 — confirm SA_PRISM_DEFENDPLUS_51
+2. Copy SNIPER_AI_OK52.mq5 → MQL5/Experts/
+3. F7 — confirm SA_PRISM_AUDITOK_52
 4. Re-attach · EntryTF=H4 on H4
-5. Experts: BUILD_ID=SA_PRISM_DEFENDPLUS_51
+5. Experts: BUILD_ID=SA_PRISM_AUDITOK_52

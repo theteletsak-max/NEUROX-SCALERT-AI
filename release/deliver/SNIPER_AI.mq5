@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_DEFENDPLUS_51                              |
-//| SNIPER AI - mid-BE + MAE stop + event ICE + slip profiles        |
+//| BUILD_ID: SA_PRISM_AUDITOK_52                                 |
+//| SNIPER AI - full audit OK + fix pre-TP1 BE sticky arm (#7)       |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.10"
-#property description "SNIPER AI defend+: pre-TP1 BE, MAE cut, event ICE boost, slip profiles"
-#property description "Spread-free OK50 + audit + Cont/Rev-only retained"
+#property version   "5.20"
+#property description "SNIPER AI audit OK52: sticky pre-TP1 adverse BE arm fixed"
+#property description "OK51 defend+ MAE/event ICE/slip profiles retained"
 
 #include <Trade/Trade.mqh>
 
@@ -478,15 +478,14 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_DEFENDPLUS_51");
-   Print("DEFENDPLUS51: PreTP1BE=", DefensePreTP1AdverseBE,
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_AUDITOK_52");
+   Print("AUDITOK52: pre-TP1 BE uses sticky peakAdverse arm (OK51 #7 fixed)");
+   Print("DEFENDPLUS: PreTP1BE=", DefensePreTP1AdverseBE,
          " MAE_ATR=", DefenseMAE_ATR,
          " EventICE_Boost=", EventICE_MinScoreBoost,
-         " SlipProfiles=", EnableSlippageProfiles,
-         " FX/Gold/Crypto=", ForexSlippagePoints, "/", GoldSlippagePoints, "/", CryptoSlippagePoints);
-   Print("SPREADFREE: EnableSpreadFilter=", EnableSpreadFilter,
-         " (false = never block on spread)");
-   Print("BESTNEXT: DirectionalBOS lookback=", DirectionalBOS_LookbackBars,
+         " SlipProfiles=", EnableSlippageProfiles);
+   Print("SPREADFREE: EnableSpreadFilter=", EnableSpreadFilter);
+   Print("BESTNEXT: BOS lookback=", DirectionalBOS_LookbackBars,
          " | BestPathsOnly=", BestPathsOnly);
    Print("OPENCAPS: Enforce=", EnforceOpenTradeCaps,
          " MaxOpen=", MaxOpenTrades, " MaxTotal=", MaxTotalOpenTradesAllSymbols);
@@ -2632,6 +2631,7 @@ struct TradeState
    bool   tp2Taken; // UPGRADE: TP2 scale-out / TP3 runner activation flag
    string strategyTag; // NEW - which strategy (SMC/MeanReversion/TrendPullback/etc) actually produced this trade, for per-strategy performance tracking (Part 15i)
    double peakFavorable; // DEFEND: best favorable price excursion from entry (absolute price)
+   double peakAdverse;   // AUDITOK52: max adverse distance from entry (sticky arm for pre-TP1 BE)
 };
 
 // NEW - set right before ExecuteBuy()/ExecuteSell() is called in
@@ -2673,6 +2673,7 @@ void PersistTradeState(int index)
    GlobalVariableSet(prefix + "_taken",  TradeStates[index].tp1Taken ? 1.0 : 0.0);
    GlobalVariableSet(prefix + "_taken2", TradeStates[index].tp2Taken ? 1.0 : 0.0);
    GlobalVariableSet(prefix + "_mfe",    TradeStates[index].peakFavorable);
+   GlobalVariableSet(prefix + "_mae",    TradeStates[index].peakAdverse);
 }
 
 void DeleteTradeStateGlobals(ulong ticket)
@@ -2689,6 +2690,7 @@ void DeleteTradeStateGlobals(ulong ticket)
    GlobalVariableDel(prefix + "_taken");
    GlobalVariableDel(prefix + "_taken2");
    GlobalVariableDel(prefix + "_mfe");
+   GlobalVariableDel(prefix + "_mae");
 }
 
 void RegisterTradeState(ulong ticket, double tp1Price, double tp2Price, double tp3Price, bool isBuy)
@@ -2712,6 +2714,7 @@ void RegisterTradeState(ulong ticket, double tp1Price, double tp2Price, double t
    TradeStates[n].tp2Taken    = false;
    TradeStates[n].strategyTag = g_PendingStrategyTag;
    TradeStates[n].peakFavorable = 0.0;
+   TradeStates[n].peakAdverse = 0.0;
 
    PersistTradeState(n);
 }
@@ -2765,7 +2768,9 @@ void RestoreTradeStates()
       TradeStates[n].tp1Taken = (GlobalVariableGet(takenKey) > 0.5);
       TradeStates[n].tp2Taken = GlobalVariableCheck(taken2Key) ? (GlobalVariableGet(taken2Key) > 0.5) : false;
       string mfeKey = prefix + IntegerToString(ticket) + "_mfe";
+      string maeKey = prefix + IntegerToString(ticket) + "_mae";
       TradeStates[n].peakFavorable = GlobalVariableCheck(mfeKey) ? GlobalVariableGet(mfeKey) : 0.0;
+      TradeStates[n].peakAdverse   = GlobalVariableCheck(maeKey) ? GlobalVariableGet(maeKey) : 0.0;
       TradeStates[n].strategyTag = "";
 
       // HARDEN: discard corrupt GV prices so ladder/defense cannot use NaN
@@ -2780,6 +2785,8 @@ void RestoreTradeStates()
          TradeStates[n].tp3Price = 0.0;
       if(!MathIsValidNumber(TradeStates[n].peakFavorable) || TradeStates[n].peakFavorable < 0.0)
          TradeStates[n].peakFavorable = 0.0;
+      if(!MathIsValidNumber(TradeStates[n].peakAdverse) || TradeStates[n].peakAdverse < 0.0)
+         TradeStates[n].peakAdverse = 0.0;
    }
 
    Print("Restored ", ArraySize(TradeStates), " TP1 trade state(s) from persistent storage.");
@@ -8327,6 +8334,16 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
 
    const bool preTP1 = (stateIndex < 0) || !TradeStates[stateIndex].tp1Taken;
    double adverseMove = isBuy ? (openPrice - price) : (price - openPrice);
+   if(adverseMove < 0.0)
+      adverseMove = 0.0;
+
+   // AUDITOK52: sticky peak adverse (arms #7 even after price recovers)
+   if(stateIndex >= 0 && adverseMove > TradeStates[stateIndex].peakAdverse)
+   {
+      TradeStates[stateIndex].peakAdverse = adverseMove;
+      PersistTradeState(stateIndex);
+   }
+   double peakAdv = (stateIndex >= 0) ? TradeStates[stateIndex].peakAdverse : adverseMove;
 
    // --- #8 MAE hard cut before TP1 ---
    if(DefenseMAE_StopEnabled && preTP1 && DefenseMAE_ATR > 0.0 && atr > 0.0)
@@ -8342,26 +8359,24 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
       }
    }
 
-   // --- #7 Mid-path BE before TP1 (adverse wick pressure, lighter than close) ---
+   // --- #7 Mid-path BE before TP1 (sticky arm → lock when recovered to entry) ---
    if(DefensePreTP1AdverseBE && preTP1 && atr > 0.0 && DefensePreTP1AdverseATR > 0.0)
    {
-      bool adverseEnough = (adverseMove >= atr * DefensePreTP1AdverseATR);
+      bool armed = (peakAdv >= atr * DefensePreTP1AdverseATR);
+      bool atOrAboveEntry = isBuy ? (price >= openPrice) : (price <= openPrice);
       bool profitOK = true;
       if(DefensePreTP1RequireProfitTiny)
          profitOK = inProfit || adverseMove <= atr * 0.10;
-      if(adverseEnough && profitOK)
+
+      if(armed && atOrAboveEntry && profitOK)
       {
-         // Only lock BE once price has recovered to flat/green (avoid locking into a worse SL)
-         bool atOrAboveEntry = isBuy ? (price >= openPrice) : (price <= openPrice);
-         if(atOrAboveEntry)
+         bool needBE = isBuy ? (currentSL < openPrice) : (currentSL > openPrice || currentSL == 0.0);
+         if(needBE && trade.PositionModify(ticket, openPrice, currentTP))
          {
-            bool needBE = isBuy ? (currentSL < openPrice) : (currentSL > openPrice || currentSL == 0.0);
-            if(needBE && trade.PositionModify(ticket, openPrice, currentTP))
-            {
-               currentSL = openPrice;
-               if(DefenseLogActions)
-                  Print("DEFEND BE: pre-TP1 adverse recover — locked breakeven ticket ", ticket);
-            }
+            currentSL = openPrice;
+            if(DefenseLogActions)
+               Print("DEFEND BE: pre-TP1 adverse recover (armed ",
+                     DoubleToString(peakAdv / atr, 2), " ATR) — locked BE ticket ", ticket);
          }
       }
    }
@@ -10074,7 +10089,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_DEFENDPLUS_51\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_AUDITOK_52\n",
          "=============================================="
       );
       return;
@@ -10096,7 +10111,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_DEFENDPLUS_51\n",
+         "BUILD: SA_PRISM_AUDITOK_52\n",
          "=========================================="
       );
       return;
