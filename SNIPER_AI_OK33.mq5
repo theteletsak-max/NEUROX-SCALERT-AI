@@ -7630,6 +7630,18 @@ int PathQualityRankScore(const string tag, const bool buy)
    if(EnableUltraCore)
       score += UltraGetBeastScore(buy, tag).overall / 2;
 
+   // High-probability: strongly prefer Cont/Rev over InstantTrend when both valid
+   if(UltraHighProbability)
+   {
+      if(tag == "ContSniper" || tag == "RevSniper")
+         score += 100;
+      else if(tag == "LiquiditySweep" || tag == "FVG+OB")
+         score += 40;
+      else if(tag == "InstantTrend")
+         score -= 15; // still fires as fallback via TryNextPath
+      score += CountConfirmingConditions(buy) * 8;
+   }
+
    if(EnableAdaptivePathRanking)
    {
       int idx = FindStrategyTagIndex(tag);

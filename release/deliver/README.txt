@@ -1,2 +1,2 @@
-SA_PRISM_STRATEGY_32
-Strategy-verified: Cont/Instant aggressive, Rev liquidity floor fixed, fill-then-mark.
+SA_PRISM_HP_33
+High-prob Ultra: no cooldown spam, Cont/Rev preferred, Instant fallback.

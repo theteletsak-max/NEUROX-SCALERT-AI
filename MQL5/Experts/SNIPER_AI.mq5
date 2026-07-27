@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_STRATEGY_32                                |
-//| SNIPER AI - strategy-verified Ultra: Cont/Rev/Instant all live    |
+//| BUILD_ID: SA_PRISM_HP_33                                      |
+//| SNIPER AI - high-probability Ultra: no spam, fire on quality     |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "3.20"
-#property description "SNIPER AI strategy-verified - Cont/Rev/Instant live, Ultra Aggro"
-#property description "Reversal liquidity floor fixed; mark bar only after fill"
+#property version   "3.30"
+#property description "SNIPER AI high-probability - Cont/Rev preferred, Instant fallback"
+#property description "No cooldown spam; silent waits; aggressive fire after engines"
 
 #include <Trade/Trade.mqh>
 
@@ -51,9 +51,11 @@ input bool   UltraAggressiveFire             = true;  // CRITICAL: fire after en
 input int    UltraMinBeastScore              = 0;     // 0=off (aggressive). Raise only if you want hard floor
 input int    UltraMinConfidencePct           = 0;     // 0=off (aggressive). Raise only if you want hard floor
 input bool   UltraInstantTrendSoftGates      = true;  // InstantTrend skips HTF-only hard fail
-input bool   UltraLogRejectReasons           = true;  // explain every hard rejection
+input bool   UltraLogRejectReasons           = true;  // explain signal rejects (throttled 1x/bar)
 input bool   UltraHealthMonitor              = true;  // track decision latency + health
 input bool   EnableUltraDashboard            = true;  // Ultra HUD (latency, score, last reject)
+input bool   UltraHighProbability            = true;  // prefer Cont/Rev; Instant only as fallback
+input int    UltraHP_MinConfirmations        = 3;     // Cont/Rev need this many confirms (0=off)
 
 input bool   AggressiveInstantQuality    = true;  // skip MPI wait
 input bool   PreferQualityPaths          = true;  // Cont/Rev before InstantTrend
@@ -445,13 +447,12 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_STRATEGY_32");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_HP_33");
    Print("PRISM ULTRA: UltraCore=", EnableUltraCore,
          " AggressiveFire=", UltraAggressiveFire,
+         " HighProb=", UltraHighProbability,
          " CycleCache=", UltraCycleCache,
-         " SniperEntry=", UltraSniperEntryGate,
-         " MinBeastScore=", UltraMinBeastScore,
-         " MinConf%=", UltraMinConfidencePct);
+         " CooldownMin=", TradeCooldownMinutes, "/", NonScalpCooldownMinutes);
    Print("PRISM BEAST: BeastMode=", EnableBeastMode,
          " SniperMode=", EnableSniperMode,
          " UnifiedStructure=", BeastUseUnifiedStructure,
@@ -2388,7 +2389,7 @@ input bool EnableVerboseLogging = false;
 input double StopLossPoints   = 500;
 input double TakeProfitPoints = 1000;
 input int    SlippagePoints   = 20;
-input int TradeCooldownMinutes = 1;   // aggressive execution: re-arm quickly after a fill
+input int TradeCooldownMinutes = 0;   // 0 = no wait after fill (MaxOpenTrades is the limit)
 input int AttemptCooldownSeconds = 1;
 
 // FIX: SlippagePoints was one flat number applied identically to every
@@ -2422,7 +2423,7 @@ input group "NON-SCALP SYMBOL OVERRIDE"
 
 input string NonScalpSymbolKeywords   = "BTC,ETH";
 input double NonScalpSLMultiplierBoost = 2.0;   // multiplies SL_ATR_Multiplier for matched symbols - wider stop, wider TP1/TP2 (they scale off SL distance)
-input int    NonScalpCooldownMinutes   = 3;    // aggressive: BTC/ETH wait minutes, not half an hour
+input int    NonScalpCooldownMinutes   = 0;    // 0 with Ultra aggro — BTC/ETH use MaxOpenTrades, not idle wait
 input int    NonScalpMinimumHoldBars   = 80;    // bars (on EntryTF) before trend-exit/trailing can act on matched symbols (vs MinimumHoldBars for everything else) - 80 x M15 = ~20 hours
 
 // FIX - THIS IS WHY BTCUSD KEPT CLOSING TRADES: once holdPeriodOK became
@@ -3410,19 +3411,29 @@ bool CooldownFinished()
    int symIdx = GetSymbolIndex(BrokerSymbol);
 
    if(symIdx < 0)
-      return false; // symbol not tracked - fail safe, don't allow a trade we can't track cooldown for
+      return false;
 
    if(LastTradeTimeArr[symIdx] == 0)
       return true;
 
+   // High-prob Ultra: MaxOpenTrades / risk engine is the real limit.
+   // Idle minute-cooldowns only create Experts spam and miss entries.
+   if(UltraAggressiveFire || NeverBlockValidSniperEntry || TradeCooldownMinutes <= 0)
+   {
+      if(NonScalpCooldownMinutes <= 0 || !IsNonScalpSymbol())
+         return true;
+   }
+
    int cooldownMinutes = IsNonScalpSymbol() ? NonScalpCooldownMinutes : TradeCooldownMinutes;
    if(NeverBlockValidSniperEntry)
-      cooldownMinutes = MathMin(cooldownMinutes, TradeCooldownMinutes);
+      cooldownMinutes = MathMin(cooldownMinutes, MathMax(TradeCooldownMinutes, 0));
+
+   if(cooldownMinutes <= 0)
+      return true;
 
    if(TimeCurrent() - LastTradeTimeArr[symIdx] < cooldownMinutes * 60)
       return false;
 
-   // Aggressive sniper: don't stall after a loss — post-loss cooldown soft
    if(!NeverBlockValidSniperEntry &&
       PostLossCooldownMinutes > 0 &&
       LastTradeWasLossArr[symIdx] &&
@@ -6634,13 +6645,35 @@ struct PRISMBeastScore
 PRISMBeastScore g_UltraBeastBuy;
 PRISMBeastScore g_UltraBeastSell;
 
+string g_UltraLastRejectPrinted = "";
+datetime g_UltraLastRejectBar = 0;
+
 void UltraSetReject(const string reason)
 {
    g_UltraLastReject = reason;
    g_UltraLastDecision = "REJECT";
    g_UltraRejectCount++;
-   if(EnableUltraCore && UltraLogRejectReasons && (EnableVerboseLogging || EnableSetupLogging))
-      Print("ULTRA REJECT: ", reason, " on ", BrokerSymbol);
+
+   // Throttle: same reason on same symbol prints at most once per EntryTF bar.
+   // Cooldown / wait states must NOT flood Experts (your 17:38 spam).
+   if(!(EnableUltraCore && UltraLogRejectReasons && (EnableVerboseLogging || EnableSetupLogging)))
+      return;
+
+   datetime bar = iTime(BrokerSymbol, EntryTF, 0);
+   string key = BrokerSymbol + "|" + reason;
+   if(bar == g_UltraLastRejectBar && key == g_UltraLastRejectPrinted)
+      return;
+
+   g_UltraLastRejectBar = bar;
+   g_UltraLastRejectPrinted = key;
+   Print("ULTRA REJECT: ", reason, " on ", BrokerSymbol);
+}
+
+void UltraSetWait(const string reason)
+{
+   // Silent wait (cooldown / final-check) — updates HUD state, no Experts spam.
+   g_UltraLastReject = reason;
+   g_UltraLastDecision = "WAIT";
 }
 
 void UltraSetApprove(const string tag, const string grade, const int beast, const int confPct)
@@ -8906,7 +8939,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_STRATEGY_32\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_HP_33\n",
          "=============================================="
       );
       return;
@@ -8928,7 +8961,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_STRATEGY_32\n",
+         "BUILD: SA_PRISM_HP_33\n",
          "=========================================="
       );
       return;
@@ -9207,14 +9240,14 @@ void InstantExecution()
 
    if(!FinalTradeCheck())
    {
-      UltraSetReject("FinalTradeCheck failed");
+      UltraSetWait("FinalTradeCheck wait");
       if(EnableVerboseLogging) Print("Final trade check failed");
       return;
    }
 
    if(!CooldownFinished())
    {
-      UltraSetReject("trade cooldown active");
+      UltraSetWait("trade cooldown wait");
       if(EnableVerboseLogging) Print("Trade cooldown active");
       return;
    }

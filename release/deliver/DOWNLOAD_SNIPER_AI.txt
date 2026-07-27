@@ -2,25 +2,24 @@ SNIPER AI - DOWNLOAD
 ====================
 
 EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK32.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK33.mq5
 
 ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
-BUILD_ID: SA_PRISM_STRATEGY_32
+BUILD_ID: SA_PRISM_HP_33
 
-STRATEGY VERIFIED:
-1. ContSniper / InstantTrend — aggressive fire after ICE/IMCE (UltraAggressiveFire)
-2. RevSniper / LiquiditySweep — FIXED (liquidity floor was 30, max score is 15)
-3. Quality-first rank + try-next-path
-4. Chop-safe InstantTrend · SMT on Rev only · no RSI/MACD/Stoch
-5. Mark bar only AFTER successful fill (retry-safe)
-6. IgnoreTradesAboveLots fixed so MaxOpenTrades works with adjustable lots
-7. News hard filter OFF · adjustable LotSize / MaxOpenTrades
+OK33 — HIGH PROBABILITY + NO SPAM:
+1. Fixed ULTRA REJECT cooldown flood (your screenshot)
+2. TradeCooldownMinutes=0 — no idle block after fills
+3. HighProb ranking: Cont/Rev first, InstantTrend fallback
+4. Reject reasons throttled 1x per bar
+5. UltraAggressiveFire + ICE/IMCE/SMT still on
+6. Rev liquidity floor fixed (from OK32)
 
 INSTALL:
-1. Delete old SNIPER* .mq5/.ex5
-2. Compile OK32 (F7) — 0 errors
-3. REMOVE EA + re-attach
-4. EntryTF = H4 if chart is H4
-5. Experts: BUILD_ID=SA_PRISM_STRATEGY_32
+1. Delete old SNIPER*
+2. Compile OK33
+3. Remove EA from ALL charts + re-attach
+4. EntryTF=H4 if H4 chart
+5. Experts: BUILD_ID=SA_PRISM_HP_33
