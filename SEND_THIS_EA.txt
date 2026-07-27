@@ -2,37 +2,38 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK45.mq5
-BUILD_ID: SA_PRISM_SIGNAL_OK_45
+File:     SNIPER_AI_OK46.mq5
+BUILD_ID: SA_PRISM_BUGCLEAN_46
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK45.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK46.mq5
 
 ──────────────────────────────────────
-SIGNAL / FEATURE AUDIT
+BUGCLEAN 46
 ──────────────────────────────────────
-CORRECT:
+FIXED polarity (same-direction structure):
+  TrendPullback / FVG+OB → DetectDirectionalBOS
+  LiquiditySweep → RecentDirectionalSweep
+  ICE snapshot BOS/sweep → directional
+  ICE early-reversal liq → directional sweep
+  IMCE trend/expansion BOS → trend-direction
+  IMCE Cont-in-reversal gate → directional BOS
+
+STILL CORRECT (from OK45+):
   RevSniper polarity (BUY=lows, SELL=highs)
-  ICE + IMCE hard gates on live path
+  ContSniper + SMT internal directional
+  ICE + IMCE hard gates
   BestQuality + sure ladder + market defense
   Hardened bounds/NaN/ticket guards
-
-FIXED IN OK45:
-  ContSniper now uses SAME-DIRECTION BOS (was any-direction)
-  SMT internal uses directional sweeps (was any-side)
-  SMT inputs documented as fail-open when no reference symbol
-
-LIVE PATH:
-  OnTick → Cont/Rev/Instant → ICE/IMCE/SMT → Ultra → Execute
-  Comment: SNIPER AI
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
-1. Delete ALL old SNIPER*
-2. Compile OK45 (F7)
-3. Re-attach · EntryTF=H4 on H4
-4. Experts: BUILD_ID=SA_PRISM_SIGNAL_OK_45
-══════════════════════════════════════
+1. Delete old SNIPER* .mq5/.ex5
+2. Copy SNIPER_AI_OK46.mq5 → MQL5/Experts/
+3. Compile (F7) — confirm SA_PRISM_BUGCLEAN_46
+4. Re-attach all charts
+5. If chart is H4: set EntryTF=H4
+6. Experts log must show BUILD_ID=SA_PRISM_BUGCLEAN_46

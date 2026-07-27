@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_SIGNAL_OK_45                               |
-//| SNIPER AI - signal polarity fix (Cont BOS + SMT directional)     |
+//| BUILD_ID: SA_PRISM_BUGCLEAN_46                                |
+//| SNIPER AI - remaining polarity bugs cleaned (Pullback/FVG/Liq)   |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "4.50"
-#property description "SNIPER AI signal OK - Cont uses same-direction BOS; SMT internal directional"
-#property description "Hardened code + quality + ladder + defense; Rev polarity already correct"
+#property version   "4.60"
+#property description "SNIPER AI bugclean - directional BOS/sweep on all live structure paths"
+#property description "Cont/Rev/SMT/Pullback/FVG/Liq polarity aligned"
 
 #include <Trade/Trade.mqh>
 
@@ -467,9 +467,8 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_SIGNAL_OK_45");
-   Print("SIGNAL OK45: ContSniper uses SAME-DIRECTION BOS | SMT internal directional sweeps");
-   Print("RevSniper polarity OK (BUY=lows, SELL=highs) | ICE/IMCE hard | SMT fail-open if no ref");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_BUGCLEAN_46");
+   Print("BUGCLEAN46: Pullback/FVG/Liq now SAME-DIRECTION BOS/sweep (Cont/SMT already fixed in OK45)");
    Print("MARKET DEFENSE: ON=", EnableMarketDefense,
          " DrawdownShield=", EnableDrawdownProtection);
    Print("QUALITY+LADDER: BestQuality=", BestQualitySetups,
@@ -7313,9 +7312,10 @@ PRISMStructureSnapshot PRISM_GetStructureSnapshot(bool buy, int recency)
 
    PRISMStructureSnapshot s;
    s.rec = (recency >= 0 ? recency : EffectiveStructureRecency());
-   s.bos = RecentBOS(s.rec);
+   // BUGCLEAN46: ICE/MPI snapshot must be SAME-DIRECTION — not any-side BOS/sweep
+   s.bos = DetectDirectionalBOS(EntryTF, buy);
    s.choch = RecentCHoCH(s.rec);
-   s.sweep = RecentSweep(s.rec);
+   s.sweep = RecentDirectionalSweep(buy, s.rec);
    s.ob = ActiveOrderBlock(buy);
    s.fvg = ActiveFVG(buy);
    s.trend = (buy ? IsBullTrend() : IsBearTrend());
@@ -7868,7 +7868,8 @@ int GetInstitutionalConfidenceScore(bool buy)
    if(EnableEarlyMarketReversal)
    {
       int rec = MathMax(EffectiveStructureRecency(), ReversalStructureRecencyBars);
-      bool liq = RecentSweep(rec) || RecentCHoCH(rec);
+      // BUGCLEAN46: correct-side sweep only (BUY=lows, SELL=highs)
+      bool liq = RecentDirectionalSweep(buy, rec) || RecentCHoCH(rec);
       bool zone = ActiveOrderBlock(buy) || ActiveFVG(buy);
       if(liq && zone)
          score += 15;
@@ -8030,11 +8031,15 @@ ENUM_IMCE_CONTEXT GetIMCEContext()
    int rec = EffectiveStructureRecency();
    bool trapBuy = DetectFakeBreakoutTrap(true);
    bool trapSell = DetectFakeBreakoutTrap(false);
-   bool sweep = RecentSweep(rec);
-   bool bos = RecentBOS(rec);
+   bool sweep = RecentSweep(rec); // any-side OK for "liquidity event" regime detect
+   // BUGCLEAN46: trend/expansion BOS must match trend direction
+   bool bull = IsBullTrend();
+   bool bear = IsBearTrend();
+   bool bos = bull ? DetectDirectionalBOS(EntryTF, true)
+                   : (bear ? DetectDirectionalBOS(EntryTF, false) : RecentBOS(rec));
    bool choch = RecentCHoCH(rec);
    bool expanding = IsVolatilityExpanding();
-   bool trending = TrendStrong() && (IsBullTrend() || IsBearTrend());
+   bool trending = TrendStrong() && (bull || bear);
 
    // Strong trend wins over chop — avoids classifying BTC bull pullbacks as dead chop.
    if(sweep && choch)
@@ -8043,7 +8048,7 @@ ENUM_IMCE_CONTEXT GetIMCEContext()
    if(expanding && trending && bos)
       return IMCE_EXPANSION_BREAKOUT;
 
-   if(trending && (bos || ActiveOrderBlock(IsBullTrend()) || ActiveFVG(IsBullTrend())))
+   if(trending && (bos || ActiveOrderBlock(bull) || ActiveFVG(bull)))
       return IMCE_TREND_CONTINUATION;
 
    if(EnableRegimeDetection && GetMarketRegime() == REGIME_RANGING && sweep)
@@ -8278,7 +8283,8 @@ bool IMCEAllows(bool buy, const string strategyTag)
 
    if(ctx == IMCE_REVERSAL_LIQUIDITY)
    {
-      if(contTag && !RecentBOS(EffectiveStructureRecency()) && strategyTag != "InstantTrend")
+      // BUGCLEAN46: Cont needs SAME-DIRECTION BOS to survive reversal context
+      if(contTag && !DetectDirectionalBOS(EntryTF, buy) && strategyTag != "InstantTrend")
       {
          if(EnableVerboseLogging || EnableSetupLogging)
             Print("IMCE HARD-blocked continuation in reversal context: ", strategyTag);
@@ -8743,23 +8749,23 @@ bool TrendPullbackBuySetup()
    double pullMul = EffectivePullbackATRMultiple();
    bool nearEma = (MathAbs(price - ema) <= atr * pullMul);
 
-   // Quality mode (regular + events): need pullback or BOS — never trend-only.
+   // Quality mode (regular + events): need pullback or SAME-DIRECTION BOS — never trend-only.
    if(EnableInstantSniperMode || NeverBlockValidSniperEntry || QualityGatesActive())
    {
       if(QualityGatesActive())
-         return (nearEma || RecentBOS(EffectiveStructureRecency()));
+         return (nearEma || DetectDirectionalBOS(EntryTF, true));
       if(NeverBlockValidSniperEntry)
          return true;
       if(nearEma)
          return true;
-      if(RecentBOS(EffectiveStructureRecency()))
+      if(DetectDirectionalBOS(EntryTF, true))
          return true;
       return false;
    }
 
    if(!nearEma)
       return false;
-   if(!RecentBOS(EffectiveStructureRecency()))
+   if(!DetectDirectionalBOS(EntryTF, true))
       return false;
    return true;
 }
@@ -8785,19 +8791,19 @@ bool TrendPullbackSellSetup()
    if(EnableInstantSniperMode || NeverBlockValidSniperEntry || QualityGatesActive())
    {
       if(QualityGatesActive())
-         return (nearEma || RecentBOS(EffectiveStructureRecency()));
+         return (nearEma || DetectDirectionalBOS(EntryTF, false));
       if(NeverBlockValidSniperEntry)
          return true;
       if(nearEma)
          return true;
-      if(RecentBOS(EffectiveStructureRecency()))
+      if(DetectDirectionalBOS(EntryTF, false))
          return true;
       return false;
    }
 
    if(!nearEma)
       return false;
-   if(!RecentBOS(EffectiveStructureRecency()))
+   if(!DetectDirectionalBOS(EntryTF, false))
       return false;
    return true;
 }
@@ -8807,7 +8813,7 @@ input group "LIQUIDITY SWEEP STRATEGY"
 bool LiquiditySweepBuySetup()
 {
    int rec = EffectiveStructureRecency();
-   bool sweep = RecentSweep(rec);
+   bool sweep = RecentDirectionalSweep(true, rec);
    bool choch = RecentCHoCH(rec);
    bool ob = ActiveOrderBlock(true);
    bool dirOK = IsBullTrend() || !UseEMA;
@@ -8830,7 +8836,7 @@ bool LiquiditySweepBuySetup()
 bool LiquiditySweepSellSetup()
 {
    int rec = EffectiveStructureRecency();
-   bool sweep = RecentSweep(rec);
+   bool sweep = RecentDirectionalSweep(false, rec);
    bool choch = RecentCHoCH(rec);
    bool ob = ActiveOrderBlock(false);
    bool dirOK = IsBearTrend() || !UseEMA;
@@ -8854,8 +8860,7 @@ input group "FVG + ORDER BLOCK STRATEGY"
 
 bool FVGOrderBlockBuySetup()
 {
-   int rec = EffectiveStructureRecency();
-   bool bos = RecentBOS(rec);
+   bool bos = DetectDirectionalBOS(EntryTF, true);
    bool fvg = ActiveFVG(true);
    bool ob = ActiveOrderBlock(true);
 
@@ -8880,8 +8885,7 @@ bool FVGOrderBlockBuySetup()
 
 bool FVGOrderBlockSellSetup()
 {
-   int rec = EffectiveStructureRecency();
-   bool bos = RecentBOS(rec);
+   bool bos = DetectDirectionalBOS(EntryTF, false);
    bool fvg = ActiveFVG(false);
    bool ob = ActiveOrderBlock(false);
 
@@ -9812,7 +9816,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_SIGNAL_OK_45\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_BUGCLEAN_46\n",
          "=============================================="
       );
       return;
@@ -9834,7 +9838,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_SIGNAL_OK_45\n",
+         "BUILD: SA_PRISM_BUGCLEAN_46\n",
          "=========================================="
       );
       return;
