@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_BEAST_29                                   |
-//| SNIPER AI - P.R.I.S.M. BEAST MODE: unified engines, no duplicates |
+//| BUILD_ID: SA_PRISM_ULTRA_30                                   |
+//| SNIPER AI - P.R.I.S.M. ULTRA CORE v11: cached, sniper, explainable |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "2.90"
-#property description "SNIPER AI PRISM Beast Mode - unified quality + sniper execution"
-#property description "20-engine stack, no duplicate gates, reversal quality"
+#property version   "3.00"
+#property description "SNIPER AI PRISM Ultra Core v11 - cached low-latency sniper"
+#property description "Beast score, sniper entry, explainable gates, zero redundant calc"
 
 #include <Trade/Trade.mqh>
 
@@ -42,6 +42,21 @@ input int    BeastMinReversalLiquidityScore  = 30;    // 0=off; liquidity qualit
 input bool   BeastDuplicateBarGuard          = true;  // one approval per bar per direction
 input bool   BeastCaptureSignalSnapshot      = true;  // record MPI/ICE at decision time
 input bool   EnableBeastDashboard            = true;  // rich HUD when EnableDashboard=true
+
+input group "PRISM ULTRA CORE v11"
+// Low-latency cached pipeline. One structure/score calc per cycle.
+// Sniper entry checklist + explainable reject reasons. Aggressive fire after approval.
+
+input bool   EnableUltraCore                 = true;  // master Ultra Core switch
+input bool   UltraCycleCache                 = true;  // cache structure/score per cycle
+input bool   UltraSmartTickFilter            = true;  // skip re-eval when bid/ask unchanged
+input bool   UltraSniperEntryGate            = true;  // institutional sniper checklist before fire
+input int    UltraMinBeastScore              = 55;    // 0=off; Beast Score floor before entry
+input int    UltraMinConfidencePct           = 50;    // 0=off; final confidence % floor
+input bool   UltraInstantTrendSoftGates      = true;  // InstantTrend skips HTF-only hard fail
+input bool   UltraLogRejectReasons           = true;  // explain every rejection
+input bool   UltraHealthMonitor              = true;  // track decision latency + health
+input bool   EnableUltraDashboard            = true;  // Ultra HUD (latency, score, last reject)
 
 input bool   AggressiveInstantQuality    = true;  // skip MPI wait
 input bool   PreferQualityPaths          = true;  // Cont/Rev before InstantTrend
@@ -433,7 +448,12 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_BEAST_29");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_ULTRA_30");
+   Print("PRISM ULTRA: UltraCore=", EnableUltraCore,
+         " CycleCache=", UltraCycleCache,
+         " SniperEntry=", UltraSniperEntryGate,
+         " MinBeastScore=", UltraMinBeastScore,
+         " MinConf%=", UltraMinConfidencePct);
    Print("PRISM BEAST: BeastMode=", EnableBeastMode,
          " SniperMode=", EnableSniperMode,
          " UnifiedStructure=", BeastUseUnifiedStructure,
@@ -444,7 +464,7 @@ int OnInit()
          " InstantFallback=", AllowTrendOnlyInstantEntry,
          " NoMPIwait=", AggressiveInstantQuality);
    Print("Engines: ICE_MinScore=", ICE_MinScore,
-         " | IMCE hard (chop override cont) | SMT on RevSniper | BEAST unified");
+         " | IMCE hard | SMT RevSniper | BEAST+ULTRA cached");
    Print("Trade size: LotSize=", LotSize, " MaxOpenTrades=", MaxOpenTrades,
          " MaxTotal=", MaxTotalOpenTradesAllSymbols);
    Print("TIP: set EntryTF to match chart (you use H4 — set EntryTF=H4)");
@@ -6544,8 +6564,93 @@ struct PRISMStructureSnapshot
    bool htfConfirms;
 };
 
+//================ PRISM ULTRA CORE v11 — CACHE / BEAST SCORE / SNIPER =//
+// Design goals: zero redundant calc, explainable rejects, sniper quality,
+// aggressive fire ONLY after approval. One structure + beast score per cycle.
+
+ulong  g_UltraStructCycleBuy  = 0;
+ulong  g_UltraStructCycleSell = 0;
+string g_UltraStructSymbolBuy  = "";
+string g_UltraStructSymbolSell = "";
+PRISMStructureSnapshot g_UltraStructBuy;
+PRISMStructureSnapshot g_UltraStructSell;
+
+ulong  g_UltraBeastCycleBuy  = 0;
+ulong  g_UltraBeastCycleSell = 0;
+string g_UltraBeastSymbolBuy  = "";
+string g_UltraBeastSymbolSell = "";
+string g_UltraBeastTagBuy  = "";
+string g_UltraBeastTagSell = "";
+
+string g_UltraLastReject = "";
+string g_UltraLastDecision = "IDLE";
+string g_UltraLastGrade = "-";
+int    g_UltraLastBeastScore = 0;
+int    g_UltraLastConfidencePct = 0;
+long   g_UltraLastDecisionMs = 0;
+long   g_UltraDecisionStartMs = 0;
+double g_UltraLastBid = 0.0;
+double g_UltraLastAsk = 0.0;
+int    g_UltraHealthOK = 1;
+int    g_UltraRejectCount = 0;
+int    g_UltraApproveCount = 0;
+
+struct PRISMBeastScore
+{
+   int context;
+   int htf;
+   int structure;
+   int liquidity;
+   int smt;
+   int bos;
+   int choch;
+   int orderBlock;
+   int fvg;
+   int premiumDiscount;
+   int momentum;
+   int confirmation;
+   int executionQuality;
+   int institutional;
+   int trendStrength;
+   int reversalProb;
+   int volatility;
+   int newsStability;
+   int overall;
+   int confidencePct;
+};
+
+PRISMBeastScore g_UltraBeastBuy;
+PRISMBeastScore g_UltraBeastSell;
+
+void UltraSetReject(const string reason)
+{
+   g_UltraLastReject = reason;
+   g_UltraLastDecision = "REJECT";
+   g_UltraRejectCount++;
+   if(EnableUltraCore && UltraLogRejectReasons && (EnableVerboseLogging || EnableSetupLogging))
+      Print("ULTRA REJECT: ", reason, " on ", BrokerSymbol);
+}
+
+void UltraSetApprove(const string tag, const string grade, const int beast, const int confPct)
+{
+   g_UltraLastDecision = "APPROVE " + tag;
+   g_UltraLastGrade = grade;
+   g_UltraLastBeastScore = beast;
+   g_UltraLastConfidencePct = confPct;
+   g_UltraLastReject = "";
+   g_UltraApproveCount++;
+}
+
 PRISMStructureSnapshot PRISM_GetStructureSnapshot(bool buy, int recency = -1)
 {
+   if(EnableUltraCore && UltraCycleCache)
+   {
+      if(buy && g_UltraStructCycleBuy == g_CycleCounter && g_UltraStructSymbolBuy == BrokerSymbol)
+         return g_UltraStructBuy;
+      if(!buy && g_UltraStructCycleSell == g_CycleCounter && g_UltraStructSymbolSell == BrokerSymbol)
+         return g_UltraStructSell;
+   }
+
    PRISMStructureSnapshot s;
    s.rec = (recency >= 0 ? recency : EffectiveStructureRecency());
    s.bos = RecentBOS(s.rec);
@@ -6556,7 +6661,344 @@ PRISMStructureSnapshot PRISM_GetStructureSnapshot(bool buy, int recency = -1)
    s.trend = (buy ? IsBullTrend() : IsBearTrend());
    s.trendStrong = TrendStrong();
    s.htfConfirms = HTFConfirms(buy);
+
+   if(EnableUltraCore && UltraCycleCache)
+   {
+      if(buy)
+      {
+         g_UltraStructBuy = s;
+         g_UltraStructCycleBuy = g_CycleCounter;
+         g_UltraStructSymbolBuy = BrokerSymbol;
+      }
+      else
+      {
+         g_UltraStructSell = s;
+         g_UltraStructCycleSell = g_CycleCounter;
+         g_UltraStructSymbolSell = BrokerSymbol;
+      }
+   }
    return s;
+}
+
+enum ENUM_IMCE_CONTEXT
+{
+   IMCE_TREND_CONTINUATION = 0,
+   IMCE_REVERSAL_LIQUIDITY = 1,
+   IMCE_EXPANSION_BREAKOUT = 2,
+   IMCE_MANIPULATION_CHOP  = 3,
+   IMCE_NEUTRAL            = 4
+};
+
+struct PRISM_MarketIntel
+{
+   MarketRegime regime;
+   ENUM_IMCE_CONTEXT imce;
+   bool eventWindow;
+   bool volExpanding;
+   bool dailyBullBias;
+   bool weeklyBullBias;
+   bool htfBull;
+};
+
+ENUM_IMCE_CONTEXT GetIMCEContext();
+string IMCEContextToString(ENUM_IMCE_CONTEXT ctx);
+PRISM_MarketIntel PRISM_GetMarketIntel(bool buy);
+bool PRISMReversalQualityOK(bool buy);
+bool SMTInternalBullish();
+bool SMTInternalBearish();
+bool SMTCrossAssetBullish();
+bool SMTCrossAssetBearish();
+bool PRISM_IsReversalTag(const string tag);
+bool PRISM_IsContinuationTag(const string tag);
+int GetInstitutionalConfidenceScore(bool buy);
+int CalculatePRISMScore(bool buy);
+int CountConfirmingConditions(bool buy);
+int GetDisplacementScore(bool buy);
+
+int UltraSMTScore(bool buy, const string strategyTag)
+{
+   if(!EnableSMT) return 5;
+   if(PRISM_IsContinuationTag(strategyTag) && !SMTBlockContinuationPaths)
+      return 8;
+   if(buy ? SMTInternalBullish() : SMTInternalBearish())
+      return 15;
+   if(StringLen(SMTReferenceSymbol) > 0)
+   {
+      if(buy ? SMTCrossAssetBullish() : SMTCrossAssetBearish())
+         return 18;
+   }
+   if(PRISM_IsReversalTag(strategyTag))
+      return 0;
+   return 6;
+}
+
+PRISMBeastScore UltraComputeBeastScore(bool buy, const string strategyTag)
+{
+   PRISMBeastScore b;
+   b.context = 0;
+   b.htf = 0;
+   b.structure = 0;
+   b.liquidity = 0;
+   b.smt = 0;
+   b.bos = 0;
+   b.choch = 0;
+   b.orderBlock = 0;
+   b.fvg = 0;
+   b.premiumDiscount = 0;
+   b.momentum = 0;
+   b.confirmation = 0;
+   b.executionQuality = 0;
+   b.institutional = 0;
+   b.trendStrength = 0;
+   b.reversalProb = 0;
+   b.volatility = 0;
+   b.newsStability = 0;
+   b.overall = 0;
+   b.confidencePct = 0;
+
+   PRISMStructureSnapshot s = PRISM_GetStructureSnapshot(buy);
+   PRISM_MarketIntel intel = PRISM_GetMarketIntel(buy);
+   int ice = GetInstitutionalConfidenceScore(buy);
+   int mpi = CalculatePRISMScore(buy);
+   int conf = CountConfirmingConditions(buy);
+   int liqQ = GetLiquiditySweepQualityScore();
+   int disp = GetDisplacementScore(buy);
+
+   // Context (0-10)
+   if(intel.imce == IMCE_TREND_CONTINUATION || intel.imce == IMCE_EXPANSION_BREAKOUT) b.context = 10;
+   else if(intel.imce == IMCE_REVERSAL_LIQUIDITY) b.context = 8;
+   else if(intel.imce == IMCE_NEUTRAL) b.context = 5;
+   else b.context = 2;
+
+   // HTF / Daily-Weekly bias (0-10)
+   b.htf = 0;
+   if(s.htfConfirms) b.htf += 5;
+   if(buy ? intel.dailyBullBias : !intel.dailyBullBias) b.htf += 3;
+   if(buy ? intel.weeklyBullBias : !intel.weeklyBullBias) b.htf += 2;
+   if(b.htf > 10) b.htf = 10;
+
+   // Structure (0-10)
+   b.structure = 0;
+   if(s.bos) b.structure += 4;
+   if(s.choch) b.structure += 4;
+   if(s.trend) b.structure += 2;
+   if(b.structure > 10) b.structure = 10;
+
+   b.bos = s.bos ? 8 : 0;
+   b.choch = s.choch ? 8 : 0;
+   b.orderBlock = s.ob ? (IsOrderBlockFreshAndValid(buy) ? 10 : 5) : 0;
+   b.fvg = s.fvg ? MathMin((int)MathRound(GetFVGQualityScore(buy) / 2.0), 10) : 0;
+
+   b.liquidity = MathMin(liqQ, 15);
+   if(GetLiquidityProximityScore(buy) > 0) b.liquidity = MathMin(b.liquidity + 3, 15);
+
+   b.smt = UltraSMTScore(buy, strategyTag);
+   if(b.smt > 15) b.smt = 15;
+
+   b.premiumDiscount = (buy ? InDiscountZone() : InPremiumZone()) ? 8 : 2;
+   b.momentum = (intel.volExpanding ? 8 : 3) + MathMin(disp, 7);
+   if(b.momentum > 15) b.momentum = 15;
+
+   b.confirmation = MathMin(conf * 2, 12);
+   b.executionQuality = (GetFilterATR() > 0.0) ? 8 : 0;
+   double spr = SymbolInfoInteger(BrokerSymbol, SYMBOL_SPREAD);
+   if(spr > 0 && spr < 50) b.executionQuality += 2;
+
+   b.institutional = MathMin(ice / 8, 12);
+   b.trendStrength = (s.trend ? 5 : 0) + (s.trendStrong ? 5 : 0);
+
+   // Reversal probability — high only when stack is real
+   b.reversalProb = 0;
+   if(PRISM_IsReversalTag(strategyTag))
+   {
+      if(s.sweep && (s.choch || s.ob || s.fvg)) b.reversalProb = 12;
+      else if(s.sweep) b.reversalProb = 5;
+      if(DetectFakeBreakoutTrap(buy)) b.reversalProb = MathMax(0, b.reversalProb - 8);
+   }
+   else if(s.trend && s.trendStrong)
+      b.reversalProb = 3; // continuation preferred
+
+   b.volatility = intel.volExpanding ? 8 : (IsVolatilityContracting() ? 3 : 5);
+   b.newsStability = intel.eventWindow ? 4 : 8;
+
+   b.overall =
+      b.context + b.htf + b.structure + b.liquidity + b.smt +
+      b.bos + b.choch + b.orderBlock + b.fvg + b.premiumDiscount +
+      b.momentum + b.confirmation + b.executionQuality + b.institutional +
+      b.trendStrength + b.reversalProb + b.volatility + b.newsStability;
+
+   // Normalize confidence % from overall (typical max ~180)
+   b.confidencePct = (int)MathRound(100.0 * (double)b.overall / 180.0);
+   if(b.confidencePct > 100) b.confidencePct = 100;
+   if(b.confidencePct < 0) b.confidencePct = 0;
+
+   // Fold MPI lightly so Beast aligns with existing quality floor
+   if(mpi > 0)
+      b.confidencePct = MathMin(100, (b.confidencePct + MathMin(mpi, 40)) / 2 + 20);
+
+   return b;
+}
+
+PRISMBeastScore UltraGetBeastScore(bool buy, const string strategyTag)
+{
+   if(EnableUltraCore && UltraCycleCache)
+   {
+      if(buy && g_UltraBeastCycleBuy == g_CycleCounter &&
+         g_UltraBeastSymbolBuy == BrokerSymbol && g_UltraBeastTagBuy == strategyTag)
+         return g_UltraBeastBuy;
+      if(!buy && g_UltraBeastCycleSell == g_CycleCounter &&
+         g_UltraBeastSymbolSell == BrokerSymbol && g_UltraBeastTagSell == strategyTag)
+         return g_UltraBeastSell;
+   }
+
+   PRISMBeastScore b = UltraComputeBeastScore(buy, strategyTag);
+
+   if(EnableUltraCore && UltraCycleCache)
+   {
+      if(buy)
+      {
+         g_UltraBeastBuy = b;
+         g_UltraBeastCycleBuy = g_CycleCounter;
+         g_UltraBeastSymbolBuy = BrokerSymbol;
+         g_UltraBeastTagBuy = strategyTag;
+      }
+      else
+      {
+         g_UltraBeastSell = b;
+         g_UltraBeastCycleSell = g_CycleCounter;
+         g_UltraBeastSymbolSell = BrokerSymbol;
+         g_UltraBeastTagSell = strategyTag;
+      }
+   }
+   return b;
+}
+
+// Sniper Entry Engine — institutional checklist with explainable fails.
+// InstantTrend can soft-skip HTF-only when UltraInstantTrendSoftGates=true.
+bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
+{
+   failReason = "";
+   if(!EnableUltraCore || !UltraSniperEntryGate)
+      return true;
+
+   PRISMStructureSnapshot s = PRISM_GetStructureSnapshot(buy);
+   PRISMBeastScore beast = UltraGetBeastScore(buy, strategyTag);
+   bool soft = (UltraInstantTrendSoftGates && strategyTag == "InstantTrend");
+
+   // 1. HTF / bias alignment
+   if(!s.trend)
+   {
+      failReason = "HTF/trend bias not aligned";
+      return false;
+   }
+   if(!soft && EnableHTFConfirmation && !s.htfConfirms)
+   {
+      failReason = "HTF confirmation gate failed";
+      return false;
+   }
+
+   // 2. Institutional confluence (OB or FVG or BOS for cont; stack for rev)
+   if(PRISM_IsReversalTag(strategyTag))
+   {
+      if(!PRISMReversalQualityOK(buy))
+      {
+         failReason = "reversal: liquidity+structure stack failed";
+         return false;
+      }
+   }
+   else if(!soft)
+   {
+      if(!(s.bos || s.ob || s.fvg || s.trendStrong))
+      {
+         failReason = "institutional confluence missing (BOS/OB/FVG/ADX)";
+         return false;
+      }
+   }
+   else if(!s.trendStrong && !AllowTrendOnlyInstantEntry)
+   {
+      failReason = "InstantTrend: trend not strong";
+      return false;
+   }
+
+   // 3. Liquidity confirmation for reversals
+   if(PRISM_IsReversalTag(strategyTag) && !s.sweep)
+   {
+      failReason = "liquidity confirmation missing";
+      return false;
+   }
+
+   // 4. SMT for reversals (already gated in SMTOK — soft check here)
+   if(PRISM_IsReversalTag(strategyTag) && EnableSMT && SMTRequireForEntry)
+   {
+      if(!(buy ? SMTInternalBullish() : SMTInternalBearish()) &&
+         StringLen(SMTReferenceSymbol) == 0)
+      {
+         // Internal SMT already required by path; don't double-kill InstantTrend
+      }
+   }
+
+   // 5. Premium/Discount when filter enabled
+   if(EnablePremiumDiscountFilter && !NeverBlockValidSniperEntry)
+   {
+      if(buy && !InDiscountZone())
+      {
+         failReason = "premium/discount: buy not in discount";
+         return false;
+      }
+      if(!buy && !InPremiumZone())
+      {
+         failReason = "premium/discount: sell not in premium";
+         return false;
+      }
+   }
+
+   // 6. Momentum / displacement soft for InstantTrend
+   if(!soft && DetectFakeBreakoutTrap(buy))
+   {
+      failReason = "entry candle: fake breakout trap in trade direction";
+      return false;
+   }
+
+   // 7. Beast score floor
+   if(UltraMinBeastScore > 0 && beast.overall < UltraMinBeastScore)
+   {
+      failReason = "BeastScore " + IntegerToString(beast.overall) +
+                   " < UltraMinBeastScore " + IntegerToString(UltraMinBeastScore);
+      return false;
+   }
+
+   // 8. Confidence %
+   if(UltraMinConfidencePct > 0 && beast.confidencePct < UltraMinConfidencePct)
+   {
+      failReason = "Confidence " + IntegerToString(beast.confidencePct) +
+                   "% < UltraMinConfidencePct " + IntegerToString(UltraMinConfidencePct);
+      return false;
+   }
+
+   // 9. Risk sanity
+   if(GetFilterATR() <= 0.0)
+   {
+      failReason = "risk: ATR unavailable";
+      return false;
+   }
+
+   return true;
+}
+
+bool UltraSmartTickUnchanged()
+{
+   if(!EnableUltraCore || !UltraSmartTickFilter)
+      return false;
+
+   double bid = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
+   double ask = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
+   if(bid == g_UltraLastBid && ask == g_UltraLastAsk &&
+      g_UltraLastDecision != "IDLE" && g_UltraLastDecision != "")
+      return true;
+
+   g_UltraLastBid = bid;
+   g_UltraLastAsk = ask;
+   return false;
 }
 
 bool PRISM_IsReversalTag(const string tag)
@@ -6655,16 +7097,7 @@ int CalculatePRISMScore(bool buy)
 
 int GetDisplacementScore(bool buy); // defined later in displacement module
 
-enum ENUM_IMCE_CONTEXT
-{
-   IMCE_TREND_CONTINUATION = 0,
-   IMCE_REVERSAL_LIQUIDITY = 1,
-   IMCE_EXPANSION_BREAKOUT = 2,
-   IMCE_MANIPULATION_CHOP  = 3,
-   IMCE_NEUTRAL            = 4
-};
-
-ENUM_IMCE_CONTEXT GetIMCEContext(); // defined below — used by SMTOK hard gate
+// ENUM_IMCE_CONTEXT + PRISM_MarketIntel declared above in Ultra Core section
 
 //----- ICE: Institutional Confidence Engine (0-100) ------------------//
 int GetInstitutionalConfidenceScore(bool buy)
@@ -6944,17 +7377,6 @@ bool IMCEAllows(bool buy, const string strategyTag)
 }
 
 //----- PRISM BEAST: Market Intelligence + Reversal Quality -------------//
-struct PRISM_MarketIntel
-{
-   MarketRegime regime;
-   ENUM_IMCE_CONTEXT imce;
-   bool eventWindow;
-   bool volExpanding;
-   bool dailyBullBias;
-   bool weeklyBullBias;
-   bool htfBull;
-};
-
 PRISM_MarketIntel PRISM_GetMarketIntel(bool buy)
 {
    PRISM_MarketIntel m;
@@ -7005,6 +7427,12 @@ string PRISMGetTradeGrade(bool buy, const string strategyTag)
    int conf = CountConfirmingConditions(buy);
    int total = mpi + ice + conf * 5;
 
+   if(EnableUltraCore)
+   {
+      PRISMBeastScore beast = UltraGetBeastScore(buy, strategyTag);
+      total = beast.overall + beast.confidencePct;
+   }
+
    if(PRISM_IsReversalTag(strategyTag) && !PRISMReversalQualityOK(buy))
       return "D";
 
@@ -7019,22 +7447,36 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
 {
    if(EnableBeastMode && BeastDuplicateBarGuard && IsDuplicateSignal(buy))
    {
+      UltraSetReject("duplicate bar guard");
       if(EnableVerboseLogging || EnableSetupLogging)
          Print("BEAST: duplicate bar guard suppressed ", (buy ? "BUY" : "SELL"),
                " on ", BrokerSymbol);
       return false;
    }
 
+   if(EnableUltraCore && UltraSniperEntryGate)
+   {
+      string fail = "";
+      if(!UltraSniperEntryOK(buy, strategyTag, fail))
+      {
+         UltraSetReject("sniper entry: " + fail);
+         return false;
+      }
+   }
+
+   PRISMBeastScore beast = UltraGetBeastScore(buy, strategyTag);
+   string grade = PRISMGetTradeGrade(buy, strategyTag);
+
    if(EnableBeastMode && EnableSniperMode)
    {
-      string grade = PRISMGetTradeGrade(buy, strategyTag);
-      Print("BEAST SNIPER ", (buy ? "BUY" : "SELL"), " [", strategyTag, "] grade=",
-            grade, " MPI=", CalculatePRISMScore(buy),
+      Print("ULTRA SNIPER ", (buy ? "BUY" : "SELL"), " [", strategyTag, "] grade=",
+            grade, " Beast=", beast.overall, " Conf=", beast.confidencePct, "%",
+            " MPI=", CalculatePRISMScore(buy),
             " ICE=", GetInstitutionalConfidenceScore(buy),
-            " conf=", CountConfirmingConditions(buy),
             " IMCE=", IMCEContextToString(GetIMCEContext()));
    }
 
+   UltraSetApprove(strategyTag, grade, beast.overall, beast.confidencePct);
    MarkSignalApproved(buy);
    if(EnableBeastMode && BeastCaptureSignalSnapshot)
       CapturePendingSignalSnapshot(buy, strategyTag);
@@ -7045,6 +7487,7 @@ bool PrismInstitutionalEnginesOK(bool buy, const string strategyTag)
 {
    if(EnableBeastMode && PRISM_IsReversalTag(strategyTag) && !PRISMReversalQualityOK(buy))
    {
+      UltraSetReject("reversal stack insufficient for " + strategyTag);
       if(EnableVerboseLogging || EnableSetupLogging)
          Print("BEAST: reversal stack insufficient for ", strategyTag, " on ", BrokerSymbol);
       return false;
@@ -7053,15 +7496,25 @@ bool PrismInstitutionalEnginesOK(bool buy, const string strategyTag)
    // ICE + IMCE hard for all paths.
    // SMT hard only on reversal tags (see SMTOK) — not duplicated on InstantTrend.
    if(!InstitutionalConfidenceOK(buy))
+   {
+      UltraSetReject("ICE below floor for " + strategyTag);
       return false;
+   }
    if(!IMCEAllows(buy, strategyTag))
+   {
+      UltraSetReject("IMCE blocked " + strategyTag);
       return false;
+   }
    if(!SMTOK(buy, strategyTag))
+   {
+      UltraSetReject("SMT blocked " + strategyTag);
       return false;
+   }
 
    if(EnableVerboseLogging)
       Print("Engines PASSED ", strategyTag, " ", (buy ? "BUY" : "SELL"),
             " ICE=", GetInstitutionalConfidenceScore(buy),
+            " Beast=", UltraGetBeastScore(buy, strategyTag).overall,
             " IMCE=", IMCEContextToString(GetIMCEContext()),
             " on ", BrokerSymbol);
    return true;
@@ -7107,6 +7560,9 @@ int PathQualityRankScore(const string tag, const bool buy)
 
    if(PRISM_IsReversalTag(tag) && PRISMReversalQualityOK(buy))
       score += 20;
+
+   if(EnableUltraCore)
+      score += UltraGetBeastScore(buy, tag).overall / 2;
 
    if(EnableAdaptivePathRanking)
    {
@@ -7297,7 +7753,7 @@ void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &
    if(bestTag == "")
    {
       if(EnableVerboseLogging || EnableSetupLogging)
-         Print("PRISM BEAST: ", candidateCount, " path(s) valid but engines rejected all on ",
+         Print("ULTRA CORE: ", candidateCount, " path(s) valid but engines rejected all on ",
                BrokerSymbol, " (", (isBuy ? "BUY" : "SELL"), ")");
       return;
    }
@@ -7305,8 +7761,10 @@ void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &
    if(isBuy) { buySignal = true;  strategyTag = bestTag; }
    else      { sellSignal = true; strategyTag = bestTag; }
 
-   Print("PRISM BEAST FIRE ", (isBuy ? "BUY" : "SELL"),
+   PRISMBeastScore fireBeast = UltraGetBeastScore(isBuy, bestTag);
+   Print("ULTRA CORE FIRE ", (isBuy ? "BUY" : "SELL"),
          " [", bestTag, "] grade=", PRISMGetTradeGrade(isBuy, bestTag),
+         " Beast=", fireBeast.overall, " Conf=", fireBeast.confidencePct, "%",
          " rank=", PathQualityRankScore(bestTag, isBuy),
          " ICE=", GetInstitutionalConfidenceScore(isBuy),
          " IMCE=", IMCEContextToString(GetIMCEContext()),
@@ -8383,6 +8841,44 @@ void CreateDashboard()
    if(!EnableDashboard)
       return;
 
+   if(EnableUltraCore && EnableUltraDashboard)
+   {
+      PRISM_MarketIntel intel = PRISM_GetMarketIntel(true);
+      PRISMStructureSnapshot s = PRISM_GetStructureSnapshot(true);
+      PRISMBeastScore beast = UltraGetBeastScore(true, "ContSniper");
+      long spread = SymbolInfoInteger(BrokerSymbol, SYMBOL_SPREAD);
+      Comment(
+         "======= SNIPER AI PRISM ULTRA CORE v11 =======\n",
+         "Chart: ", BrokerSymbol, " | EntryTF: ", EnumToString(EntryTF), "\n",
+         "Open: ", IntegerToString(CountOpenTrades()),
+         " / ", IntegerToString(MaxOpenTrades),
+         " | Spread: ", IntegerToString((int)spread), "\n",
+         "Regime: ", EnumToString(intel.regime),
+         " | IMCE: ", IMCEContextToString(intel.imce), "\n",
+         "BOS: ", (s.bos ? "Y" : "N"),
+         " CHoCH: ", (s.choch ? "Y" : "N"),
+         " Sweep: ", (s.sweep ? "Y" : "N"),
+         " OB: ", (s.ob ? "Y" : "N"),
+         " FVG: ", (s.fvg ? "Y" : "N"), "\n",
+         "Beast: ", IntegerToString(beast.overall),
+         " | Conf: ", IntegerToString(beast.confidencePct), "%",
+         " | Grade: ", g_UltraLastGrade, "\n",
+         "MPI: ", IntegerToString(CalculatePRISMScore(true)),
+         " | ICE: ", IntegerToString(GetInstitutionalConfidenceScore(true)), "\n",
+         "Daily: ", (intel.dailyBullBias ? "BULL" : "BEAR"),
+         " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"),
+         " | Event: ", (intel.eventWindow ? "ON" : "OFF"), "\n",
+         "Last: ", g_UltraLastDecision,
+         " | Latency: ", IntegerToString((int)g_UltraLastDecisionMs), "ms\n",
+         "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
+         "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
+         " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_ULTRA_30\n",
+         "=============================================="
+      );
+      return;
+   }
+
    if(EnableBeastMode && EnableBeastDashboard)
    {
       PRISM_MarketIntel intel = PRISM_GetMarketIntel(true);
@@ -8399,7 +8895,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_BEAST_29\n",
+         "BUILD: SA_PRISM_ULTRA_30\n",
          "=========================================="
       );
       return;
@@ -8602,13 +9098,16 @@ void PrintSetupDiagnostics()
             " EventTighten=", eventQ,
             " MPI floor=", EffectiveMinimumMPIScore(),
             " NewsHardBlock=", EnableNewsFilter);
-      Print("NOTE: PRISM BEAST PreferQuality=", PreferQualityPaths,
+      Print("NOTE: ULTRA CORE PreferQuality=", PreferQualityPaths,
             " TryNextPath=", TryNextPathIfEnginesFail,
-            " ICE_buy=", GetInstitutionalConfidenceScore(true),
+            " Beast=", UltraGetBeastScore(true, "ContSniper").overall,
+            " Conf%=", UltraGetBeastScore(true, "ContSniper").confidencePct,
             " ICE_MinScore=", ICE_MinScore,
             " IMCE=", IMCEContextToString(GetIMCEContext()),
             " grade=", PRISMGetTradeGrade(true, "ContSniper"));
-      Print("NOTE: Rank Cont/Rev first; chop-safe InstantTrend; reversal stack quality; MPI wait OFF");
+      Print("NOTE: Cached cycle pipeline; sniper entry checklist; explainable rejects; MPI wait OFF");
+      if(g_UltraLastReject != "")
+         Print("NOTE: Last reject — ", g_UltraLastReject);
    }
 }
 
@@ -8647,6 +9146,9 @@ void InstantExecution()
    if(idx < 0)
       return;
 
+   if(EnableUltraCore && UltraHealthMonitor)
+      g_UltraDecisionStartMs = (long)GetTickCount();
+
    // Every symbol gets its own trading-cycle "tick" for the indicator
    // cache (Part 2) - incremented once per RunTradingCycle() call so
    // GetEMA()/GetADX()/GetATR() only re-fetch buffers once per symbol per
@@ -8661,6 +9163,10 @@ void InstantExecution()
          return; // already evaluated this bar for this symbol - wait for the next one
    }
 
+   // Ultra smart tick filter: same bid/ask + already decided this price → skip
+   if(EnableTickLevelSignalDetection && UltraSmartTickUnchanged())
+      return;
+
    LastEntryEvalBarTimeArr[idx] = currentBarTime;
 
    if(EnableVerboseLogging)
@@ -8668,12 +9174,14 @@ void InstantExecution()
 
    if(!FinalTradeCheck())
    {
+      UltraSetReject("FinalTradeCheck failed");
       if(EnableVerboseLogging) Print("Final trade check failed");
       return;
    }
 
    if(!CooldownFinished())
    {
+      UltraSetReject("trade cooldown active");
       if(EnableVerboseLogging) Print("Trade cooldown active");
       return;
    }
@@ -8689,50 +9197,64 @@ void InstantExecution()
    // deliberately turned on.
    if(buySignal && !CorrelationFilterOK(true))
    {
+      UltraSetReject("correlation filter blocked BUY");
       buySignal = false;
    }
 
    if(sellSignal && !CorrelationFilterOK(false))
    {
+      UltraSetReject("correlation filter blocked SELL");
       sellSignal = false;
    }
 
    if(buySignal)
    {
-      if(EnableBeastMode && !PRISMFinalizeApproval(true, strategyTag))
+      if((EnableBeastMode || EnableUltraCore) && !PRISMFinalizeApproval(true, strategyTag))
          return;
 
       Print("BUY approved (", BrokerSymbol, ") [", strategyTag, "]");
       g_PendingStrategyTag = strategyTag;
       ExecuteBuy();
+      if(EnableUltraCore && UltraHealthMonitor)
+      {
+         g_UltraLastDecisionMs = (long)GetTickCount() - g_UltraDecisionStartMs;
+         g_UltraHealthOK = (g_UltraLastDecisionMs < 500) ? 1 : 0;
+      }
       return;
    }
 
    if(sellSignal)
    {
-      if(EnableBeastMode && !PRISMFinalizeApproval(false, strategyTag))
+      if((EnableBeastMode || EnableUltraCore) && !PRISMFinalizeApproval(false, strategyTag))
          return;
 
       Print("SELL approved (", BrokerSymbol, ") [", strategyTag, "]");
       g_PendingStrategyTag = strategyTag;
       ExecuteSell();
+      if(EnableUltraCore && UltraHealthMonitor)
+      {
+         g_UltraLastDecisionMs = (long)GetTickCount() - g_UltraDecisionStartMs;
+         g_UltraHealthOK = (g_UltraLastDecisionMs < 500) ? 1 : 0;
+      }
       return;
    }
 
+   if(g_UltraLastReject == "" && EnableUltraCore)
+   {
+      g_UltraLastReject = "no valid sniper setup this cycle";
+      g_UltraLastDecision = "WAIT";
+   }
+
+   if(EnableUltraCore && UltraHealthMonitor)
+      g_UltraLastDecisionMs = (long)GetTickCount() - g_UltraDecisionStartMs;
+
    if(EnableSetupLogging)
    {
-      // FIX: PrintSetupDiagnostics() below already throttles ITSELF to
-      // once per bar per symbol (DiagLastBarTimeArr) - but this plain
-      // "No valid setup" line had no throttle of its own, so turning on
-      // EnableTickLevelSignalDetection made it fire on every single tick
-      // (confirmed: multiple identical "No valid setup (EURUSD.m)" lines
-      // within the same second). Now gated the same way, so it prints at
-      // most once per newly closed bar regardless of tick-level checking
-      // frequency - the underlying signal re-evaluation still happens
-      // every tick as intended, only the repeated no-op logging is
-      // throttled.
       if(idx < ArraySize(DiagLastBarTimeArr) && DiagLastBarTimeArr[idx] != currentBarTime)
-         Print("No valid setup (", BrokerSymbol, ")");
+      {
+         Print("No valid setup (", BrokerSymbol,
+               EnableUltraCore && g_UltraLastReject != "" ? ") — " + g_UltraLastReject : ")");
+      }
 
       PrintSetupDiagnostics();
    }

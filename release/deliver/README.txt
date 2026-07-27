@@ -1,2 +1,2 @@
-SA_PRISM_BEAST_29
-PRISM Beast Mode: unified engines, reversal quality, sniper execution, no duplicate gates.
+SA_PRISM_ULTRA_30
+PRISM Ultra Core v11: cycle cache, Beast Score, sniper entry, explainable rejects.

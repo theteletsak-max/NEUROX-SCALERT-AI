@@ -2,26 +2,26 @@ SNIPER AI - DOWNLOAD
 ====================
 
 EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK29.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK30.mq5
 
 ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.zip
 
-BUILD_ID: SA_PRISM_BEAST_29
+BUILD_ID: SA_PRISM_ULTRA_30
 
-PRISM BEAST MODE (20-engine stack):
-1. Unified structure snapshot — MPI/ICE/rank share one BOS/CHoCH/sweep read (no duplicates)
-2. Market intelligence — regime + IMCE + daily/weekly bias + event mode
-3. Reversal quality stack — sweep + CHoCH/zone + liquidity score for RevSniper
-4. Sniper execution — fires when beast gates pass; duplicate bar guard
-5. Trade grades A+ to D logged on every fire
-6. Chop-safe InstantTrend fallback (from OK28)
-7. ICE/IMCE/SMT hard; SMT on RevSniper only; MPI wait OFF
-8. Rich beast dashboard when EnableDashboard=true
+PRISM ULTRA CORE v11:
+1. Ultra cycle cache — structure + Beast Score computed once per cycle (zero redundant calc)
+2. Smart tick filter — skip re-eval when bid/ask unchanged
+3. Beast Score Engine — 18-component institutional score + Confidence %
+4. Sniper Entry Engine — HTF/confluence/liquidity/premium/momentum checklist
+5. Explainable rejects — every blocked trade logs ULTRA REJECT reason
+6. Health monitor — decision latency + A/R counters on dashboard
+7. Keeps OK29 Beast Mode + OK28 chop-safe InstantTrend
+8. Aggressive fire ONLY after Ultra sniper approval
 
 INSTALL:
 1. Delete old SNIPER* .mq5/.ex5
-2. Compile OK29
+2. Compile OK30
 3. REMOVE EA from chart + re-attach
 4. Set EntryTF = H4 if chart is H4
-5. Experts must show: BUILD_ID=SA_PRISM_BEAST_29
+5. Experts must show: BUILD_ID=SA_PRISM_ULTRA_30
