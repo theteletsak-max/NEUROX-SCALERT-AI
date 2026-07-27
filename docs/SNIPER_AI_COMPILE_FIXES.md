@@ -35,3 +35,15 @@ Defaults flipped for aggressive power:
 - `EnableTrailing=true`
 
 File: `SNIPER_AI_OK38.mq5`
+
+## OK39 — sure profit ladder (`SA_PRISM_PROFIT_SURE_39`)
+
+Makes the aggressive TP ladder reliable:
+- Broker TP opens at **TP3** (not TP2) so the broker cannot full-close before EA locks SL
+- `ForceSureProfitLadder=true` keeps ladder on even with fixed management
+- Stronger locks: 80% at TP1, 85% at TP2
+- Bar-touch TP detection so wick hits are not missed
+
+Flow: TP1 → lock SL into profit → TP2 → lock further → TP3 / trail
+
+File: `SNIPER_AI_OK39.mq5`

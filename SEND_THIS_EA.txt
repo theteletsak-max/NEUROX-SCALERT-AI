@@ -2,46 +2,39 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK38.mq5
-BUILD_ID: SA_PRISM_PROFIT_LOCK_38
+File:     SNIPER_AI_OK39.mq5
+BUILD_ID: SA_PRISM_PROFIT_SURE_39
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK38.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK39.mq5
 
 Raw:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK38.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK39.mq5
 
 ──────────────────────────────────────
-AGGRESSIVE PROFIT LADDER (ON by default)
+SURE AGGRESSIVE PROFIT LADDER
 ──────────────────────────────────────
-TP1 hit → partial close → SL locks INTO profit → remainder runs to TP2
-TP2 hit → partial close → SL locks further (near TP1) → remainder → TP3 / trail
-After lock → ATR trailing keeps securing more profit automatically
+TP1 hit → SL locks INTO profit (80%) → remainder MUST hunt TP2
+TP2 hit → SL locks further (85%) → remainder → TP3 / ATR trail
+Broker opens with far TP3 so trade is NOT cut off at TP2
 
-Defaults:
-  UseFixedTradeManagement = false
-  AggressiveProfitLadder   = true
-  SecureProfitOnTPHit      = true
-  EnableTrailing           = true
-  LockProfitAtTP1_Fraction = 0.50
-  LockProfitAtTP2_Fraction = 0.60
+Forced ON (ForceSureProfitLadder=true) even if fixed management was on.
+Bar-touch detection so TP hits are not missed on wicks.
 
-Experts will show:
-  TP1 hit: closed 0.01 lots ... — locking profit, remainder → TP2
+Experts:
+  TP1 hit ... — locking profit, remainder → TP2
+  SURE LADDER: TP1 secured → now hunting TP2
+  SURE LADDER: TP2 secured → trailing runner / hunting TP3
   PROFIT LOCK: ticket ... SL→... TP→...
-  TP2 hit: ... — locking more profit, runner → TP3/trail
-  Runner released — profit locked, ATR trailing active
-
-Correct reversal detection from OK37 is kept.
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. Delete ALL old SNIPER*
-2. Compile OK38 (F7)
+2. Compile OK39 (F7)
 3. Remove EA all charts → re-attach
 4. EntryTF=H4 on H4 charts
-5. Experts: BUILD_ID=SA_PRISM_PROFIT_LOCK_38
+5. Experts: BUILD_ID=SA_PRISM_PROFIT_SURE_39
 ══════════════════════════════════════

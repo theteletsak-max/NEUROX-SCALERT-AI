@@ -1,11 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK38.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK39.mq5
 
-BUILD_ID: SA_PRISM_PROFIT_LOCK_38
+BUILD_ID: SA_PRISM_PROFIT_SURE_39
 Comment:  SNIPER AI
 
-AGGRESSIVE PROFIT LADDER: TP1 → lock SL into profit → TP2 → lock further → TP3 / trail.
-Correct reversal signals kept.
+SURE PROFIT LADDER: TP1 → lock SL into profit → TP2 → lock further → TP3 / trail.
+Broker TP starts at TP3 so the ladder cannot be cut short.
 
-INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_PROFIT_LOCK_38
+INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_PROFIT_SURE_39

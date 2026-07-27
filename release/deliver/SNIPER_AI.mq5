@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_PROFIT_LOCK_38                             |
-//| SNIPER AI - aggressive TP ladder: lock SL → TP2 → TP3 → trail   |
+//| BUILD_ID: SA_PRISM_PROFIT_SURE_39                             |
+//| SNIPER AI - sure profit ladder: TP1 lock SL → TP2 → TP3 → trail |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "3.80"
-#property description "SNIPER AI aggressive profit lock - TP1 secures SL, then TP2/TP3/trail"
-#property description "Correct reversal signals + auto profit ladder on every fill"
+#property version   "3.90"
+#property description "SNIPER AI sure profit lock - TP hit auto-secures SL then runs to next TP"
+#property description "Broker TP set far (TP3) so EA ladder TP1→TP2→TP3 cannot be cut short"
 
 #include <Trade/Trade.mqh>
 
@@ -466,11 +466,13 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_PROFIT_LOCK_38");
-   Print("PROFIT LADDER: Aggressive=", AggressiveProfitLadder,
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_PROFIT_SURE_39");
+   Print("SURE PROFIT LADDER: Force=", ForceSureProfitLadder,
+         " Aggressive=", AggressiveProfitLadder,
          " SecureOnTP=", SecureProfitOnTPHit,
-         " LockTP1Frac=", LockProfitAtTP1_Fraction,
-         " LockTP2Frac=", LockProfitAtTP2_Fraction,
+         " LockTP1=", LockProfitAtTP1_Fraction,
+         " LockTP2=", LockProfitAtTP2_Fraction,
+         " BrokerTP@TP3=", BrokerTPStartsAtTP3,
          " Trailing=", EnableTrailing,
          " FixedMgmt=", UseFixedTradeManagement);
    Print("REVERSAL CORRECT SIGNALS: CorrectSideSweep=", ReversalRequireCorrectSideSweep,
@@ -2495,17 +2497,22 @@ input double TP1_ClosePercent       = 50.0;   // % of the position closed when T
 input bool   MoveSLToBreakEvenAtTP1 = true;   // fallback: move remaining SL to entry if SecureProfitOnTPHit=false
 
 input group "AGGRESSIVE PROFIT LADDER"
-// When TP1 hits → lock SL into profit → remainder runs to TP2.
-// When TP2 hits → lock SL further (at TP1) → remainder runs to TP3 / trail.
-// Aggressive by default: dynamic management ON, trailing ON.
+// SURE ladder (aggressive):
+// TP1 hit → SL locks INTO profit → remainder MUST run to TP2
+// TP2 hit → SL locks further → remainder MUST run to TP3 / trail
+// Broker TP opens at TP3 (far) so the broker cannot close the trade at TP2
+// before the EA locks profit and advances the ladder.
 
-input bool   AggressiveProfitLadder   = true;  // master ladder switch (TP1→lock→TP2→lock→TP3/trail)
+input bool   AggressiveProfitLadder   = true;  // master ladder switch (forced on when ForceSureProfitLadder)
+input bool   ForceSureProfitLadder    = true;  // overrides UseFixedTradeManagement — ladder ALWAYS active
 input bool   SecureProfitOnTPHit      = true;  // move SL INTO profit (not just breakeven) when a TP hits
-input double LockProfitAtTP1_Fraction = 0.50;  // lock SL at this fraction of the TP1 move (0.5 = half TP1 secured)
-input double LockProfitAtTP2_Fraction = 0.60;  // lock SL at this fraction of the TP2 move (~TP1 level when TP1=1.5R TP2=2.5R)
-input double LockProfitBufferATR      = 0.05;  // small ATR buffer so locked SL is not glued to exact TP wick
-input bool   ExtendTPAfterLock        = true;  // after TP1 lock, keep/set broker TP at TP2; after TP2 → TP3 or trail
-input double AggressiveTrailATRMult   = 1.8;   // tighter ATR trail after TP1 (aggressive lock of open profit)
+input double LockProfitAtTP1_Fraction = 0.80;  // lock 80% of TP1 move as secured profit (aggressive)
+input double LockProfitAtTP2_Fraction = 0.85;  // lock ~85% of TP2 move (near/above TP1) when TP2 hits
+input double LockProfitBufferATR      = 0.05;  // small ATR buffer so locked SL is not glued to exact wick
+input bool   ExtendTPAfterLock        = true;  // after TP1 → broker TP=TP3; after TP2 → TP3 or trail(0)
+input bool   DetectTPByBarTouch       = true;  // count TP hit if bar high/low touched level (sure detect)
+input double AggressiveTrailATRMult   = 1.5;   // tight ATR trail after TP1 locks profit
+input bool   BrokerTPStartsAtTP3      = true;  // open with far TP3 so EA owns TP1/TP2 ladder steps
 
 //================ TRADE STATE TRACKING (for TP1/TP2/TP3) ============//
 // MT5 positions only carry one SL and one TP natively - there's no built-in
@@ -2723,6 +2730,56 @@ void GetTradeDistances(double &slDistance, double &tp1Distance, double &tp2Dista
    tp1Distance = slDistance * TP1_RR_Ratio;
    tp2Distance = slDistance * TP2_RR_Ratio;
    tp3Distance = slDistance * TP3_RR_Ratio;
+}
+
+bool ProfitLadderActive()
+{
+   return (ForceSureProfitLadder || (AggressiveProfitLadder && !UseFixedTradeManagement));
+}
+
+// Broker TP must start at far TP3 so the broker cannot full-close at TP2
+// before the EA locks SL and advances TP1 → TP2 → TP3.
+double InitialBrokerTP(const bool isBuy, const double entry,
+                       const double tp2Distance, const double tp3Distance,
+                       const double tp2Price, const double tp3Price)
+{
+   if(ForceSureProfitLadder || (AggressiveProfitLadder && BrokerTPStartsAtTP3))
+   {
+      if(tp3Price > 0.0)
+         return tp3Price;
+      return isBuy ? (entry + tp3Distance) : (entry - tp3Distance);
+   }
+   if(tp2Price > 0.0)
+      return tp2Price;
+   return isBuy ? (entry + tp2Distance) : (entry - tp2Distance);
+}
+
+bool LevelTouchedForTP(const bool isBuy, const double level, const double price)
+{
+   if(isBuy)
+   {
+      if(price >= level)
+         return true;
+      if(DetectTPByBarTouch)
+      {
+         double hi = iHigh(BrokerSymbol, EntryTF, 0);
+         double hi1 = iHigh(BrokerSymbol, EntryTF, 1);
+         if(hi >= level || hi1 >= level)
+            return true;
+      }
+      return false;
+   }
+
+   if(price <= level)
+      return true;
+   if(DetectTPByBarTouch)
+   {
+      double lo = iLow(BrokerSymbol, EntryTF, 0);
+      double lo1 = iLow(BrokerSymbol, EntryTF, 1);
+      if(lo <= level || lo1 <= level)
+         return true;
+   }
+   return false;
 }
 
 //================ NORMALIZE PRICE ===================================//
@@ -3038,10 +3095,11 @@ bool ExecuteBuy()
    GetTradeDistances(slDistance, tp1Distance, tp2Distance, tp3Distance);
 
    sl = ask - slDistance;
-   tp = ask + tp2Distance;       // broker-side TP starts at TP2 - TP1 handling in ManageOpenTrades() may later widen this to TP3 or remove it for a trailing runner
-   tp1Price = ask + tp1Distance; // tracked locally, handled in ManageOpenTrades()
+   tp1Price = ask + tp1Distance; // soft TP1 — EA locks SL here then runs to TP2
    tp2Price = ask + tp2Distance;
    tp3Price = ask + tp3Distance;
+   // Far broker TP (TP3) so ladder is not cut short by a full close at TP2
+   tp = InitialBrokerTP(true, ask, tp2Distance, tp3Distance, tp2Price, tp3Price);
 
    if(!CheckTradeStops(ask,sl,tp))
    {
@@ -3064,7 +3122,8 @@ bool ExecuteBuy()
       tp1Price = ask + actualSLDistance * TP1_RR_Ratio;
       tp2Price = ask + actualSLDistance * TP2_RR_Ratio;
       tp3Price = ask + actualSLDistance * TP3_RR_Ratio;
-      tp = tp2Price;
+      tp = InitialBrokerTP(true, ask, actualSLDistance * TP2_RR_Ratio,
+                          actualSLDistance * TP3_RR_Ratio, tp2Price, tp3Price);
       CheckTradeStops(ask, sl, tp); // re-validate the adjusted tp against broker minimums too
    }
 
@@ -3131,10 +3190,10 @@ bool ExecuteBuy()
             break;
 
          sl = ask - slDistance;
-         tp = ask + tp2Distance;
          tp1Price = ask + tp1Distance;
          tp2Price = ask + tp2Distance;
          tp3Price = ask + tp3Distance;
+         tp = InitialBrokerTP(true, ask, tp2Distance, tp3Distance, tp2Price, tp3Price);
 
          CheckTradeStops(ask, sl, tp);
          continue;
@@ -3284,10 +3343,10 @@ bool ExecuteSell()
    GetTradeDistances(slDistance, tp1Distance, tp2Distance, tp3Distance);
 
    sl = bid + slDistance;
-   tp = bid - tp2Distance;       // broker-side TP starts at TP2 - TP1 handling in ManageOpenTrades() may later widen this to TP3 or remove it for a trailing runner
-   tp1Price = bid - tp1Distance; // tracked locally, handled in ManageOpenTrades()
+   tp1Price = bid - tp1Distance;
    tp2Price = bid - tp2Distance;
    tp3Price = bid - tp3Distance;
+   tp = InitialBrokerTP(false, bid, tp2Distance, tp3Distance, tp2Price, tp3Price);
 
    if(!CheckTradeStops(bid,sl,tp))
    {
@@ -3303,7 +3362,8 @@ bool ExecuteSell()
       tp1Price = bid - actualSLDistance * TP1_RR_Ratio;
       tp2Price = bid - actualSLDistance * TP2_RR_Ratio;
       tp3Price = bid - actualSLDistance * TP3_RR_Ratio;
-      tp = tp2Price;
+      tp = InitialBrokerTP(false, bid, actualSLDistance * TP2_RR_Ratio,
+                          actualSLDistance * TP3_RR_Ratio, tp2Price, tp3Price);
       CheckTradeStops(bid, sl, tp);
    }
 
@@ -3356,10 +3416,10 @@ bool ExecuteSell()
             break;
 
          sl = bid + slDistance;
-         tp = bid - tp2Distance;
          tp1Price = bid - tp1Distance;
          tp2Price = bid - tp2Distance;
          tp3Price = bid - tp3Distance;
+         tp = InitialBrokerTP(false, bid, tp2Distance, tp3Distance, tp2Price, tp3Price);
 
          CheckTradeStops(bid, sl, tp);
          continue;
@@ -3934,21 +3994,16 @@ void ManageOpenTrades()
 
       //================ TP1 SCALE-OUT + PROFIT LOCK → TP2 ================//
       // Hit TP1 → bank partial → lock SL into profit → remainder runs to TP2.
-      // AggressiveProfitLadder / !UseFixedTradeManagement enables this path.
+      // ForceSureProfitLadder keeps this ON even if UseFixedTradeManagement=true.
 
-      if(!UseFixedTradeManagement && AggressiveProfitLadder)
+      if(ProfitLadderActive())
       {
       int stateIndex = FindTradeState(ticket);
 
       if(stateIndex >= 0 && !TradeStates[stateIndex].tp1Taken)
       {
-         bool tp1Hit = false;
-
-         if(type == POSITION_TYPE_BUY && price >= TradeStates[stateIndex].tp1Price)
-            tp1Hit = true;
-
-         if(type == POSITION_TYPE_SELL && price <= TradeStates[stateIndex].tp1Price)
-            tp1Hit = true;
+         bool tp1Hit = LevelTouchedForTP((type == POSITION_TYPE_BUY),
+                                         TradeStates[stateIndex].tp1Price, price);
 
          if(tp1Hit)
          {
@@ -3991,21 +4046,24 @@ void ManageOpenTrades()
             }
             else
             {
-               if(EnableVerboseLogging)
-                  Print("TP1 hit at min lot — skip partial, still lock SL into profit: ", ticket);
+               Print("TP1 hit at min lot — locking SL into profit, advancing to TP2: ", ticket);
             }
 
             TradeStates[stateIndex].tp1Taken = true;
             PersistTradeState(stateIndex);
 
-            // Secure profit on remainder and point broker TP at TP2
+            // Secure profit on remainder; keep broker TP at far TP3 so TP2 can still fire
+            double nextTP = TradeStates[stateIndex].tp3Price;
+            if(nextTP <= 0.0)
+               nextTP = TradeStates[stateIndex].tp2Price;
             ApplyProfitLockSL(ticket,
                               (type == POSITION_TYPE_BUY),
                               openPrice,
                               TradeStates[stateIndex].tp1Price,
                               LockProfitAtTP1_Fraction,
-                              TradeStates[stateIndex].tp2Price);
+                              nextTP);
 
+            Print("SURE LADDER: TP1 secured → now hunting TP2 on ticket ", ticket);
             if(partialDone && EnableVerboseLogging)
                Print("TP1 ladder armed for ticket ", ticket);
          }
@@ -4014,18 +4072,13 @@ void ManageOpenTrades()
 
 
       //================ TP2 SCALE-OUT + PROFIT LOCK → TP3 / TRAIL =========//
-      // Hit TP2 → bank more → lock SL at/near TP1 → remainder → TP3 or trail.
+      // Hit TP2 → bank more → lock SL further → remainder → TP3 or trail.
 
       if(stateIndex >= 0 && TradeStates[stateIndex].tp1Taken && !TradeStates[stateIndex].tp2Taken
          && EnableTP3Runner && TradeStates[stateIndex].tp2Price > 0.0)
       {
-         bool tp2Hit = false;
-
-         if(type == POSITION_TYPE_BUY && price >= TradeStates[stateIndex].tp2Price)
-            tp2Hit = true;
-
-         if(type == POSITION_TYPE_SELL && price <= TradeStates[stateIndex].tp2Price)
-            tp2Hit = true;
+         bool tp2Hit = LevelTouchedForTP((type == POSITION_TYPE_BUY),
+                                         TradeStates[stateIndex].tp2Price, price);
 
          if(tp2Hit)
          {
@@ -4057,8 +4110,7 @@ void ManageOpenTrades()
             }
             else
             {
-               if(EnableVerboseLogging)
-                  Print("TP2 hit at min lot — lock SL further, activate runner: ", ticket);
+               Print("TP2 hit at min lot — lock SL further, activate runner: ", ticket);
             }
 
             TradeStates[stateIndex].tp2Taken = true;
@@ -4066,11 +4118,9 @@ void ManageOpenTrades()
 
             if(PositionSelectByTicket(ticket))
             {
-               // Lock at TP1-level profit (fraction of TP2 move from open)
                double nextTP = 0.0;
                if(EnableTrailing)
                {
-                  // Trail manages runner — clear fixed TP
                   nextTP = 0.0;
                   ApplyProfitLockSL(ticket,
                                     (type == POSITION_TYPE_BUY),
@@ -4078,7 +4128,6 @@ void ManageOpenTrades()
                                     TradeStates[stateIndex].tp2Price,
                                     LockProfitAtTP2_Fraction,
                                     nextTP);
-                  // Ensure SL at least at TP1
                   if(PositionSelectByTicket(ticket))
                   {
                      double curSL2 = PositionGetDouble(POSITION_SL);
@@ -4089,7 +4138,7 @@ void ManageOpenTrades()
                      if(needRaise)
                         trade.PositionModify(ticket, tp1Lock, 0.0);
                   }
-                  Print("Runner released — profit locked, ATR trailing active: ", ticket);
+                  Print("SURE LADDER: TP2 secured → trailing runner on ticket ", ticket);
                }
                else
                {
@@ -4111,12 +4160,12 @@ void ManageOpenTrades()
                      if(needRaise)
                         trade.PositionModify(ticket, tp1Lock, curTP2);
                   }
-                  Print("Runner given TP3 — profit locked at/near TP1: ", ticket);
+                  Print("SURE LADDER: TP2 secured → hunting TP3 on ticket ", ticket);
                }
             }
          }
       }
-      } // end aggressive profit ladder (TP1 → lock → TP2 → lock → TP3/trail)
+      } // end sure profit ladder (TP1 → lock → TP2 → lock → TP3/trail)
 
 
 
@@ -4176,9 +4225,9 @@ void ManageOpenTrades()
 
       // Trail always after TP1 profit-lock (aggressive); otherwise wait for hold period
       int trailStateGate = FindTradeState(ticket);
-      bool trailAfterLock = (AggressiveProfitLadder && trailStateGate >= 0 &&
+      bool trailAfterLock = (ProfitLadderActive() && trailStateGate >= 0 &&
                              TradeStates[trailStateGate].tp1Taken);
-      if(!UseFixedTradeManagement && EnableTrailing && (holdPeriodOK || trailAfterLock))
+      if((!UseFixedTradeManagement || ForceSureProfitLadder) && EnableTrailing && (holdPeriodOK || trailAfterLock))
       {
 
          double newSL;
@@ -4193,7 +4242,7 @@ void ManageOpenTrades()
             {
                // After TP1 profit-lock, trail tighter to protect secured gains
                bool afterTP1 = trailAfterLock;
-               double trailMult = (AggressiveProfitLadder && afterTP1)
+               double trailMult = (ProfitLadderActive() && afterTP1)
                   ? AggressiveTrailATRMult
                   : ATR_TrailingMultiplier;
                trailingDistance = atr * trailMult;
@@ -9283,7 +9332,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_PROFIT_LOCK_38\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_PROFIT_SURE_39\n",
          "=============================================="
       );
       return;
@@ -9305,7 +9354,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_PROFIT_LOCK_38\n",
+         "BUILD: SA_PRISM_PROFIT_SURE_39\n",
          "=========================================="
       );
       return;
