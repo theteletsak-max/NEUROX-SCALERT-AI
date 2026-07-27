@@ -114,3 +114,13 @@ Code robustness without changing execution:
 Defaults for quality/ladder/defense unchanged.
 
 File: `SNIPER_AI_OK44.mq5`
+
+## OK45 — signal correctness (`SA_PRISM_SIGNAL_OK_45`)
+
+Fixed:
+- ContSniper used non-directional `RecentBOS`/`DetectBOS` → now `DetectDirectionalBOS`
+- SMT internal used any-side `RecentSweep` → now `RecentDirectionalSweep`
+
+Confirmed OK: RevSniper polarity, ICE/IMCE hard gates, ladder, defense, harden guards.
+
+File: `SNIPER_AI_OK45.mq5`

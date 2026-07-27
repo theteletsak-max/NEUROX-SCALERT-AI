@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_HARDEN_44                                  |
-//| SNIPER AI - hardened code (same execution: quality+ladder+defend)|
+//| BUILD_ID: SA_PRISM_SIGNAL_OK_45                               |
+//| SNIPER AI - signal polarity fix (Cont BOS + SMT directional)     |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "4.40"
-#property description "SNIPER AI hardened - crash/bounds/modify guards; execution unchanged"
-#property description "Same quality setups, sure ladder, market defense behavior"
+#property version   "4.50"
+#property description "SNIPER AI signal OK - Cont uses same-direction BOS; SMT internal directional"
+#property description "Hardened code + quality + ladder + defense; Rev polarity already correct"
 
 #include <Trade/Trade.mqh>
 
@@ -118,12 +118,12 @@ input group "SMT - SMART MONEY TECHNIQUE"
 // duplicated RevSniper's sweep+zone checks and killed BTC trend execution.
 
 input bool   EnableSMT                 = true;
-input string SMTReferenceSymbol        = "";   // e.g. ETHUSD.m for BTC — blank = path-internal only
+input string SMTReferenceSymbol        = "";   // e.g. ETHUSD.m for BTC — blank = internal SMT only
 input bool   SMTAllowInternal          = true;
-input bool   SMTRequireForEntry        = true;  // HARD on RevSniper/LiquiditySweep only
-input bool   SMTBlockContinuationPaths = false; // keep FALSE so InstantTrend can trade
+input bool   SMTRequireForEntry        = true;  // HARD on RevSniper/LiquiditySweep when stack fails
+input bool   SMTBlockContinuationPaths = false; // keep FALSE so Cont/Instant are not SMT-blocked
 input int    SMTSwingLookbackBars      = 20;
-input bool   SMTFailOpenIfNoRefData    = true;
+input bool   SMTFailOpenIfNoRefData    = true;  // if ref blank/unavailable, do not block (fail-open)
 
 input group "IMCE - INSTITUTIONAL MARKET CONTEXT ENGINE"
 // HARD context gate — blocks chop on reversal paths; continuation/InstantTrend
@@ -467,16 +467,12 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_HARDEN_44");
-   Print("HARDEN44: bounds/NaN/EMPTY_VALUE/modify/ticket0 guards — execution unchanged");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_SIGNAL_OK_45");
+   Print("SIGNAL OK45: ContSniper uses SAME-DIRECTION BOS | SMT internal directional sweeps");
+   Print("RevSniper polarity OK (BUY=lows, SELL=highs) | ICE/IMCE hard | SMT fail-open if no ref");
    Print("MARKET DEFENSE: ON=", EnableMarketDefense,
-         " HardRevClose=", DefenseCloseOnHardReversal,
-         " AdverseSweepBE=", DefenseLockBEOnAdverseSweep,
-         " ChopBE=", DefenseTightenOnChop,
-         " TrapClose=", DefenseCloseOnTrapAgainst,
-         " PeakRetrace=", DefenseRetraceLockFromPeak,
          " DrawdownShield=", EnableDrawdownProtection);
-   Print("SAFE+QUALITY: BestQuality=", BestQualitySetups,
+   Print("QUALITY+LADDER: BestQuality=", BestQualitySetups,
          " HP_Confirms=", UltraHP_MinConfirmations,
          " ForceLadder=", ForceSureProfitLadder);
    Print("REVERSAL CORRECT SIGNALS: CorrectSideSweep=", ReversalRequireCorrectSideSweep,
@@ -3159,18 +3155,9 @@ bool ExecuteBuy()
    if(!TradeProtectionOK())
       return false;
 
-   // FIX: nothing re-confirmed the signal was still valid at the moment
-   // execution actually runs - InstantExecution() calls StrongBuySetup()
-   // once per new bar, but ExecuteBuy() itself could still run a moment
-   // later (after risk/protection checks, indicator cache lookups, etc.).
-   // On a fast-moving symbol the trend itself could have already flipped
-   // in that gap. This is a cheap re-check of the core trend condition
-   // right before committing - not the full score/structure re-evaluation
-   // (that would risk a different result than what actually triggered
-   // this call and defeat the point of the pending-snapshot fix), just a
-   // sanity check that the basic direction hasn't already reversed.
    // Sanity: direction still agrees — skip abort in UltraAggressiveFire
    // (path+engines already approved; price can wick without flipping EMA).
+   // Live gate is EvaluateSpecCompliantStrategies (Cont/Rev/Instant), not StrongBuySetup.
    if(!IsBullTrend() && !(UltraAggressiveFire || NeverBlockValidSniperEntry))
    {
       if(EnableVerboseLogging)
@@ -7051,7 +7038,7 @@ bool ActiveFVG(bool buy)
    return buy ? FVG_Bull_ActiveArr[idx] : FVG_Bear_ActiveArr[idx];
 }
 
-// Path A quality continuation: trend (+ADX) + structure (BOS/OB/FVG).
+// Path A quality continuation: trend (+ADX) + SAME-DIRECTION structure (BOS/OB/FVG).
 bool AggressiveContinuationBuySetup()
 {
    if(!AggressiveSniperEntries)
@@ -7065,7 +7052,8 @@ bool AggressiveContinuationBuySetup()
    double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
    bool pulled = (ema != EMPTY_VALUE && atr > 0.0 &&
                   MathAbs(price - ema) <= atr * EffectivePullbackATRMultiple());
-   bool bos = RecentBOS(rec);
+   // SIGNAL OK45: Cont BUY needs bullish BOS — not any-direction DetectBOS/RecentBOS
+   bool bos = DetectDirectionalBOS(EntryTF, true);
    bool zone = ActiveOrderBlock(true) || ActiveFVG(true);
 
    if(QualityGatesActive())
@@ -7103,7 +7091,8 @@ bool AggressiveContinuationSellSetup()
    double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
    bool pulled = (ema != EMPTY_VALUE && atr > 0.0 &&
                   MathAbs(price - ema) <= atr * EffectivePullbackATRMultiple());
-   bool bos = RecentBOS(rec);
+   // SIGNAL OK45: Cont SELL needs bearish BOS — not any-direction DetectBOS/RecentBOS
+   bool bos = DetectDirectionalBOS(EntryTF, false);
    bool zone = ActiveOrderBlock(false) || ActiveFVG(false);
 
    if(QualityGatesActive())
@@ -7917,16 +7906,20 @@ bool InstitutionalConfidenceOK(bool buy)
 bool SMTInternalBullish()
 {
    int rec = EffectiveStructureRecency();
-   bool swept = RecentSweep(rec) || DetectStopHunt(false); // sell-side liquidity (lows) swept
-   bool reclaim = RecentCHoCH(rec) || RecentBOS(rec) || ActiveOrderBlock(true) || ActiveFVG(true);
+   // SIGNAL OK45: directional sell-side sweep (lows), not any-side RecentSweep
+   bool swept = RecentDirectionalSweep(true, rec);
+   bool reclaim = RecentCHoCH(rec) || DetectDirectionalBOS(EntryTF, true) ||
+                  ActiveOrderBlock(true) || ActiveFVG(true);
    return swept && reclaim && (IsBullTrend() || RecentCHoCH(rec));
 }
 
 bool SMTInternalBearish()
 {
    int rec = EffectiveStructureRecency();
-   bool swept = RecentSweep(rec) || DetectStopHunt(true); // buy-side liquidity (highs) swept
-   bool reclaim = RecentCHoCH(rec) || RecentBOS(rec) || ActiveOrderBlock(false) || ActiveFVG(false);
+   // SIGNAL OK45: directional buy-side sweep (highs), not any-side RecentSweep
+   bool swept = RecentDirectionalSweep(false, rec);
+   bool reclaim = RecentCHoCH(rec) || DetectDirectionalBOS(EntryTF, false) ||
+                  ActiveOrderBlock(false) || ActiveFVG(false);
    return swept && reclaim && (IsBearTrend() || RecentCHoCH(rec));
 }
 
@@ -9821,7 +9814,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_HARDEN_44\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_SIGNAL_OK_45\n",
          "=============================================="
       );
       return;
@@ -9843,7 +9836,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_HARDEN_44\n",
+         "BUILD: SA_PRISM_SIGNAL_OK_45\n",
          "=========================================="
       );
       return;

@@ -1,11 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK44.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK45.mq5
 
-BUILD_ID: SA_PRISM_HARDEN_44
+BUILD_ID: SA_PRISM_SIGNAL_OK_45
 Comment:  SNIPER AI
 
-HARDENED code (bounds/NaN/modify/ticket guards). Execution unchanged:
-best quality + sure ladder + market defense.
+Signal OK: Cont same-direction BOS + SMT directional. Rev polarity correct.
+Quality + ladder + defense + harden retained.
 
-INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_HARDEN_44
+INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_SIGNAL_OK_45

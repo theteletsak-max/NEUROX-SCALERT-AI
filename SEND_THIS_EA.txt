@@ -2,37 +2,37 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK44.mq5
-BUILD_ID: SA_PRISM_HARDEN_44
+File:     SNIPER_AI_OK45.mq5
+BUILD_ID: SA_PRISM_SIGNAL_OK_45
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK44.mq5
-
-Raw:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK44.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK45.mq5
 
 ──────────────────────────────────────
-HARDENED CODE — SAME EXECUTION
+SIGNAL / FEATURE AUDIT
 ──────────────────────────────────────
-Trading behavior unchanged (quality + ladder + defense).
-Code hardened for crash/data safety:
-- Invalid iHigh/iLow (0) cannot fake TP touches
-- ATR EMPTY_VALUE treated as unavailable (not huge stop)
-- TradeStates bounds + ticket-0 never registered
-- Corrupt GV prices rejected on restore
-- PositionSelect before count loops
-- PositionModify success updates local SL only
-- Empty symbol / bad price/point skipped in manage
-- Peak equity NaN guard
+CORRECT:
+  RevSniper polarity (BUY=lows, SELL=highs)
+  ICE + IMCE hard gates on live path
+  BestQuality + sure ladder + market defense
+  Hardened bounds/NaN/ticket guards
+
+FIXED IN OK45:
+  ContSniper now uses SAME-DIRECTION BOS (was any-direction)
+  SMT internal uses directional sweeps (was any-side)
+  SMT inputs documented as fail-open when no reference symbol
+
+LIVE PATH:
+  OnTick → Cont/Rev/Instant → ICE/IMCE/SMT → Ultra → Execute
+  Comment: SNIPER AI
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. Delete ALL old SNIPER*
-2. Compile OK44 (F7)
-3. Remove EA all charts → re-attach
-4. EntryTF=H4 on H4 charts
-5. Experts: BUILD_ID=SA_PRISM_HARDEN_44
+2. Compile OK45 (F7)
+3. Re-attach · EntryTF=H4 on H4
+4. Experts: BUILD_ID=SA_PRISM_SIGNAL_OK_45
 ══════════════════════════════════════
