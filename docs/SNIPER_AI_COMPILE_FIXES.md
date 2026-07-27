@@ -98,3 +98,19 @@ Open trades defend against the market:
 - `EnableDrawdownProtection=true` by default
 
 File: `SNIPER_AI_OK43.mq5`
+
+## OK44 — harden only (`SA_PRISM_HARDEN_44`)
+
+Code robustness without changing execution:
+- Safe bar high/low for TP touch (ignore iHigh/iLow=0)
+- ATR EMPTY_VALUE → 0
+- TradeStates bounds + ticket 0 never registered
+- Corrupt GV reject on restore
+- PositionSelect in count loops
+- PositionModify success updates local SL
+- Empty symbol / bad price guards
+- Peak equity NaN guard
+
+Defaults for quality/ladder/defense unchanged.
+
+File: `SNIPER_AI_OK44.mq5`

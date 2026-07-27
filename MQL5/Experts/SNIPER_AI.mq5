@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_DEFEND_43                                  |
-//| SNIPER AI - market defense: protect vs flip, chop, trap, DD     |
+//| BUILD_ID: SA_PRISM_HARDEN_44                                  |
+//| SNIPER AI - hardened code (same execution: quality+ladder+defend)|
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "4.30"
-#property description "SNIPER AI market defense - auto-protect vs adverse structure, chop, traps"
-#property description "Best quality + sure ladder + safety locks + drawdown shield"
+#property version   "4.40"
+#property description "SNIPER AI hardened - crash/bounds/modify guards; execution unchanged"
+#property description "Same quality setups, sure ladder, market defense behavior"
 
 #include <Trade/Trade.mqh>
 
@@ -467,7 +467,8 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_DEFEND_43");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_HARDEN_44");
+   Print("HARDEN44: bounds/NaN/EMPTY_VALUE/modify/ticket0 guards — execution unchanged");
    Print("MARKET DEFENSE: ON=", EnableMarketDefense,
          " HardRevClose=", DefenseCloseOnHardReversal,
          " AdverseSweepBE=", DefenseLockBEOnAdverseSweep,
@@ -1211,6 +1212,10 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
 
 void RunTradingCycle(string symbol)
 {
+   // HARDEN: never manage/execute on an empty symbol handle
+   if(symbol == NULL || StringLen(symbol) == 0)
+      return;
+
    BrokerSymbol = symbol;
 
    ManageOpenTrades();
@@ -1488,9 +1493,13 @@ double GetADX()
 double GetATR()
 {
    if(!UpdateIndicators())
-      return EMPTY_VALUE;
+      return 0.0;
 
-   return ATRBuffer[SignalBarIndex()];
+   double v = ATRBuffer[SignalBarIndex()];
+   // HARDEN: EMPTY_VALUE is >0 and would inflate stops/trails — treat as unavailable
+   if(!MathIsValidNumber(v) || v == EMPTY_VALUE || v <= 0.0)
+      return 0.0;
+   return v;
 }
 
 
@@ -1719,6 +1728,8 @@ double GetPeakEquity()
 {
    string key = PeakEquityGVName();
    double currentEquity = AccountInfoDouble(ACCOUNT_EQUITY);
+   if(!MathIsValidNumber(currentEquity) || currentEquity <= 0.0)
+      return 0.0;
 
    if(!GlobalVariableCheck(key))
    {
@@ -1727,6 +1738,12 @@ double GetPeakEquity()
    }
 
    double peak = GlobalVariableGet(key);
+   if(!MathIsValidNumber(peak) || peak <= 0.0)
+   {
+      peak = currentEquity;
+      GlobalVariableSet(key, peak);
+      return peak;
+   }
 
    if(currentEquity > peak)
    {
@@ -2082,6 +2099,8 @@ int CountTotalOpenTradesAllSymbols()
 
       if(ticket == 0)
          continue;
+      if(!PositionSelectByTicket(ticket))
+         continue;
 
       if(PositionGetInteger(POSITION_MAGIC) == MagicNumber &&
          PositionGetDouble(POSITION_VOLUME) <= IgnoreTradesAboveLots)
@@ -2152,6 +2171,8 @@ int CountOpenTradesSharingCurrency(string candidateSymbol)
       ulong ticket = PositionGetTicket(i);
 
       if(ticket == 0)
+         continue;
+      if(!PositionSelectByTicket(ticket))
          continue;
 
       if(PositionGetInteger(POSITION_MAGIC) != MagicNumber)
@@ -2578,6 +2599,12 @@ string TradeStateGVPrefix()
 
 void PersistTradeState(int index)
 {
+   // HARDEN: never index TradeStates out of range
+   if(index < 0 || index >= ArraySize(TradeStates))
+      return;
+   if(TradeStates[index].ticket == 0)
+      return;
+
    string prefix = TradeStateGVPrefix() + IntegerToString(TradeStates[index].ticket);
 
    GlobalVariableSet(prefix + "_tp1",    TradeStates[index].tp1Price);
@@ -2591,6 +2618,9 @@ void PersistTradeState(int index)
 
 void DeleteTradeStateGlobals(ulong ticket)
 {
+   if(ticket == 0)
+      return;
+
    string prefix = TradeStateGVPrefix() + IntegerToString(ticket);
 
    GlobalVariableDel(prefix + "_tp1");
@@ -2604,6 +2634,13 @@ void DeleteTradeStateGlobals(ulong ticket)
 
 void RegisterTradeState(ulong ticket, double tp1Price, double tp2Price, double tp3Price, bool isBuy)
 {
+   // HARDEN: never register unresolved ticket 0 (pollutes GV namespace _TP1_0_*)
+   if(ticket == 0)
+   {
+      Print("HARDEN: RegisterTradeState skipped — ticket is 0");
+      return;
+   }
+
    int n = ArraySize(TradeStates);
    ArrayResize(TradeStates, n + 1);
 
@@ -2671,6 +2708,19 @@ void RestoreTradeStates()
       string mfeKey = prefix + IntegerToString(ticket) + "_mfe";
       TradeStates[n].peakFavorable = GlobalVariableCheck(mfeKey) ? GlobalVariableGet(mfeKey) : 0.0;
       TradeStates[n].strategyTag = "";
+
+      // HARDEN: discard corrupt GV prices so ladder/defense cannot use NaN
+      if(!MathIsValidNumber(TradeStates[n].tp1Price) || TradeStates[n].tp1Price <= 0.0)
+      {
+         ArrayResize(TradeStates, n); // drop this slot
+         continue;
+      }
+      if(!MathIsValidNumber(TradeStates[n].tp2Price) || TradeStates[n].tp2Price < 0.0)
+         TradeStates[n].tp2Price = 0.0;
+      if(!MathIsValidNumber(TradeStates[n].tp3Price) || TradeStates[n].tp3Price < 0.0)
+         TradeStates[n].tp3Price = 0.0;
+      if(!MathIsValidNumber(TradeStates[n].peakFavorable) || TradeStates[n].peakFavorable < 0.0)
+         TradeStates[n].peakFavorable = 0.0;
    }
 
    Print("Restored ", ArraySize(TradeStates), " TP1 trade state(s) from persistent storage.");
@@ -2779,6 +2829,23 @@ double InitialBrokerTP(const bool isBuy, const double entry,
    return isBuy ? (entry + tp2Distance) : (entry - tp2Distance);
 }
 
+// HARDEN: iHigh/iLow return 0 on failure — never treat as a real touch.
+bool SafeBarTouchedHigh(const int bar, const double level)
+{
+   double hi = iHigh(BrokerSymbol, EntryTF, bar);
+   if(!MathIsValidNumber(hi) || hi <= 0.0 || hi == EMPTY_VALUE)
+      return false;
+   return (hi >= level);
+}
+
+bool SafeBarTouchedLow(const int bar, const double level)
+{
+   double lo = iLow(BrokerSymbol, EntryTF, bar);
+   if(!MathIsValidNumber(lo) || lo <= 0.0 || lo == EMPTY_VALUE)
+      return false;
+   return (lo <= level);
+}
+
 // BUGFIX40: never credit pre-entry bar wicks as TP hits (was firing TP1/TP2
 // instantly on new trades when prior bar already swept the level).
 // barsHeld==0 (same bar as entry): live price only.
@@ -2786,15 +2853,18 @@ double InitialBrokerTP(const bool isBuy, const double entry,
 // barsHeld>=2: may also use completed bar 1 wick.
 bool LevelTouchedForTP(const bool isBuy, const double level, const double price, const int barsHeld)
 {
+   if(!MathIsValidNumber(level) || !MathIsValidNumber(price) || level <= 0.0 || price <= 0.0)
+      return false;
+
    if(isBuy)
    {
       if(price >= level)
          return true;
       if(!DetectTPByBarTouch)
          return false;
-      if(barsHeld >= 1 && iHigh(BrokerSymbol, EntryTF, 0) >= level)
+      if(barsHeld >= 1 && SafeBarTouchedHigh(0, level))
          return true;
-      if(barsHeld >= 2 && iHigh(BrokerSymbol, EntryTF, 1) >= level)
+      if(barsHeld >= 2 && SafeBarTouchedHigh(1, level))
          return true;
       return false;
    }
@@ -2803,9 +2873,9 @@ bool LevelTouchedForTP(const bool isBuy, const double level, const double price,
       return true;
    if(!DetectTPByBarTouch)
       return false;
-   if(barsHeld >= 1 && iLow(BrokerSymbol, EntryTF, 0) <= level)
+   if(barsHeld >= 1 && SafeBarTouchedLow(0, level))
       return true;
-   if(barsHeld >= 2 && iLow(BrokerSymbol, EntryTF, 1) <= level)
+   if(barsHeld >= 2 && SafeBarTouchedLow(1, level))
       return true;
    return false;
 }
@@ -2964,6 +3034,10 @@ void CapturePendingSignalSnapshot(bool buy, string strategyTag = "")
 
 void RecordSignalSnapshot(ulong ticket, bool buy)
 {
+   // HARDEN: never snapshot unresolved tickets
+   if(ticket == 0)
+      return;
+
    int n = ArraySize(SignalSnapshots);
    ArrayResize(SignalSnapshots, n + 1);
 
@@ -3264,6 +3338,12 @@ bool ExecuteBuy()
          ulong newTicket = ResolvePositionTicket(trade.ResultOrder());
          bool stopsAttached = false;
 
+         if(newTicket == 0)
+         {
+            Print("HARDEN: BUY no-stops fill but ticket unresolved — abort attach");
+            return false;
+         }
+
          if(PositionSelectByTicket(newTicket))
          {
             if(trade.PositionModify(newTicket, sl, tp))
@@ -3493,6 +3573,12 @@ bool ExecuteSell()
          ulong newTicket = ResolvePositionTicket(trade.ResultOrder());
          bool stopsAttached = false;
 
+         if(newTicket == 0)
+         {
+            Print("HARDEN: SELL no-stops fill but ticket unresolved — abort attach");
+            return false;
+         }
+
          if(PositionSelectByTicket(newTicket))
          {
             if(trade.PositionModify(newTicket, sl, tp))
@@ -3662,6 +3748,8 @@ int CountOpenTrades()
       ulong ticket = PositionGetTicket(i);
 
       if(ticket == 0)
+         continue;
+      if(!PositionSelectByTicket(ticket))
          continue;
 
       if(PositionGetString(POSITION_SYMBOL) == BrokerSymbol &&
@@ -3944,6 +4032,12 @@ void ManageOpenTrades()
          );
       }
 
+      // HARDEN: skip corrupt price/point/bar data — do not manage blindly
+      if(point <= 0.0 || !MathIsValidNumber(point))
+         continue;
+      if(price <= 0.0 || !MathIsValidNumber(price))
+         continue;
+
 
       // How many bars has this position been open? Used to gate trailing/
       // trend-exit management so a fresh trade isn't immediately stopped
@@ -3972,6 +4066,8 @@ void ManageOpenTrades()
 
       datetime openTime = (datetime)PositionGetInteger(POSITION_TIME);
       int barsHeld = iBarShift(BrokerSymbol, EntryTF, openTime);
+      if(barsHeld < 0)
+         barsHeld = 0;
       bool holdPeriodOK = (!EnableLongTermHolding) || (barsHeld >= effectiveMinHoldBars);
 
 
@@ -4020,11 +4116,8 @@ void ManageOpenTrades()
 
                if(currentSL < openPrice)
                {
-                  trade.PositionModify(
-                     ticket,
-                     openPrice,
-                     currentTP
-                  );
+                  if(trade.PositionModify(ticket, openPrice, currentTP))
+                     currentSL = openPrice;
                }
 
             }
@@ -4041,11 +4134,8 @@ void ManageOpenTrades()
 
                if(currentSL > openPrice || currentSL == 0)
                {
-                  trade.PositionModify(
-                     ticket,
-                     openPrice,
-                     currentTP
-                  );
+                  if(trade.PositionModify(ticket, openPrice, currentTP))
+                     currentSL = openPrice;
                }
 
             }
@@ -4444,11 +4534,8 @@ if((price - newSL) >= minimumDistance)
 
    if(newSL > currentSL)
    {
-      trade.PositionModify(
-         ticket,
-         newSL,
-         currentTP
-      );
+      if(trade.PositionModify(ticket, newSL, currentTP))
+         currentSL = newSL;
    }
 }
 
@@ -4481,11 +4568,8 @@ if((newSL - price) >= minimumDistance)
 
    if(newSL < currentSL || currentSL == 0)
    {
-      trade.PositionModify(
-         ticket,
-         newSL,
-         currentTP
-      );
+      if(trade.PositionModify(ticket, newSL, currentTP))
+         currentSL = newSL;
    }
 }
          }
@@ -4559,6 +4643,9 @@ double GetFilterATR()
       return 0;
    }
 
+   // HARDEN: refuse EMPTY_VALUE / NaN as a usable ATR
+   if(!MathIsValidNumber(atr[0]) || atr[0] == EMPTY_VALUE || atr[0] <= 0.0)
+      return 0;
 
    return atr[0];
 
@@ -4749,11 +4836,19 @@ double GetRecentHigh(ENUM_TIMEFRAMES tf = PERIOD_CURRENT)
       bool swing = true;
 
       double high = iHigh(BrokerSymbol, workingTF, i);
+      if(!MathIsValidNumber(high) || high <= 0.0 || high == EMPTY_VALUE)
+         continue;
 
       for(int j = 1; j < SwingBars; j++)
       {
-         if(high <= iHigh(BrokerSymbol, workingTF, i-j) ||
-            high <= iHigh(BrokerSymbol, workingTF, i+j))
+         double hj = iHigh(BrokerSymbol, workingTF, i-j);
+         double hk = iHigh(BrokerSymbol, workingTF, i+j);
+         if(!MathIsValidNumber(hj) || !MathIsValidNumber(hk) || hj <= 0.0 || hk <= 0.0)
+         {
+            swing = false;
+            break;
+         }
+         if(high <= hj || high <= hk)
          {
             swing = false;
             break;
@@ -4799,11 +4894,19 @@ double GetRecentLow(ENUM_TIMEFRAMES tf = PERIOD_CURRENT)
       bool swing = true;
 
       double low = iLow(BrokerSymbol, workingTF, i);
+      if(!MathIsValidNumber(low) || low <= 0.0 || low == EMPTY_VALUE)
+         continue;
 
       for(int j = 1; j < SwingBars; j++)
       {
-         if(low >= iLow(BrokerSymbol, workingTF, i-j) ||
-            low >= iLow(BrokerSymbol, workingTF, i+j))
+         double lj = iLow(BrokerSymbol, workingTF, i-j);
+         double lk = iLow(BrokerSymbol, workingTF, i+j);
+         if(!MathIsValidNumber(lj) || !MathIsValidNumber(lk) || lj <= 0.0 || lk <= 0.0)
+         {
+            swing = false;
+            break;
+         }
+         if(low >= lj || low >= lk)
          {
             swing = false;
             break;
@@ -9718,7 +9821,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_DEFEND_43\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_HARDEN_44\n",
          "=============================================="
       );
       return;
@@ -9740,7 +9843,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_DEFEND_43\n",
+         "BUILD: SA_PRISM_HARDEN_44\n",
          "=========================================="
       );
       return;

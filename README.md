@@ -25,20 +25,20 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 
 ### Install (MT5) — single file (compile-safe)
 
-Use **[`SNIPER_AI_OK43.mq5`](SNIPER_AI_OK43.mq5)**  
-`BUILD_ID: SA_PRISM_DEFEND_43`
+Use **[`SNIPER_AI_OK44.mq5`](SNIPER_AI_OK44.mq5)**  
+`BUILD_ID: SA_PRISM_HARDEN_44`
 
 1. Close MetaEditor
 2. **File → Open Data Folder** → `MQL5/Experts/`
 3. **Delete** any old `Sniper*` / `SNIPER*` `.mq5` / `.ex5` files
-4. Copy **`SNIPER_AI_OK43.mq5`**
-5. Open it, confirm `SA_PRISM_DEFEND_43`, compile **(F7)**
+4. Copy **`SNIPER_AI_OK44.mq5`**
+5. Open it, confirm `SA_PRISM_HARDEN_44`, compile **(F7)**
 6. Attach → set **LotSize** / **MaxOpenTrades** (optional **SMTReferenceSymbol**) → enable **Algo Trading**
 7. Engines on by default: **SMT**, **IMCE**, **ICE** — no RSI/MACD/Stochastic
 
 Also mirrored as [`SNIPER_AI.mq5`](SNIPER_AI.mq5) and [`release/deliver/SNIPER_AI.mq5`](release/deliver/SNIPER_AI.mq5).
 
-**Market Defense (ON):** opposite hard reversal closes; traps/adverse sweeps/chop lock BE; peak retrace locks profit; drawdown shield on. Quality + sure ladder + OK42 safety retained.
+**OK44 harden:** crash/bounds/NaN/modify/ticket guards only — **execution unchanged** (quality setups, sure ladder, market defense).
 
 See [`DOWNLOAD_SNIPER_AI.txt`](DOWNLOAD_SNIPER_AI.txt) · [`docs/SNIPER_AI_COMPILE_FIXES.md`](docs/SNIPER_AI_COMPILE_FIXES.md)
 

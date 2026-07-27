@@ -1,11 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK43.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK44.mq5
 
-BUILD_ID: SA_PRISM_DEFEND_43
+BUILD_ID: SA_PRISM_HARDEN_44
 Comment:  SNIPER AI
 
-MARKET DEFENSE: closes/locks on opposite reversal, trap, adverse sweep, chop, peak retrace.
-Drawdown shield ON. Quality setups + sure profit ladder retained.
+HARDENED code (bounds/NaN/modify/ticket guards). Execution unchanged:
+best quality + sure ladder + market defense.
 
-INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_DEFEND_43
+INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_HARDEN_44
