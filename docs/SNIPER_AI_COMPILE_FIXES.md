@@ -22,3 +22,16 @@ RevSniper must detect reversals with the **correct** side only:
 - Cont/Instant unchanged (aggressive trend continuation)
 
 File: `SNIPER_AI_OK37.mq5`
+
+## OK38 — aggressive profit ladder (`SA_PRISM_PROFIT_LOCK_38`)
+
+When TP1 is hit: partial close + **SL locks into profit** + remainder runs to TP2.
+When TP2 is hit: partial close + SL locks further + remainder → TP3 / ATR trail.
+
+Defaults flipped for aggressive power:
+- `UseFixedTradeManagement=false`
+- `AggressiveProfitLadder=true`
+- `SecureProfitOnTPHit=true`
+- `EnableTrailing=true`
+
+File: `SNIPER_AI_OK38.mq5`

@@ -1,11 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK37.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK38.mq5
 
-BUILD_ID: SA_PRISM_REV_CORRECT_37
+BUILD_ID: SA_PRISM_PROFIT_LOCK_38
 Comment:  SNIPER AI
 
-CORRECT SIGNALS: BUY needs lows swept + strong reclaim; SELL needs highs swept + strong reclaim.
-Rejects wrong-side / continuation traps. Plain candle alone is not enough.
+AGGRESSIVE PROFIT LADDER: TP1 → lock SL into profit → TP2 → lock further → TP3 / trail.
+Correct reversal signals kept.
 
-INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_REV_CORRECT_37
+INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_PROFIT_LOCK_38

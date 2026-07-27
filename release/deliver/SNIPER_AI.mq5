@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_REV_CORRECT_37                             |
-//| SNIPER AI - correct reversal signals only (anti-continuation)    |
+//| BUILD_ID: SA_PRISM_PROFIT_LOCK_38                             |
+//| SNIPER AI - aggressive TP ladder: lock SL → TP2 → TP3 → trail   |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "3.70"
-#property description "SNIPER AI correct reversal signals - right-side sweep + strict reclaim"
-#property description "Rejects wrong-side/continuation traps; Cont/Instant still aggressive"
+#property version   "3.80"
+#property description "SNIPER AI aggressive profit lock - TP1 secures SL, then TP2/TP3/trail"
+#property description "Correct reversal signals + auto profit ladder on every fill"
 
 #include <Trade/Trade.mqh>
 
@@ -466,7 +466,13 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_REV_CORRECT_37");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_PROFIT_LOCK_38");
+   Print("PROFIT LADDER: Aggressive=", AggressiveProfitLadder,
+         " SecureOnTP=", SecureProfitOnTPHit,
+         " LockTP1Frac=", LockProfitAtTP1_Fraction,
+         " LockTP2Frac=", LockProfitAtTP2_Fraction,
+         " Trailing=", EnableTrailing,
+         " FixedMgmt=", UseFixedTradeManagement);
    Print("REVERSAL CORRECT SIGNALS: CorrectSideSweep=", ReversalRequireCorrectSideSweep,
          " StrictReclaim=", ReversalStrictCorrectSignal,
          " RejectWrongSide=", ReversalRejectWrongSideRecent,
@@ -2486,7 +2492,20 @@ input double SL_ATR_Multiplier      = 2.0;    // stop-loss distance = ATR x this
 input double TP1_RR_Ratio           = 1.5;    // CHANGED from 1.0 - at 1.0, a TP1-only win (50% of position at 1R) only nets +0.5R while a full loss costs -1R, meaning even a 50% win rate loses money. At 1.5, a TP1-only win nets +0.75R - still less than a full loss, but the gap is smaller. See TP1_ClosePercent below for the other lever on this same tradeoff.
 input double TP2_RR_Ratio           = 2.5;    // TP2 distance = SL distance x this (final target, set as broker TP)
 input double TP1_ClosePercent       = 50.0;   // % of the position closed when TP1 is hit
-input bool   MoveSLToBreakEvenAtTP1 = true;   // move remaining SL to entry once TP1 is taken
+input bool   MoveSLToBreakEvenAtTP1 = true;   // fallback: move remaining SL to entry if SecureProfitOnTPHit=false
+
+input group "AGGRESSIVE PROFIT LADDER"
+// When TP1 hits → lock SL into profit → remainder runs to TP2.
+// When TP2 hits → lock SL further (at TP1) → remainder runs to TP3 / trail.
+// Aggressive by default: dynamic management ON, trailing ON.
+
+input bool   AggressiveProfitLadder   = true;  // master ladder switch (TP1→lock→TP2→lock→TP3/trail)
+input bool   SecureProfitOnTPHit      = true;  // move SL INTO profit (not just breakeven) when a TP hits
+input double LockProfitAtTP1_Fraction = 0.50;  // lock SL at this fraction of the TP1 move (0.5 = half TP1 secured)
+input double LockProfitAtTP2_Fraction = 0.60;  // lock SL at this fraction of the TP2 move (~TP1 level when TP1=1.5R TP2=2.5R)
+input double LockProfitBufferATR      = 0.05;  // small ATR buffer so locked SL is not glued to exact TP wick
+input bool   ExtendTPAfterLock        = true;  // after TP1 lock, keep/set broker TP at TP2; after TP2 → TP3 or trail
+input double AggressiveTrailATRMult   = 1.8;   // tighter ATR trail after TP1 (aggressive lock of open profit)
 
 //================ TRADE STATE TRACKING (for TP1/TP2/TP3) ============//
 // MT5 positions only carry one SL and one TP natively - there's no built-in
@@ -3589,12 +3608,11 @@ bool TradeProtectionOK()
 //================ MANAGEMENT SETTINGS ==============================//
 
 input bool EnableBreakEven = true;
-input bool EnableTrailing  = false;
+input bool EnableTrailing  = true;   // OK38: ON — trail runner after TP ladder locks profit
 
-// Per your P.R.I.S.M. spec: fixed SL/TP/breakeven only, no trailing, no
-// partial profits, no dynamic management. Default true. Set false to
-// restore the old dynamic TP1/TP2/TP3 scale-out + ATR trailing behavior.
-input bool UseFixedTradeManagement = true;
+// false = aggressive TP1/TP2/TP3 scale-out + SL profit lock + ATR trailing (OK38 default).
+// true  = fixed SL/TP/breakeven only (old PRISM fixed mode).
+input bool UseFixedTradeManagement = false;
 
 input double BreakEvenPoints = 500;
 input double TrailingPoints  = 300;
@@ -3618,6 +3636,88 @@ double GetBreakEvenDistance(double point)
    }
 
    return BreakEvenPoints * point;
+}
+
+//----- Aggressive profit-lock SL after a TP level is hit ----------------//
+// Locks the stop INTO profit so a reversal can't give back the whole move.
+// fraction=0 → breakeven; fraction=1 → lock at the hit TP level (minus buffer).
+double ComputeProfitLockSL(const bool isBuy,
+                           const double openPrice,
+                           const double tpLevelHit,
+                           const double fraction,
+                           const double currentSL)
+{
+   double frac = MathMax(0.0, MathMin(fraction, 1.5));
+   double move = isBuy ? (tpLevelHit - openPrice) : (openPrice - tpLevelHit);
+   if(move <= 0.0)
+      return currentSL;
+
+   double atr = GetFilterATR();
+   double buffer = (atr > 0.0) ? (atr * LockProfitBufferATR) : 0.0;
+
+   double locked = isBuy
+      ? (openPrice + move * frac - buffer)
+      : (openPrice - move * frac + buffer);
+
+   // Never lock on the wrong side of entry when SecureProfit is on with frac>0
+   if(isBuy && locked < openPrice)
+      locked = openPrice;
+   if(!isBuy && locked > openPrice)
+      locked = openPrice;
+
+   locked = NormalizeTradePrice(locked);
+
+   // Never loosen an existing stop
+   if(isBuy)
+   {
+      if(currentSL > 0.0 && locked <= currentSL)
+         return currentSL;
+      return locked;
+   }
+
+   if(currentSL > 0.0 && locked >= currentSL)
+      return currentSL;
+   return locked;
+}
+
+bool ApplyProfitLockSL(const ulong ticket,
+                       const bool isBuy,
+                       const double openPrice,
+                       const double tpLevelHit,
+                       const double fraction,
+                       const double nextTP)
+{
+   if(!PositionSelectByTicket(ticket))
+      return false;
+
+   double curSL = PositionGetDouble(POSITION_SL);
+   double curTP = PositionGetDouble(POSITION_TP);
+   double newSL = curSL;
+
+   if(SecureProfitOnTPHit)
+      newSL = ComputeProfitLockSL(isBuy, openPrice, tpLevelHit, fraction, curSL);
+   else if(MoveSLToBreakEvenAtTP1)
+      newSL = isBuy
+         ? ((curSL < openPrice) ? openPrice : curSL)
+         : ((curSL > openPrice || curSL == 0.0) ? openPrice : curSL);
+
+   double newTP = curTP;
+   if(ExtendTPAfterLock && nextTP > 0.0)
+      newTP = nextTP;
+
+   if(MathAbs(newSL - curSL) < SymbolInfoDouble(BrokerSymbol, SYMBOL_POINT) &&
+      MathAbs(newTP - curTP) < SymbolInfoDouble(BrokerSymbol, SYMBOL_POINT))
+      return true;
+
+   bool ok = trade.PositionModify(ticket, newSL, newTP);
+   if(ok)
+      Print("PROFIT LOCK: ticket ", ticket,
+            " SL→", DoubleToString(newSL, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+            " TP→", DoubleToString(newTP, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+            " (secured after TP hit)");
+   else
+      Print("PROFIT LOCK failed on ticket ", ticket, ": ", trade.ResultRetcodeDescription());
+   return ok;
 }
 
 input group "LONG-TERM HOLDING - ADAPTIVE / SAFETY"
@@ -3832,24 +3932,11 @@ void ManageOpenTrades()
 
 
 
-      //================ TP1 SCALE-OUT (SNIPER TARGET 1) =================//
-      // Closes TP1_ClosePercent% of the position once price reaches the
-      // TP1 level recorded at entry, then optionally snaps the remaining
-      // position's SL to breakeven. The broker-side TP (currentTP) stays
-      // at TP2/the final target for whatever volume is left running.
-      //
-      // Per your P.R.I.S.M. spec ("No Trailing Stop, No Partial Profits,
-      // No Dynamic Trade Management - trade runs until Stop Loss, Take
-      // Profit, or Break-Even"): UseFixedTradeManagement gates this block
-      // and the TP3 runner block below (the ATR trailing block further
-      // down is gated separately, since stagnation/trend-exit checks sit
-      // between them and must keep running either way). When true (the
-      // default now), a trade opens with its fixed SL and TP and is left
-      // alone except for the break-even move above - no partial closes,
-      // no runner release. Set false to restore the old dynamic
-      // TP1/TP2/TP3 + trailing behavior.
+      //================ TP1 SCALE-OUT + PROFIT LOCK → TP2 ================//
+      // Hit TP1 → bank partial → lock SL into profit → remainder runs to TP2.
+      // AggressiveProfitLadder / !UseFixedTradeManagement enables this path.
 
-      if(!UseFixedTradeManagement)
+      if(!UseFixedTradeManagement && AggressiveProfitLadder)
       {
       int stateIndex = FindTradeState(ticket);
 
@@ -3875,29 +3962,16 @@ void ManageOpenTrades()
             if(volumeStep > 0)
                closeVolume = MathFloor(closeVolume / volumeStep) * volumeStep;
 
-            // Only partial-close if what's left afterwards still meets the
-            // broker's minimum volume - otherwise just close the whole
-            // thing here rather than leaving an unmanageable dust position.
             double remainder = currentVolume - closeVolume;
+            bool partialDone = false;
 
             if(closeVolume >= minVolume && remainder >= minVolume)
             {
                if(trade.PositionClosePartial(ticket, closeVolume))
                {
                   Print("TP1 hit: closed ", DoubleToString(closeVolume,2),
-                        " lots of ticket ", ticket, ", letting remainder run to TP2");
-
-                  TradeStates[stateIndex].tp1Taken = true;
-                  PersistTradeState(stateIndex);
-
-                  if(MoveSLToBreakEvenAtTP1)
-                  {
-                     if(PositionSelectByTicket(ticket))
-                     {
-                        double newTP = PositionGetDouble(POSITION_TP);
-                        trade.PositionModify(ticket, openPrice, newTP);
-                     }
-                  }
+                        " lots of ticket ", ticket, " — locking profit, remainder → TP2");
+                  partialDone = true;
                }
                else
                {
@@ -3905,10 +3979,8 @@ void ManageOpenTrades()
                         trade.ResultRetcodeDescription());
                }
             }
-            else if(remainder < minVolume && currentVolume >= minVolume)
+            else if(remainder < minVolume && currentVolume >= minVolume && closeVolume >= minVolume)
             {
-               // Position too small to split - just take the whole thing
-               // at TP1 instead of leaving a stranded position.
                if(trade.PositionClose(ticket))
                {
                   Print("TP1 hit but position too small to split - closed in full: ", ticket);
@@ -3919,43 +3991,30 @@ void ManageOpenTrades()
             }
             else
             {
-               // FIX: neither branch above fires when the position is
-               // already exactly at the broker's minimum volume (e.g. the
-               // 0.01-lot floor this EA trades at) - closeVolume rounds
-               // down to 0 (too small to be a valid partial close) while
-               // remainder still equals the full current volume (not "too
-               // small" by the check above). TP1 was silently doing
-               // nothing in that case. At minimum lot size there's no way
-               // to mechanically bank partial profit, but breakeven
-               // protection should still trigger - that's the one part of
-               // "hitting TP1" that doesn't require splitting the volume.
                if(EnableVerboseLogging)
-                  Print("TP1 hit but position is at minimum lot size - can't partial close, securing breakeven instead: ", ticket);
-
-               TradeStates[stateIndex].tp1Taken = true;
-               PersistTradeState(stateIndex);
-
-               if(MoveSLToBreakEvenAtTP1)
-               {
-                  double newTP = PositionGetDouble(POSITION_TP);
-                  trade.PositionModify(ticket, openPrice, newTP);
-               }
+                  Print("TP1 hit at min lot — skip partial, still lock SL into profit: ", ticket);
             }
+
+            TradeStates[stateIndex].tp1Taken = true;
+            PersistTradeState(stateIndex);
+
+            // Secure profit on remainder and point broker TP at TP2
+            ApplyProfitLockSL(ticket,
+                              (type == POSITION_TYPE_BUY),
+                              openPrice,
+                              TradeStates[stateIndex].tp1Price,
+                              LockProfitAtTP1_Fraction,
+                              TradeStates[stateIndex].tp2Price);
+
+            if(partialDone && EnableVerboseLogging)
+               Print("TP1 ladder armed for ticket ", ticket);
          }
       }
 
 
 
-      //================ TP2 SCALE-OUT / TP3 RUNNER (UPGRADE) =============//
-      // Fires only after TP1 has already been handled. Same mechanism as
-      // TP1 above - partial close of the REMAINING volume, same
-      // minimum-lot fallback (secure extra protection instead of doing
-      // nothing when the position can't be split further). What's
-      // different here: once TP2 is taken, whatever's left either becomes
-      // an uncapped trailing runner (if EnableTrailing is on) or gets one
-      // more real, wider target at TP3 (if trailing is off, so it's never
-      // left with no exit at all). Either way the stop is ratcheted up to
-      // the TP1 price first, locking in at least that much on the runner.
+      //================ TP2 SCALE-OUT + PROFIT LOCK → TP3 / TRAIL =========//
+      // Hit TP2 → bank more → lock SL at/near TP1 → remainder → TP3 or trail.
 
       if(stateIndex >= 0 && TradeStates[stateIndex].tp1Taken && !TradeStates[stateIndex].tp2Taken
          && EnableTP3Runner && TradeStates[stateIndex].tp2Price > 0.0)
@@ -3993,47 +4052,71 @@ void ManageOpenTrades()
                else
                {
                   Print("TP2 hit: closed ", DoubleToString(closeVolume2,2),
-                        " lots of ticket ", ticket, ", releasing runner");
+                        " lots of ticket ", ticket, " — locking more profit, runner → TP3/trail");
                }
             }
             else
             {
                if(EnableVerboseLogging)
-                  Print("TP2 hit but position at minimum lot size - can't partial close, activating runner on full remaining size: ", ticket);
+                  Print("TP2 hit at min lot — lock SL further, activate runner: ", ticket);
             }
 
-            // Whether or not the partial close above actually happened,
-            // TP2 is now considered "taken" and the remainder becomes the
-            // runner - ratchet SL up to the TP1 price (locks in at least
-            // that much) and either release the cap (trailing takes over)
-            // or set a real, wider TP3 target.
             TradeStates[stateIndex].tp2Taken = true;
             PersistTradeState(stateIndex);
 
             if(PositionSelectByTicket(ticket))
             {
-               double runnerSL = TradeStates[stateIndex].tp1Price;
-
+               // Lock at TP1-level profit (fraction of TP2 move from open)
+               double nextTP = 0.0;
                if(EnableTrailing)
                {
-                  // No fixed cap - EnableATRTrailing/TrailingPoints logic
-                  // further down in this same function takes over from
-                  // here and manages the runner's stop going forward.
-                  trade.PositionModify(ticket, runnerSL, 0.0);
-                  Print("Runner released with no fixed TP - ATR trailing will manage it from here: ", ticket);
+                  // Trail manages runner — clear fixed TP
+                  nextTP = 0.0;
+                  ApplyProfitLockSL(ticket,
+                                    (type == POSITION_TYPE_BUY),
+                                    openPrice,
+                                    TradeStates[stateIndex].tp2Price,
+                                    LockProfitAtTP2_Fraction,
+                                    nextTP);
+                  // Ensure SL at least at TP1
+                  if(PositionSelectByTicket(ticket))
+                  {
+                     double curSL2 = PositionGetDouble(POSITION_SL);
+                     double tp1Lock = TradeStates[stateIndex].tp1Price;
+                     bool needRaise = (type == POSITION_TYPE_BUY)
+                        ? (curSL2 < tp1Lock)
+                        : (curSL2 == 0.0 || curSL2 > tp1Lock);
+                     if(needRaise)
+                        trade.PositionModify(ticket, tp1Lock, 0.0);
+                  }
+                  Print("Runner released — profit locked, ATR trailing active: ", ticket);
                }
                else
                {
-                  // Trailing is off - don't leave the runner with no exit
-                  // at all. Give it one more real, wider target.
-                  double tp3 = TradeStates[stateIndex].tp3Price;
-                  trade.PositionModify(ticket, runnerSL, tp3);
-                  Print("Runner given fixed TP3 target (trailing disabled): ", ticket);
+                  nextTP = TradeStates[stateIndex].tp3Price;
+                  ApplyProfitLockSL(ticket,
+                                    (type == POSITION_TYPE_BUY),
+                                    openPrice,
+                                    TradeStates[stateIndex].tp2Price,
+                                    LockProfitAtTP2_Fraction,
+                                    nextTP);
+                  if(PositionSelectByTicket(ticket))
+                  {
+                     double curSL2 = PositionGetDouble(POSITION_SL);
+                     double tp1Lock = TradeStates[stateIndex].tp1Price;
+                     double curTP2 = PositionGetDouble(POSITION_TP);
+                     bool needRaise = (type == POSITION_TYPE_BUY)
+                        ? (curSL2 < tp1Lock)
+                        : (curSL2 == 0.0 || curSL2 > tp1Lock);
+                     if(needRaise)
+                        trade.PositionModify(ticket, tp1Lock, curTP2);
+                  }
+                  Print("Runner given TP3 — profit locked at/near TP1: ", ticket);
                }
             }
          }
       }
-      } // end !UseFixedTradeManagement (TP1 scale-out + TP3 runner)
+      } // end aggressive profit ladder (TP1 → lock → TP2 → lock → TP3/trail)
 
 
 
@@ -4091,7 +4174,11 @@ void ManageOpenTrades()
       // default, so fixed mode can never trail even if EnableTrailing is
       // later turned on for some other reason.
 
-      if(!UseFixedTradeManagement && EnableTrailing && holdPeriodOK)
+      // Trail always after TP1 profit-lock (aggressive); otherwise wait for hold period
+      int trailStateGate = FindTradeState(ticket);
+      bool trailAfterLock = (AggressiveProfitLadder && trailStateGate >= 0 &&
+                             TradeStates[trailStateGate].tp1Taken);
+      if(!UseFixedTradeManagement && EnableTrailing && (holdPeriodOK || trailAfterLock))
       {
 
          double newSL;
@@ -4103,7 +4190,14 @@ void ManageOpenTrades()
             double atr = GetFilterATR();
 
             if(atr > 0.0)
-               trailingDistance = atr * ATR_TrailingMultiplier;
+            {
+               // After TP1 profit-lock, trail tighter to protect secured gains
+               bool afterTP1 = trailAfterLock;
+               double trailMult = (AggressiveProfitLadder && afterTP1)
+                  ? AggressiveTrailATRMult
+                  : ATR_TrailingMultiplier;
+               trailingDistance = atr * trailMult;
+            }
          }
 
 
@@ -9189,7 +9283,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_REV_CORRECT_37\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_PROFIT_LOCK_38\n",
          "=============================================="
       );
       return;
@@ -9211,7 +9305,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_REV_CORRECT_37\n",
+         "BUILD: SA_PRISM_PROFIT_LOCK_38\n",
          "=========================================="
       );
       return;
