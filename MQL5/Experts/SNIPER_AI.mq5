@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_BUGFIX_40                                  |
-//| SNIPER AI - bugfix: sure ladder + no false TP / SL loosen     |
+//| BUILD_ID: SA_PRISM_BEST_QUALITY_41                            |
+//| SNIPER AI - best quality setups + sure profit ladder + bugfixes  |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "4.00"
-#property description "SNIPER AI bugfix - profit ladder TP touch, SL lock, stagnation, partial flags"
-#property description "TP1 lock→TP2→TP3 sure ladder with confirmed defect fixes"
+#property version   "4.10"
+#property description "SNIPER AI best quality - Cont/Rev structure required, Instant fallback only"
+#property description "Sure TP1 lock→TP2→TP3 ladder + OK40 bugfixes retained"
 
 #include <Trade/Trade.mqh>
 
@@ -33,7 +33,7 @@ input bool   EnableBeastMode                 = true;  // unified PRISM beast pip
 input bool   EnableSniperMode                = true;  // aggressive fire when beast gates pass
 input bool   BeastUseUnifiedStructure        = true;  // MPI/ICE/rank share one structure snapshot
 input bool   BeastRequireReversalStack       = true;  // RevSniper/LiquiditySweep need liquidity stack
-input int    BeastMinReversalLiquidityScore  = 5;     // 0=off; floor vs sweep quality (max 15)
+input int    BeastMinReversalLiquidityScore  = 8;     // BEST: higher Rev liquidity floor (max 15)
 input bool   BeastDuplicateBarGuard          = true;  // one approval per bar per direction
 input bool   BeastCaptureSignalSnapshot      = true;  // record MPI/ICE at decision time
 input bool   EnableBeastDashboard            = true;  // rich HUD when EnableDashboard=true
@@ -58,48 +58,49 @@ input bool   ReversalPreferStopHunt          = false; // true = require stop-hun
 input bool   ReversalLogValidation           = true;  // print why Rev passed/failed
 
 input group "PRISM ULTRA CORE v11"
-// Low-latency cached pipeline. Aggressive fire AFTER path+engines approve.
-// Beast Score / Confidence are logged for quality — they do NOT hard-block
-// ContSniper/InstantTrend when UltraAggressiveFire=true (default).
+// BEST QUALITY: Cont/Rev need structure + confirmations. InstantTrend is
+// fallback only. Ultra still fires fast AFTER quality path + engines pass.
+// Score floors apply hard to InstantTrend; Cont/Rev use HP confirms.
 
 input bool   EnableUltraCore                 = true;  // master Ultra Core switch
 input bool   UltraCycleCache                 = true;  // cache structure/score per cycle
 input bool   UltraSmartTickFilter            = true;  // skip re-eval when bid/ask+bar unchanged
 input bool   UltraSniperEntryGate            = true;  // checklist (soft on Cont/Instant when aggressive)
-input bool   UltraAggressiveFire             = true;  // CRITICAL: fire after engines pass — score is log-only
-input int    UltraMinBeastScore              = 0;     // 0=off (aggressive). Raise only if you want hard floor
-input int    UltraMinConfidencePct           = 0;     // 0=off (aggressive). Raise only if you want hard floor
-input bool   UltraInstantTrendSoftGates      = true;  // InstantTrend skips HTF-only hard fail
+input bool   UltraAggressiveFire             = true;  // fire AFTER quality path+engines pass
+input int    UltraMinBeastScore              = 30;    // InstantTrend hard floor (0=off)
+input int    UltraMinConfidencePct           = 35;    // InstantTrend hard floor (0=off)
+input bool   UltraInstantTrendSoftGates      = false; // BEST: Instant must pass full gates
 input bool   UltraLogRejectReasons           = true;  // explain signal rejects (throttled 1x/bar)
 input bool   UltraHealthMonitor              = true;  // track decision latency + health
 input bool   EnableUltraDashboard            = true;  // Ultra HUD (latency, score, last reject)
 input bool   UltraHighProbability            = true;  // prefer Cont/Rev; Instant only as fallback
-input int    UltraHP_MinConfirmations        = 3;     // Cont/Rev need this many confirms (0=off)
+input int    UltraHP_MinConfirmations        = 4;     // Cont/Rev HARD min confirms when BestQualitySetups
 
-input bool   AggressiveInstantQuality    = true;  // skip MPI wait
+input bool   BestQualitySetups           = true;  // MASTER: structure Cont/Rev + hard HP + Instant fallback
+input bool   AggressiveInstantQuality    = true;  // skip MPI wait once path approved
 input bool   PreferQualityPaths          = true;  // Cont/Rev before InstantTrend
-input bool   TryNextPathIfEnginesFail    = true;  // critical: don't kill bar if Cont fails engines
+input bool   TryNextPathIfEnginesFail    = true;  // Cont fail engines → try Instant fallback
 input bool   EnableAdaptivePathRanking   = true;  // boost tags with proven win-rate
 input int    AdaptivePathMinTrades       = 10;    // min closed trades before win-rate ranks
 input bool   PrintPathStatsOnInit        = true;
 input bool   EnableAlwaysQualityMode     = true;
-input bool   QualityRequireStructureZone = false; // OFF: sniper Cont fires on trend+ADX without waiting for OB/FVG
+input bool   QualityRequireStructureZone = true;  // BEST: Cont needs BOS/OB/FVG (or pullback)
 input bool   QualityRequireTrendAndADX   = true;  // keep trend strength for high-prob sniper
-input bool   QualityDisableWeakPaths     = false;
+input bool   QualityDisableWeakPaths     = true;  // BEST: suppress weak VolBreakout unless stacked
 input int    QualityMPIScore             = 0;
 
 input bool   EnableInstantSniperMode     = true;
-input bool   AllowTrendOnlyInstantEntry  = true;  // aggressive InstantTrend fallback
+input bool   AllowTrendOnlyInstantEntry  = true;  // last-resort fallback only (ranked last)
 input bool   AggressiveSniperEntries     = true;
-input bool   NeverBlockValidSniperEntry  = true;
+input bool   NeverBlockValidSniperEntry  = true;  // don't veto approved Cont/Rev
 input bool   ResolveConflictByTrend      = true;
-input bool   AggressiveInstitutionalExecution = true; // sniper: Cont/Rev don't stall on extra zone waits
-input double InstantPullbackATRMultiple  = 3.0;
-input int    InstantStructureRecencyBars = 30;     // wider window so setups qualify within 1-2 min
+input bool   AggressiveInstitutionalExecution = true; // fast Cont/Rev once quality stack OK
+input double InstantPullbackATRMultiple  = 2.5;   // tighter pullback for quality Cont
+input int    InstantStructureRecencyBars = 24;
 input int    InstantMinimumMPIScore      = 0;
 input bool   InstantTwoOfThreeLiquidity  = true;
 input bool   InstantFvgOrOb              = true;
-input double InstantChannelBreakATR      = 0.50;  // slightly looser channel pad for faster breakouts
+input double InstantChannelBreakATR      = 0.35;
 
 input group "TRADE SIZE & LIMITS (adjustable)"
 // Change these in EA Inputs after attach — they are live settings.
@@ -139,7 +140,7 @@ input group "ICE - INSTITUTIONAL CONFIDENCE ENGINE"
 
 input bool   EnableInstitutionalConfidence = true;
 input bool   ICERequireForEntry            = true;  // HARD gate
-input int    ICE_MinScore                  = 25;    // NEW name (ignores old MinInstitutionalConfidence=50)
+input int    ICE_MinScore                  = 32;    // BEST quality floor (was 25)
 
 input group "FILTERS"
 
@@ -466,17 +467,19 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_BUGFIX_40");
-   Print("BUGFIX40: false-TP touch gated | SL lock not loosened by trail |");
-   Print("  failed-partial does not advance ladder | stagnation skips after TP1 |");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_BEST_QUALITY_41");
+   Print("BEST QUALITY: BestQualitySetups=", BestQualitySetups,
+         " StructZone=", QualityRequireStructureZone,
+         " HP_Confirms=", UltraHP_MinConfirmations,
+         " ICE_Min=", ICE_MinScore,
+         " BeastFloor=", UltraMinBeastScore,
+         " ConfFloor=", UltraMinConfidencePct);
+   Print("BUGFIX40 retained: false-TP gated | SL lock safe | partial retry | stag skip");
    Print("SURE PROFIT LADDER: Force=", ForceSureProfitLadder,
-         " Aggressive=", AggressiveProfitLadder,
          " SecureOnTP=", SecureProfitOnTPHit,
          " LockTP1=", LockProfitAtTP1_Fraction,
          " LockTP2=", LockProfitAtTP2_Fraction,
-         " BrokerTP@TP3=", BrokerTPStartsAtTP3,
-         " Trailing=", EnableTrailing,
-         " FixedMgmt=", UseFixedTradeManagement);
+         " Trailing=", EnableTrailing);
    Print("REVERSAL CORRECT SIGNALS: CorrectSideSweep=", ReversalRequireCorrectSideSweep,
          " StrictReclaim=", ReversalStrictCorrectSignal,
          " RejectWrongSide=", ReversalRejectWrongSideRecent,
@@ -6856,7 +6859,14 @@ bool AggressiveContinuationBuySetup()
    {
       if(QualityNeedsTrendAndADX() && !TrendStrong())
          return false;
-      // Aggressive: trend+ADX is enough; structure preferred but not required
+      // BEST QUALITY: Cont needs structure (BOS/OB/FVG) or tight pullback — not trend alone
+      if(BestQualitySetups || QualityNeedsStructureZone())
+      {
+         if(!(zone || bos || pulled))
+            return false;
+         return true;
+      }
+      // Legacy aggressive: trend+ADX enough
       if(AggressiveInstitutionalExecution)
          return true;
       if(QualityNeedsStructureZone() && !(zone || bos))
@@ -6887,6 +6897,12 @@ bool AggressiveContinuationSellSetup()
    {
       if(QualityNeedsTrendAndADX() && !TrendStrong())
          return false;
+      if(BestQualitySetups || QualityNeedsStructureZone())
+      {
+         if(!(zone || bos || pulled))
+            return false;
+         return true;
+      }
       if(AggressiveInstitutionalExecution)
          return true;
       if(QualityNeedsStructureZone() && !(zone || bos))
@@ -6931,7 +6947,9 @@ input int SpecBreakout_ChannelLookbackBars = 20; // structure reference: recent 
 
 bool SpecVolatilityBreakoutBuySetup()
 {
-   // Only suppress weak breakouts when quality-weak-paths is on AND not aggressive
+   // BEST QUALITY: suppress weak channel breakouts (Cont/Rev preferred)
+   if(BestQualitySetups && QualityDisableWeakPaths)
+      return false;
    if(QualityWeakPathsDisabled() && !AggressiveInstitutionalExecution)
       return false;
 
@@ -6954,6 +6972,8 @@ bool SpecVolatilityBreakoutBuySetup()
 
 bool SpecVolatilityBreakoutSellSetup()
 {
+   if(BestQualitySetups && QualityDisableWeakPaths)
+      return false;
    if(QualityWeakPathsDisabled() && !AggressiveInstitutionalExecution)
       return false;
 
@@ -7313,11 +7333,10 @@ PRISMBeastScore UltraGetBeastScore(bool buy, const string strategyTag)
    return b;
 }
 
-// Sniper Entry Engine — institutional checklist with explainable fails.
-// AGGRESSIVE MODE (UltraAggressiveFire / NeverBlockValidSniperEntry):
-// ContSniper + InstantTrend are NOT hard-blocked by Beast/Conf floors —
-// engines (ICE/IMCE/SMT) already approved the path. Fire immediately.
-// Reversal tags still need the liquidity stack. Score is always logged.
+// Sniper Entry Engine — BEST QUALITY checklist.
+// Cont/Rev: structure already in path setup; HP confirmations HARD when BestQualitySetups.
+// InstantTrend: Beast/Conf floors HARD; soft gates OFF by default.
+// UltraAggressiveFire still means: once quality+engines pass → fire immediately.
 bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
 {
    failReason = "";
@@ -7325,48 +7344,79 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
       return true;
 
    PRISMBeastScore beast = UltraGetBeastScore(buy, strategyTag);
-   bool soft = (UltraInstantTrendSoftGates && strategyTag == "InstantTrend");
+   bool soft = (UltraInstantTrendSoftGates && strategyTag == "InstantTrend" && !BestQualitySetups);
    bool contTag = PRISM_IsContinuationTag(strategyTag);
    bool revTag = PRISM_IsReversalTag(strategyTag);
    bool aggro = UltraAggressiveFire || NeverBlockValidSniperEntry || AggressiveInstantQuality;
 
-   // Hard stop only: no ATR → cannot size risk.
    if(GetFilterATR() <= 0.0)
    {
       failReason = "risk: ATR unavailable";
       return false;
    }
 
-   // AGGRESSIVE: Cont/Instant already passed path + ICE/IMCE → FIRE
-   // High-prob: Cont/Rev still fire; InstantTrend stays fallback (ranking prefers Cont/Rev)
-   if(contTag && aggro)
+   // BEST QUALITY: Cont/Rev need enough confirming conditions (HARD)
+   if(BestQualitySetups && UltraHighProbability && UltraHP_MinConfirmations > 0 &&
+      (strategyTag == "ContSniper" || strategyTag == "RevSniper"))
    {
-      if(UltraHighProbability && UltraHP_MinConfirmations > 0 &&
-         strategyTag != "InstantTrend")
+      int conf = CountConfirmingConditions(buy);
+      if(conf < UltraHP_MinConfirmations)
       {
-         int conf = CountConfirmingConditions(buy);
-         if(conf < UltraHP_MinConfirmations)
-         {
-            // Soft: Cont without enough confirms — still allow under UltraAggressiveFire
-            // but log so you can see quality. InstantTrend never blocked here.
-            if(EnableVerboseLogging || EnableSetupLogging)
-               Print("ULTRA HP soft: ", strategyTag, " conf=", conf,
-                     " < ", UltraHP_MinConfirmations, " (still firing — UltraAggressiveFire) on ",
-                     BrokerSymbol);
-         }
+         failReason = StringFormat("HP quality: confirms %d < %d", conf, UltraHP_MinConfirmations);
+         return false;
       }
+   }
 
+   // InstantTrend: always apply score floors under BestQuality (fallback only if strong)
+   if(strategyTag == "InstantTrend" && BestQualitySetups)
+   {
+      if(UltraMinBeastScore > 0 && beast.overall < UltraMinBeastScore)
+      {
+         failReason = "InstantTrend Beast " + IntegerToString(beast.overall) +
+                      " < floor " + IntegerToString(UltraMinBeastScore);
+         return false;
+      }
+      if(UltraMinConfidencePct > 0 && beast.confidencePct < UltraMinConfidencePct)
+      {
+         failReason = "InstantTrend Conf " + IntegerToString(beast.confidencePct) +
+                      "% < floor " + IntegerToString(UltraMinConfidencePct);
+         return false;
+      }
+      if(!TrendStrong())
+      {
+         failReason = "InstantTrend: trend not strong enough for quality fallback";
+         return false;
+      }
+   }
+
+   // Cont path after quality checks — fire when engines already passed
+   if(contTag && aggro && strategyTag != "InstantTrend")
+   {
       if(EnableVerboseLogging || EnableSetupLogging)
-         Print("ULTRA AGGRO PASS ", strategyTag,
+         Print("ULTRA QUALITY PASS ", strategyTag,
                " Beast=", beast.overall, " Conf=", beast.confidencePct, "%",
-               (UltraHighProbability ? " HP=ON" : ""),
-               " (engines already passed) on ", BrokerSymbol);
+               " HP=ON on ", BrokerSymbol);
+      return true;
+   }
+
+   // InstantTrend aggro pass only if BestQuality floors already cleared above
+   if(strategyTag == "InstantTrend" && aggro && !BestQualitySetups)
+   {
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("ULTRA AGGRO PASS InstantTrend Beast=", beast.overall,
+               " Conf=", beast.confidencePct, "% on ", BrokerSymbol);
+      return true;
+   }
+   if(strategyTag == "InstantTrend" && aggro && BestQualitySetups)
+   {
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("ULTRA QUALITY FALLBACK InstantTrend Beast=", beast.overall,
+               " Conf=", beast.confidencePct, "% on ", BrokerSymbol);
       return true;
    }
 
    PRISMStructureSnapshot s = PRISM_GetStructureSnapshot(buy);
 
-   // Reversal: keep quality stack even in aggressive mode
    if(revTag)
    {
       if(!PRISMReversalQualityOK(buy))
@@ -7374,19 +7424,40 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
          failReason = "reversal: liquidity+structure stack failed";
          return false;
       }
-      if(!s.sweep)
+      // BEST: prefer directional sweep already validated in MarketReversalSignalOK
+      if(BestQualitySetups)
+      {
+         string revDetail = "";
+         if(!MarketReversalSignalOK(buy, revDetail))
+         {
+            failReason = "reversal quality: " + revDetail;
+            return false;
+         }
+      }
+      else if(!s.sweep)
       {
          failReason = "liquidity confirmation missing";
          return false;
       }
       if(aggro)
-         return true; // stack OK — fire reversal sniper
+      {
+         if(EnableVerboseLogging || EnableSetupLogging)
+            Print("ULTRA QUALITY PASS RevSniper Beast=", beast.overall,
+                  " Conf=", beast.confidencePct, "% on ", BrokerSymbol);
+         return true;
+      }
    }
 
-   // Non-aggressive quality path (UltraAggressiveFire=false)
+   // Non-aggressive quality path (UltraAggressiveFire=false) — remaining tags
    if(!s.trend)
    {
       failReason = "trend bias not aligned";
+      return false;
+   }
+
+   if(BestQualitySetups && !s.htfConfirms && strategyTag == "InstantTrend")
+   {
+      failReason = "InstantTrend: HTF not confirming";
       return false;
    }
 
@@ -8066,16 +8137,20 @@ int PathQualityRankScore(const string tag, const bool buy)
    if(EnableUltraCore)
       score += UltraGetBeastScore(buy, tag).overall / 2;
 
-   // High-probability: strongly prefer Cont/Rev over InstantTrend when both valid
-   if(UltraHighProbability)
+   // High-probability / BEST QUALITY: strongly prefer Cont/Rev over InstantTrend
+   if(UltraHighProbability || BestQualitySetups)
    {
-      if(tag == "ContSniper" || tag == "RevSniper")
+      if(tag == "RevSniper")
+         score += 120;
+      else if(tag == "ContSniper")
          score += 100;
       else if(tag == "LiquiditySweep" || tag == "FVG+OB")
-         score += 40;
+         score += 45;
       else if(tag == "InstantTrend")
-         score -= 15; // still fires as fallback via TryNextPath
-      score += CountConfirmingConditions(buy) * 8;
+         score -= (BestQualitySetups ? 45 : 15); // fallback only
+      else if(tag == "VolBreakout(Spec)" && QualityDisableWeakPaths)
+         score -= 30;
+      score += CountConfirmingConditions(buy) * (BestQualitySetups ? 12 : 8);
    }
 
    if(EnableAdaptivePathRanking)
@@ -9389,7 +9464,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_BUGFIX_40\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_BEST_QUALITY_41\n",
          "=============================================="
       );
       return;
@@ -9411,7 +9486,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_BUGFIX_40\n",
+         "BUILD: SA_PRISM_BEST_QUALITY_41\n",
          "=========================================="
       );
       return;

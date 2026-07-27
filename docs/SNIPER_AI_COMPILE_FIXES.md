@@ -61,3 +61,15 @@ Confirmed defects fixed:
 8. `DetectStopHunt` score polarity corrected for BUY/SELL
 
 File: `SNIPER_AI_OK40.mq5`
+
+## OK41 — best quality setups (`SA_PRISM_BEST_QUALITY_41`)
+
+`BestQualitySetups=true` (default):
+- ContSniper requires trend+ADX+(BOS|OB/FVG|pullback)
+- RevSniper keeps correct-side + strong reclaim
+- Cont/Rev need UltraHP_MinConfirmations=4 (HARD)
+- InstantTrend fallback only: Beast≥30, Conf≥35%, strong trend
+- VolBreakout suppressed; ICE_MinScore=32; Rev liquidity floor=8
+- Retains OK40 ladder bugfixes + sure TP1→lock→TP2→TP3
+
+File: `SNIPER_AI_OK41.mq5`

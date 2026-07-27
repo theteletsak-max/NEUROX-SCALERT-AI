@@ -1,11 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK40.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK41.mq5
 
-BUILD_ID: SA_PRISM_BUGFIX_40
+BUILD_ID: SA_PRISM_BEST_QUALITY_41
 Comment:  SNIPER AI
 
-BUGFIX build: false TP touch, SL lock not loosened, failed-partial retry,
-stagnation skip after TP1, broker TP clear for trail, stop-hunt score polarity.
+BEST QUALITY: Cont/Rev need structure + HP confirms; InstantTrend is fallback only.
+Sure profit ladder + OK40 bugfixes retained.
 
-INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_BUGFIX_40
+INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_BEST_QUALITY_41

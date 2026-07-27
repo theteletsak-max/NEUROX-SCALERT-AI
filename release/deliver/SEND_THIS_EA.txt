@@ -2,38 +2,36 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK40.mq5
-BUILD_ID: SA_PRISM_BUGFIX_40
+File:     SNIPER_AI_OK41.mq5
+BUILD_ID: SA_PRISM_BEST_QUALITY_41
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK40.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK41.mq5
 
 Raw:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK40.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK41.mq5
 
 ──────────────────────────────────────
-BUGFIXES IN THIS BUILD
+BEST QUALITY SETUPS (default ON)
 ──────────────────────────────────────
-1. False TP1/TP2 on pre-entry bar wicks — gated by barsHeld
-2. Trail no longer loosens just-locked SL (skip same tick + re-read SL)
-3. After TP2+trail, broker TP is cleared to 0 (was stuck at TP3)
-4. Failed partial close does NOT advance ladder (retries next tick)
-5. TP2 min-lot dust remainder closes full (mirrored TP1)
-6. Stagnation exit skips after TP1 lock (was killing runners)
-7. EnableTP3Runner=false honored (TP2 as final target)
-8. DetectStopHunt score polarity fixed for BUY/SELL
+ContSniper: trend + ADX + (BOS or OB/FVG or pullback)
+RevSniper:  correct-side sweep + zone + strong reclaim
+InstantTrend: fallback only — Beast≥30, Conf≥35%, strong trend
+VolBreakout: suppressed under BestQuality
+HP confirms: Cont/Rev need ≥4 confirmations (HARD)
 
-Profit ladder still ON:
-  TP1 → lock SL into profit → TP2 → lock further → TP3 / trail
+Keeps OK40 bugfixes + sure profit ladder:
+  TP1 → lock SL into profit → TP2 → lock → TP3 / trail
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. Delete ALL old SNIPER*
-2. Compile OK40 (F7) — expect 0 errors, 0 warnings
+2. Compile OK41 (F7)
 3. Remove EA all charts → re-attach
 4. EntryTF=H4 on H4 charts
-5. Experts: BUILD_ID=SA_PRISM_BUGFIX_40
+5. Experts: BUILD_ID=SA_PRISM_BEST_QUALITY_41
+   Look for: ULTRA QUALITY PASS ContSniper / RevSniper
 ══════════════════════════════════════
