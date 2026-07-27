@@ -1,11 +1,10 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK46.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK47.mq5
 
-BUILD_ID: SA_PRISM_BUGCLEAN_46
+BUILD_ID: SA_PRISM_OPENCAPS_47
 Comment:  SNIPER AI
 
-Bugclean: Pullback/FVG/Liq + ICE/IMCE/snapshot polarity aligned.
-Quality + ladder + defense + harden + OK45 signal fixes retained.
+Open-trade caps fully adjustable in Inputs (0=unlimited). OK46 polarity retained.
 
-INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_BUGCLEAN_46
+INSTALL: delete old SNIPER* → F7 → re-attach → set MaxOpenTrades → BUILD_ID=SA_PRISM_OPENCAPS_47

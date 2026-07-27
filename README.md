@@ -25,20 +25,20 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 
 ### Install (MT5) — single file (compile-safe)
 
-Use **[`SNIPER_AI_OK46.mq5`](SNIPER_AI_OK46.mq5)**  
-`BUILD_ID: SA_PRISM_BUGCLEAN_46`
+Use **[`SNIPER_AI_OK47.mq5`](SNIPER_AI_OK47.mq5)**  
+`BUILD_ID: SA_PRISM_OPENCAPS_47`
 
 1. Close MetaEditor
 2. **File → Open Data Folder** → `MQL5/Experts/`
 3. **Delete** any old `Sniper*` / `SNIPER*` `.mq5` / `.ex5` files
-4. Copy **`SNIPER_AI_OK46.mq5`**
-5. Open it, confirm `SA_PRISM_BUGCLEAN_46`, compile **(F7)**
-6. Attach → set **LotSize** / **MaxOpenTrades** (optional **SMTReferenceSymbol**) → enable **Algo Trading**
+4. Copy **`SNIPER_AI_OK47.mq5`**
+5. Open it, confirm `SA_PRISM_OPENCAPS_47`, compile **(F7)**
+6. Attach → set **LotSize** / **MaxOpenTrades** / **MaxTotalOpenTradesAllSymbols** (0=unlimited) → enable **Algo Trading**
 7. Engines on by default: **SMT**, **IMCE**, **ICE** — no RSI/MACD/Stochastic
 
 Also mirrored as [`SNIPER_AI.mq5`](SNIPER_AI.mq5) and [`release/deliver/SNIPER_AI.mq5`](release/deliver/SNIPER_AI.mq5).
 
-**OK46 bugclean:** Pullback/FVG/Liq + ICE/IMCE/snapshot same-direction polarity. Cont/Rev/SMT from OK45 retained. Quality + ladder + defense + harden intact.
+**OK47:** Open-trade caps fully adjustable (`EnforceOpenTradeCaps`, per-symbol / account / currency — `0` = unlimited). OK46 polarity bugclean retained.
 
 See [`DOWNLOAD_SNIPER_AI.txt`](DOWNLOAD_SNIPER_AI.txt) · [`docs/SNIPER_AI_COMPILE_FIXES.md`](docs/SNIPER_AI_COMPILE_FIXES.md)
 

@@ -2,38 +2,34 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK46.mq5
-BUILD_ID: SA_PRISM_BUGCLEAN_46
+File:     SNIPER_AI_OK47.mq5
+BUILD_ID: SA_PRISM_OPENCAPS_47
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK46.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK47.mq5
 
 ──────────────────────────────────────
-BUGCLEAN 46
+OPEN TRADES CAPS (Inputs — adjustable)
 ──────────────────────────────────────
-FIXED polarity (same-direction structure):
-  TrendPullback / FVG+OB → DetectDirectionalBOS
-  LiquiditySweep → RecentDirectionalSweep
-  ICE snapshot BOS/sweep → directional
-  ICE early-reversal liq → directional sweep
-  IMCE trend/expansion BOS → trend-direction
-  IMCE Cont-in-reversal gate → directional BOS
+EnforceOpenTradeCaps         = true   (false = ignore all open-count caps)
+MaxOpenTrades                = 3      (THIS symbol; 0 = unlimited)
+MaxTotalOpenTradesAllSymbols = 9      (all symbols; 0 = unlimited)
+MaxOpenTradesPerCurrency     = 4      (shared USD/EUR/…; 0 = off)
 
-STILL CORRECT (from OK45+):
-  RevSniper polarity (BUY=lows, SELL=highs)
-  ContSniper + SMT internal directional
-  ICE + IMCE hard gates
-  BestQuality + sure ladder + market defense
-  Hardened bounds/NaN/ticket guards
+Change live in EA Inputs after attach — no recompile needed for values.
+
+──────────────────────────────────────
+RETAINED FROM OK46
+──────────────────────────────────────
+Polarity bugclean · BestQuality · ladder · trail/BE · defense · ICE/IMCE/SMT
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. Delete old SNIPER* .mq5/.ex5
-2. Copy SNIPER_AI_OK46.mq5 → MQL5/Experts/
-3. Compile (F7) — confirm SA_PRISM_BUGCLEAN_46
-4. Re-attach all charts
-5. If chart is H4: set EntryTF=H4
-6. Experts log must show BUILD_ID=SA_PRISM_BUGCLEAN_46
+2. Copy SNIPER_AI_OK47.mq5 → MQL5/Experts/
+3. Compile (F7) — confirm SA_PRISM_OPENCAPS_47
+4. Re-attach → set MaxOpenTrades / MaxTotal as you want
+5. Experts: BUILD_ID=SA_PRISM_OPENCAPS_47

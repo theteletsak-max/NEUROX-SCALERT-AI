@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_BUGCLEAN_46                                |
-//| SNIPER AI - remaining polarity bugs cleaned (Pullback/FVG/Liq)   |
+//| BUILD_ID: SA_PRISM_OPENCAPS_47                                |
+//| SNIPER AI - adjustable open-trade caps (0=unlimited) + OK46      |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "4.60"
-#property description "SNIPER AI bugclean - directional BOS/sweep on all live structure paths"
-#property description "Cont/Rev/SMT/Pullback/FVG/Liq polarity aligned"
+#property version   "4.70"
+#property description "SNIPER AI open-trade caps fully adjustable in Inputs"
+#property description "Per-symbol / account / currency caps — 0=unlimited"
 
 #include <Trade/Trade.mqh>
 
@@ -108,9 +108,16 @@ input group "TRADE SIZE & LIMITS (adjustable)"
 input double LotSize = 0.01;              // lots per trade (when UseFixedLot=true)
 input bool   UseFixedLot = true;          // true = use LotSize; false = risk % of equity
 input double RiskPercent = 1.0;           // used only when UseFixedLot=false
-input int    MaxOpenTrades = 3;           // max open trades on THIS symbol
-input int    MaxTotalOpenTradesAllSymbols = 9; // max open trades across ALL symbols (this EA)
 input double MaxLotSizeHardCap = 5.0;     // hard ceiling so sizing never goes insane
+
+input group "OPEN TRADES CAPS (adjustable — set in Inputs)"
+// All caps are live Inputs. Set any to 0 = unlimited / off for that cap.
+// Turn EnforceOpenTradeCaps=false to ignore ALL open-trade count limits.
+
+input bool   EnforceOpenTradeCaps         = true;  // master: false = no open-trade count blocks
+input int    MaxOpenTrades                = 3;     // THIS symbol (0 = unlimited)
+input int    MaxTotalOpenTradesAllSymbols = 9;     // ALL symbols this EA (0 = unlimited)
+input int    MaxOpenTradesPerCurrency     = 4;     // shared currency e.g. USD (0 = off)
 
 input group "SMT - SMART MONEY TECHNIQUE"
 // RIGHT PLACE: SMT belongs on REVERSAL / liquidity paths (RevSniper,
@@ -467,8 +474,8 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_BUGCLEAN_46");
-   Print("BUGCLEAN46: Pullback/FVG/Liq now SAME-DIRECTION BOS/sweep (Cont/SMT already fixed in OK45)");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_OPENCAPS_47");
+   Print("OPENCAPS47: open-trade limits fully adjustable (0=unlimited) | Enforce=", EnforceOpenTradeCaps);
    Print("MARKET DEFENSE: ON=", EnableMarketDefense,
          " DrawdownShield=", EnableDrawdownProtection);
    Print("QUALITY+LADDER: BestQuality=", BestQualitySetups,
@@ -495,8 +502,12 @@ int OnInit()
          " NoMPIwait=", AggressiveInstantQuality);
    Print("Engines: ICE_MinScore=", ICE_MinScore,
          " | IMCE hard | SMT RevSniper | BEAST+ULTRA cached");
-   Print("Trade size: LotSize=", LotSize, " MaxOpenTrades=", MaxOpenTrades,
-         " MaxTotal=", MaxTotalOpenTradesAllSymbols);
+   Print("Trade size: LotSize=", LotSize,
+         " | OpenCaps Enforce=", EnforceOpenTradeCaps,
+         " MaxOpen/symbol=", MaxOpenTrades,
+         " MaxTotal=", MaxTotalOpenTradesAllSymbols,
+         " MaxPerCurrency=", MaxOpenTradesPerCurrency,
+         " (0=unlimited)");
    Print("TIP: set EntryTF to match chart (you use H4 — set EntryTF=H4)");
    if(PrintPathStatsOnInit)
       PrintStrategyPerformanceReport();
@@ -2063,7 +2074,19 @@ bool MonthlyLossProtection()
 
 bool MaxTradesProtection()
 {
-   return (CountOpenTrades() < MaxOpenTrades);
+   // OPENCAPS47: adjustable — EnforceOpenTradeCaps=false or MaxOpenTrades=0 → unlimited
+   if(!EnforceOpenTradeCaps || MaxOpenTrades <= 0)
+      return true;
+
+   int openNow = CountOpenTrades();
+   if(openNow >= MaxOpenTrades)
+   {
+      if(EnableVerboseLogging)
+         Print("Trading blocked: per-symbol open cap (", openNow, "/", MaxOpenTrades,
+               ") on ", BrokerSymbol);
+      return false;
+   }
+   return true;
 }
 
 //=============================================================//
@@ -2079,10 +2102,9 @@ bool MaxTradesProtection()
 // currency (either side of the pair) - catching the "three different
 // pairs, one hidden USD bet" case that a pure trade-count limit misses.
 
-input group "PORTFOLIO RISK"
-
-// MaxTotalOpenTradesAllSymbols is in TRADE SIZE & LIMITS (top) — adjustable there.
-input int MaxOpenTradesPerCurrency     = 4;   // max positions sharing a currency (either base or quote) - e.g. EURUSD+GBPUSD+USDJPY all count toward USD
+// PORTFOLIO RISK helpers — caps live in "OPEN TRADES CAPS" Inputs (top).
+// MaxOpenTrades / MaxTotalOpenTradesAllSymbols / MaxOpenTradesPerCurrency
+// are adjustable there (0 = unlimited). EnforceOpenTradeCaps is the master.
 
 int CountTotalOpenTradesAllSymbols()
 {
@@ -2193,17 +2215,23 @@ int CountOpenTradesSharingCurrency(string candidateSymbol)
 
 bool PortfolioExposureOK()
 {
+   // OPENCAPS47: master off → skip account/currency open-trade caps
+   if(!EnforceOpenTradeCaps)
+      return true;
+
    if(MaxTotalOpenTradesAllSymbols > 0 && CountTotalOpenTradesAllSymbols() >= MaxTotalOpenTradesAllSymbols)
    {
       if(EnableVerboseLogging)
-         Print("Trading blocked: account-wide open trade cap reached (", MaxTotalOpenTradesAllSymbols, ")");
+         Print("Trading blocked: account-wide open trade cap reached (",
+               CountTotalOpenTradesAllSymbols(), "/", MaxTotalOpenTradesAllSymbols, ")");
       return false;
    }
 
    if(MaxOpenTradesPerCurrency > 0 && CountOpenTradesSharingCurrency(BrokerSymbol) >= MaxOpenTradesPerCurrency)
    {
       if(EnableVerboseLogging)
-         Print("Trading blocked: currency exposure cap reached for ", BrokerSymbol);
+         Print("Trading blocked: currency exposure cap reached for ", BrokerSymbol,
+               " (cap=", MaxOpenTradesPerCurrency, ")");
       return false;
    }
 
@@ -9816,7 +9844,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_BUGCLEAN_46\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_OPENCAPS_47\n",
          "=============================================="
       );
       return;
@@ -9838,7 +9866,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_BUGCLEAN_46\n",
+         "BUILD: SA_PRISM_OPENCAPS_47\n",
          "=========================================="
       );
       return;
