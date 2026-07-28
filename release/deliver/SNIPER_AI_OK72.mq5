@@ -617,6 +617,7 @@ int OnInit()
    Print("ANYTIME: SessionHardBlock=", APEX_SessionHardBlock,
          " | SessionDetect=", EnableSessionDetect,
          " | Spread/News never hard-block | ContFallback=", EnableContFallback);
+   Print("COMPANION INDICATOR: SNIPER_IDP (Institutional Displacement Pulse) — attach from MQL5/Indicators");
    UpdateNewsAwareness();
    {
       string sn="", sd=""; bool a=false,b=false,c=false,d=false; int h=-1;
