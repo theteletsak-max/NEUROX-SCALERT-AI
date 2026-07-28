@@ -1,25 +1,23 @@
 SNIPER AI — EVERYTHING IN PLACE
 
-EA:         SNIPER_AI_OK73.mq5
-BUILD_ID:   SA_QUALITY_73
+EA:         SNIPER_AI_OK74.mq5
+BUILD_ID:   SA_QUALITY_74
 Comment:    SNIPER AI
 
-INDICATOR:  SNIPER_IDP.mq5
+INDICATOR:  SNIPER_IDP.mq5 (optional visual only)
 BUILD_ID:   IDP_1
-Name:       Institutional Displacement Pulse
 
 Live: APEX → ContFallback STRONG/QUALITY
-Signal core: EA reads SNIPER_IDP via iCustom (HardGate ON)
+Signal core: IDP pulse BUILT INTO EA (no iCustom)
 Anytime: session detect soft (no hard block)
 News aware · spread never blocks
 
-Pack:       SNIPER_AI.zip  (EA + IDP + docs)
+Pack:       SNIPER_AI.zip
 Layout:     PACKAGE_LAYOUT.txt
-Deliver:    release/deliver/   (current only)
-Archive:    release/archive/   (OK11..OK72 — do not attach)
+Deliver:    release/deliver/
+Archive:    release/archive/ (OK11..OK73 — do not attach)
 
-EA:  https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK73.mq5
-IDP: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_IDP.mq5
+EA:  https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK74.mq5
 
 REMOVE PRISM STRATEGY before attach.
-Compile IDP first (F7) so EA iCustom can load it.
+One file to trade: SNIPER_AI_OK74.mq5

@@ -2,48 +2,38 @@
         SNIPER AI — FULL PACKAGE
 ══════════════════════════════════════
 
-EA:        SNIPER_AI_OK73.mq5
-BUILD_ID:  SA_QUALITY_73
+EA:        SNIPER_AI_OK74.mq5
+BUILD_ID:  SA_QUALITY_74
 Comment:   SNIPER AI
 
-INDICATOR: SNIPER_IDP.mq5
-BUILD_ID:  IDP_1
+IDP:       BUILT INTO THE EA (no iCustom)
+Optional:  SNIPER_IDP.mq5 chart visual only
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK73.mq5
-
-DOWNLOAD IDP:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_IDP.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK74.mq5
 
 ──────────────────────────────────────
 IN PLACE
 ──────────────────────────────────────
 ✓ APEX → ContFallback STRONG/QUALITY
-✓ IDP signal core (EA iCustom hard-gate)
+✓ IDP pulse computed INSIDE EA
 ✓ Trade anytime (session detect, soft)
-✓ Clean market analysis
 ✓ News aware · spread never blocks
-✓ Anti-scalp structure (no trend spam)
+✓ Anti-scalp structure
 ✓ PRISM/ContSniper live path retired
-✓ SNIPER IDP companion pulse indicator
 
 Look for:
-  BUILD_ID=SA_QUALITY_73
-  IDP signal core linked
+  BUILD_ID=SA_QUALITY_74
+  IDP BUILT-IN CORE
   IDP PASS / IDP FAIL
-  SESSION DETECT: …
-  FIRE [APEX] / FIRE [ContFallback] STRONG|QUALITY
+  FIRE [APEX] / FIRE [ContFallback]
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
-1. REMOVE "PRISM STRATEGY" from EVERY chart
-2. Delete old SNIPER*.ex5
-3. Copy SNIPER_IDP.mq5 → MQL5/Indicators/ → F7 FIRST
-4. Copy SNIPER_AI_OK73.mq5 → MQL5/Experts/ → F7
-5. Attach SNIPER_AI_OK73 (NOT Prism, NOT old OK72)
-6. Optional: attach SNIPER_IDP on chart (visual)
-7. Experts must show SA_QUALITY_73 · IDP linked
-8. Algo Trading ON · AutoTrading ON
+1. REMOVE "PRISM STRATEGY"
+2. Copy SNIPER_AI_OK74.mq5 → MQL5/Experts/ → F7
+3. Attach SNIPER_AI_OK74
+4. Algo Trading ON
 
-See PACKAGE_LAYOUT.txt · CURRENT.txt · INSTALL.txt
+One file. IDP is inside the bot.
