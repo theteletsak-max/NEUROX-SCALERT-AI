@@ -1,11 +1,15 @@
-SNIPER AI — DOWNLOAD
+SNIPER AI — DOWNLOAD (CURRENT)
 
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK68.mq5
 
 BUILD_ID: SA_STRUCT_BEST_68
 Comment: SNIPER AI
 
-BEST ContFallback structure: BOS + fresh OB/FVG + price-in-zone + displacement + discount/premium.
-REMOVE PRISM STRATEGY.
+Everything in place:
+  APEX → ContFallback best structure
+  news aware · spread never blocks · soft session · anti-scalp
 
-INSTALL: F7 OK68 → BUILD_ID=SA_STRUCT_BEST_68
+REMOVE PRISM STRATEGY or you keep running the wrong EA.
+
+INSTALL: remove PRISM STRATEGY → F7 OK68 → attach SNIPER_AI_OK68 →
+BUILD_ID=SA_STRUCT_BEST_68

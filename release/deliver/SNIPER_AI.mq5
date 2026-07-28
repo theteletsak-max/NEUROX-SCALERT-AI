@@ -11041,7 +11041,7 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    sellSignal = false;
    strategyTag = "";
 
-   // OK67 PURE live path — nothing else may fire entries
+   // OK68 LIVE: APEX → ContFallback best structure only
    // 1) APEX
    if(EnableAPEXStrategy)
    {
@@ -11050,7 +11050,7 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
          return;
    }
 
-   // 2) ContFallback structure-only (BOS+zone)
+   // 2) ContFallback BEST structure (BOS + fresh zone + disp + discount/premium)
    if(EnableContFallback)
       EvaluateContFallback(buySignal, sellSignal, strategyTag);
 

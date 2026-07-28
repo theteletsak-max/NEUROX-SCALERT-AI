@@ -1,0 +1,17 @@
+SNIPER AI — CURRENT BUILD
+
+File:     SNIPER_AI_OK68.mq5
+BUILD_ID: SA_STRUCT_BEST_68
+Branch:   cursor/sniper-ai-compile-fix-b12d
+Comment:  SNIPER AI
+
+Live: APEX → ContFallback (best structure)
+News: aware, no hard block
+Spread: never blocks
+Session: soft (anytime)
+Anti-scalp: ON
+
+Download:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK68.mq5
+
+REMOVE PRISM STRATEGY before attach.

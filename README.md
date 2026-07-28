@@ -1,55 +1,57 @@
 # SNIPER AI
 
-Aggressive institutional forex sniper robot for **MetaTrader 5**.
+MetaTrader 5 Expert Advisor — single-file product.
 
-Instant execution · 24/7 · trades through events · execution-focused (no chart dashboard) · H4/H1/M5 kill-chain.
+> Not financial advice. Demo-test before live.
 
-> Not financial advice. Demo-test before live. Forex can lose capital quickly.
+## Use this file
 
-## Primary product — MT5 EA
+**[`SNIPER_AI_OK68.mq5`](SNIPER_AI_OK68.mq5)**  
+`BUILD_ID: SA_STRUCT_BEST_68` · Trade comment: `SNIPER AI`
 
-Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
+Download:  
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK68.mq5
 
-| Piece | Role |
-|-------|------|
-| `SniperAI.mq5` | Main Expert Advisor |
-| `Include/SniperAI/SA_Signal.mqh` | Continuation + reversal kill-chain |
-| `Include/SniperAI/SA_Structure.mqh` | Swings, BOS, CHoCH, H4 bias |
-| `Include/SniperAI/SA_Liquidity.mqh` | Sweeps / equal highs-lows |
-| `Include/SniperAI/SA_Zones.mqh` | Displacement, FVG, order blocks |
-| `Include/SniperAI/SA_Risk.mqh` | Lot / ATR SL / 2R / BE / max 3 |
-| `Include/SniperAI/SA_Trade.mqh` | Instant market orders |
-| `Include/SniperAI/SA_Watermark.mqh` | Background watermark (candles on top) |
-| `Include/SniperAI/SA_Dashboard.mqh` | Right-corner HUD |
-| `Images/SniperAI_Watermark.bmp` | SNIPER AI branded artwork |
+Also mirrored as [`SNIPER_AI.mq5`](SNIPER_AI.mq5) and [`MQL5/Experts/SNIPER_AI.mq5`](MQL5/Experts/SNIPER_AI.mq5).
 
-### Install (MT5) — single file (compile-safe)
+## Live path (only)
 
-Use **[`SNIPER_AI_OK68.mq5`](SNIPER_AI_OK68.mq5)**  
-`BUILD_ID: SA_STRUCT_BEST_68`
+1. **APEX** — liquidity sweep sniper (unmitigated zone required)
+2. **ContFallback** — best structure stack:
+   - clear trend
+   - quality directional BOS (2-bar preferred)
+   - fresh OB **or** quality FVG
+   - price at the zone
+   - displacement
+   - discount (BUY) / premium (SELL)
 
-1. **Remove `PRISM STRATEGY` from every chart**  
-2. Copy **`SNIPER_AI_OK68.mq5`** → F7  
-3. Attach **SNIPER_AI_OK68** (source must not say PRISM STRATEGY)  
-4. Experts: `SA_STRUCT_BEST_68` + `NEWS AWARE` / `FIRE [APEX]` or `FIRE [ContFallback]`  
+Retired (cannot open trades): ContSniper, RevSniper, InstantTrend, LCS, SpecCompliant / PRISM multi-path.
 
-**OK68:** Best ContFallback structure — fresh BOS + fresh OB/quality FVG + price-in-zone + displacement + discount/premium. APEX unmitigated zone ON.
+## Locked behaviour
 
-See [`DOWNLOAD_SNIPER_AI.txt`](DOWNLOAD_SNIPER_AI.txt)
+| Setting | Default |
+|--------|---------|
+| Session | Soft ON (tracks London/NY, does **not** hard-block) |
+| News | Aware (logs) — does **not** hard-block |
+| Spread | Never blocks |
+| Anti-scalp | ContFallback cooldown / hold / wider SL |
+| Max open | 1 per symbol |
+| Comment | must be exactly `SNIPER AI` |
 
+## Install (critical)
 
-### Locked behaviour
+1. **Remove `PRISM STRATEGY` from every chart**
+2. Delete old `SNIPER*.ex5`
+3. Copy `SNIPER_AI_OK68.mq5` → `MQL5/Experts/`
+4. Compile (F7)
+5. Attach **SNIPER_AI_OK68** (Experts source must not say PRISM STRATEGY)
+6. Confirm Journal: `BUILD_ID=SA_STRUCT_BEST_68`
+7. Algo Trading ON · AutoTrading ON
 
-- Chart symbol by default (or all forex if you disable “Trade attached chart only”)
-- Max **3** open trades · lot **0.01** (input) · SL **1.5×ATR(H1)** · TP **2R** · BE **+1R**
-- **No session filter** · **no volatility block** · runs in news
-- No chart dashboard · Experts log for status
+Look for: `FIRE [APEX]` or `FIRE [ContFallback] BEST …`
 
-## Strategy docs
+See [`SEND_THIS_EA.txt`](SEND_THIS_EA.txt) · [`DOWNLOAD_SNIPER_AI.txt`](DOWNLOAD_SNIPER_AI.txt) · [`release/deliver/`](release/deliver/)
 
-- [`docs/SNIPER_AI_STRATEGY.md`](docs/SNIPER_AI_STRATEGY.md)
-- [`docs/SNIPER_AI_BUILD_PLAN.md`](docs/SNIPER_AI_BUILD_PLAN.md)
+## Legacy note
 
-## Optional Python research toolkit
-
-`neurox_scalper/` — offline backtests (`neurox backtest`). Not required for the MT5 robot.
+`mt5/SniperAI/` is an older modular experiment. **Do not use it for live trading** — use `SNIPER_AI_OK68.mq5` only.
