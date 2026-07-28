@@ -2,35 +2,54 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK55.mq5
-BUILD_ID: SA_PRISM_CONTFIRE_55
+File:     SNIPER_AI_OK56.mq5
+BUILD_ID: SA_PRISM_ALLTRADE_56
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK55.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK56.mq5
 
 Raw:
-https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK55.mq5
+https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK56.mq5
 
 ──────────────────────────────────────
-WHAT YOUR SCREENSHOT SHOWS
+BUG HUNT → ALLTRADE FIXES (OK56)
 ──────────────────────────────────────
-Source column = "PRISM STRATEGY"  → WRONG / OLD EA still attached
-ULTRA CORE FIRE SELL [ContSniper] A+  → Cont path IS valid
-REV VALIDATE FAIL                   → RevSniper only (ignore when Cont fires)
+FALSE BLOCKERS REMOVED / DEFAULTED OFF:
+  • MaxTotalOpenTradesAllSymbols = 0 (was 9 — blocked multi-chart)
+  • MaxOpenTradesPerCurrency = 0 (was 4 — EUR/GBP/XAU share USD)
+  • EnableDailyLossProtection = false (NEW — was always on)
+  • Weekly / Monthly loss protection = false
+  • BeastDuplicateBarGuard = false
+  • EnableEventQualityMode = false + EventICE boost 0
+  • MinMarginLevelPercent = 0 (was 200%)
+  • QualityRequireTrendAndADX = false
+  • ICE_MinScore = 25 (was 32)
+  • Drawdown shield stays OFF (OK53)
 
-OK55 FIX: Cont FIRE was then killed by post-FIRE HP confirms (need 4)
-with throttled/silent reject — no "SELL approved", no order.
+CODE HARDENING:
+  • GetSymbolIndex suffix-safe (EURUSD ↔ EURUSD.m)
+  • Lot normalize from SYMBOL_VOLUME_STEP (not fixed 2dp)
+  • ATR missing: Cont/Rev fail-open under NeverBlock
+  • Cooldown never blocks under NeverBlock/AggressiveFire
+  • EntryTF iTime==0 no longer deadlocks bar gate
+  • Cont FIRE still cannot be HP-vetoed (OK55)
+  • Loud FIRE BLOCKED / Execute FAILED prints
+
+KEPT (quality Cont/Rev, not spam):
+  • BestPathsOnly Cont+Rev
+  • Structure zone for Cont
+  • ICE/IMCE engines
+  • MaxOpenTrades=3 per symbol
 
 ──────────────────────────────────────
-INSTALL (DO THIS EXACTLY)
+INSTALL (REQUIRED)
 ──────────────────────────────────────
-1. Remove PRISM STRATEGY from EVERY chart (right-click chart → Expert list → Remove)
-2. Delete old SNIPER* / PRISM* .ex5 from MQL5/Experts/
-3. Copy SNIPER_AI_OK55.mq5 → MQL5/Experts/
-4. F7 — confirm SA_PRISM_CONTFIRE_55
-5. Attach THIS file fresh · EntryTF=H4 on H4 · Algo Trading ON
-6. Experts MUST show:
-     SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_CONTFIRE_55
+1. Remove PRISM STRATEGY from EVERY chart
+2. Delete old SNIPER* .ex5
+3. Copy SNIPER_AI_OK56.mq5 → MQL5/Experts/
+4. F7 — confirm SA_PRISM_ALLTRADE_56
+5. Attach FRESH on each symbol · EntryTF=chart TF
+6. Experts MUST show BUILD_ID=SA_PRISM_ALLTRADE_56
    NOT "PRISM STRATEGY"

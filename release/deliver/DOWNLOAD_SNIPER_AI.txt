@@ -1,12 +1,12 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK54.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK56.mq5
 
-BUILD_ID: SA_PRISM_TRADEFIRE_54
+BUILD_ID: SA_PRISM_ALLTRADE_56
 Comment: SNIPER AI
 
-FIX: ContSniper ULTRA CORE FIRE was blocked by broken duplicate-bar guard
-(0==0 false positive / closed-fill same bar). Now only suppresses while
-that direction is still open on the same EntryTF bar.
+Bug hunt: removed false blockers so Cont/Rev can fill on all attached
+symbols (caps/daily/dup/event/margin/ADX/ICE soft + suffix-safe index).
 
-INSTALL: delete old SNIPER* → F7 → fresh attach → EntryTF=chart TF → BUILD_ID=SA_PRISM_TRADEFIRE_54
+INSTALL: remove PRISM STRATEGY → F7 OK56 → fresh attach each chart →
+BUILD_ID=SA_PRISM_ALLTRADE_56 · EntryTF=chart TF

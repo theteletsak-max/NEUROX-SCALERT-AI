@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_CONTFIRE_55                                 |
-//| SNIPER AI - Cont FIRE must execute (no post-FIRE HP veto)       |
+//| BUILD_ID: SA_PRISM_ALLTRADE_56                                 |
+//| SNIPER AI - trade all symbols: remove false account/entry blocks|
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.23"
-#property description "SNIPER AI OK55: ContSniper FIRE no longer vetoed by post-FIRE HP confirms"
-#property description "If Experts source says PRISM STRATEGY you attached the WRONG EA — use this file"
+#property version   "5.24"
+#property description "SNIPER AI OK56: all-symbol trade — caps/DD/daily/dup/event soft; suffix-safe index"
+#property description "Remove PRISM STRATEGY from charts — attach THIS file; BUILD_ID=SA_PRISM_ALLTRADE_56"
 
 #include <Trade/Trade.mqh>
 
@@ -34,11 +34,9 @@ input bool   EnableSniperMode                = true;  // aggressive fire when be
 input bool   BeastUseUnifiedStructure        = true;  // MPI/ICE/rank share one structure snapshot
 input bool   BeastRequireReversalStack       = true;  // RevSniper/LiquiditySweep need liquidity stack
 input int    BeastMinReversalLiquidityScore  = 8;     // BEST: higher Rev liquidity floor (max 15)
-// TRADEFIRE54: was blocking ContSniper after ULTRA CORE FIRE when
-// iTime(EntryTF)==0 matched unset LastApproved==0, OR after a fill that
-// defense already closed on the same bar. Guard now only suppresses when
-// a real prior fill bar matches AND that direction is still open.
-input bool   BeastDuplicateBarGuard          = true;  // one LIVE open fill per bar per direction
+// ALLTRADE56: do not block same-bar Cont re-fire across multi-chart attaches.
+// OK54 logic still safe if turned back on (only while direction still open).
+input bool   BeastDuplicateBarGuard          = false; // OFF: never suppress Cont/Rev after FIRE
 input bool   BeastCaptureSignalSnapshot      = true;  // record MPI/ICE at decision time
 input bool   EnableBeastDashboard            = true;  // rich HUD when EnableDashboard=true
 
@@ -89,8 +87,8 @@ input bool   EnableAdaptivePathRanking   = true;  // boost tags with proven win-
 input int    AdaptivePathMinTrades       = 10;    // min closed trades before win-rate ranks
 input bool   PrintPathStatsOnInit        = true;
 input bool   EnableAlwaysQualityMode     = true;
-input bool   QualityRequireStructureZone = true;  // BEST: Cont needs BOS/OB/FVG (or pullback)
-input bool   QualityRequireTrendAndADX   = true;  // keep trend strength for high-prob sniper
+input bool   QualityRequireStructureZone = true;  // Cont needs BOS/OB/FVG (or pullback)
+input bool   QualityRequireTrendAndADX   = false; // ALLTRADE56: ADX not hard — was blocking valid Cont
 input bool   QualityDisableWeakPaths     = true;  // BEST: suppress weak VolBreakout unless stacked
 input int    QualityMPIScore             = 0;
 
@@ -122,8 +120,8 @@ input group "OPEN TRADES CAPS (adjustable — set in Inputs)"
 
 input bool   EnforceOpenTradeCaps         = true;  // master: false = no open-trade count blocks
 input int    MaxOpenTrades                = 3;     // THIS symbol (0 = unlimited)
-input int    MaxTotalOpenTradesAllSymbols = 9;     // ALL symbols this EA (0 = unlimited)
-input int    MaxOpenTradesPerCurrency     = 4;     // shared currency e.g. USD (0 = off)
+input int    MaxTotalOpenTradesAllSymbols = 0;     // ALLTRADE56: 0=unlimited — was 9 blocking multi-chart
+input int    MaxOpenTradesPerCurrency     = 0;     // ALLTRADE56: 0=off — was 4 blocking EUR/GBP/XAU USD share
 
 input group "SMT - SMART MONEY TECHNIQUE"
 // RIGHT PLACE: SMT belongs on REVERSAL / liquidity paths (RevSniper,
@@ -153,7 +151,7 @@ input group "ICE - INSTITUTIONAL CONFIDENCE ENGINE"
 
 input bool   EnableInstitutionalConfidence = true;
 input bool   ICERequireForEntry            = true;  // HARD gate
-input int    ICE_MinScore                  = 32;    // BEST quality floor (was 25)
+input int    ICE_MinScore                  = 25;    // ALLTRADE56: was 32 — fewer false Cont rejects
 
 input group "FILTERS"
 
@@ -199,13 +197,13 @@ input group "EVENT EXTRA TIGHTEN (still trades — stricter than regular quality
 // News hard-block stays OFF. Events use the same quality system, with a
 // higher MPI floor so only the cleanest sniper setups fire in the spike.
 
-input bool   EnableEventQualityMode       = true;  // extra tighten during high-impact events
-input bool   EventQualityAppliesToCrypto  = true;  // also tighten BTC/ETH around USD high-impact news
+input bool   EnableEventQualityMode       = false; // ALLTRADE56: OFF — was tightening ICE around news
+input bool   EventQualityAppliesToCrypto  = false; // ALLTRADE56: do not tighten BTC/ETH for USD news
 input bool   EventDisableWeakPaths        = true;  // keep weak paths off in events
 input bool   EventRequireStructureZone    = true;
 input bool   EventRequireTrendAndADX      = true;
 input int    EventQualityMPIScore         = 50;    // stricter than regular QualityMPIScore (40)
-input int    EventICE_MinScoreBoost       = 8;     // #9: raise ICE floor by this during events (0=off)
+input int    EventICE_MinScoreBoost       = 0;     // ALLTRADE56: no event ICE bump
 input int    EventMinutesBeforeNews       = 30;
 input int    EventMinutesAfterNews        = 30;
 
@@ -487,9 +485,19 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_CONTFIRE_55");
-   Print("IMPORTANT: Experts source must be SNIPER_AI_OK55 / SNIPER_AI — if you see PRISM STRATEGY, remove that EA and attach THIS file");
-   Print("CONTFIRE55: Cont/Rev after path+engines FIRE cannot be vetoed by HP confirms (NeverBlock/AggressiveFire)");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_ALLTRADE_56");
+   Print("IMPORTANT: Experts source must be SNIPER_AI_OK56 / SNIPER_AI — if you see PRISM STRATEGY, remove that EA");
+   Print("ALLTRADE56: MaxTotal=", MaxTotalOpenTradesAllSymbols,
+         " MaxPerCcy=", MaxOpenTradesPerCurrency,
+         " DailyLoss=", EnableDailyLossProtection,
+         " Weekly=", EnableWeeklyLossProtection,
+         " Monthly=", EnableMonthlyLossProtection,
+         " DupGuard=", BeastDuplicateBarGuard,
+         " EventQ=", EnableEventQualityMode,
+         " MinMargin%=", MinMarginLevelPercent,
+         " ICE=", ICE_MinScore,
+         " ADXhard=", QualityRequireTrendAndADX);
+   Print("CONTFIRE55 retained: Cont/Rev HP soft under NeverBlock");
    Print("TRADEFIRE54 retained: duplicate-bar 0==0 fix");
    Print("TRADEUNBLOCK53 retained: DrawdownShield=", EnableDrawdownProtection,
          " ResetPeakOnInit=", ResetPeakEquityOnInit,
@@ -1737,6 +1745,9 @@ bool IsBearTrend()
 
 input group "RISK ENGINE"
 
+// ALLTRADE56: period-loss shields OFF by default (same philosophy as drawdown OFF).
+// Turn any Enable* back on if you want hard stops after a bad day/week/month.
+input bool   EnableDailyLossProtection = false; // OFF: was hard-blocking all symbols after 5% day
 input double MaxDailyLossPercent = 5.0;
 input double MaxDrawdownPercent  = 20.0;
 
@@ -1961,6 +1972,9 @@ void CloseAllEAPositions()
 
 bool DailyLossProtection()
 {
+   if(!EnableDailyLossProtection || MaxDailyLossPercent <= 0.0)
+      return true;
+
    UpdateDailyReferenceBalance();
 
    if(DailyStartBalance <= 0.0)
@@ -1996,11 +2010,11 @@ bool DailyLossProtection()
 // engine - this reuses the exact same mechanism as the daily check.)
 //=============================================================//
 
-input bool   EnableWeeklyLossProtection        = true;
+input bool   EnableWeeklyLossProtection        = false; // ALLTRADE56: OFF
 input double MaxWeeklyLossPercent              = 10.0;
 input bool   EnableEmergencyCloseOnWeeklyLoss  = true;
 
-input bool   EnableMonthlyLossProtection       = true;
+input bool   EnableMonthlyLossProtection       = false; // ALLTRADE56: OFF
 input double MaxMonthlyLossPercent             = 15.0;
 input bool   EnableEmergencyCloseOnMonthlyLoss = true;
 
@@ -2055,7 +2069,7 @@ void UpdateMonthlyReferenceBalance()
 
 bool WeeklyLossProtection()
 {
-   if(!EnableWeeklyLossProtection)
+   if(!EnableWeeklyLossProtection || MaxWeeklyLossPercent <= 0.0)
       return true;
 
    UpdateWeeklyReferenceBalance();
@@ -2086,7 +2100,7 @@ bool WeeklyLossProtection()
 
 bool MonthlyLossProtection()
 {
-   if(!EnableMonthlyLossProtection)
+   if(!EnableMonthlyLossProtection || MaxMonthlyLossPercent <= 0.0)
       return true;
 
    UpdateMonthlyReferenceBalance();
@@ -2369,7 +2383,24 @@ double CalculateRiskBasedLot(double slDistance)
    if(maxLot > 0.0 && lot > maxLot) lot = maxLot;
    if(lot > MaxLotSizeHardCap) lot = MaxLotSizeHardCap;
 
-   return NormalizeDouble(lot, 2);
+   return NormalizeLotVolume(lot);
+}
+
+double NormalizeLotVolume(double lot)
+{
+   double lotStep = SymbolInfoDouble(BrokerSymbol, SYMBOL_VOLUME_STEP);
+   int digits = 2;
+   if(lotStep > 0.0 && lotStep < 1.0)
+   {
+      digits = 0;
+      double step = lotStep;
+      while(digits < 8 && MathAbs(step - MathRound(step)) > 1e-12)
+      {
+         step *= 10.0;
+         digits++;
+      }
+   }
+   return NormalizeDouble(lot, digits);
 }
 
 double CalculateLotSize(double slDistance = 0.0)
@@ -2395,7 +2426,7 @@ double CalculateLotSize(double slDistance = 0.0)
    if(lot > MaxLotSizeHardCap)
       lot = MaxLotSizeHardCap;
 
-   return NormalizeDouble(lot, 2);
+   return NormalizeLotVolume(lot);
 }
 
 //=============================================================//
@@ -2444,7 +2475,7 @@ bool HasSufficientMargin(ENUM_ORDER_TYPE orderType, double lot, double price)
 // positions where one more trade could tip the account toward a margin
 // call even if this specific trade's own requirement technically fits.
 
-input double MinMarginLevelPercent = 200.0; // block new trades if margin level would fall below this - 0 disables the check
+input double MinMarginLevelPercent = 0.0; // ALLTRADE56: 0=off — was 200% blocking accounts with open risk
 
 bool MarginLevelProtection()
 {
@@ -3748,22 +3779,24 @@ bool CooldownFinished()
    int symIdx = GetSymbolIndex(BrokerSymbol);
 
    if(symIdx < 0)
-      return false;
+   {
+      // ALLTRADE56: do not hard-block unknown index — allow entry path
+      Print("CooldownFinished: symbol not in tracking list yet: ", BrokerSymbol,
+            " — allowing (fail-open)");
+      return true;
+   }
 
    if(LastTradeTimeArr[symIdx] == 0)
       return true;
 
-   // High-prob Ultra: MaxOpenTrades / risk engine is the real limit.
-   // Idle minute-cooldowns only create Experts spam and miss entries.
-   if(UltraAggressiveFire || NeverBlockValidSniperEntry || TradeCooldownMinutes <= 0)
-   {
-      if(NonScalpCooldownMinutes <= 0 || !IsNonScalpSymbol())
-         return true;
-   }
+   // ALLTRADE56 / NeverBlock: MaxOpenTrades is the real limit — no idle cooldown blocks
+   if(NeverBlockValidSniperEntry || UltraAggressiveFire)
+      return true;
+
+   if(TradeCooldownMinutes <= 0 && (NonScalpCooldownMinutes <= 0 || !IsNonScalpSymbol()))
+      return true;
 
    int cooldownMinutes = IsNonScalpSymbol() ? NonScalpCooldownMinutes : TradeCooldownMinutes;
-   if(NeverBlockValidSniperEntry)
-      cooldownMinutes = MathMin(cooldownMinutes, MathMax(TradeCooldownMinutes, 0));
 
    if(cooldownMinutes <= 0)
       return true;
@@ -3771,8 +3804,7 @@ bool CooldownFinished()
    if(TimeCurrent() - LastTradeTimeArr[symIdx] < cooldownMinutes * 60)
       return false;
 
-   if(!NeverBlockValidSniperEntry &&
-      PostLossCooldownMinutes > 0 &&
+   if(PostLossCooldownMinutes > 0 &&
       LastTradeWasLossArr[symIdx] &&
       (TimeCurrent() - LastLossCloseTimeArr[symIdx] < PostLossCooldownMinutes * 60))
    {
@@ -6615,7 +6647,7 @@ bool DetectInducement(bool reversalDirectionIsBuy)
 //================ SYMBOL SETTINGS ==================================//
 
 input string TradeSymbols =
-"EURUSD,GBPUSD,USDJPY,AUDUSD,USDCAD,XAUUSD";
+"EURUSD,GBPUSD,USDJPY,AUDUSD,USDCAD,XAUUSD,BTCUSD";
 
 input group "MULTI-SYMBOL EXECUTION"
 
@@ -6808,12 +6840,50 @@ void BuildMultiSymbolList()
 // Every per-symbol array (indicator handles, cooldown tracking) is
 // index-matched to MultiSymbolList - this finds the right index for
 // whatever symbol BrokerSymbol currently points to.
+// ALLTRADE56: exact → case-insensitive → base-prefix (EURUSD ↔ EURUSD.m)
+
+string SymbolBaseName(string symbol)
+{
+   string s = symbol;
+   StringToUpper(s);
+   // Strip common broker suffixes (.m, .i, .pro, _m, etc.) for matching
+   int dot = StringFind(s, ".");
+   if(dot > 0)
+      s = StringSubstr(s, 0, dot);
+   int us = StringFind(s, "_");
+   if(us > 3) // keep XAU_USD style; only strip trailing _m style if long
+   {
+      string tail = StringSubstr(s, us + 1);
+      if(StringLen(tail) <= 3)
+         s = StringSubstr(s, 0, us);
+   }
+   return s;
+}
+
+bool SymbolNamesMatch(string a, string b)
+{
+   if(a == b)
+      return true;
+   string au = a, bu = b;
+   StringToUpper(au);
+   StringToUpper(bu);
+   if(au == bu)
+      return true;
+   string ab = SymbolBaseName(a);
+   string bb = SymbolBaseName(b);
+   return (ab != "" && ab == bb);
+}
 
 int GetSymbolIndex(string symbol)
 {
-   for(int i = 0; i < ArraySize(MultiSymbolList); i++)
+   int n = ArraySize(MultiSymbolList);
+   for(int i = 0; i < n; i++)
       if(MultiSymbolList[i] == symbol)
          return i;
+
+   for(int j = 0; j < n; j++)
+      if(SymbolNamesMatch(MultiSymbolList[j], symbol))
+         return j;
 
    return -1;
 }
@@ -7804,8 +7874,20 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
 
    if(GetFilterATR() <= 0.0)
    {
-      failReason = "risk: ATR unavailable";
-      return false;
+      // ALLTRADE56: Cont/Rev already selected — Execute uses fixed-stop fallback.
+      // Do not veto FIRE solely because ATR handle not ready yet.
+      if((strategyTag == "ContSniper" || strategyTag == "RevSniper") &&
+         (NeverBlockValidSniperEntry || UltraAggressiveFire))
+      {
+         if(EnableVerboseLogging || EnableSetupLogging)
+            Print("ATR soft: unavailable on ", BrokerSymbol,
+                  " — allowing ", strategyTag, " (fixed SL fallback in Execute)");
+      }
+      else
+      {
+         failReason = "risk: ATR unavailable";
+         return false;
+      }
    }
 
    // CONTFIRE55: Cont/Rev already passed path setups + ICE/IMCE before FIRE.
@@ -10189,7 +10271,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_CONTFIRE_55\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_ALLTRADE_56\n",
          "=============================================="
       );
       return;
@@ -10211,7 +10293,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_CONTFIRE_55\n",
+         "BUILD: SA_PRISM_ALLTRADE_56\n",
          "=========================================="
       );
       return;
@@ -10460,7 +10542,11 @@ void InstantExecution()
    int idx = GetSymbolIndex(BrokerSymbol);
 
    if(idx < 0)
+   {
+      Print("InstantExecution: symbol not tracked: ", BrokerSymbol,
+            " — skip (check DetectBrokerSymbol / MultiSymbolList)");
       return;
+   }
 
    if(EnableUltraCore && UltraHealthMonitor)
       g_UltraDecisionStartMs = (long)GetTickCount();
@@ -10473,7 +10559,18 @@ void InstantExecution()
 
    datetime currentBarTime = iTime(BrokerSymbol, EntryTF, 0);
 
-   if(!EnableTickLevelSignalDetection)
+   // ALLTRADE56: iTime==0 must not equal LastEntryEval init 0 forever
+   if(currentBarTime <= 0)
+   {
+      static datetime lastHistWarn = 0;
+      if(TimeCurrent() - lastHistWarn >= 60)
+      {
+         lastHistWarn = TimeCurrent();
+         Print("EntryTF history not ready for ", BrokerSymbol,
+               " TF=", EnumToString(EntryTF), " — evaluating anyway (tick path)");
+      }
+   }
+   else if(!EnableTickLevelSignalDetection)
    {
       if(currentBarTime == LastEntryEvalBarTimeArr[idx])
          return; // already evaluated this bar for this symbol - wait for the next one
@@ -10483,7 +10580,8 @@ void InstantExecution()
    if(EnableTickLevelSignalDetection && UltraSmartTickUnchanged())
       return;
 
-   LastEntryEvalBarTimeArr[idx] = currentBarTime;
+   if(currentBarTime > 0)
+      LastEntryEvalBarTimeArr[idx] = currentBarTime;
 
    if(EnableVerboseLogging)
       Print("Instant Execution Running (", BrokerSymbol, ")");

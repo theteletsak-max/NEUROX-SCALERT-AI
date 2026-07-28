@@ -1,12 +1,12 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK55.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK56.mq5
 
-BUILD_ID: SA_PRISM_CONTFIRE_55
+BUILD_ID: SA_PRISM_ALLTRADE_56
 Comment: SNIPER AI
 
-Your log source "PRISM STRATEGY" = wrong EA. Cont FIRE was real; post-FIRE HP
-veto blocked the fill. OK55: Cont/Rev FIRE executes (HP soft under NeverBlock).
+Bug hunt: removed false blockers so Cont/Rev can fill on all attached
+symbols (caps/daily/dup/event/margin/ADX/ICE soft + suffix-safe index).
 
-INSTALL: remove PRISM STRATEGY from all charts → F7 OK55 → fresh attach →
-Experts must show BUILD_ID=SA_PRISM_CONTFIRE_55 (not PRISM STRATEGY)
+INSTALL: remove PRISM STRATEGY → F7 OK56 → fresh attach each chart →
+BUILD_ID=SA_PRISM_ALLTRADE_56 · EntryTF=chart TF

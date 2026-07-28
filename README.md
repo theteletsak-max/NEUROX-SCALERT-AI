@@ -25,20 +25,20 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 
 ### Install (MT5) — single file (compile-safe)
 
-Use **[`SNIPER_AI_OK55.mq5`](SNIPER_AI_OK55.mq5)**  
-`BUILD_ID: SA_PRISM_CONTFIRE_55`
+Use **[`SNIPER_AI_OK56.mq5`](SNIPER_AI_OK56.mq5)**  
+`BUILD_ID: SA_PRISM_ALLTRADE_56`
 
 1. Close MetaEditor
 2. **File → Open Data Folder** → `MQL5/Experts/`
 3. **Delete** any old `Sniper*` / `SNIPER*` / `PRISM*` `.mq5` / `.ex5` files
-4. Copy **`SNIPER_AI_OK55.mq5`**
-5. Open it, confirm `SA_PRISM_CONTFIRE_55`, compile **(F7)**
-6. **Remove** any chart EA named `PRISM STRATEGY` → attach **this** file fresh → **EntryTF**=chart TF → Algo Trading ON
-7. Experts must show `BUILD_ID=SA_PRISM_CONTFIRE_55` (not `PRISM STRATEGY`)
+4. Copy **`SNIPER_AI_OK56.mq5`**
+5. Open it, confirm `SA_PRISM_ALLTRADE_56`, compile **(F7)**
+6. **Remove** any chart EA named `PRISM STRATEGY` → attach **this** file fresh on each symbol → **EntryTF**=chart TF → Algo Trading ON
+7. Experts must show `BUILD_ID=SA_PRISM_ALLTRADE_56` (not `PRISM STRATEGY`)
 
 Also mirrored as [`SNIPER_AI.mq5`](SNIPER_AI.mq5) and [`release/deliver/SNIPER_AI.mq5`](release/deliver/SNIPER_AI.mq5).
 
-**OK55:** ContSniper `ULTRA CORE FIRE` must fill — post-FIRE HP confirm veto removed under NeverBlock/AggressiveFire. OK54 duplicate-bar + OK53 DD unblock retained.
+**OK56:** All-symbol trade — account caps/currency/daily/weekly/monthly/dup/event/margin false blockers off or unlimited; suffix-safe symbol index; Cont FIRE retained. Still Cont/Rev quality path (not random spam).
 
 See [`DOWNLOAD_SNIPER_AI.txt`](DOWNLOAD_SNIPER_AI.txt) · [`docs/SNIPER_AI_COMPILE_FIXES.md`](docs/SNIPER_AI_COMPILE_FIXES.md)
 
