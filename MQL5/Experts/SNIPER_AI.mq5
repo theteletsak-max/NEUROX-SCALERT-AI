@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_QUALITY_75                                      |
+//| BUILD_ID: SA_QUALITY_76                                      |
 //| SNIPER AI - anytime + strong quality + IDP built into EA          |
 //| Comment: SNIPER AI | IDP embedded pulse | No RSI/MACD/Stoch      |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.43"
-#property description "SNIPER AI OK75: anytime + quality + built-in IDP"
-#property description "Remove PRISM. Source SNIPER_AI_OK75 BUILD=SA_QUALITY_75"
+#property version   "5.44"
+#property description "SNIPER AI OK76: anytime + quality + built-in IDP"
+#property description "Remove PRISM. Source SNIPER_AI_OK76 BUILD=SA_QUALITY_76"
 
 #include <Trade/Trade.mqh>
 
@@ -121,7 +121,7 @@ input double ContFallbackSL_ATR_Boost    = 1.5;    // wider SL — not a scalp s
 input int    ContFallbackMaxOpen         = 1;      // max open ContFallback positions on this symbol
 input bool   ContFallbackDisableAdaptiveHold = true; // do not shorten hold in ranging for ContFallback/APEX
 
-input group "CONT STRUCTURE — STRONG QUALITY (OK75, anytime + built-in IDP)"
+input group "CONT STRUCTURE — STRONG QUALITY (OK76, anytime + built-in IDP)"
 // Anytime: sessions never hard-block.
 // Strong quality ContFallback: ADX trend + BOS + fresh zone + (near OR disp) + min score.
 // STRONG grade = near+disp+fresh OB. QUALITY grade = solid score with ZoneOrDisp.
@@ -217,6 +217,7 @@ input bool   AggressiveSniperEntries     = true;
 input bool   NeverBlockValidSniperEntry  = true;  // don't veto approved Cont/Rev
 input bool   ResolveConflictByTrend      = true;
 input bool   AggressiveInstitutionalExecution = true; // fast Cont/Rev once quality stack OK
+input double PullbackMaxATRMultiple      = 2.5;   // max ATR distance from EMA to count as pullback
 input double InstantPullbackATRMultiple  = 2.5;   // tighter pullback for quality Cont
 input int    InstantStructureRecencyBars = 24;
 input int    InstantMinimumMPIScore      = 0;
@@ -618,9 +619,9 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded BUILD_ID=SA_QUALITY_75");
-   Print("CRITICAL: SOURCE must be SNIPER_AI_OK75 — remove PRISM STRATEGY if present");
-   Print("QUALITY75: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
+   Print("SNIPER AI Loaded BUILD_ID=SA_QUALITY_76");
+   Print("CRITICAL: SOURCE must be SNIPER_AI_OK76 — remove PRISM STRATEGY if present");
+   Print("QUALITY76: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
          " HardBlock=", APEX_SessionHardBlock, " (must be false)",
          " NewsAware=", EnableNewsAwareness,
          " IDP=", EnableIDPConfluence,
@@ -11545,7 +11546,7 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    sellSignal = false;
    strategyTag = "";
 
-   // OK75 LIVE: APEX → ContFallback, both gated by built-in IDP pulse
+   // OK76 LIVE: APEX → ContFallback, both gated by built-in IDP pulse
    // 1) APEX
    if(EnableAPEXStrategy)
    {
@@ -12513,7 +12514,7 @@ string LiveMarketSummary()
 void PrintLiveMarketAnalysis()
 {
    AnalyzeLiveMarket(true);
-   Print("---- MARKET ANALYSIS BUILD=SA_QUALITY_75 (", BrokerSymbol, ") ----");
+   Print("---- MARKET ANALYSIS BUILD=SA_QUALITY_76 (", BrokerSymbol, ") ----");
    Print("SESSION=", g_LiveMkt.sessionName,
          " hour=", g_LiveMkt.sessionHour,
          (APEX_UseGMT ? " GMT" : " SERVER"),

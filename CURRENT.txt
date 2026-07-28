@@ -1,13 +1,11 @@
 SNIPER AI — CURRENT
 
-EA:         SNIPER_AI_OK75.mq5
-BUILD_ID:   SA_QUALITY_75
-Comment:    SNIPER AI
+EA:       SNIPER_AI_OK76.mq5
+BUILD_ID: SA_QUALITY_76
 
-IDP pulse is BUILT INTO the EA (no iCustom).
-Optional visual: SNIPER_IDP.mq5
+Fix: restored missing input PullbackMaxATRMultiple (MetaEditor 2 errors).
+IDP pulse built into EA.
 
-Download:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK75.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK76.mq5
 
-REMOVE PRISM STRATEGY. F7 OK75 → attach → SA_QUALITY_75
+Remove PRISM → F7 OK76 → attach → SA_QUALITY_76

@@ -1,5 +1,3 @@
-EA (IDP built-in):
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK75.mq5
-BUILD_ID: SA_QUALITY_75
-
-REMOVE PRISM. F7 OK75 → attach.
+EA:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK76.mq5
+BUILD_ID: SA_QUALITY_76

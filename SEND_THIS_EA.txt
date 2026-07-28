@@ -1,10 +1,8 @@
-SNIPER AI OK75 — IDP BUILT INTO EA
+SNIPER AI OK76
 
 DOWNLOAD:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK75.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK76.mq5
 
-BUILD_ID: SA_QUALITY_75
-Comment:  SNIPER AI
-
-Install: remove PRISM → F7 OK75 → attach → SA_QUALITY_75
-IDP pulse is inside the bot (no separate indicator required).
+BUILD_ID: SA_QUALITY_76
+Fix: PullbackMaxATRMultiple input restored (compile errors cleared).
+IDP built into EA. Remove PRISM → F7 → attach.
