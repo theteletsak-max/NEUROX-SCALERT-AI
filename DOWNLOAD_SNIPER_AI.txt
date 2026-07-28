@@ -1,11 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK70.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK71.mq5
 
-BUILD_ID: SA_ANALYZE_70
+BUILD_ID: SA_SESSION_71
 Comment: SNIPER AI
 
-Clean market analysis + APEX/ContFallback can trade.
+Detects London / New York / Asia sessions. Soft = trade anytime.
 REMOVE PRISM STRATEGY.
 
-INSTALL: F7 OK70 → BUILD_ID=SA_ANALYZE_70 · look for MARKET ANALYSIS / FIRE
+INSTALL: F7 OK71 → BUILD_ID=SA_SESSION_71 · look for SESSION DETECT

@@ -1,12 +1,12 @@
 SNIPER AI — CURRENT BUILD
 
-File:     SNIPER_AI_OK70.mq5
-BUILD_ID: SA_ANALYZE_70
+File:     SNIPER_AI_OK71.mq5
+BUILD_ID: SA_SESSION_71
 Comment:  SNIPER AI
 
-Clean live market analysis (bias/BOS/zone/regime/session/news).
-APEX → ContFallback can trade. News/spread never hard-block.
+Session detect: ASIA / LONDON / NEWYORK / LONDON+NY / OFF
+Clean market analysis · APEX → ContFallback · soft session (anytime)
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK70.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK71.mq5
 
 REMOVE PRISM STRATEGY before attach.

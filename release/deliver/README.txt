@@ -1,3 +1,3 @@
-CURRENT: SNIPER_AI_OK70.mq5
-BUILD_ID: SA_ANALYZE_70
-Clean market analysis + APEX/ContFallback
+CURRENT: SNIPER_AI_OK71.mq5
+BUILD_ID: SA_SESSION_71
+Session detect London/NY/Asia

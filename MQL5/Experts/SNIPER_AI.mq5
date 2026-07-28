@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_ANALYZE_70                                      |
-//| SNIPER AI - clean live market analysis + APEX/ContFallback that can trade  |
+//| BUILD_ID: SA_SESSION_71                                      |
+//| SNIPER AI - detects London/NY/Asia sessions + clean market analysis  |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.38"
-#property description "SNIPER AI OK70: CLEAN MARKET ANALYSIS — one live snapshot (trend/BOS/zone/regime/session/news) for APEX+Cont"
-#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK70. BUILD=SA_ANALYZE_70"
+#property version   "5.39"
+#property description "SNIPER AI OK71: SESSION DETECT — London/NY/Asia/Overlap named cleanly; soft filter still allows anytime"
+#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK71. BUILD=SA_SESSION_71"
 
 #include <Trade/Trade.mqh>
 
@@ -144,23 +144,24 @@ input double APEX_MaxSL_ATR              = 4.0;
 input bool   APEX_LogValidation          = true;
 input bool   APEX_LogFailsEveryBar       = true;
 
-input group "APEX SESSION / KILL-ZONE FILTER"
-// Session filter STAYS ON (marks London/NY) but by default does NOT block.
-// Soft = trade anytime + log whether you are in/out of kill zone.
-// Hard = only allow entries inside London/NY (old OK59 behaviour).
+input group "SESSION DETECT (London / New York / Asia)"
+// OK71: ALWAYS detect which session is active (name it cleanly).
+// Soft hard-block stays OFF by default → detect ≠ block (still trades anytime).
 
-input bool   EnableAPEXSessionFilter     = true;   // ON: track London/NY kill zones
-input bool   APEX_SessionHardBlock       = false;  // OK61: false = trade ANYTIME (soft); true = kill-zone only
+input bool   EnableSessionDetect         = true;   // ON: detect & log London/NY/Asia
+input bool   EnableAPEXSessionFilter     = true;   // ON: kill-zone awareness for APEX path
+input bool   APEX_SessionHardBlock       = false;  // false = trade ANYTIME (soft); true = kill-zone only
 input bool   APEX_UseGMT                 = true;   // true=TimeGMT hours; false=broker server hours
-input bool   APEX_AllowLondon            = true;   // London kill zone
+input bool   SessionLogOnChange          = true;   // print when session name changes
+input bool   APEX_AllowLondon            = true;   // London counts as kill-zone
 input int    APEX_LondonStartHourGMT     = 7;      // inclusive
-input int    APEX_LondonEndHourGMT       = 11;     // exclusive
-input bool   APEX_AllowNewYork           = true;   // NY kill zone
+input int    APEX_LondonEndHourGMT       = 16;     // exclusive (covers London open into NY overlap)
+input bool   APEX_AllowNewYork           = true;   // NY counts as kill-zone
 input int    APEX_NYStartHourGMT         = 12;     // inclusive
-input int    APEX_NYEndHourGMT           = 17;     // exclusive
-input bool   APEX_AllowAsia              = false;
-input int    APEX_AsiaStartHourGMT       = 0;
-input int    APEX_AsiaEndHourGMT         = 4;
+input int    APEX_NYEndHourGMT           = 21;     // exclusive
+input bool   APEX_AllowAsia              = true;   // OK71: Asia detected + optional kill-zone
+input int    APEX_AsiaStartHourGMT       = 0;      // inclusive
+input int    APEX_AsiaEndHourGMT         = 7;      // exclusive (until London)
 input bool   APEX_SessionFilterCryptoToo = false;  // crypto: always anytime unless hard+this true
 
 input group "LCS - RETIRED (not on live path OK67)"
@@ -594,9 +595,9 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded BUILD_ID=SA_ANALYZE_70");
-   Print("CRITICAL: SOURCE must be SNIPER_AI_OK70 — remove PRISM STRATEGY if present");
-   Print("ANALYZE70: APEX → ContFallback BEST structure | AntiScalp=", EnableAntiScalpMode,
+   Print("SNIPER AI Loaded BUILD_ID=SA_SESSION_71");
+   Print("CRITICAL: SOURCE must be SNIPER_AI_OK71 — remove PRISM STRATEGY if present");
+   Print("SESSION71: APEX → ContFallback BEST structure | AntiScalp=", EnableAntiScalpMode,
          " SoftSession HardBlock=", APEX_SessionHardBlock,
          " NewsAware=", EnableNewsAwareness,
          " SpreadAlwaysAllow | MaxOpen=", MaxOpenTrades,
@@ -617,6 +618,11 @@ int OnInit()
          " BypassEngines=", ContFallbackBypassEngines,
          " Spread/News never hard-block");
    UpdateNewsAwareness();
+   {
+      string sn="", sd=""; bool a=false,b=false,c=false,d=false; int h=-1;
+      DetectMarketSession(sn, sd, a, b, c, d, h);
+      Print("SESSION DETECT ON LOAD: ", sd);
+   }
    AnalyzeLiveMarket(true);
    Print("MARKET: ", LiveMarketSummary());
    if(PrintPathStatsOnInit)
@@ -903,6 +909,12 @@ struct LiveMarketAnalysis
    string   contBuyDetail;
    string   contSellDetail;
    string   session;
+   string   sessionName;   // LONDON / NEWYORK / LONDON+NY / ASIA / OFF
+   bool     inLondon;
+   bool     inNewYork;
+   bool     inAsia;
+   bool     inOverlap;
+   int      sessionHour;
    string   news;
    string   apexBuy;
    string   apexSell;
@@ -912,6 +924,7 @@ struct LiveMarketAnalysis
 };
 LiveMarketAnalysis g_LiveMkt;
 ulong              g_LiveMktCycle = 0;
+string             g_LastSessionNameLogged = "";
 
 struct SignalSnapshot
 {
@@ -964,6 +977,8 @@ bool ContStruct_HasDisplacement(const bool buy);
 bool ContFallbackBestStructureOK(const bool buy, string &detail);
 bool NewsAwarenessInWindow(string &detail);
 bool APEX_InKillZone(string &detail);
+void DetectMarketSession(string &name, string &detail, bool &inLondon, bool &inNY, bool &inAsia, bool &inOverlap, int &hourOut);
+
 
 bool HasStructureConfluence(bool buy);
 bool HasHTFStructureConfluence(bool buy);
@@ -9525,50 +9540,97 @@ bool APEX_HourInWindow(const int hour, const int startHour, const int endHour)
    return (hour >= startHour || hour < endHour);
 }
 
+// OK71: always DETECT which session is active (name it). Independent of kill-zone allow flags.
+void DetectMarketSession(string &name, string &detail, bool &inLondon, bool &inNY, bool &inAsia, bool &inOverlap, int &hourOut)
+{
+   name = "OFF";
+   detail = "";
+   inLondon = false;
+   inNY = false;
+   inAsia = false;
+   inOverlap = false;
+   hourOut = -1;
+
+   if(!EnableSessionDetect && !EnableAPEXSessionFilter)
+   {
+      name = "OFF";
+      detail = "session detect OFF (24/7)";
+      return;
+   }
+
+   datetime now = APEX_UseGMT ? TimeGMT() : TimeCurrent();
+   MqlDateTime dt;
+   TimeToStruct(now, dt);
+   hourOut = dt.hour;
+
+   // Detect by clock windows (always — for clean analysis)
+   inLondon = APEX_HourInWindow(hourOut, APEX_LondonStartHourGMT, APEX_LondonEndHourGMT);
+   inNY     = APEX_HourInWindow(hourOut, APEX_NYStartHourGMT, APEX_NYEndHourGMT);
+   inAsia   = APEX_HourInWindow(hourOut, APEX_AsiaStartHourGMT, APEX_AsiaEndHourGMT);
+   inOverlap = (inLondon && inNY);
+
+   if(inOverlap)      name = "LONDON+NY";
+   else if(inLondon)  name = "LONDON";
+   else if(inNY)      name = "NEWYORK";
+   else if(inAsia)    name = "ASIA";
+   else               name = "OFF";
+
+   string clock = APEX_UseGMT ? "GMT" : "SERVER";
+   detail = StringFormat("SESSION=%s hour=%d %s | London %d-%d=%s | NY %d-%d=%s | Asia %d-%d=%s",
+                         name, hourOut, clock,
+                         APEX_LondonStartHourGMT, APEX_LondonEndHourGMT, inLondon ? "Y" : "N",
+                         APEX_NYStartHourGMT, APEX_NYEndHourGMT, inNY ? "Y" : "N",
+                         APEX_AsiaStartHourGMT, APEX_AsiaEndHourGMT, inAsia ? "Y" : "N");
+
+   if(SessionLogOnChange && name != g_LastSessionNameLogged)
+   {
+      g_LastSessionNameLogged = name;
+      Print("SESSION DETECT: ", detail, " on ", BrokerSymbol,
+            APEX_SessionHardBlock ? " | HardBlock=ON" : " | soft (trade anytime)");
+   }
+}
+
 bool APEX_InKillZone(string &detail)
 {
    detail = "";
+   string name = "";
+   bool inLondon = false, inNY = false, inAsia = false, inOverlap = false;
+   int hour = -1;
+   DetectMarketSession(name, detail, inLondon, inNY, inAsia, inOverlap, hour);
+
    if(!EnableAPEXSessionFilter)
    {
-      detail = "session: filter OFF (24/7)";
+      detail = detail + " | filter OFF (24/7)";
       return true;
    }
 
    // Crypto: never hard-blocked unless SessionFilterCryptoToo + HardBlock
    if(!APEX_SessionFilterCryptoToo && IsNonScalpSymbol())
    {
-      detail = "session: crypto anytime";
+      detail = detail + " | crypto anytime";
       return true;
    }
 
-   datetime now = APEX_UseGMT ? TimeGMT() : TimeCurrent();
-   MqlDateTime dt;
-   TimeToStruct(now, dt);
-   int hour = dt.hour;
-
-   bool london = APEX_AllowLondon && APEX_HourInWindow(hour, APEX_LondonStartHourGMT, APEX_LondonEndHourGMT);
-   bool ny     = APEX_AllowNewYork && APEX_HourInWindow(hour, APEX_NYStartHourGMT, APEX_NYEndHourGMT);
-   bool asia   = APEX_AllowAsia && APEX_HourInWindow(hour, APEX_AsiaStartHourGMT, APEX_AsiaEndHourGMT);
-   bool inZone = (london || ny || asia);
+   // Kill-zone membership uses Allow* flags (detect still named session above)
+   bool killLondon = APEX_AllowLondon && inLondon;
+   bool killNY     = APEX_AllowNewYork && inNY;
+   bool killAsia   = APEX_AllowAsia && inAsia;
+   bool inZone = (killLondon || killNY || killAsia);
 
    if(inZone)
    {
-      detail = StringFormat("session: IN kill-zone hour=%d%s%s%s",
-                            hour,
-                            london ? " London" : "",
-                            ny ? " NY" : "",
-                            asia ? " Asia" : "");
+      detail = StringFormat("%s | IN kill-zone%s%s%s",
+                            detail,
+                            killLondon ? " London" : "",
+                            killNY ? " NY" : "",
+                            killAsia ? " Asia" : "");
       return true;
    }
 
-   // OUTSIDE kill zone
-   detail = StringFormat("session: OUTSIDE kill-zone hour=%d (London %d-%d / NY %d-%d)%s",
-                         hour,
-                         APEX_LondonStartHourGMT, APEX_LondonEndHourGMT,
-                         APEX_NYStartHourGMT, APEX_NYEndHourGMT,
+   detail = StringFormat("%s | OUTSIDE kill-zone%s",
+                         detail,
                          APEX_SessionHardBlock ? " HARD-BLOCK" : " soft — still allowed anytime");
 
-   // OK61: soft session = trade anytime (only annotate). Hard = block.
    if(APEX_SessionHardBlock)
       return false;
 
@@ -12024,9 +12086,20 @@ void AnalyzeLiveMarket(const bool force)
    m.contBuyOK  = ContFallbackBestStructureOK(true,  m.contBuyDetail);
    m.contSellOK = ContFallbackBestStructureOK(false, m.contSellDetail);
 
-   string sess = "";
-   APEX_InKillZone(sess);
+   string sess = "", sessName = "";
+   bool inL = false, inN = false, inA = false, inO = false;
+   int hourS = -1;
+   DetectMarketSession(sessName, sess, inL, inN, inA, inO, hourS);
+   // also annotate kill-zone soft/hard via APEX_InKillZone (does not change detect)
+   string kz = "";
+   APEX_InKillZone(kz);
    m.session = sess;
+   m.sessionName = sessName;
+   m.inLondon = inL;
+   m.inNewYork = inN;
+   m.inAsia = inA;
+   m.inOverlap = inO;
+   m.sessionHour = hourS;
 
    string newsDetail = "";
    bool newsWin = false;
@@ -12043,8 +12116,10 @@ void AnalyzeLiveMarket(const bool force)
    else m.bias = "FLAT";
 
    m.summary = StringFormat(
-      "%s | %s%s | BOS B/S=%s/%s | Zone B/S=%s/%s | Near=%s/%s | Disp=%s/%s | Cont B/S=%s/%s | %s",
+      "%s | SESSION=%s h%d | %s%s | BOS B/S=%s/%s | Zone B/S=%s/%s | Near=%s/%s | Disp=%s/%s | Cont B/S=%s/%s",
       m.bias,
+      m.sessionName,
+      m.sessionHour,
       EnumToString(m.regime),
       m.trendStrong ? "+ADX" : "",
       m.bosBuy ? "Y" : "N",
@@ -12056,8 +12131,7 @@ void AnalyzeLiveMarket(const bool force)
       m.dispBuy ? "Y" : "N",
       m.dispSell ? "Y" : "N",
       m.contBuyOK ? "READY" : "wait",
-      m.contSellOK ? "READY" : "wait",
-      m.session);
+      m.contSellOK ? "READY" : "wait");
 
    g_LiveMkt = m;
 }
@@ -12071,7 +12145,14 @@ string LiveMarketSummary()
 void PrintLiveMarketAnalysis()
 {
    AnalyzeLiveMarket(true);
-   Print("---- MARKET ANALYSIS BUILD=SA_ANALYZE_70 (", BrokerSymbol, ") ----");
+   Print("---- MARKET ANALYSIS BUILD=SA_SESSION_71 (", BrokerSymbol, ") ----");
+   Print("SESSION=", g_LiveMkt.sessionName,
+         " hour=", g_LiveMkt.sessionHour,
+         (APEX_UseGMT ? " GMT" : " SERVER"),
+         " London=", g_LiveMkt.inLondon,
+         " NY=", g_LiveMkt.inNewYork,
+         " Asia=", g_LiveMkt.inAsia,
+         " Overlap=", g_LiveMkt.inOverlap);
    Print("Bias=", g_LiveMkt.bias,
          " Regime=", EnumToString(g_LiveMkt.regime),
          " ADXstrong=", g_LiveMkt.trendStrong,

@@ -2,32 +2,33 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK70.mq5
-BUILD_ID: SA_ANALYZE_70
+File:     SNIPER_AI_OK71.mq5
+BUILD_ID: SA_SESSION_71
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK70.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK71.mq5
 
 ──────────────────────────────────────
-CLEAN MARKET ANALYSIS (OK70)
+SESSION DETECT (OK71)
 ──────────────────────────────────────
-One live snapshot per cycle:
-  Bias · Regime · BOS · Zone · Near · Disp
-  Cont READY/wait reasons · APEX wait · Session · News
+Detects and names:
+  ASIA · LONDON · NEWYORK · LONDON+NY · OFF
 
-Journal shows:
-  ---- MARKET ANALYSIS BUILD=SA_ANALYZE_70 ----
-  SUMMARY: BULL | REGIME_TRENDING+ADX | BOS B/S=Y/N | ...
+Journal:
+  SESSION DETECT: SESSION=LONDON hour=8 GMT | ...
+  MARKET ANALYSIS … SESSION=LONDON …
 
-Live path still: APEX → ContFallback (can trade)
-No ContSniper/PRISM diagnostic spam.
+Soft by default = detects sessions, still trades anytime.
+Set APEX_SessionHardBlock=true only if you want kill-zone-only entries.
+
+Also keeps: clean market analysis + APEX/ContFallback can trade.
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. REMOVE "PRISM STRATEGY"
-2. Copy SNIPER_AI_OK70.mq5 → MQL5/Experts/
-3. F7 → attach SNIPER_AI_OK70
-4. Experts: BUILD_ID=SA_ANALYZE_70
+2. Copy SNIPER_AI_OK71.mq5 → MQL5/Experts/
+3. F7 → attach SNIPER_AI_OK71
+4. Experts: BUILD_ID=SA_SESSION_71
