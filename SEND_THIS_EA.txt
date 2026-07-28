@@ -2,35 +2,35 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK62.mq5
-BUILD_ID: SA_APEX_WAITFIX_62
+File:     SNIPER_AI_OK63.mq5
+BUILD_ID: SA_APEX_EXEC_63
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK62.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK63.mq5
 
 ──────────────────────────────────────
-WHY YOU STILL SAW "no valid sniper setup"
+MAKES IT EXECUTE TRADES
 ──────────────────────────────────────
-1. That phrase is OLD PRISM wait text
-2. Diagnostics still printed ContSniper/RevSniper blocked
-3. OR you still have PRISM STRATEGY attached (source column)
+1) APEX first (high-prob)
+2) If APEX waits → ContFallback fires on trend
+   (ICE/IMCE bypassed so it actually fills)
 
-OK62 FIX:
-  • Wait = "APEX waiting | BUY: … | SELL: …"
-  • Diagnostics = APEX only (no Cont/Rev spam)
-  • Relaxed sweeps + zone not hard-required
-  • Soft session still trades anytime
-
-IF Experts source = PRISM STRATEGY → REMOVE IT.
-Must show: BUILD_ID=SA_APEX_WAITFIX_62
+Look for:
+  ULTRA CORE FIRE BUY/SELL [ContFallback]
+  or ULTRA CORE FIRE … [APEX]
+  then BUY/SELL approved / executed
 
 ──────────────────────────────────────
-INSTALL
+INSTALL (CRITICAL)
 ──────────────────────────────────────
-1. Remove PRISM STRATEGY from EVERY chart
-2. Delete old SNIPER* .ex5
-3. F7 SNIPER_AI_OK62.mq5
-4. Attach SNIPER_AI_OK62 fresh
-5. Experts: SA_APEX_WAITFIX_62 + APEX DIAGNOSTICS
+1. REMOVE "PRISM STRATEGY" from EVERY chart
+2. Delete old SNIPER*.ex5
+3. Copy SNIPER_AI_OK63.mq5 → MQL5/Experts/
+4. F7
+5. Attach SNIPER_AI_OK63 (NOT Prism)
+6. Experts MUST show:
+   BUILD_ID=SA_APEX_EXEC_63
+   SOURCE = SNIPER_AI_OK63 (not PRISM STRATEGY)
+7. Algo Trading ON · AutoTrading ON

@@ -1,12 +1,12 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK62.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK63.mq5
 
-BUILD_ID: SA_APEX_WAITFIX_62
+BUILD_ID: SA_APEX_EXEC_63
 Comment: SNIPER AI
 
-FIX: "no valid sniper setup" → real APEX wait reason.
-APEX-only diagnostics. Relaxed entries. Soft session anytime.
+EXECUTES: APEX first, then ContFallback on trend (engines bypassed).
+REMOVE PRISM STRATEGY or you will keep seeing ContSniper blocked / no valid setup.
 
-INSTALL: REMOVE PRISM STRATEGY → F7 OK62 → fresh attach →
-BUILD_ID=SA_APEX_WAITFIX_62 (source must NOT say PRISM STRATEGY)
+INSTALL: remove PRISM STRATEGY → F7 OK63 → attach SNIPER_AI_OK63 →
+BUILD_ID=SA_APEX_EXEC_63 · look for FIRE [ContFallback]

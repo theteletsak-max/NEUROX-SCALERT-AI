@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_APEX_WAITFIX_62                                   |
-//| SNIPER AI - APEX wait message + APEX-only diagnostics + relax   |
+//| BUILD_ID: SA_APEX_EXEC_63                                      |
+//| SNIPER AI - APEX first, Cont fallback EXECUTES when APEX waits  |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.30"
-#property description "SNIPER AI OK62: replace 'no valid sniper setup' with APEX wait reason; APEX-only diags"
-#property description "Remove PRISM STRATEGY. BUILD_ID=SA_APEX_WAITFIX_62"
+#property version   "5.31"
+#property description "SNIPER AI OK63: APEX + Cont fallback that EXECUTES (engines bypass on ContFallback)"
+#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK63. BUILD=SA_APEX_EXEC_63"
 
 #include <Trade/Trade.mqh>
 
@@ -94,7 +94,10 @@ input group "APEX - WORLD-CLASS LIQUIDITY SNIPER (LIVE)"
 // ONE decision. NO post-FIRE veto (tag APEX bypasses ICE/IMCE/Ultra re-check).
 
 input bool   EnableAPEXStrategy          = true;
-input bool   APEXOnlyLivePath            = true;   // LIVE = APEX only (recommended)
+input bool   APEXOnlyLivePath            = false;  // OK63: false so Cont fallback can execute
+input bool   EnableContFallback          = true;   // OK63: when APEX waits, Cont still EXECUTES
+input bool   ContFallbackTrendOnly       = true;   // trend direction enough for fallback fire
+input bool   ContFallbackBypassEngines   = true;   // skip ICE/IMCE/SMT on ContFallback (must fill)
 input ENUM_TIMEFRAMES APEX_BiasTF        = PERIOD_H4;
 input ENUM_TIMEFRAMES APEX_EntryTF       = PERIOD_H1;
 input int    APEX_BiasMA_Period          = 200;
@@ -571,19 +574,15 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_APEX_WAITFIX_62");
-   Print("IMPORTANT: If Experts source says PRISM STRATEGY — REMOVE IT. This file is SNIPER_AI_OK62 / APEX");
-   Print("APEX62: wait message is APEX reason (not 'no valid sniper setup'); diagnostics are APEX-only");
-   Print("APEX62: Relaxed=", APEX_RelaxedEntries,
-         " ZoneHard=", APEX_RequireUnmitigatedZone,
-         " SoftSession HardBlock=", APEX_SessionHardBlock);
-   Print("APEX: OnlyLive=", APEXOnlyLivePath,
-         " Bias=", EnumToString(APEX_BiasTF),
-         " Entry=", EnumToString(APEX_EntryTF),
-         " | NO post-FIRE veto");
-   Print("LCS fallback Enable=", EnableLCSStrategy);
-   Print("TRADEUNBLOCK53: DrawdownShield=", EnableDrawdownProtection,
-         " ResetPeakOnInit=", ResetPeakEquityOnInit);
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_APEX_EXEC_63");
+   Print("CRITICAL: Experts SOURCE must be SNIPER_AI_OK63 or SNIPER_AI — if it says PRISM STRATEGY, REMOVE that EA now");
+   Print("EXEC63: APEX first, then ContFallback=", EnableContFallback,
+         " TrendOnly=", ContFallbackTrendOnly,
+         " BypassEngines=", ContFallbackBypassEngines,
+         " APEXOnly=", APEXOnlyLivePath);
+   Print("SoftSession HardBlock=", APEX_SessionHardBlock, " (false=trade anytime)");
+   Print("APEX Bias=", EnumToString(APEX_BiasTF), " Entry=", EnumToString(APEX_EntryTF));
+   Print("TRADEUNBLOCK: DrawdownShield=", EnableDrawdownProtection);
    Print("DEFENDPLUS: PreTP1BE=", DefensePreTP1AdverseBE,
          " MAE_ATR=", DefenseMAE_ATR,
          " EventICE_Boost=", EventICE_MinScoreBoost,
@@ -8017,10 +8016,15 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
       }
    }
 
-   // APEX / LCS already passed full checklist — NEVER post-FIRE veto
+   // APEX / LCS / ContFallback already passed — NEVER post-FIRE veto
    if(apexTag)
    {
       Print("ULTRA APEX PASS (no post-FIRE veto) on ", BrokerSymbol, " — ", g_APEX_LastDetail);
+      return true;
+   }
+   if(strategyTag == "ContFallback" || (strategyTag == "ContSniper" && EnableContFallback && ContFallbackBypassEngines))
+   {
+      Print("ULTRA CONT FALLBACK PASS (execute) on ", BrokerSymbol, " ", (buy ? "BUY" : "SELL"));
       return true;
    }
    if(lcsTag && (NeverBlockValidSniperEntry || UltraAggressiveFire || !UltraSniperEntryGate))
@@ -8955,8 +8959,12 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
 
 bool PrismInstitutionalEnginesOK(bool buy, const string strategyTag)
 {
-   // APEX / LCS embed their own world-class checklist — no ICE/IMCE/SMT re-veto
+   // APEX / LCS / ContFallback embed own checklist — no ICE/IMCE/SMT re-veto
    if(strategyTag == "APEX" || strategyTag == "LCS")
+      return true;
+   if(strategyTag == "ContFallback" && ContFallbackBypassEngines)
+      return true;
+   if(strategyTag == "ContSniper" && EnableContFallback && ContFallbackBypassEngines)
       return true;
 
    if(EnableBeastMode && PRISM_IsReversalTag(strategyTag) && !PRISMReversalQualityOK(buy))
@@ -10955,33 +10963,98 @@ void EvaluateLCSStrategies(bool &buySignal, bool &sellSignal, string &strategyTa
    }
 }
 
+void EvaluateContFallback(bool &buySignal, bool &sellSignal, string &strategyTag)
+{
+   buySignal = false;
+   sellSignal = false;
+   strategyTag = "";
+   if(!EnableContFallback)
+      return;
+
+   bool bull = IsBullTrend();
+   bool bear = IsBearTrend();
+
+   // Avoid conflict
+   if(bull && bear)
+   {
+      if(CalculatePRISMScore(true) >= CalculatePRISMScore(false))
+         bear = false;
+      else
+         bull = false;
+   }
+
+   if(ContFallbackTrendOnly)
+   {
+      // EXEC63: clear trend bias → fire ContFallback (engines bypassed)
+      if(!bull && !bear)
+      {
+         double ema = GetEMA();
+         double bid = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
+         if(ema > 0.0 && bid > 0.0)
+         {
+            if(bid > ema) bull = true;
+            else if(bid < ema) bear = true;
+         }
+      }
+      if(bull && !bear)
+      {
+         buySignal = true;
+         strategyTag = "ContFallback";
+         Print("ULTRA CORE FIRE BUY [ContFallback] trend-continuation execute on ", BrokerSymbol);
+         return;
+      }
+      if(bear && !bull)
+      {
+         sellSignal = true;
+         strategyTag = "ContFallback";
+         Print("ULTRA CORE FIRE SELL [ContFallback] trend-continuation execute on ", BrokerSymbol);
+         return;
+      }
+      return;
+   }
+
+   // Structure-assisted fallback
+   if(bull && !bear && AggressiveContinuationBuySetup())
+   {
+      buySignal = true;
+      strategyTag = "ContFallback";
+      Print("ULTRA CORE FIRE BUY [ContFallback] Cont setup on ", BrokerSymbol);
+      return;
+   }
+   if(bear && !bull && AggressiveContinuationSellSetup())
+   {
+      sellSignal = true;
+      strategyTag = "ContFallback";
+      Print("ULTRA CORE FIRE SELL [ContFallback] Cont setup on ", BrokerSymbol);
+      return;
+   }
+}
+
 void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategyTag)
 {
    buySignal = false;
    sellSignal = false;
    strategyTag = "";
 
-   // OK58: APEX is the world-class live engine when enabled+OnlyLive.
-   if(EnableAPEXStrategy && APEXOnlyLivePath)
-   {
-      EvaluateAPEXStrategies(buySignal, sellSignal, strategyTag);
-      return;
-   }
-
+   // 1) APEX first (high-prob)
    if(EnableAPEXStrategy)
    {
       EvaluateAPEXStrategies(buySignal, sellSignal, strategyTag);
       if(buySignal || sellSignal)
          return;
+      if(APEXOnlyLivePath && !EnableContFallback)
+         return;
    }
 
-   // LCS fallback (OK57) if APEX not exclusive / missed
-   if(EnableLCSStrategy && LCSOnlyLivePath)
+   // 2) Cont fallback — MUST execute when APEX waits (OK63)
+   if(EnableContFallback)
    {
-      EvaluateLCSStrategies(buySignal, sellSignal, strategyTag);
-      return;
+      EvaluateContFallback(buySignal, sellSignal, strategyTag);
+      if(buySignal || sellSignal)
+         return;
    }
 
+   // 3) LCS optional
    if(EnableLCSStrategy)
    {
       EvaluateLCSStrategies(buySignal, sellSignal, strategyTag);
@@ -10989,7 +11062,9 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
          return;
    }
 
-   EvaluateSpecCompliantStrategies(buySignal, sellSignal, strategyTag);
+   // 4) Legacy PRISM only if explicitly not APEX-only and no Cont fallback
+   if(!APEXOnlyLivePath && !EnableContFallback)
+      EvaluateSpecCompliantStrategies(buySignal, sellSignal, strategyTag);
 }
 
 //+------------------------------------------------------------------+
@@ -11682,7 +11757,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_APEX_WAITFIX_62\n",
+         "Comment: SNIPER AI | BUILD: SA_APEX_EXEC_63\n",
          "=============================================="
       );
       return;
@@ -11704,7 +11779,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_APEX_WAITFIX_62\n",
+         "BUILD: SA_APEX_EXEC_63\n",
          "=========================================="
       );
       return;
@@ -11856,16 +11931,16 @@ void PrintSetupDiagnostics()
 
    // OK62: when APEX is the only live path, do NOT print Cont/Rev/Instant
    // "live=blocked" spam — that made users think PRISM was still live.
-   if(EnableAPEXStrategy && APEXOnlyLivePath)
+   if(EnableAPEXStrategy && (APEXOnlyLivePath || EnableContFallback))
    {
-      Print("---- APEX DIAGNOSTICS (", BrokerSymbol, " Bias=", EnumToString(APEX_BiasTF),
-            " Entry=", EnumToString(APEX_EntryTF), " BUILD=SA_APEX_WAITFIX_62) ----");
-      Print("APEX waiting BUY:  ", (g_APEX_LastBuyFail == "" ? "(none / recently passed)" : g_APEX_LastBuyFail));
-      Print("APEX waiting SELL: ", (g_APEX_LastSellFail == "" ? "(none / recently passed)" : g_APEX_LastSellFail));
-      Print("APEX SoftSession HardBlock=", APEX_SessionHardBlock,
-            " Relaxed=", APEX_RelaxedEntries,
-            " ZoneHard=", APEX_RequireUnmitigatedZone);
-      Print("NOTE: If you still see ContSniper/RevSniper lines, you attached the WRONG EA (PRISM STRATEGY)");
+      Print("---- LIVE DIAGNOSTICS BUILD=SA_APEX_EXEC_63 (", BrokerSymbol, ") ----");
+      Print("APEX waiting BUY:  ", (g_APEX_LastBuyFail == "" ? "(none)" : g_APEX_LastBuyFail));
+      Print("APEX waiting SELL: ", (g_APEX_LastSellFail == "" ? "(none)" : g_APEX_LastSellFail));
+      Print("ContFallback ON=", EnableContFallback, " TrendOnly=", ContFallbackTrendOnly,
+            " BypassEngines=", ContFallbackBypassEngines,
+            " | bullTrend=", IsBullTrend(), " bearTrend=", IsBearTrend());
+      Print("NOTE: ContFallback fires when APEX waits — look for FIRE [ContFallback] / FIRE [APEX]");
+      Print("NOTE: If source=PRISM STRATEGY you have the WRONG EA attached");
       return;
    }
 
@@ -12092,14 +12167,16 @@ void InstantExecution()
 
    if(g_UltraLastReject == "" && EnableUltraCore)
    {
-      // OK62: never say "no valid sniper setup" when APEX is live — that was PRISM wording
-      if(EnableAPEXStrategy && APEXOnlyLivePath)
+      // OK63: APEX wait or ContFallback wait — never PRISM "no valid sniper setup"
+      if(EnableAPEXStrategy || EnableContFallback)
       {
-         string wait = "APEX waiting";
-         if(g_APEX_LastBuyFail != "" || g_APEX_LastSellFail != "")
-            wait = StringFormat("APEX waiting | BUY: %s | SELL: %s",
-                                (g_APEX_LastBuyFail == "" ? "ok/na" : g_APEX_LastBuyFail),
-                                (g_APEX_LastSellFail == "" ? "ok/na" : g_APEX_LastSellFail));
+         string wait = "waiting for APEX/ContFallback";
+         if(EnableContFallback)
+            wait = StringFormat("APEX wait + ContFallback ready check | BUY fail: %s | SELL fail: %s | trend bull=%s bear=%s",
+                                (g_APEX_LastBuyFail == "" ? "-" : g_APEX_LastBuyFail),
+                                (g_APEX_LastSellFail == "" ? "-" : g_APEX_LastSellFail),
+                                IsBullTrend() ? "Y" : "N",
+                                IsBearTrend() ? "Y" : "N");
          g_UltraLastReject = wait;
       }
       else

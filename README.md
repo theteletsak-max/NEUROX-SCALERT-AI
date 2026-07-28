@@ -25,16 +25,15 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 
 ### Install (MT5) — single file (compile-safe)
 
-Use **[`SNIPER_AI_OK62.mq5`](SNIPER_AI_OK62.mq5)**  
-`BUILD_ID: SA_APEX_WAITFIX_62`
+Use **[`SNIPER_AI_OK63.mq5`](SNIPER_AI_OK63.mq5)**  
+`BUILD_ID: SA_APEX_EXEC_63`
 
-1. **Remove `PRISM STRATEGY` from every chart** (this was why you still saw ContSniper / “no valid sniper setup”)
-2. Copy **`SNIPER_AI_OK62.mq5`** → `MQL5/Experts/` → **F7**
-3. Attach **this** file fresh → Algo Trading ON
-4. Experts must show `SA_APEX_WAITFIX_62` and `---- APEX DIAGNOSTICS ----`
-5. Wait text is now `APEX waiting | BUY: … | SELL: …` (not “no valid sniper setup”)
+1. **Remove `PRISM STRATEGY` from every chart**  
+2. Copy **`SNIPER_AI_OK63.mq5`** → F7  
+3. Attach **SNIPER_AI_OK63** (source must not say PRISM STRATEGY)  
+4. Experts: `SA_APEX_EXEC_63` + `FIRE [ContFallback]` or `FIRE [APEX]`  
 
-**OK62:** APEX-only diagnostics + real wait reasons + relaxed sweeps. Soft session still trades anytime.
+**OK63:** APEX first, then **ContFallback executes on trend** (ICE/IMCE bypassed). Soft session still anytime.
 
 See [`DOWNLOAD_SNIPER_AI.txt`](DOWNLOAD_SNIPER_AI.txt)
 
