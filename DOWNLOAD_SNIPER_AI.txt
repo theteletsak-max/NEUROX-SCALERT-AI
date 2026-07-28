@@ -1,11 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK69.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK70.mq5
 
-BUILD_ID: SA_CANTRADE_69
+BUILD_ID: SA_ANALYZE_70
 Comment: SNIPER AI
 
-CAN TRADE: APEX + ContFallback structure (Zone OR Disp). News/spread never block.
+Clean market analysis + APEX/ContFallback can trade.
 REMOVE PRISM STRATEGY.
 
-INSTALL: F7 OK69 → BUILD_ID=SA_CANTRADE_69 · FIRE [APEX] / FIRE [ContFallback]
+INSTALL: F7 OK70 → BUILD_ID=SA_ANALYZE_70 · look for MARKET ANALYSIS / FIRE

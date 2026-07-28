@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_CANTRADE_69                                      |
-//| SNIPER AI - can trade: APEX + ContFallback structure that actually fills  |
+//| BUILD_ID: SA_ANALYZE_70                                      |
+//| SNIPER AI - clean live market analysis + APEX/ContFallback that can trade  |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.37"
-#property description "SNIPER AI OK69: CAN TRADE — quality ContFallback without impossible stacked gates; APEX unmitigated soft"
-#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK69. BUILD=SA_CANTRADE_69"
+#property version   "5.38"
+#property description "SNIPER AI OK70: CLEAN MARKET ANALYSIS — one live snapshot (trend/BOS/zone/regime/session/news) for APEX+Cont"
+#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK70. BUILD=SA_ANALYZE_70"
 
 #include <Trade/Trade.mqh>
 
@@ -594,9 +594,9 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded BUILD_ID=SA_CANTRADE_69");
-   Print("CRITICAL: SOURCE must be SNIPER_AI_OK69 — remove PRISM STRATEGY if present");
-   Print("CANTRADE69: APEX → ContFallback BEST structure | AntiScalp=", EnableAntiScalpMode,
+   Print("SNIPER AI Loaded BUILD_ID=SA_ANALYZE_70");
+   Print("CRITICAL: SOURCE must be SNIPER_AI_OK70 — remove PRISM STRATEGY if present");
+   Print("ANALYZE70: APEX → ContFallback BEST structure | AntiScalp=", EnableAntiScalpMode,
          " SoftSession HardBlock=", APEX_SessionHardBlock,
          " NewsAware=", EnableNewsAwareness,
          " SpreadAlwaysAllow | MaxOpen=", MaxOpenTrades,
@@ -617,6 +617,8 @@ int OnInit()
          " BypassEngines=", ContFallbackBypassEngines,
          " Spread/News never hard-block");
    UpdateNewsAwareness();
+   AnalyzeLiveMarket(true);
+   Print("MARKET: ", LiveMarketSummary());
    if(PrintPathStatsOnInit)
       PrintStrategyPerformanceReport();
 
@@ -880,6 +882,37 @@ enum MarketRegime
    REGIME_RANGING
 };
 
+// OK70: clean live-market snapshot used by diagnostics + wait reasons
+struct LiveMarketAnalysis
+{
+   bool     valid;
+   bool     bull;
+   bool     bear;
+   bool     trendStrong;
+   MarketRegime regime;
+   bool     bosBuy;
+   bool     bosSell;
+   bool     zoneBuy;
+   bool     zoneSell;
+   bool     nearBuy;
+   bool     nearSell;
+   bool     dispBuy;
+   bool     dispSell;
+   bool     contBuyOK;
+   bool     contSellOK;
+   string   contBuyDetail;
+   string   contSellDetail;
+   string   session;
+   string   news;
+   string   apexBuy;
+   string   apexSell;
+   string   bias;
+   string   summary;
+   datetime barTime;
+};
+LiveMarketAnalysis g_LiveMkt;
+ulong              g_LiveMktCycle = 0;
+
 struct SignalSnapshot
 {
    ulong  ticket;
@@ -921,6 +954,17 @@ int CalculatePRISMScore(bool buy);
 int EffectiveMinimumMPIScore();
 void MarkContFallbackFillIfNeeded(); // OK64 anti-scalp fill stamp (defined near ContFallback)
 void UpdateNewsAwareness(); // OK65 news know/log (no block)
+void AnalyzeLiveMarket(const bool force = false); // OK70 clean market read
+string LiveMarketSummary();
+void PrintLiveMarketAnalysis();
+bool ContStruct_HasQualityBOS(const bool buy);
+bool ContStruct_GetFreshZone(const bool buy, double &zTop, double &zBot, string &kind);
+bool ContStruct_PriceNearZone(const bool buy, const double zTop, const double zBot);
+bool ContStruct_HasDisplacement(const bool buy);
+bool ContFallbackBestStructureOK(const bool buy, string &detail);
+bool NewsAwarenessInWindow(string &detail);
+bool APEX_InKillZone(string &detail);
+
 bool HasStructureConfluence(bool buy);
 bool HasHTFStructureConfluence(bool buy);
 bool IsVolatilityExpanding();
@@ -11939,11 +11983,122 @@ bool FinalTradeCheck()
 // SYMBOL (not every tick, to avoid flooding the log), so it's immediately
 // visible which specific condition is holding back a trade.
 
+
+//================ CLEAN LIVE MARKET ANALYSIS (OK70) =================//
+// One read of what matters for APEX + ContFallback — no ContSniper/PRISM noise.
+
+void AnalyzeLiveMarket(const bool force)
+{
+   if(!force && g_LiveMktCycle == g_CycleCounter && g_LiveMkt.valid)
+      return;
+
+   g_LiveMktCycle = g_CycleCounter;
+   LiveMarketAnalysis m;
+   m.valid = true;
+   m.barTime = iTime(BrokerSymbol, EntryTF, 0);
+   m.bull = IsBullTrend();
+   m.bear = IsBearTrend();
+   m.trendStrong = TrendStrong();
+   m.regime = GetMarketRegime();
+
+   // Refresh zone trackers once so analysis matches ContFallback
+   UpdateOrderBlockTracking();
+   UpdateFVGTracking();
+
+   m.bosBuy  = ContStruct_HasQualityBOS(true);
+   m.bosSell = ContStruct_HasQualityBOS(false);
+
+   double zTop = 0.0, zBot = 0.0;
+   string kind = "";
+   m.zoneBuy  = ContStruct_GetFreshZone(true,  zTop, zBot, kind);
+   m.nearBuy  = m.zoneBuy  && ContStruct_PriceNearZone(true,  zTop, zBot);
+   m.dispBuy  = ContStruct_HasDisplacement(true);
+
+   zTop = 0.0; zBot = 0.0; kind = "";
+   m.zoneSell = ContStruct_GetFreshZone(false, zTop, zBot, kind);
+   m.nearSell = m.zoneSell && ContStruct_PriceNearZone(false, zTop, zBot);
+   m.dispSell = ContStruct_HasDisplacement(false);
+
+   m.contBuyDetail = "";
+   m.contSellDetail = "";
+   m.contBuyOK  = ContFallbackBestStructureOK(true,  m.contBuyDetail);
+   m.contSellOK = ContFallbackBestStructureOK(false, m.contSellDetail);
+
+   string sess = "";
+   APEX_InKillZone(sess);
+   m.session = sess;
+
+   string newsDetail = "";
+   bool newsWin = false;
+   if(EnableNewsAwareness)
+      newsWin = NewsAwarenessInWindow(newsDetail);
+   m.news = newsWin ? newsDetail : (EnableNewsAwareness ? "news clear" : "news awareness off");
+
+   m.apexBuy  = (g_APEX_LastBuyFail  == "" ? "ready/checking" : g_APEX_LastBuyFail);
+   m.apexSell = (g_APEX_LastSellFail == "" ? "ready/checking" : g_APEX_LastSellFail);
+
+   if(m.bull && !m.bear) m.bias = "BULL";
+   else if(m.bear && !m.bull) m.bias = "BEAR";
+   else if(m.bull && m.bear) m.bias = "MIXED";
+   else m.bias = "FLAT";
+
+   m.summary = StringFormat(
+      "%s | %s%s | BOS B/S=%s/%s | Zone B/S=%s/%s | Near=%s/%s | Disp=%s/%s | Cont B/S=%s/%s | %s",
+      m.bias,
+      EnumToString(m.regime),
+      m.trendStrong ? "+ADX" : "",
+      m.bosBuy ? "Y" : "N",
+      m.bosSell ? "Y" : "N",
+      m.zoneBuy ? "Y" : "N",
+      m.zoneSell ? "Y" : "N",
+      m.nearBuy ? "Y" : "N",
+      m.nearSell ? "Y" : "N",
+      m.dispBuy ? "Y" : "N",
+      m.dispSell ? "Y" : "N",
+      m.contBuyOK ? "READY" : "wait",
+      m.contSellOK ? "READY" : "wait",
+      m.session);
+
+   g_LiveMkt = m;
+}
+
+string LiveMarketSummary()
+{
+   AnalyzeLiveMarket(false);
+   return g_LiveMkt.summary;
+}
+
+void PrintLiveMarketAnalysis()
+{
+   AnalyzeLiveMarket(true);
+   Print("---- MARKET ANALYSIS BUILD=SA_ANALYZE_70 (", BrokerSymbol, ") ----");
+   Print("Bias=", g_LiveMkt.bias,
+         " Regime=", EnumToString(g_LiveMkt.regime),
+         " ADXstrong=", g_LiveMkt.trendStrong,
+         " | ", g_LiveMkt.session);
+   Print("Structure BUY : BOS=", g_LiveMkt.bosBuy,
+         " Zone=", g_LiveMkt.zoneBuy,
+         " Near=", g_LiveMkt.nearBuy,
+         " Disp=", g_LiveMkt.dispBuy,
+         " Cont=", (g_LiveMkt.contBuyOK ? "READY" : g_LiveMkt.contBuyDetail));
+   Print("Structure SELL: BOS=", g_LiveMkt.bosSell,
+         " Zone=", g_LiveMkt.zoneSell,
+         " Near=", g_LiveMkt.nearSell,
+         " Disp=", g_LiveMkt.dispSell,
+         " Cont=", (g_LiveMkt.contSellOK ? "READY" : g_LiveMkt.contSellDetail));
+   Print("APEX BUY wait : ", g_LiveMkt.apexBuy);
+   Print("APEX SELL wait: ", g_LiveMkt.apexSell);
+   Print("News: ", g_LiveMkt.news);
+   Print("SUMMARY: ", g_LiveMkt.summary);
+   Print("NOTE: live path APEX → ContFallback only | spread/news never hard-block");
+}
+
+
 void PrintSetupDiagnostics()
 {
    int idx = GetSymbolIndex(BrokerSymbol);
 
-   if(idx < 0)
+   if(idx < 0 || idx >= ArraySize(DiagLastBarTimeArr))
       return;
 
    datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
@@ -11953,72 +12108,8 @@ void PrintSetupDiagnostics()
 
    DiagLastBarTimeArr[idx] = barTime;
 
-   // OK67 PURE: only APEX/ContFallback diagnostics (never ContSniper spam)
-   Print("---- LIVE DIAGNOSTICS BUILD=SA_CANTRADE_69 (", BrokerSymbol, ") ----");
-   Print("APEX waiting BUY:  ", (g_APEX_LastBuyFail == "" ? "(none)" : g_APEX_LastBuyFail));
-   Print("APEX waiting SELL: ", (g_APEX_LastSellFail == "" ? "(none)" : g_APEX_LastSellFail));
-   Print("ContFallback ON=", EnableContFallback,
-         " BypassEngines=", ContFallbackBypassEngines,
-         " | bullTrend=", IsBullTrend(), " bearTrend=", IsBearTrend());
-   Print("NOTE: LIVE = APEX → ContFallback STRUCT (BOS+zone, ZoneOrDisp) — can trade");
-   Print("NOTE: news aware, spread never blocks | remove PRISM STRATEGY if source says that");
-   return;
-
-   // RETIRED ContSniper diagnostics below (unreachable)
-   Print("---- SETUP DIAGNOSTICS (", BrokerSymbol, " ", EnumToString(EntryTF), ", mode=", EnumToString(StrategyMode), ") ----");
-
-   {
-      bool trendOK = IsBullTrend(), trendOKSell = IsBearTrend();
-      bool strong = TrendStrong();
-      double ema = GetEMA(), atr = GetFilterATR();
-      double priceB = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
-      bool pulledBack = (ema != EMPTY_VALUE && atr > 0.0 && MathAbs(priceB - ema) <= atr * PullbackMaxATRMultiple);
-      bool bos = DetectBOS(), choch = DetectCHoCH(), sweep = DetectLiquiditySweep();
-      bool bullFVG = DetectBullishFVG(), bearFVG = DetectBearishFVG();
-      bool bullOB = DetectBullishOrderBlock(), bearOB = DetectBearishOrderBlock();
-      double chHigh = GetChannelHigh(SpecBreakout_ChannelLookbackBars);
-      double chLow  = GetChannelLow(SpecBreakout_ChannelLookbackBars);
-      double closeBar = iClose(BrokerSymbol, EntryTF, SignalBarIndex());
-
-      Print("ContSniper BUY:  live=", (AggressiveContinuationBuySetup() ? "WOULD PASS -> TRADE" : "blocked"),
-            " | trend=", trendOK, " ADX=", strong, " BOS=", bos, " OB=", bullOB, " FVG=", bullFVG);
-      Print("ContSniper SELL: live=", (AggressiveContinuationSellSetup() ? "WOULD PASS -> TRADE" : "blocked"),
-            " | trend=", trendOKSell, " ADX=", strong, " BOS=", bos, " OB=", bearOB, " FVG=", bearFVG);
-      Print("RevSniper BUY:   live=", (AggressiveReversalBuySetup() ? "WOULD PASS -> TRADE" : "blocked"),
-            " | sweep=", sweep, " CHoCH=", choch, " OB=", bullOB, " FVG=", bullFVG);
-      Print("RevSniper SELL:  live=", (AggressiveReversalSellSetup() ? "WOULD PASS -> TRADE" : "blocked"),
-            " | sweep=", sweep, " CHoCH=", choch, " OB=", bearOB, " FVG=", bearFVG);
-      Print("InstantTrend BUY:  live=", (InstantTrendSniperBuySetup() ? "WOULD PASS -> TRADE" : "blocked"),
-            " | trend=", trendOK, " ADXstrong=", strong);
-      Print("InstantTrend SELL: live=", (InstantTrendSniperSellSetup() ? "WOULD PASS -> TRADE" : "blocked"),
-            " | trend=", trendOKSell, " ADXstrong=", strong);
-      Print("TrendPullback BUY: live=", (TrendPullbackBuySetup() ? "WOULD PASS" : "blocked"),
-            " | pulledBack=", pulledBack, " BOS=", bos);
-      Print("LiquiditySweep BUY: live=", (LiquiditySweepBuySetup() ? "WOULD PASS" : "blocked"),
-            " | sweep=", sweep, " CHoCH=", choch, " bullOB=", bullOB);
-      Print("FVG+OB BUY: live=", (FVGOrderBlockBuySetup() ? "WOULD PASS" : "blocked"),
-            " | BOS=", bos, " bullFVG=", bullFVG, " bullOB=", bullOB);
-      Print("VolBreakout BUY: live=", (SpecVolatilityBreakoutBuySetup() ? "WOULD PASS" : "blocked"),
-            " | close=", closeBar, " chHigh=", chHigh, " | SELL live=",
-            (SpecVolatilityBreakoutSellSetup() ? "WOULD PASS" : "blocked"), " chLow=", chLow);
-      bool eventQ = EventQualityModeActive();
-      Print("NOTE: AlwaysQuality=", EnableAlwaysQualityMode,
-            " QualityGatesACTIVE=", QualityGatesActive(),
-            " EventTighten=", eventQ,
-            " MPI floor=", EffectiveMinimumMPIScore(),
-            " NewsAware=", EnableNewsAwareness,
-            " SpreadAlwaysAllow=true");
-      Print("NOTE: ULTRA CORE PreferQuality=", PreferQualityPaths,
-            " TryNextPath=", TryNextPathIfEnginesFail,
-            " Beast=", UltraGetBeastScore(true, "ContSniper").overall,
-            " Conf%=", UltraGetBeastScore(true, "ContSniper").confidencePct,
-            " ICE_MinScore=", ICE_MinScore,
-            " IMCE=", IMCEContextToString(GetIMCEContext()),
-            " grade=", PRISMGetTradeGrade(true, "ContSniper"));
-      Print("NOTE: Cached cycle pipeline; sniper entry checklist; explainable rejects; MPI wait OFF");
-      if(g_UltraLastReject != "")
-         Print("NOTE: Last reject — ", g_UltraLastReject);
-   }
+   // OK70: clean market analysis only (no ContSniper/PRISM spam)
+   PrintLiveMarketAnalysis();
 }
 
 input bool EnableSetupLogging = true; // CHANGED default to true - "silent when nothing fires" was indistinguishable from "broken" with no way to tell the difference. Prints once per new bar only, not per-tick, so it won't flood the Journal.
@@ -12060,8 +12151,9 @@ void InstantExecution()
       return;
    }
 
-   // OK65: know news (log only) — never used to refuse entries here
+   // OK70: news aware + clean market analysis (never refuse on news/spread)
    UpdateNewsAwareness();
+   AnalyzeLiveMarket(false);
 
    if(EnableUltraCore && UltraHealthMonitor)
       g_UltraDecisionStartMs = (long)GetTickCount();
@@ -12192,20 +12284,17 @@ void InstantExecution()
 
    if(g_UltraLastReject == "" && EnableUltraCore)
    {
-      // OK63: APEX wait or ContFallback wait — never PRISM "no valid sniper setup"
-      if(EnableAPEXStrategy || EnableContFallback)
-      {
-         string wait = "waiting for APEX/ContFallback";
-         if(EnableContFallback)
-            wait = StringFormat("APEX wait + ContFallback ready check | BUY fail: %s | SELL fail: %s | trend bull=%s bear=%s",
-                                (g_APEX_LastBuyFail == "" ? "-" : g_APEX_LastBuyFail),
-                                (g_APEX_LastSellFail == "" ? "-" : g_APEX_LastSellFail),
-                                IsBullTrend() ? "Y" : "N",
-                                IsBearTrend() ? "Y" : "N");
-         g_UltraLastReject = wait;
-      }
-      else
-         g_UltraLastReject = "no valid sniper setup this cycle";
+      AnalyzeLiveMarket(false);
+      // Clean wait reason from live market analysis (never PRISM ContSniper spam)
+      string wait = "MARKET " + g_LiveMkt.summary;
+      if(EnableContFallback)
+         wait = StringFormat("WAIT | %s | ContB=%s ContS=%s | APEX B=%s S=%s",
+                             g_LiveMkt.summary,
+                             g_LiveMkt.contBuyOK ? "READY" : g_LiveMkt.contBuyDetail,
+                             g_LiveMkt.contSellOK ? "READY" : g_LiveMkt.contSellDetail,
+                             (g_APEX_LastBuyFail == "" ? "-" : g_APEX_LastBuyFail),
+                             (g_APEX_LastSellFail == "" ? "-" : g_APEX_LastSellFail));
+      g_UltraLastReject = wait;
       g_UltraLastDecision = "WAIT";
    }
 

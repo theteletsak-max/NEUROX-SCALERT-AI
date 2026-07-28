@@ -1,1 +1,3 @@
-CURRENT: SNIPER_AI_OK69.mq5\nBUILD_ID: SA_CANTRADE_69\nLive: APEX → ContFallback can-trade structure\n
+CURRENT: SNIPER_AI_OK70.mq5
+BUILD_ID: SA_ANALYZE_70
+Clean market analysis + APEX/ContFallback

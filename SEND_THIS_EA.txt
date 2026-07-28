@@ -2,41 +2,32 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK69.mq5
-BUILD_ID: SA_CANTRADE_69
+File:     SNIPER_AI_OK70.mq5
+BUILD_ID: SA_ANALYZE_70
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK69.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK70.mq5
 
 ──────────────────────────────────────
-CAN TRADE (OK69)
+CLEAN MARKET ANALYSIS (OK70)
 ──────────────────────────────────────
-Live: APEX → ContFallback
+One live snapshot per cycle:
+  Bias · Regime · BOS · Zone · Near · Disp
+  Cont READY/wait reasons · APEX wait · Session · News
 
-Why OK68 rarely filled:
-  required near-zone AND displacement AND discount/premium together
+Journal shows:
+  ---- MARKET ANALYSIS BUILD=SA_ANALYZE_70 ----
+  SUMMARY: BULL | REGIME_TRENDING+ADX | BOS B/S=Y/N | ...
 
-OK69 fixes:
-  • ContFallback: BOS + fresh zone, then Zone OR Disp
-  • Discount/premium OFF (was blocking after BOS)
-  • Two-bar BOS optional
-  • APEX unmitigated zone OFF again (can fill)
-  • Shorter ContFallback cooldown (60m)
-  • News/spread still never hard-block
-
-Still NOT scalping: needs BOS + zone structure, engines bypassed on ContFallback.
-
-Look for:
-  BUILD_ID=SA_CANTRADE_69
-  FIRE [APEX] or FIRE [ContFallback] STRUCT …
+Live path still: APEX → ContFallback (can trade)
+No ContSniper/PRISM diagnostic spam.
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. REMOVE "PRISM STRATEGY"
-2. Copy SNIPER_AI_OK69.mq5 → MQL5/Experts/
-3. F7 → attach SNIPER_AI_OK69
-4. Experts: BUILD_ID=SA_CANTRADE_69
-5. Algo Trading ON
+2. Copy SNIPER_AI_OK70.mq5 → MQL5/Experts/
+3. F7 → attach SNIPER_AI_OK70
+4. Experts: BUILD_ID=SA_ANALYZE_70
