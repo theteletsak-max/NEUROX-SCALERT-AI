@@ -1087,8 +1087,9 @@ void ReportSignalOutcome(ulong ticket, bool wasWin, double profit)
 // of these nine is worth keeping - rather than adding more strategies
 // being mistaken for adding more evidence.
 
-#define STRATEGY_TAG_COUNT 12
+#define STRATEGY_TAG_COUNT 15
 string g_StrategyTagNames[STRATEGY_TAG_COUNT] = {
+   "APEX", "ContFallback", "LCS",
    "SMC", "MeanReversion", "VolBreakout", "TrendFollow",
    "TrendPullback", "LiquiditySweep", "FVG+OB", "VolBreakout(Spec)", "SpecCompliant",
    "InstantTrend", "ContSniper", "RevSniper"
