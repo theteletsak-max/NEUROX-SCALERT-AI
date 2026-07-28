@@ -10725,13 +10725,12 @@ bool ContStruct_TwoBarDirectionalBOS(const bool buy)
 
 bool ContStruct_HasQualityBOS(const bool buy)
 {
+   // Best: two-bar confirmation. Soft fallback: very fresh single-bar BOS still held.
    if(ContStruct_RequireTwoBarBOS)
    {
       if(ContStruct_TwoBarDirectionalBOS(buy))
          return true;
-      // still accept a very fresh single-bar BOS inside lookback if two-bar not ready
-      if(DetectDirectionalBOS(EntryTF, buy))
-         return true;
+      return DetectDirectionalBOS(EntryTF, buy) && RecentDirectionalBOS(buy, 3);
    }
    return RecentDirectionalBOS(buy, ContStruct_BOS_MaxBars);
 }
