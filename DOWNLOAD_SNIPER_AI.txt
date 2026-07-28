@@ -1,12 +1,12 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK61.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK62.mq5
 
-BUILD_ID: SA_APEX_SOFTSESS_61
+BUILD_ID: SA_APEX_WAITFIX_62
 Comment: SNIPER AI
 
-Session filter ON (marks London/NY) but soft — trades anytime.
-Hard kill-zone only: APEX_SessionHardBlock=true.
+FIX: "no valid sniper setup" → real APEX wait reason.
+APEX-only diagnostics. Relaxed entries. Soft session anytime.
 
-INSTALL: remove PRISM STRATEGY → F7 OK61 → fresh attach →
-BUILD_ID=SA_APEX_SOFTSESS_61
+INSTALL: REMOVE PRISM STRATEGY → F7 OK62 → fresh attach →
+BUILD_ID=SA_APEX_WAITFIX_62 (source must NOT say PRISM STRATEGY)

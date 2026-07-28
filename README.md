@@ -25,17 +25,16 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 
 ### Install (MT5) — single file (compile-safe)
 
-Use **[`SNIPER_AI_OK61.mq5`](SNIPER_AI_OK61.mq5)**  
-`BUILD_ID: SA_APEX_SOFTSESS_61`
+Use **[`SNIPER_AI_OK62.mq5`](SNIPER_AI_OK62.mq5)**  
+`BUILD_ID: SA_APEX_WAITFIX_62`
 
-1. Close MetaEditor  
-2. **File → Open Data Folder** → `MQL5/Experts/`  
-3. **Delete** old `Sniper*` / `SNIPER*` / `PRISM*`  
-4. Copy **`SNIPER_AI_OK61.mq5`** → F7  
-5. Remove **PRISM STRATEGY** from every chart → attach this file fresh  
-6. Experts must show `SA_APEX_SOFTSESS_61` and `SOFT: trade ANYTIME + mark London/NY`
+1. **Remove `PRISM STRATEGY` from every chart** (this was why you still saw ContSniper / “no valid sniper setup”)
+2. Copy **`SNIPER_AI_OK62.mq5`** → `MQL5/Experts/` → **F7**
+3. Attach **this** file fresh → Algo Trading ON
+4. Experts must show `SA_APEX_WAITFIX_62` and `---- APEX DIAGNOSTICS ----`
+5. Wait text is now `APEX waiting | BUY: … | SELL: …` (not “no valid sniper setup”)
 
-**OK61:** Session filter stays ON (London/NY marked on every PASS) but **`APEX_SessionHardBlock=false`** so APEX still trades anytime. Set HardBlock=true only for kill-zone-only mode.
+**OK62:** APEX-only diagnostics + real wait reasons + relaxed sweeps. Soft session still trades anytime.
 
 See [`DOWNLOAD_SNIPER_AI.txt`](DOWNLOAD_SNIPER_AI.txt)
 

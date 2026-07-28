@@ -2,31 +2,35 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK61.mq5
-BUILD_ID: SA_APEX_SOFTSESS_61
+File:     SNIPER_AI_OK62.mq5
+BUILD_ID: SA_APEX_WAITFIX_62
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK61.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK62.mq5
 
 ──────────────────────────────────────
-SESSION FILTER + TRADE ANYTIME
+WHY YOU STILL SAW "no valid sniper setup"
 ──────────────────────────────────────
-EnableAPEXSessionFilter = true   → tracks London/NY kill zones
-APEX_SessionHardBlock   = false  → does NOT block (trades anytime)
+1. That phrase is OLD PRISM wait text
+2. Diagnostics still printed ContSniper/RevSniper blocked
+3. OR you still have PRISM STRATEGY attached (source column)
 
-PASS detail shows:
-  session: IN kill-zone …
-  session: OUTSIDE … soft — still allowed anytime
+OK62 FIX:
+  • Wait = "APEX waiting | BUY: … | SELL: …"
+  • Diagnostics = APEX only (no Cont/Rev spam)
+  • Relaxed sweeps + zone not hard-required
+  • Soft session still trades anytime
 
-Kill-zone ONLY (old hard mode):
-  APEX_SessionHardBlock = true
+IF Experts source = PRISM STRATEGY → REMOVE IT.
+Must show: BUILD_ID=SA_APEX_WAITFIX_62
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. Remove PRISM STRATEGY from EVERY chart
-2. F7 SNIPER_AI_OK61.mq5
-3. Fresh attach → BUILD_ID=SA_APEX_SOFTSESS_61
-4. Experts: Soft: trade ANYTIME + mark London/NY
+2. Delete old SNIPER* .ex5
+3. F7 SNIPER_AI_OK62.mq5
+4. Attach SNIPER_AI_OK62 fresh
+5. Experts: SA_APEX_WAITFIX_62 + APEX DIAGNOSTICS

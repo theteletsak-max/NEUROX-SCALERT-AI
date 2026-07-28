@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_APEX_SOFTSESS_61                                  |
-//| SNIPER AI - APEX session filter ON but soft (trades anytime)    |
+//| BUILD_ID: SA_APEX_WAITFIX_62                                   |
+//| SNIPER AI - APEX wait message + APEX-only diagnostics + relax   |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.29"
-#property description "SNIPER AI OK61: session filter marks London/NY but does NOT block — trades anytime"
-#property description "Set APEX_SessionHardBlock=true only if you want kill-zone-only entries"
+#property version   "5.30"
+#property description "SNIPER AI OK62: replace 'no valid sniper setup' with APEX wait reason; APEX-only diags"
+#property description "Remove PRISM STRATEGY. BUILD_ID=SA_APEX_WAITFIX_62"
 
 #include <Trade/Trade.mqh>
 
@@ -102,22 +102,23 @@ input int    APEX_SwingStrength          = 2;      // bars left/right for swing 
 input int    APEX_SwingLookback          = 40;      // BiasTF bars to map structure
 input int    APEX_PoolLookback           = 30;      // EntryTF bars to find equal H/L pool
 input double APEX_EqualTolATR            = 0.12;    // equal high/low tolerance vs ATR
-input int    APEX_SweepLookback          = 16;
-input double APEX_MinSweepWickRatio      = 0.42;
-input double APEX_MinSweepDepthATR       = 0.10;
-input double APEX_DispMinBodyRatio       = 0.58;
-input double APEX_DispMinATR             = 0.70;
+input int    APEX_SweepLookback          = 24;     // OK62 longer
+input double APEX_MinSweepWickRatio      = 0.28;   // OK62 relaxed
+input double APEX_MinSweepDepthATR       = 0.06;
+input double APEX_DispMinBodyRatio       = 0.42;   // OK62 relaxed
+input double APEX_DispMinATR             = 0.40;   // OK62 relaxed
 input double APEX_TickVolExpansion       = 1.25;    // bar1 tick vol vs avg (1.0=off soft)
-input bool   APEX_RequireTickVol         = false;   // hard tick-vol gate (off = soft boost)
-input bool   APEX_RequireUnmitigatedZone = true;
-input bool   APEX_RequireStructureBias   = false;   // OK60: OFF — HH/HL was rejecting most hours
-input bool   APEX_RequireMAAlign         = true;    // MA side is enough for bias when structure off
-input bool   APEX_BiasNeedStructOrMA     = true;    // OK60: PASS if structure OR MA (when both inputs on)
+input bool   APEX_RequireTickVol         = false;
+input bool   APEX_RequireUnmitigatedZone = false;  // OK62: OFF — was blocking most APEX fires
+input bool   APEX_RequireStructureBias   = false;
+input bool   APEX_RequireMAAlign         = true;
+input bool   APEX_BiasNeedStructOrMA     = true;
+input bool   APEX_RelaxedEntries         = true;   // OK62: softer wick/disp + swing-sweep path
 input bool   APEX_UseSweepSL             = true;
 input double APEX_SL_BufferATR           = 0.12;
-input double APEX_MaxSL_ATR              = 3.5;     // reject if sweep SL absurdly wide
+input double APEX_MaxSL_ATR              = 4.0;
 input bool   APEX_LogValidation          = true;
-input bool   APEX_LogFailsEveryBar       = true;    // OK60: FAIL at most 1x/bar/side (not every tick)
+input bool   APEX_LogFailsEveryBar       = true;
 
 input group "APEX SESSION / KILL-ZONE FILTER"
 // Session filter STAYS ON (marks London/NY) but by default does NOT block.
@@ -288,6 +289,8 @@ bool TradingAllowed=true;
 double   g_APEX_InvalidationPrice = 0.0;
 datetime g_APEX_SweepBarTime      = 0;
 string   g_APEX_LastDetail        = "";
+string   g_APEX_LastBuyFail       = "";
+string   g_APEX_LastSellFail      = "";
 
 // LCS runtime (fallback path)
 double   g_LCS_InvalidationPrice = 0.0;
@@ -568,23 +571,19 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_APEX_SOFTSESS_61");
-   Print("IMPORTANT: Experts source must be SNIPER_AI_OK61 / SNIPER_AI — NOT PRISM STRATEGY");
-   Print("APEX61 SESSION: Filter=", EnableAPEXSessionFilter,
-         " HardBlock=", APEX_SessionHardBlock,
-         " → ", (APEX_SessionHardBlock ? "kill-zone ONLY" : "SOFT: trade ANYTIME + mark London/NY"),
-         " London=", APEX_LondonStartHourGMT, "-", APEX_LondonEndHourGMT,
-         " NY=", APEX_NYStartHourGMT, "-", APEX_NYEndHourGMT);
-   Print("APEX60 retained: FAIL 1x/bar | StructOrMA | PASS/FIRE matter");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_APEX_WAITFIX_62");
+   Print("IMPORTANT: If Experts source says PRISM STRATEGY — REMOVE IT. This file is SNIPER_AI_OK62 / APEX");
+   Print("APEX62: wait message is APEX reason (not 'no valid sniper setup'); diagnostics are APEX-only");
+   Print("APEX62: Relaxed=", APEX_RelaxedEntries,
+         " ZoneHard=", APEX_RequireUnmitigatedZone,
+         " SoftSession HardBlock=", APEX_SessionHardBlock);
    Print("APEX: OnlyLive=", APEXOnlyLivePath,
          " Bias=", EnumToString(APEX_BiasTF),
          " Entry=", EnumToString(APEX_EntryTF),
-         " | NO post-FIRE veto on tag APEX");
-   Print("LCS fallback Enable=", EnableLCSStrategy, " OnlyLive=", LCSOnlyLivePath);
-   Print("ALLTRADE56 retained: soft caps/DD/daily/dup/event");
-   Print("TRADEUNBLOCK53 retained: DrawdownShield=", EnableDrawdownProtection,
-         " ResetPeakOnInit=", ResetPeakEquityOnInit,
-         " CurrentDD=", DoubleToString(GetCurrentDrawdown(), 2), "%");
+         " | NO post-FIRE veto");
+   Print("LCS fallback Enable=", EnableLCSStrategy);
+   Print("TRADEUNBLOCK53: DrawdownShield=", EnableDrawdownProtection,
+         " ResetPeakOnInit=", ResetPeakEquityOnInit);
    Print("DEFENDPLUS: PreTP1BE=", DefensePreTP1AdverseBE,
          " MAE_ATR=", DefenseMAE_ATR,
          " EventICE_Boost=", EventICE_MinScoreBoost,
@@ -10301,9 +10300,69 @@ bool APEX_SetupOK(const bool buy, string &detail, double &invalidation)
    double sweepExt = 0.0;
    if(!APEX_SweepOfPool(buy, pool, sweepBar, sweepExt))
    {
-      detail = buy ? "APEX: pool not swept (need lows taken + reclaim close)"
-                   : "APEX: pool not swept (need highs taken + reclaim close)";
-      return false;
+      // OK62 relaxed: also accept a fresh stop-hunt of a recent swing (not only equal-pool)
+      if(APEX_RelaxedEntries)
+      {
+         ENUM_TIMEFRAMES tf = APEX_EntryTF;
+         double atr = APEX_AvgRange(tf, 14);
+         double minDepth = (atr > 0.0) ? (atr * APEX_MinSweepDepthATR) : 0.0;
+         int lb = MathMax(APEX_SweepLookback, 3);
+         bool found = false;
+         for(int i = 1; i <= lb && !found; i++)
+         {
+            double hi = iHigh(BrokerSymbol, tf, i);
+            double lo = iLow(BrokerSymbol, tf, i);
+            double cl = iClose(BrokerSymbol, tf, i);
+            double range = hi - lo;
+            if(range <= 0.0) continue;
+            if(buy)
+            {
+               double priorLow = iLow(BrokerSymbol, tf, i + 1);
+               for(int j = i + 2; j <= i + 6; j++)
+               {
+                  double l = iLow(BrokerSymbol, tf, j);
+                  if(l > 0.0 && l < priorLow) priorLow = l;
+               }
+               if(lo < priorLow - minDepth && cl > priorLow)
+               {
+                  double wick = MathMin(cl, priorLow) - lo;
+                  if(wick / range >= APEX_MinSweepWickRatio)
+                  {
+                     sweepBar = i; sweepExt = lo; pool = priorLow; found = true;
+                  }
+               }
+            }
+            else
+            {
+               double priorHigh = iHigh(BrokerSymbol, tf, i + 1);
+               for(int j = i + 2; j <= i + 6; j++)
+               {
+                  double h = iHigh(BrokerSymbol, tf, j);
+                  if(h > priorHigh) priorHigh = h;
+               }
+               if(hi > priorHigh + minDepth && cl < priorHigh)
+               {
+                  double wick = hi - MathMax(cl, priorHigh);
+                  if(wick / range >= APEX_MinSweepWickRatio)
+                  {
+                     sweepBar = i; sweepExt = hi; pool = priorHigh; found = true;
+                  }
+               }
+            }
+         }
+         if(!found)
+         {
+            detail = buy ? "APEX: waiting for sell-side sweep (lows taken)"
+                         : "APEX: waiting for buy-side sweep (highs taken)";
+            return false;
+         }
+      }
+      else
+      {
+         detail = buy ? "APEX: pool not swept (need lows taken + reclaim close)"
+                      : "APEX: pool not swept (need highs taken + reclaim close)";
+         return false;
+      }
    }
 
    if(!APEX_HasReclaim(buy, pool))
@@ -10365,6 +10424,10 @@ void EvaluateAPEXStrategies(bool &buySignal, bool &sellSignal, string &strategyT
    double buyInv = 0.0, sellInv = 0.0;
    bool buyOK = APEX_SetupOK(true, buyDetail, buyInv);
    bool sellOK = APEX_SetupOK(false, sellDetail, sellInv);
+   if(!buyOK) g_APEX_LastBuyFail = buyDetail;
+   if(!sellOK) g_APEX_LastSellFail = sellDetail;
+   if(buyOK) g_APEX_LastBuyFail = "";
+   if(sellOK) g_APEX_LastSellFail = "";
 
    // OK60: PASS always prints; FAIL at most once per EntryTF bar per side
    // (was flooding Experts every tick — looked like the EA was broken).
@@ -11619,7 +11682,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_APEX_SOFTSESS_61\n",
+         "Comment: SNIPER AI | BUILD: SA_APEX_WAITFIX_62\n",
          "=============================================="
       );
       return;
@@ -11641,7 +11704,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_APEX_SOFTSESS_61\n",
+         "BUILD: SA_APEX_WAITFIX_62\n",
          "=========================================="
       );
       return;
@@ -11786,21 +11849,25 @@ void PrintSetupDiagnostics()
 
    datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
 
-   // FIX: this used to be a single function-local static shared across
-   // every symbol - in multi-symbol mode, whichever symbol last ran this
-   // stamped the shared value, so other symbols' genuinely-new bars could
-   // be silently skipped (or a stale symbol's old bar time could
-   // coincidentally re-trigger it). Now tracked per symbol via
-   // DiagLastBarTimeArr (Part 1), same pattern as every other per-symbol
-   // bar-gate in this file.
    if(barTime == DiagLastBarTimeArr[idx])
       return;
 
    DiagLastBarTimeArr[idx] = barTime;
 
-   // Prints the real gate states for PRISM, the EA's only strategy engine.
-   // (Legacy SMC/mean-reversion/adaptive-regime diagnostics removed along
-   // with those modes.)
+   // OK62: when APEX is the only live path, do NOT print Cont/Rev/Instant
+   // "live=blocked" spam — that made users think PRISM was still live.
+   if(EnableAPEXStrategy && APEXOnlyLivePath)
+   {
+      Print("---- APEX DIAGNOSTICS (", BrokerSymbol, " Bias=", EnumToString(APEX_BiasTF),
+            " Entry=", EnumToString(APEX_EntryTF), " BUILD=SA_APEX_WAITFIX_62) ----");
+      Print("APEX waiting BUY:  ", (g_APEX_LastBuyFail == "" ? "(none / recently passed)" : g_APEX_LastBuyFail));
+      Print("APEX waiting SELL: ", (g_APEX_LastSellFail == "" ? "(none / recently passed)" : g_APEX_LastSellFail));
+      Print("APEX SoftSession HardBlock=", APEX_SessionHardBlock,
+            " Relaxed=", APEX_RelaxedEntries,
+            " ZoneHard=", APEX_RequireUnmitigatedZone);
+      Print("NOTE: If you still see ContSniper/RevSniper lines, you attached the WRONG EA (PRISM STRATEGY)");
+      return;
+   }
 
    Print("---- SETUP DIAGNOSTICS (", BrokerSymbol, " ", EnumToString(EntryTF), ", mode=", EnumToString(StrategyMode), ") ----");
 
@@ -12025,7 +12092,18 @@ void InstantExecution()
 
    if(g_UltraLastReject == "" && EnableUltraCore)
    {
-      g_UltraLastReject = "no valid sniper setup this cycle";
+      // OK62: never say "no valid sniper setup" when APEX is live — that was PRISM wording
+      if(EnableAPEXStrategy && APEXOnlyLivePath)
+      {
+         string wait = "APEX waiting";
+         if(g_APEX_LastBuyFail != "" || g_APEX_LastSellFail != "")
+            wait = StringFormat("APEX waiting | BUY: %s | SELL: %s",
+                                (g_APEX_LastBuyFail == "" ? "ok/na" : g_APEX_LastBuyFail),
+                                (g_APEX_LastSellFail == "" ? "ok/na" : g_APEX_LastSellFail));
+         g_UltraLastReject = wait;
+      }
+      else
+         g_UltraLastReject = "no valid sniper setup this cycle";
       g_UltraLastDecision = "WAIT";
    }
 
