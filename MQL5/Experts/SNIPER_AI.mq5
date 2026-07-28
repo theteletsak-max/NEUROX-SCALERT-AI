@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_SESSION_71                                      |
-//| SNIPER AI - detects London/NY/Asia sessions + clean market analysis  |
+//| BUILD_ID: SA_QUALITY_72                                      |
+//| SNIPER AI - anytime + strong quality setups (session detect, soft)  |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.39"
-#property description "SNIPER AI OK71: SESSION DETECT — London/NY/Asia/Overlap named cleanly; soft filter still allows anytime"
-#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK71. BUILD=SA_SESSION_71"
+#property version   "5.40"
+#property description "SNIPER AI OK72: ANYTIME + STRONG QUALITY — soft sessions; ContFallback needs ADX trend + score + structure"
+#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK72. BUILD=SA_QUALITY_72"
 
 #include <Trade/Trade.mqh>
 
@@ -101,22 +101,25 @@ input double ContFallbackSL_ATR_Boost    = 1.5;    // wider SL — not a scalp s
 input int    ContFallbackMaxOpen         = 1;      // max open ContFallback positions on this symbol
 input bool   ContFallbackDisableAdaptiveHold = true; // do not shorten hold in ranging for ContFallback/APEX
 
-input group "CONT STRUCTURE (OK69 — quality that CAN TRADE)"
-// Required: trend + directional BOS + fresh OB/quality FVG.
-// Then EITHER price-at-zone OR displacement (both together was nearly impossible).
-// Discount/premium is optional soft preference — OFF so continuations can fill.
-input int    ContStruct_BOS_MaxBars          = 12;    // directional BOS within N EntryTF bars
-input bool   ContStruct_RequireTwoBarBOS     = false; // OK69: single-bar BOS OK (two-bar optional)
-input bool   ContStruct_FreshOBOnly          = true;  // prefer fresh OB; FVG still allowed
-input double ContStruct_MinFVG_ATR           = 0.15;  // min FVG size vs ATR
-input double ContStruct_MaxFVGFillPct        = 70.0;  // allow partially filled FVGs
-input double ContStruct_ZoneProximityATR     = 1.25;  // wider: price near OB/FVG
-input bool   ContStruct_RequireDisplacement  = false; // OK69 OFF — use ZoneOrDisp instead
-input bool   ContStruct_ZoneOrDisplacement   = true;  // OK69: pass if near-zone OR displacement
-input double ContStruct_MinDispBodyRatio     = 0.42;  // body/range of displace bar
-input double ContStruct_MinDispATR           = 0.30;  // displace range vs ATR
-input bool   ContStruct_RequireHTF_BOS       = false; // optional same-dir BOS on Bias/HTF
-input bool   ContStruct_PreferDiscountPrem   = false; // OK69 OFF — was blocking most Cont fills after BOS
+input group "CONT STRUCTURE — STRONG QUALITY (OK72, trades ANYTIME)"
+// Anytime: sessions never hard-block.
+// Strong quality ContFallback: ADX trend + BOS + fresh zone + (near OR disp) + min score.
+// STRONG grade = near+disp+fresh OB. QUALITY grade = solid score with ZoneOrDisp.
+input int    ContStruct_BOS_MaxBars          = 10;    // directional BOS within N EntryTF bars
+input bool   ContStruct_RequireTwoBarBOS     = true;  // OK72: prefer 2-bar BOS (fresh single still ok ≤3)
+input bool   ContStruct_FreshOBOnly          = true;  // reject mitigated OBs
+input double ContStruct_MinFVG_ATR           = 0.20;  // quality FVG size vs ATR
+input double ContStruct_MaxFVGFillPct        = 55.0;  // reject mostly-filled FVGs
+input double ContStruct_ZoneProximityATR     = 1.10;  // price near OB/FVG
+input bool   ContStruct_RequireDisplacement  = false; // use ZoneOrDisp
+input bool   ContStruct_ZoneOrDisplacement   = true;  // near-zone OR displacement required
+input double ContStruct_MinDispBodyRatio     = 0.48;  // stronger impulse body
+input double ContStruct_MinDispATR           = 0.35;  // stronger displace vs ATR
+input bool   ContStruct_RequireHTF_BOS       = false; // optional HTF BOS
+input bool   ContStruct_PreferDiscountPrem   = false; // soft only (scores bonus; not hard gate)
+input bool   ContStruct_RequireTrendADX      = true;  // OK72: TrendStrong() required
+input bool   ContStruct_SkipRanging          = true;  // OK72: skip Cont in clear ranging regime
+input int    ContStruct_MinScore             = 60;    // OK72: minimum structure score to fire
 input bool   ContStruct_LogDetail            = true;
 
 input ENUM_TIMEFRAMES APEX_BiasTF        = PERIOD_H4;
@@ -129,8 +132,8 @@ input double APEX_EqualTolATR            = 0.12;    // equal high/low tolerance 
 input int    APEX_SweepLookback          = 24;     // OK62 longer
 input double APEX_MinSweepWickRatio      = 0.28;   // OK62 relaxed
 input double APEX_MinSweepDepthATR       = 0.06;
-input double APEX_DispMinBodyRatio       = 0.42;   // OK62 relaxed
-input double APEX_DispMinATR             = 0.40;   // OK62 relaxed
+input double APEX_DispMinBodyRatio       = 0.48;   // OK72: stronger displacement quality
+input double APEX_DispMinATR             = 0.45;   // OK72: stronger displacement quality
 input double APEX_TickVolExpansion       = 1.25;    // bar1 tick vol vs avg (1.0=off soft)
 input bool   APEX_RequireTickVol         = false;
 input bool   APEX_RequireUnmitigatedZone = false;  // OK69: OFF so APEX can fill (zone still preferred in path)
@@ -145,12 +148,12 @@ input bool   APEX_LogValidation          = true;
 input bool   APEX_LogFailsEveryBar       = true;
 
 input group "SESSION DETECT (London / New York / Asia)"
-// OK71: ALWAYS detect which session is active (name it cleanly).
-// Soft hard-block stays OFF by default → detect ≠ block (still trades anytime).
+// OK72: detect sessions for analysis. HardBlock OFF = TRADE ANYTIME.
+// Strong quality comes from structure/ADX — not from session blocking.
 
 input bool   EnableSessionDetect         = true;   // ON: detect & log London/NY/Asia
-input bool   EnableAPEXSessionFilter     = true;   // ON: kill-zone awareness for APEX path
-input bool   APEX_SessionHardBlock       = false;  // false = trade ANYTIME (soft); true = kill-zone only
+input bool   EnableAPEXSessionFilter     = true;   // ON: kill-zone awareness (annotate)
+input bool   APEX_SessionHardBlock       = false;  // OK72 LOCK: false = TRADE ANYTIME
 input bool   APEX_UseGMT                 = true;   // true=TimeGMT hours; false=broker server hours
 input bool   SessionLogOnChange          = true;   // print when session name changes
 input bool   APEX_AllowLondon            = true;   // London counts as kill-zone
@@ -184,7 +187,7 @@ input bool   LCS_LogValidation           = true;
 
 input bool   EnableAlwaysQualityMode     = true;
 input bool   QualityRequireStructureZone = true;  // Cont needs BOS/OB/FVG (or pullback)
-input bool   QualityRequireTrendAndADX   = false; // ALLTRADE56: ADX not hard — was blocking valid Cont
+input bool   QualityRequireTrendAndADX   = true;  // OK72: strong setups prefer trend+ADX
 input bool   QualityDisableWeakPaths     = true;  // BEST: suppress weak VolBreakout unless stacked
 input int    QualityMPIScore             = 0;
 
@@ -595,28 +598,25 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded BUILD_ID=SA_SESSION_71");
-   Print("CRITICAL: SOURCE must be SNIPER_AI_OK71 — remove PRISM STRATEGY if present");
-   Print("SESSION71: APEX → ContFallback BEST structure | AntiScalp=", EnableAntiScalpMode,
-         " SoftSession HardBlock=", APEX_SessionHardBlock,
+   Print("SNIPER AI Loaded BUILD_ID=SA_QUALITY_72");
+   Print("CRITICAL: SOURCE must be SNIPER_AI_OK72 — remove PRISM STRATEGY if present");
+   Print("QUALITY72: APEX → ContFallback BEST structure | AntiScalp=", EnableAntiScalpMode,
+         " ANYTIME HardBlock=", APEX_SessionHardBlock, " (must be false)
          " NewsAware=", EnableNewsAwareness,
          " SpreadAlwaysAllow | MaxOpen=", MaxOpenTrades,
          " Lot=", LotSize);
    Print("APEX ", EnumToString(APEX_BiasTF), "/", EnumToString(APEX_EntryTF),
          " | ContFallback cooldown=", ContFallbackCooldownMinutes, "m hold=", ContFallbackMinimumHoldBars,
          " | DD shield=", EnableDrawdownProtection);
-   Print("CONT STRUCT: BOS<=", ContStruct_BOS_MaxBars,
-         " TwoBar=", ContStruct_RequireTwoBarBOS,
-         " FreshOB=", ContStruct_FreshOBOnly,
+   Print("STRONG QUALITY Cont: ADX=", ContStruct_RequireTrendADX,
+         " SkipRange=", ContStruct_SkipRanging,
+         " MinScore=", ContStruct_MinScore,
+         " TwoBarBOS=", ContStruct_RequireTwoBarBOS,
          " ZoneOrDisp=", ContStruct_ZoneOrDisplacement,
-         " RequireDisp=", ContStruct_RequireDisplacement,
-         " DiscountPrem=", ContStruct_PreferDiscountPrem,
-         " ZoneATR=", ContStruct_ZoneProximityATR,
          " CF_Cooldown=", ContFallbackCooldownMinutes);
-   Print("CAN TRADE: APEX unmitigated soft=", APEX_RequireUnmitigatedZone,
-         " ContFallback=", EnableContFallback,
-         " BypassEngines=", ContFallbackBypassEngines,
-         " Spread/News never hard-block");
+   Print("ANYTIME: SessionHardBlock=", APEX_SessionHardBlock,
+         " | SessionDetect=", EnableSessionDetect,
+         " | Spread/News never hard-block | ContFallback=", EnableContFallback);
    UpdateNewsAwareness();
    {
       string sn="", sd=""; bool a=false,b=false,c=false,d=false; int h=-1;
@@ -975,6 +975,7 @@ bool ContStruct_GetFreshZone(const bool buy, double &zTop, double &zBot, string 
 bool ContStruct_PriceNearZone(const bool buy, const double zTop, const double zBot);
 bool ContStruct_HasDisplacement(const bool buy);
 bool ContFallbackBestStructureOK(const bool buy, string &detail);
+string ContStruct_Grade(const bool buy);
 bool NewsAwarenessInWindow(string &detail);
 bool APEX_InKillZone(string &detail);
 void DetectMarketSession(string &name, string &detail, bool &inLondon, bool &inNY, bool &inAsia, bool &inOverlap, int &hourOut);
@@ -11016,18 +11017,36 @@ bool ContStruct_HTF_OK(const bool buy)
 
 int ContStruct_Score(const bool buy)
 {
-   // Used only to resolve BUY vs SELL conflict — higher = better structure
+   // Higher = stronger quality (conflict resolve + MinScore gate)
    int s = 0;
    if(ContStruct_HasQualityBOS(buy)) s += 40;
+   if(TrendStrong()) s += 10;
    double zTop, zBot; string kind;
    if(ContStruct_GetFreshZone(buy, zTop, zBot, kind))
    {
-      s += (StringFind(kind, "OB-fresh") >= 0) ? 35 : 25;
-      if(ContStruct_PriceNearZone(buy, zTop, zBot)) s += 15;
+      s += (StringFind(kind, "OB-fresh") >= 0) ? 35 : 22;
+      bool near = ContStruct_PriceNearZone(buy, zTop, zBot);
+      bool disp = ContStruct_HasDisplacement(buy);
+      if(near) s += 15;
+      if(disp) s += 15;
+      if(near && disp) s += 10; // STRONG confluence bonus
    }
-   if(ContStruct_HasDisplacement(buy)) s += 10;
    if(ContStruct_InDiscountPremium(buy)) s += 5;
    return s;
+}
+
+string ContStruct_Grade(const bool buy)
+{
+   double zTop, zBot; string kind;
+   bool zone = ContStruct_GetFreshZone(buy, zTop, zBot, kind);
+   bool near = zone && ContStruct_PriceNearZone(buy, zTop, zBot);
+   bool disp = ContStruct_HasDisplacement(buy);
+   bool freshOB = (StringFind(kind, "OB-fresh") >= 0);
+   if(near && disp && freshOB && TrendStrong())
+      return "STRONG";
+   if(ContStruct_Score(buy) >= ContStruct_MinScore + 15)
+      return "STRONG";
+   return "QUALITY";
 }
 
 bool ContFallbackBestStructureOK(const bool buy, string &detail)
@@ -11035,6 +11054,20 @@ bool ContFallbackBestStructureOK(const bool buy, string &detail)
    detail = "";
    if(buy && !IsBullTrend()) { detail = "no bull trend"; return false; }
    if(!buy && !IsBearTrend()) { detail = "no bear trend"; return false; }
+
+   // OK72: strong setups — require ADX trend strength
+   if(ContStruct_RequireTrendADX && !TrendStrong())
+   {
+      detail = "trend not strong (ADX)";
+      return false;
+   }
+
+   // OK72: skip Cont in clear ranging — wait for quality trend conditions
+   if(ContStruct_SkipRanging && EnableRegimeDetection && GetMarketRegime() == REGIME_RANGING)
+   {
+      detail = "ranging regime — wait strong trend";
+      return false;
+   }
 
    if(!ContStruct_HasQualityBOS(buy))
    {
@@ -11053,7 +11086,6 @@ bool ContFallbackBestStructureOK(const bool buy, string &detail)
    bool near = ContStruct_PriceNearZone(buy, zTop, zBot);
    bool disp = ContStruct_HasDisplacement(buy);
 
-   // OK69: near-zone OR displacement (both-required was almost never true after a BOS)
    if(ContStruct_ZoneOrDisplacement)
    {
       if(!near && !disp)
@@ -11076,30 +11108,27 @@ bool ContFallbackBestStructureOK(const bool buy, string &detail)
       }
    }
 
-   if(ContStruct_RequireDisplacement && !ContStruct_ZoneOrDisplacement && !disp)
-   {
-      detail = "no displacement impulse";
-      return false;
-   }
-
-   if(!ContStruct_InDiscountPremium(buy))
-   {
-      detail = buy ? "not in discount half" : "not in premium half";
-      return false;
-   }
-
    if(!ContStruct_HTF_OK(buy))
    {
       detail = "HTF BOS missing";
       return false;
    }
 
-   detail = StringFormat("STRUCT %s + %s%s%s%s",
+   int score = ContStruct_Score(buy);
+   if(ContStruct_MinScore > 0 && score < ContStruct_MinScore)
+   {
+      detail = StringFormat("score %d < min %d (need stronger setup)", score, ContStruct_MinScore);
+      return false;
+   }
+
+   string grade = ContStruct_Grade(buy);
+   detail = StringFormat("%s %s + %s%s%s score=%d",
+                         grade,
                          ContStruct_RequireTwoBarBOS ? "BOS2" : "BOS",
                          kind,
-                         near ? " + near-zone" : "",
+                         near ? " + near" : "",
                          disp ? " + disp" : "",
-                         ContStruct_PreferDiscountPrem ? (buy ? " + discount" : " + premium") : "");
+                         score);
    return true;
 }
 
@@ -12145,7 +12174,7 @@ string LiveMarketSummary()
 void PrintLiveMarketAnalysis()
 {
    AnalyzeLiveMarket(true);
-   Print("---- MARKET ANALYSIS BUILD=SA_SESSION_71 (", BrokerSymbol, ") ----");
+   Print("---- MARKET ANALYSIS BUILD=SA_QUALITY_72 (", BrokerSymbol, ") ----");
    Print("SESSION=", g_LiveMkt.sessionName,
          " hour=", g_LiveMkt.sessionHour,
          (APEX_UseGMT ? " GMT" : " SERVER"),
@@ -12171,7 +12200,7 @@ void PrintLiveMarketAnalysis()
    Print("APEX SELL wait: ", g_LiveMkt.apexSell);
    Print("News: ", g_LiveMkt.news);
    Print("SUMMARY: ", g_LiveMkt.summary);
-   Print("NOTE: live path APEX → ContFallback only | spread/news never hard-block");
+   Print("NOTE: ANYTIME + STRONG/QUALITY ContFallback | session detect soft | spread/news never hard-block");
 }
 
 

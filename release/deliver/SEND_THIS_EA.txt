@@ -2,33 +2,35 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK71.mq5
-BUILD_ID: SA_SESSION_71
+File:     SNIPER_AI_OK72.mq5
+BUILD_ID: SA_QUALITY_72
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK71.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK72.mq5
 
 ──────────────────────────────────────
-SESSION DETECT (OK71)
+ANYTIME + STRONG QUALITY (OK72)
 ──────────────────────────────────────
-Detects and names:
-  ASIA · LONDON · NEWYORK · LONDON+NY · OFF
+• Trade ANYTIME — session detect ON, HardBlock OFF
+• ContFallback only on STRONG/QUALITY setups:
+    ADX trend · skip ranging · BOS · fresh zone
+    near OR disp · min structure score
+• Grades: STRONG (best) or QUALITY
+• APEX still first (stronger displacement)
+• News/spread never hard-block
 
-Journal:
-  SESSION DETECT: SESSION=LONDON hour=8 GMT | ...
-  MARKET ANALYSIS … SESSION=LONDON …
-
-Soft by default = detects sessions, still trades anytime.
-Set APEX_SessionHardBlock=true only if you want kill-zone-only entries.
-
-Also keeps: clean market analysis + APEX/ContFallback can trade.
+Look for:
+  FIRE [ContFallback] STRONG …
+  FIRE [ContFallback] QUALITY …
+  FIRE [APEX]
+  SESSION DETECT: …
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. REMOVE "PRISM STRATEGY"
-2. Copy SNIPER_AI_OK71.mq5 → MQL5/Experts/
-3. F7 → attach SNIPER_AI_OK71
-4. Experts: BUILD_ID=SA_SESSION_71
+2. Copy SNIPER_AI_OK72.mq5 → MQL5/Experts/
+3. F7 → attach SNIPER_AI_OK72
+4. Experts: BUILD_ID=SA_QUALITY_72
