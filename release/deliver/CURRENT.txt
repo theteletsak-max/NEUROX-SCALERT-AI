@@ -8,3 +8,5 @@ Anytime (soft sessions) + strong quality ContFallback/APEX.
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK72.mq5
 
 REMOVE PRISM STRATEGY before attach.
+
+Companion indicator: SNIPER_IDP.mq5 (Institutional Displacement Pulse)

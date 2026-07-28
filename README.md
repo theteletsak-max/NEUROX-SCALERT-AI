@@ -14,6 +14,26 @@ https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compi
 
 Also mirrored as [`SNIPER_AI.mq5`](SNIPER_AI.mq5) and [`MQL5/Experts/SNIPER_AI.mq5`](MQL5/Experts/SNIPER_AI.mq5).
 
+
+## Best companion indicator (from scratch)
+
+**[`SNIPER_IDP.mq5`](SNIPER_IDP.mq5)** — *Institutional Displacement Pulse* (`BUILD_ID: IDP_1`)
+
+One pulse for this bot (not RSI/MACD/Stoch):
+- Sweep wick pressure
+- Displacement impulse
+- Directional BOS pressure
+- Trend-side vs EMA
+- Expansion fuel
+
+|Pulse|Meaning|
+|-----|-------|
+|±70+|**STRONG** (lime/red)|
+|±45+|**QUALITY**|
+|near 0|no institutional impulse|
+
+Install: copy to `MQL5/Indicators/` → F7 → attach on same chart TF as EntryTF (H1).
+
 ## Clean market analysis
 
 Each cycle builds one live snapshot: **session (ASIA/LONDON/NY/OVERLAP) · bias · regime · BOS · zone · Cont READY · APEX wait · news**.

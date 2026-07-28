@@ -9,3 +9,5 @@ ANYTIME trading + STRONG/QUALITY ContFallback setups. Session detect soft.
 REMOVE PRISM STRATEGY.
 
 INSTALL: F7 OK72 → BUILD_ID=SA_QUALITY_72
+
+INDICATOR: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_IDP.mq5

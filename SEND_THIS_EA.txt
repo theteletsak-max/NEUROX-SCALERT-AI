@@ -28,7 +28,20 @@ Look for:
   SESSION DETECT: …
 
 ──────────────────────────────────────
-INSTALL
+BEST INDICATOR (created for this bot)
+──────────────────────────────────────
+File: SNIPER_IDP.mq5
+Name: Institutional Displacement Pulse
+Why:  one score for sweep + displacement + BOS + trend side
+      (exactly what APEX/ContFallback trade)
+
+Install indicator:
+  Copy SNIPER_IDP.mq5 → MQL5/Indicators/ → F7 → attach on chart
+
+STRONG = |pulse| ≥ 70   QUALITY = |pulse| ≥ 45
+
+──────────────────────────────────────
+INSTALL EA
 ──────────────────────────────────────
 1. REMOVE "PRISM STRATEGY"
 2. Copy SNIPER_AI_OK72.mq5 → MQL5/Experts/
