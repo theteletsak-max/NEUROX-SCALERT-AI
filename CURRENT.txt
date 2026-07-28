@@ -1,23 +1,13 @@
-SNIPER AI — EVERYTHING IN PLACE
+SNIPER AI — CURRENT
 
-EA:         SNIPER_AI_OK74.mq5
-BUILD_ID:   SA_QUALITY_74
+EA:         SNIPER_AI_OK75.mq5
+BUILD_ID:   SA_QUALITY_75
 Comment:    SNIPER AI
 
-INDICATOR:  SNIPER_IDP.mq5 (optional visual only)
-BUILD_ID:   IDP_1
+IDP pulse is BUILT INTO the EA (no iCustom).
+Optional visual: SNIPER_IDP.mq5
 
-Live: APEX → ContFallback STRONG/QUALITY
-Signal core: IDP pulse BUILT INTO EA (no iCustom)
-Anytime: session detect soft (no hard block)
-News aware · spread never blocks
+Download:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK75.mq5
 
-Pack:       SNIPER_AI.zip
-Layout:     PACKAGE_LAYOUT.txt
-Deliver:    release/deliver/
-Archive:    release/archive/ (OK11..OK73 — do not attach)
-
-EA:  https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK74.mq5
-
-REMOVE PRISM STRATEGY before attach.
-One file to trade: SNIPER_AI_OK74.mq5
+REMOVE PRISM STRATEGY. F7 OK75 → attach → SA_QUALITY_75

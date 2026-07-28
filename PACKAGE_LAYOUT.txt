@@ -1,22 +1,5 @@
-SNIPER AI — PACKAGE LAYOUT
-
-CURRENT:
-  SNIPER_AI_OK74.mq5          Live EA (IDP built-in)   BUILD=SA_QUALITY_74
-  SNIPER_AI.mq5               Mirror of OK74
-  SNIPER_IDP.mq5              Optional chart visual     BUILD=IDP_1
-  SNIPER_AI.zip               Pack
-
-  CURRENT.txt / SEND_THIS_EA.txt / INSTALL.txt
-  DOWNLOAD_SNIPER_AI.txt / IDP_README.txt / README.md
-
-MT5:
-  MQL5/Experts/SNIPER_AI_OK74.mq5
-  MQL5/Experts/SNIPER_AI.mq5
-  MQL5/Indicators/SNIPER_IDP.mq5   (visual only)
-
-release/deliver/   current only
-release/archive/   OK11..OK73 — do not attach
-
-IDP pulse is computed INSIDE the EA. Chart indicator optional.
-Trade comment: SNIPER AI
-Remove PRISM STRATEGY before attach.
+CURRENT: SNIPER_AI_OK75.mq5 (SA_QUALITY_75) — IDP built-in
+Mirror:  SNIPER_AI.mq5
+Optional visual: SNIPER_IDP.mq5
+Pack: SNIPER_AI.zip
+Archive: release/archive/ (OK11..OK74)

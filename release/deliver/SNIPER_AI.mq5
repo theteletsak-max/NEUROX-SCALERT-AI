@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_QUALITY_74                                      |
-//| SNIPER AI - anytime + strong quality + IDP built into EA            |
-//| Comment: SNIPER AI | IDP embedded pulse | No RSI/MACD/Stoch  |
+//| BUILD_ID: SA_QUALITY_75                                      |
+//| SNIPER AI - anytime + strong quality + IDP built into EA          |
+//| Comment: SNIPER AI | IDP embedded pulse | No RSI/MACD/Stoch      |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.42"
-#property description "SNIPER AI OK74: ANYTIME + STRONG QUALITY + IDP pulse BUILT INTO EA"
-#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK74. BUILD=SA_QUALITY_74"
+#property version   "5.43"
+#property description "SNIPER AI OK75: anytime + quality + built-in IDP"
+#property description "Remove PRISM. Source SNIPER_AI_OK75 BUILD=SA_QUALITY_75"
 
 #include <Trade/Trade.mqh>
 
@@ -25,7 +25,7 @@ input group "GENERAL"
 input long MagicNumber = 40001;
 input string TradeComment = "SNIPER AI";
 
-input group "SNIPER IDP — BUILT INTO EA (signal core)"
+input group "SNIPER IDP - BUILT INTO EA (signal core)"
 // Institutional Displacement Pulse computed INSIDE the EA (same math as SNIPER_IDP).
 // No separate indicator required for trading. Chart SNIPER_IDP is optional visual only.
 input bool   EnableIDPConfluence     = true;   // master: IDP pulse gates live FIRE
@@ -121,7 +121,7 @@ input double ContFallbackSL_ATR_Boost    = 1.5;    // wider SL — not a scalp s
 input int    ContFallbackMaxOpen         = 1;      // max open ContFallback positions on this symbol
 input bool   ContFallbackDisableAdaptiveHold = true; // do not shorten hold in ranging for ContFallback/APEX
 
-input group "CONT STRUCTURE — STRONG QUALITY (OK74, anytime + built-in IDP)"
+input group "CONT STRUCTURE — STRONG QUALITY (OK75, anytime + built-in IDP)"
 // Anytime: sessions never hard-block.
 // Strong quality ContFallback: ADX trend + BOS + fresh zone + (near OR disp) + min score.
 // STRONG grade = near+disp+fresh OB. QUALITY grade = solid score with ZoneOrDisp.
@@ -618,9 +618,9 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded BUILD_ID=SA_QUALITY_74");
-   Print("CRITICAL: SOURCE must be SNIPER_AI_OK74 — remove PRISM STRATEGY if present");
-   Print("QUALITY74: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
+   Print("SNIPER AI Loaded BUILD_ID=SA_QUALITY_75");
+   Print("CRITICAL: SOURCE must be SNIPER_AI_OK75 — remove PRISM STRATEGY if present");
+   Print("QUALITY75: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
          " HardBlock=", APEX_SessionHardBlock, " (must be false)",
          " NewsAware=", EnableNewsAwareness,
          " IDP=", EnableIDPConfluence,
@@ -646,7 +646,7 @@ int OnInit()
          " Shift=", IDP_PulseShift,
          " ATR=", IDP_ATR_Period,
          " EMA=", IDP_EMA_Period);
-   Print("IDP: pulse computed INSIDE EA (no iCustom) — chart SNIPER_IDP optional visual only");
+   Print("IDP: pulse computed INSIDE EA (no iCustom) - chart SNIPER_IDP optional visual only");
    UpdateNewsAwareness();
    {
       string sn="", sd=""; bool a=false,b=false,c=false,d=false; int h=-1;
@@ -1005,8 +1005,6 @@ bool ContStruct_GetFreshZone(const bool buy, double &zTop, double &zBot, string 
 bool ContStruct_PriceNearZone(const bool buy, const double zTop, const double zBot);
 bool ContStruct_HasDisplacement(const bool buy);
 bool ContFallbackBestStructureOK(const bool buy, string &detail);
-bool IDP_GetPulse(double &pulse, string &detail);
-bool IDP_ConfluenceOK(const bool buy, string &detail);
 string ContStruct_Grade(const bool buy);
 bool NewsAwarenessInWindow(string &detail);
 bool APEX_InKillZone(string &detail);
@@ -10139,6 +10137,276 @@ bool APEX_HasUnmitigatedZone(const bool buy)
    return (ActiveFVG(false) || ActiveOrderBlock(false));
 }
 
+//================ SNIPER IDP - BUILT INTO EA ===========================//
+// Same pulse math as SNIPER_IDP.mq5, computed inside the bot on EntryTF.
+
+double IDP_ClampPulse(double v)
+{
+   if(v > 100.0) return 100.0;
+   if(v < -100.0) return -100.0;
+   return v;
+}
+
+double IDP_BarATR(const int shift)
+{
+   ENUM_TIMEFRAMES tf = EntryTF;
+   int period = (IDP_ATR_Period > 1 ? IDP_ATR_Period : 1);
+   double sum = 0.0;
+   int n = 0;
+   for(int i = shift; i < shift + period; i++)
+   {
+      double h = iHigh(BrokerSymbol, tf, i);
+      double l = iLow(BrokerSymbol, tf, i);
+      double pc = iClose(BrokerSymbol, tf, i + 1);
+      if(h <= 0.0 || l <= 0.0 || pc <= 0.0)
+         continue;
+      double tr = MathMax(h - l, MathMax(MathAbs(h - pc), MathAbs(l - pc)));
+      sum += tr;
+      n++;
+   }
+   return (n > 0) ? (sum / n) : 0.0;
+}
+
+double IDP_BarEMA(const int shift)
+{
+   ENUM_TIMEFRAMES tf = EntryTF;
+   int period = (IDP_EMA_Period > 1 ? IDP_EMA_Period : 1);
+   double k = 2.0 / (period + 1.0);
+   int seedShift = shift + period;
+   double sma = 0.0;
+   int n = 0;
+   for(int i = seedShift; i < seedShift + period; i++)
+   {
+      double c = iClose(BrokerSymbol, tf, i);
+      if(c <= 0.0) continue;
+      sma += c;
+      n++;
+   }
+   if(n == 0)
+      return 0.0;
+   double ema = sma / n;
+   for(int i = seedShift - 1; i >= shift; i--)
+   {
+      double c = iClose(BrokerSymbol, tf, i);
+      if(c <= 0.0) continue;
+      ema = c * k + ema * (1.0 - k);
+   }
+   return ema;
+}
+
+double IDP_PriorSwingHigh(const int shift)
+{
+   ENUM_TIMEFRAMES tf = EntryTF;
+   double h = iHigh(BrokerSymbol, tf, shift + 1);
+   for(int j = shift + 2; j <= shift + 1 + IDP_SwingLookback; j++)
+   {
+      double v = iHigh(BrokerSymbol, tf, j);
+      if(v > h) h = v;
+   }
+   return h;
+}
+
+double IDP_PriorSwingLow(const int shift)
+{
+   ENUM_TIMEFRAMES tf = EntryTF;
+   double l = iLow(BrokerSymbol, tf, shift + 1);
+   for(int j = shift + 2; j <= shift + 1 + IDP_SwingLookback; j++)
+   {
+      double v = iLow(BrokerSymbol, tf, j);
+      if(v > 0.0 && v < l) l = v;
+   }
+   return l;
+}
+
+double IDP_SweepScore(const int shift, const double atr)
+{
+   ENUM_TIMEFRAMES tf = EntryTF;
+   double hi = iHigh(BrokerSymbol, tf, shift);
+   double lo = iLow(BrokerSymbol, tf, shift);
+   double cl = iClose(BrokerSymbol, tf, shift);
+   double range = hi - lo;
+   if(range <= 0.0 || atr <= 0.0)
+      return 0.0;
+
+   double priorHigh = IDP_PriorSwingHigh(shift);
+   double priorLow  = IDP_PriorSwingLow(shift);
+   double minDepth  = atr * IDP_SweepMinDepthATR;
+   double score = 0.0;
+
+   if(lo < priorLow - minDepth && cl > priorLow)
+   {
+      double wick = MathMin(cl, priorLow) - lo;
+      double ratio = wick / range;
+      if(ratio >= IDP_SweepMinWickRatio)
+         score += 25.0 * MathMin(ratio / 0.6, 1.5);
+   }
+   if(hi > priorHigh + minDepth && cl < priorHigh)
+   {
+      double wick = hi - MathMax(cl, priorHigh);
+      double ratio = wick / range;
+      if(ratio >= IDP_SweepMinWickRatio)
+         score -= 25.0 * MathMin(ratio / 0.6, 1.5);
+   }
+   return score;
+}
+
+double IDP_DisplacementScore(const int shift, const double atr)
+{
+   ENUM_TIMEFRAMES tf = EntryTF;
+   double o = iOpen(BrokerSymbol, tf, shift);
+   double c = iClose(BrokerSymbol, tf, shift);
+   double h = iHigh(BrokerSymbol, tf, shift);
+   double l = iLow(BrokerSymbol, tf, shift);
+   double range = h - l;
+   if(range <= 0.0)
+      return 0.0;
+
+   double body = MathAbs(c - o);
+   double bodyRatio = body / range;
+   if(bodyRatio < IDP_DispMinBodyRatio)
+      return 0.0;
+   if(atr > 0.0 && range < atr * IDP_DispMinATR)
+      return 0.0;
+
+   double mag = 35.0 * MathMin(bodyRatio / 0.7, 1.4);
+   if(atr > 0.0)
+      mag *= MathMin(range / (atr * 0.8), 1.5);
+   return (c > o) ? mag : -mag;
+}
+
+double IDP_BosScore(const int shift, const double atr)
+{
+   ENUM_TIMEFRAMES tf = EntryTF;
+   double c1 = iClose(BrokerSymbol, tf, shift);
+   double c2 = iClose(BrokerSymbol, tf, shift + 1);
+   double swingHigh = IDP_PriorSwingHigh(shift);
+   double swingLow  = IDP_PriorSwingLow(shift);
+   double margin = (atr > 0.0) ? (atr * 0.10) : 0.0;
+
+   if(c2 <= swingHigh && c1 > swingHigh + margin)
+      return 20.0;
+   if(c2 >= swingLow && c1 < swingLow - margin)
+      return -20.0;
+   return 0.0;
+}
+
+double IDP_TrendSideScore(const int shift)
+{
+   ENUM_TIMEFRAMES tf = EntryTF;
+   double ema = IDP_BarEMA(shift);
+   double c = iClose(BrokerSymbol, tf, shift);
+   if(ema <= 0.0 || c <= 0.0)
+      return 0.0;
+   if(c > ema) return 10.0;
+   if(c < ema) return -10.0;
+   return 0.0;
+}
+
+double IDP_ExpansionScore(const int shift)
+{
+   ENUM_TIMEFRAMES tf = EntryTF;
+   double r0 = iHigh(BrokerSymbol, tf, shift) - iLow(BrokerSymbol, tf, shift);
+   double r1 = iHigh(BrokerSymbol, tf, shift + 1) - iLow(BrokerSymbol, tf, shift + 1);
+   if(r1 <= 0.0 || r0 <= 0.0)
+      return 0.0;
+   if(r0 < r1 * 1.15)
+      return 0.0;
+   double c = iClose(BrokerSymbol, tf, shift);
+   double o = iOpen(BrokerSymbol, tf, shift);
+   double boost = 10.0 * MathMin(r0 / r1, 2.0);
+   return (c > o) ? boost : -boost;
+}
+
+double IDP_ComputePulse(const int shift)
+{
+   double atr = IDP_BarATR(shift);
+   double pulse = 0.0;
+   pulse += IDP_SweepScore(shift, atr);
+   pulse += IDP_DisplacementScore(shift, atr);
+   pulse += IDP_BosScore(shift, atr);
+   pulse += IDP_TrendSideScore(shift);
+   pulse += IDP_ExpansionScore(shift);
+   return IDP_ClampPulse(pulse);
+}
+
+bool IDP_GetPulse(double &pulse, string &detail)
+{
+   int shift;
+   pulse = 0.0;
+   detail = "";
+   if(!EnableIDPConfluence)
+   {
+      detail = "IDP off";
+      return false;
+   }
+
+   shift = (IDP_PulseShift > 0 ? IDP_PulseShift : 0);
+   if(iBars(BrokerSymbol, EntryTF) < IDP_ATR_Period + IDP_EMA_Period + IDP_SwingLookback + 5)
+   {
+      detail = "IDP: not enough bars";
+      return false;
+   }
+
+   pulse = IDP_ComputePulse(shift);
+   detail = StringFormat("IDP built-in pulse=%.1f shift=%d", pulse, shift);
+   return true;
+}
+
+bool IDP_ConfluenceOK(const bool buy, string &detail)
+{
+   double pulse;
+   string pd;
+   double need;
+   bool ok;
+   string grade;
+
+   detail = "";
+   if(!EnableIDPConfluence)
+   {
+      detail = "IDP off";
+      return true;
+   }
+
+   pulse = 0.0;
+   pd = "";
+   if(!IDP_GetPulse(pulse, pd))
+   {
+      detail = pd;
+      if(!IDP_HardGate)
+      {
+         if(IDP_LogGate)
+            Print("IDP soft-allow (no pulse): ", pd, " on ", BrokerSymbol);
+         return true;
+      }
+      return false;
+   }
+
+   need = IDP_RequireStrong ? IDP_StrongAbsPulse : IDP_MinAbsPulse;
+   if(need < 0.0) need = 0.0;
+
+   ok = buy ? (pulse >= need) : (pulse <= -need);
+   grade = (MathAbs(pulse) >= IDP_StrongAbsPulse) ? "STRONG"
+         : (MathAbs(pulse) >= IDP_MinAbsPulse) ? "QUALITY" : "WEAK";
+
+   detail = StringFormat("%s %s need %s%.0f (got %.1f)",
+                         pd, grade, buy ? "+" : "-", need, pulse);
+
+   if(ok)
+   {
+      if(IDP_LogGate)
+         Print("IDP PASS ", (buy ? "BUY" : "SELL"), " - ", detail, " on ", BrokerSymbol);
+      return true;
+   }
+
+   if(IDP_LogGate)
+      Print("IDP FAIL ", (buy ? "BUY" : "SELL"), " - ", detail, " on ", BrokerSymbol);
+
+   if(!IDP_HardGate)
+      return true;
+   return false;
+}
+
+
 bool APEX_SetupOK(const bool buy, string &detail, double &invalidation)
 {
    detail = "";
@@ -10302,7 +10570,8 @@ bool APEX_SetupOK(const bool buy, string &detail, double &invalidation)
    string idpNote = "";
    if(EnableIDPConfluence && IDP_ApplyToAPEX)
    {
-      double p = 0.0; string pd = "";
+      double p = 0.0;
+      string pd = "";
       if(IDP_GetPulse(p, pd))
          idpNote = " | " + pd;
    }
@@ -11100,268 +11369,6 @@ string ContStruct_Grade(const bool buy)
    return "QUALITY";
 }
 
-//================ SNIPER IDP — BUILT INTO EA ===========================//
-// Same pulse math as SNIPER_IDP.mq5, computed inside the bot on EntryTF.
-
-double IDP_ClampPulse(const double v)
-{
-   if(v > 100.0) return 100.0;
-   if(v < -100.0) return -100.0;
-   return v;
-}
-
-double IDP_BarATR(const int shift)
-{
-   ENUM_TIMEFRAMES tf = EntryTF;
-   int period = MathMax(IDP_ATR_Period, 1);
-   double sum = 0.0;
-   int n = 0;
-   for(int i = shift; i < shift + period; i++)
-   {
-      double h = iHigh(BrokerSymbol, tf, i);
-      double l = iLow(BrokerSymbol, tf, i);
-      double pc = iClose(BrokerSymbol, tf, i + 1);
-      if(h <= 0.0 || l <= 0.0 || pc <= 0.0)
-         continue;
-      double tr = MathMax(h - l, MathMax(MathAbs(h - pc), MathAbs(l - pc)));
-      sum += tr;
-      n++;
-   }
-   return (n > 0) ? (sum / n) : 0.0;
-}
-
-double IDP_BarEMA(const int shift)
-{
-   ENUM_TIMEFRAMES tf = EntryTF;
-   int period = MathMax(IDP_EMA_Period, 1);
-   double k = 2.0 / (period + 1.0);
-   int seedShift = shift + period;
-   double sma = 0.0;
-   int n = 0;
-   for(int i = seedShift; i < seedShift + period; i++)
-   {
-      double c = iClose(BrokerSymbol, tf, i);
-      if(c <= 0.0) continue;
-      sma += c;
-      n++;
-   }
-   if(n == 0)
-      return 0.0;
-   double ema = sma / n;
-   for(int i = seedShift - 1; i >= shift; i--)
-   {
-      double c = iClose(BrokerSymbol, tf, i);
-      if(c <= 0.0) continue;
-      ema = c * k + ema * (1.0 - k);
-   }
-   return ema;
-}
-
-double IDP_PriorSwingHigh(const int shift)
-{
-   ENUM_TIMEFRAMES tf = EntryTF;
-   double h = iHigh(BrokerSymbol, tf, shift + 1);
-   for(int j = shift + 2; j <= shift + 1 + IDP_SwingLookback; j++)
-   {
-      double v = iHigh(BrokerSymbol, tf, j);
-      if(v > h) h = v;
-   }
-   return h;
-}
-
-double IDP_PriorSwingLow(const int shift)
-{
-   ENUM_TIMEFRAMES tf = EntryTF;
-   double l = iLow(BrokerSymbol, tf, shift + 1);
-   for(int j = shift + 2; j <= shift + 1 + IDP_SwingLookback; j++)
-   {
-      double v = iLow(BrokerSymbol, tf, j);
-      if(v > 0.0 && v < l) l = v;
-   }
-   return l;
-}
-
-double IDP_SweepScore(const int shift, const double atr)
-{
-   ENUM_TIMEFRAMES tf = EntryTF;
-   double hi = iHigh(BrokerSymbol, tf, shift);
-   double lo = iLow(BrokerSymbol, tf, shift);
-   double cl = iClose(BrokerSymbol, tf, shift);
-   double range = hi - lo;
-   if(range <= 0.0 || atr <= 0.0)
-      return 0.0;
-
-   double priorHigh = IDP_PriorSwingHigh(shift);
-   double priorLow  = IDP_PriorSwingLow(shift);
-   double minDepth  = atr * IDP_SweepMinDepthATR;
-   double score = 0.0;
-
-   if(lo < priorLow - minDepth && cl > priorLow)
-   {
-      double wick = MathMin(cl, priorLow) - lo;
-      double ratio = wick / range;
-      if(ratio >= IDP_SweepMinWickRatio)
-         score += 25.0 * MathMin(ratio / 0.6, 1.5);
-   }
-   if(hi > priorHigh + minDepth && cl < priorHigh)
-   {
-      double wick = hi - MathMax(cl, priorHigh);
-      double ratio = wick / range;
-      if(ratio >= IDP_SweepMinWickRatio)
-         score -= 25.0 * MathMin(ratio / 0.6, 1.5);
-   }
-   return score;
-}
-
-double IDP_DisplacementScore(const int shift, const double atr)
-{
-   ENUM_TIMEFRAMES tf = EntryTF;
-   double o = iOpen(BrokerSymbol, tf, shift);
-   double c = iClose(BrokerSymbol, tf, shift);
-   double h = iHigh(BrokerSymbol, tf, shift);
-   double l = iLow(BrokerSymbol, tf, shift);
-   double range = h - l;
-   if(range <= 0.0)
-      return 0.0;
-
-   double body = MathAbs(c - o);
-   double bodyRatio = body / range;
-   if(bodyRatio < IDP_DispMinBodyRatio)
-      return 0.0;
-   if(atr > 0.0 && range < atr * IDP_DispMinATR)
-      return 0.0;
-
-   double mag = 35.0 * MathMin(bodyRatio / 0.7, 1.4);
-   if(atr > 0.0)
-      mag *= MathMin(range / (atr * 0.8), 1.5);
-   return (c > o) ? mag : -mag;
-}
-
-double IDP_BosScore(const int shift, const double atr)
-{
-   ENUM_TIMEFRAMES tf = EntryTF;
-   double c1 = iClose(BrokerSymbol, tf, shift);
-   double c2 = iClose(BrokerSymbol, tf, shift + 1);
-   double swingHigh = IDP_PriorSwingHigh(shift);
-   double swingLow  = IDP_PriorSwingLow(shift);
-   double margin = (atr > 0.0) ? (atr * 0.10) : 0.0;
-
-   if(c2 <= swingHigh && c1 > swingHigh + margin)
-      return 20.0;
-   if(c2 >= swingLow && c1 < swingLow - margin)
-      return -20.0;
-   return 0.0;
-}
-
-double IDP_TrendSideScore(const int shift)
-{
-   ENUM_TIMEFRAMES tf = EntryTF;
-   double ema = IDP_BarEMA(shift);
-   double c = iClose(BrokerSymbol, tf, shift);
-   if(ema <= 0.0 || c <= 0.0)
-      return 0.0;
-   if(c > ema) return 10.0;
-   if(c < ema) return -10.0;
-   return 0.0;
-}
-
-double IDP_ExpansionScore(const int shift)
-{
-   ENUM_TIMEFRAMES tf = EntryTF;
-   double r0 = iHigh(BrokerSymbol, tf, shift) - iLow(BrokerSymbol, tf, shift);
-   double r1 = iHigh(BrokerSymbol, tf, shift + 1) - iLow(BrokerSymbol, tf, shift + 1);
-   if(r1 <= 0.0 || r0 <= 0.0)
-      return 0.0;
-   if(r0 < r1 * 1.15)
-      return 0.0;
-   double c = iClose(BrokerSymbol, tf, shift);
-   double o = iOpen(BrokerSymbol, tf, shift);
-   double boost = 10.0 * MathMin(r0 / r1, 2.0);
-   return (c > o) ? boost : -boost;
-}
-
-double IDP_ComputePulse(const int shift)
-{
-   double atr = IDP_BarATR(shift);
-   double pulse = 0.0;
-   pulse += IDP_SweepScore(shift, atr);
-   pulse += IDP_DisplacementScore(shift, atr);
-   pulse += IDP_BosScore(shift, atr);
-   pulse += IDP_TrendSideScore(shift);
-   pulse += IDP_ExpansionScore(shift);
-   return IDP_ClampPulse(pulse);
-}
-
-bool IDP_GetPulse(double &pulse, string &detail)
-{
-   pulse = 0.0;
-   detail = "";
-   if(!EnableIDPConfluence)
-   {
-      detail = "IDP off";
-      return false;
-   }
-
-   int shift = MathMax(IDP_PulseShift, 0);
-   if(Bars(BrokerSymbol, EntryTF) < IDP_ATR_Period + IDP_EMA_Period + IDP_SwingLookback + 5)
-   {
-      detail = "IDP: not enough bars";
-      return false;
-   }
-
-   pulse = IDP_ComputePulse(shift);
-   detail = StringFormat("IDP(built-in) pulse=%.1f shift=%d", pulse, shift);
-   return true;
-}
-
-bool IDP_ConfluenceOK(const bool buy, string &detail)
-{
-   detail = "";
-   if(!EnableIDPConfluence)
-   {
-      detail = "IDP off";
-      return true;
-   }
-
-   double pulse = 0.0;
-   string pd = "";
-   if(!IDP_GetPulse(pulse, pd))
-   {
-      detail = pd;
-      if(!IDP_HardGate)
-      {
-         if(IDP_LogGate)
-            Print("IDP soft-allow (no pulse): ", pd, " on ", BrokerSymbol);
-         return true;
-      }
-      return false;
-   }
-
-   double need = IDP_RequireStrong ? IDP_StrongAbsPulse : IDP_MinAbsPulse;
-   if(need < 0.0) need = 0.0;
-
-   bool ok = buy ? (pulse >= need) : (pulse <= -need);
-   string grade = (MathAbs(pulse) >= IDP_StrongAbsPulse) ? "STRONG"
-                : (MathAbs(pulse) >= IDP_MinAbsPulse) ? "QUALITY" : "WEAK";
-
-   detail = StringFormat("%s %s need %s%.0f (got %.1f)",
-                         pd, grade, buy ? "+" : "-", need, pulse);
-
-   if(ok)
-   {
-      if(IDP_LogGate)
-         Print("IDP PASS ", (buy ? "BUY" : "SELL"), " — ", detail, " on ", BrokerSymbol);
-      return true;
-   }
-
-   if(IDP_LogGate)
-      Print("IDP FAIL ", (buy ? "BUY" : "SELL"), " — ", detail, " on ", BrokerSymbol);
-
-   if(!IDP_HardGate)
-      return true;
-   return false;
-}
-
 bool ContFallbackBestStructureOK(const bool buy, string &detail)
 {
    detail = "";
@@ -11448,7 +11455,8 @@ bool ContFallbackBestStructureOK(const bool buy, string &detail)
    string idpNote = "";
    if(EnableIDPConfluence && IDP_ApplyToContFallback)
    {
-      double p = 0.0; string pd = "";
+      double p = 0.0;
+      string pd = "";
       if(IDP_GetPulse(p, pd))
          idpNote = StringFormat(" | %s", pd);
    }
@@ -11537,7 +11545,7 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    sellSignal = false;
    strategyTag = "";
 
-   // OK74 LIVE: APEX → ContFallback, both gated by built-in IDP pulse
+   // OK75 LIVE: APEX → ContFallback, both gated by built-in IDP pulse
    // 1) APEX
    if(EnableAPEXStrategy)
    {
@@ -12505,7 +12513,7 @@ string LiveMarketSummary()
 void PrintLiveMarketAnalysis()
 {
    AnalyzeLiveMarket(true);
-   Print("---- MARKET ANALYSIS BUILD=SA_QUALITY_74 (", BrokerSymbol, ") ----");
+   Print("---- MARKET ANALYSIS BUILD=SA_QUALITY_75 (", BrokerSymbol, ") ----");
    Print("SESSION=", g_LiveMkt.sessionName,
          " hour=", g_LiveMkt.sessionHour,
          (APEX_UseGMT ? " GMT" : " SERVER"),

@@ -1,11 +1,5 @@
-SNIPER AI — DOWNLOAD
-
 EA (IDP built-in):
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK74.mq5
-BUILD_ID: SA_QUALITY_74
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK75.mq5
+BUILD_ID: SA_QUALITY_75
 
-Optional visual IDP:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_IDP.mq5
-
-REMOVE PRISM STRATEGY.
-INSTALL: F7 OK74 → attach → SA_QUALITY_74
+REMOVE PRISM. F7 OK75 → attach.

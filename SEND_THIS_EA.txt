@@ -1,39 +1,10 @@
-══════════════════════════════════════
-        SNIPER AI — FULL PACKAGE
-══════════════════════════════════════
+SNIPER AI OK75 — IDP BUILT INTO EA
 
-EA:        SNIPER_AI_OK74.mq5
-BUILD_ID:  SA_QUALITY_74
-Comment:   SNIPER AI
+DOWNLOAD:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK75.mq5
 
-IDP:       BUILT INTO THE EA (no iCustom)
-Optional:  SNIPER_IDP.mq5 chart visual only
+BUILD_ID: SA_QUALITY_75
+Comment:  SNIPER AI
 
-DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK74.mq5
-
-──────────────────────────────────────
-IN PLACE
-──────────────────────────────────────
-✓ APEX → ContFallback STRONG/QUALITY
-✓ IDP pulse computed INSIDE EA
-✓ Trade anytime (session detect, soft)
-✓ News aware · spread never blocks
-✓ Anti-scalp structure
-✓ PRISM/ContSniper live path retired
-
-Look for:
-  BUILD_ID=SA_QUALITY_74
-  IDP BUILT-IN CORE
-  IDP PASS / IDP FAIL
-  FIRE [APEX] / FIRE [ContFallback]
-
-──────────────────────────────────────
-INSTALL
-──────────────────────────────────────
-1. REMOVE "PRISM STRATEGY"
-2. Copy SNIPER_AI_OK74.mq5 → MQL5/Experts/ → F7
-3. Attach SNIPER_AI_OK74
-4. Algo Trading ON
-
-One file. IDP is inside the bot.
+Install: remove PRISM → F7 OK75 → attach → SA_QUALITY_75
+IDP pulse is inside the bot (no separate indicator required).
