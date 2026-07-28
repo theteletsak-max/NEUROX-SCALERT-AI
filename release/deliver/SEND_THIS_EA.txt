@@ -2,30 +2,31 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK66.mq5
-BUILD_ID: SA_CLEAN_66
+File:     SNIPER_AI_OK67.mq5
+BUILD_ID: SA_PURE_67
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK66.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK67.mq5
 
 ──────────────────────────────────────
-CLEANUP (OK66)
+PURE LIVE PATH (OK67)
 ──────────────────────────────────────
-Removed misconceptions / duplicates:
-• Hard news block path (awareness only)
-• Spread filter stack (CheckSpread always allows)
-• ContFallback trend-only + ContSniper twin bypass
-• Duplicate OnInit / pre-send spread checks
-• Dead GetSpread helper
+ONLY:
+  1) APEX
+  2) ContFallback (BOS + OB/FVG) — anti-scalp
 
-Still: APEX → ContFallback BOS+zone | news aware | anti-scalp holds
+RETIRED / cannot fire:
+  ContSniper · RevSniper · InstantTrend · LCS · SpecCompliant
+  Hard news block · Spread block · Event ICE tighten
+
+Still: news AWARE (log only) · soft session · spread always allow
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. REMOVE "PRISM STRATEGY"
-2. Copy SNIPER_AI_OK66.mq5 → MQL5/Experts/
-3. F7 → attach SNIPER_AI_OK66
-4. Experts: BUILD_ID=SA_CLEAN_66
+2. Copy SNIPER_AI_OK67.mq5 → MQL5/Experts/
+3. F7 → attach SNIPER_AI_OK67
+4. Experts: BUILD_ID=SA_PURE_67

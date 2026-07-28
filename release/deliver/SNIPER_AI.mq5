@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_CLEAN_66                                      |
-//| SNIPER AI - cleaned: APEX+Cont swing, news aware, spread never blocks  |
+//| BUILD_ID: SA_PURE_67                                      |
+//| SNIPER AI - PURE live path: APEX → ContFallback only  |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.34"
-#property description "SNIPER AI OK66: trim duplicates — one news path, spread always allow, ContFallback structure-only"
-#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK66. BUILD=SA_CLEAN_66"
+#property version   "5.35"
+#property description "SNIPER AI OK67: PURE — delete contradictions; live path APEX→ContFallback only"
+#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK67. BUILD=SA_PURE_67"
 
 #include <Trade/Trade.mqh>
 
@@ -25,9 +25,8 @@ input group "GENERAL"
 input long MagicNumber = 40001;
 input string TradeComment = "SNIPER AI";
 
-input group "PRISM BEAST MODE ENGINE"
-// Master quality stack: one structure read, one gate pipeline, sniper execution.
-// Reversal paths get extra liquidity/stack checks. No duplicate BOS/CHoCH vetoes.
+input group "PRISM BEAST MODE ENGINE (support only — not a live entry path)"
+// OK67: live entries are APEX/ContFallback only. Beast/Ultra still finalize those tags.
 
 input bool   EnableBeastMode                 = true;  // unified PRISM beast pipeline
 input bool   EnableSniperMode                = true;  // aggressive fire when beast gates pass
@@ -40,11 +39,7 @@ input bool   BeastDuplicateBarGuard          = false; // OFF: never suppress Con
 input bool   BeastCaptureSignalSnapshot      = true;  // record MPI/ICE at decision time
 input bool   EnableBeastDashboard            = true;  // rich HUD when EnableDashboard=true
 
-input group "MARKET REVERSAL SNIPER"
-// CORRECT signals only:
-// BUY  = sell-side sweep (lows taken) + bullish zone + strong reclaim
-// SELL = buy-side sweep (highs taken) + bearish zone + strong reclaim
-// Rejects wrong-side / continuation traps (opposite sweep more recent).
+input group "MARKET REVERSAL SNIPER (RETIRED live — RevSniper offline OK67)"
 
 input bool   EnableEarlyMarketReversal       = true;  // catch flips before full trend ADX
 input bool   ReversalRequireTrendADX         = false; // false = don't wait for new trend+ADX
@@ -78,13 +73,14 @@ input bool   EnableUltraDashboard            = true;  // Ultra HUD (latency, sco
 input bool   UltraHighProbability            = true;  // prefer Cont/Rev; Instant only as fallback
 input int    UltraHP_MinConfirmations        = 4;     // Cont/Rev HARD min confirms when BestQualitySetups
 
-input bool   BestQualitySetups           = true;  // MASTER: structure Cont/Rev + hard HP + Instant fallback
-input bool   BestPathsOnly               = true;  // BEST-NEXT: ContSniper + RevSniper ONLY (no Instant/secondary)
-input bool   AggressiveInstantQuality    = true;  // skip MPI wait once path approved
-input bool   PreferQualityPaths          = true;  // Cont/Rev before InstantTrend
-input bool   TryNextPathIfEnginesFail    = true;  // Cont fail engines → try Instant fallback (ignored if BestPathsOnly)
-input bool   EnableAdaptivePathRanking   = true;  // boost tags with proven win-rate
-input int    AdaptivePathMinTrades       = 10;    // min closed trades before win-rate ranks
+// RETIRED ContSniper/Instant live switches (OK67) — kept for old .set compatibility only
+input bool   BestQualitySetups           = true;  // used by ContFallback structure quality helpers only
+input bool   BestPathsOnly               = true;  // RETIRED live
+input bool   AggressiveInstantQuality    = true;  // RETIRED live
+input bool   PreferQualityPaths          = true;  // RETIRED live
+input bool   TryNextPathIfEnginesFail    = false; // RETIRED — no Instant fallback
+input bool   EnableAdaptivePathRanking   = false; // RETIRED live
+input int    AdaptivePathMinTrades       = 10;
 input bool   PrintPathStatsOnInit        = true;
 
 input group "APEX - WORLD-CLASS LIQUIDITY SNIPER (LIVE)"
@@ -94,12 +90,10 @@ input group "APEX - WORLD-CLASS LIQUIDITY SNIPER (LIVE)"
 // ONE decision. NO post-FIRE veto (tag APEX bypasses ICE/IMCE/Ultra re-check).
 
 input bool   EnableAPEXStrategy          = true;
-input bool   APEXOnlyLivePath            = false;  // ContFallback still allowed (structure-only)
-input bool   EnableAntiScalpMode         = true;   // OK64 HARD: blocks ContFallback trend-scalping in code
-input bool   EnableContFallback          = true;   // structure Cont only (BOS+zone) — NOT trend spam
+// OK67 PURE: live path is ONLY APEX → ContFallback (BOS+zone). No PRISM/LCS/ContSniper live.
+input bool   EnableAntiScalpMode         = true;   // ALWAYS on for ContFallback (structure hold/cooldown)
+input bool   EnableContFallback          = true;   // second live path — structure Cont only
 input bool   ContFallbackBypassEngines   = true;   // ContFallback skips ICE/IMCE after structure pass
-input bool   ContFallbackRequireBOS      = true;   // must have directional BOS
-input bool   ContFallbackRequireZone     = true;   // must have OB or FVG
 input bool   ContFallbackOncePerBar      = true;   // max 1 ContFallback signal per EntryTF bar
 input int    ContFallbackCooldownMinutes = 180;    // minutes after ContFallback FILL before next ContFallback
 input int    ContFallbackMinimumHoldBars = 24;     // EntryTF bars before trail/trend mgmt (H1≈24h)
@@ -150,10 +144,8 @@ input int    APEX_AsiaStartHourGMT       = 0;
 input int    APEX_AsiaEndHourGMT         = 4;
 input bool   APEX_SessionFilterCryptoToo = false;  // crypto: always anytime unless hard+this true
 
-input group "LCS - LIQUIDITY CONTINUITY SNIPER (FALLBACK)"
-// Used only if APEXOnlyLivePath=false. APEX is the live world-class path.
-
-input bool   EnableLCSStrategy           = false;  // OFF while APEX owns live
+input group "LCS - RETIRED (not on live path OK67)"
+input bool   EnableLCSStrategy           = false;  // RETIRED — ignored by EvaluateStrategySignals
 input bool   LCSOnlyLivePath             = false;
 input ENUM_TIMEFRAMES LCS_BiasTF         = PERIOD_H4;
 input ENUM_TIMEFRAMES LCS_EntryTF        = PERIOD_H1;
@@ -176,8 +168,8 @@ input bool   QualityRequireTrendAndADX   = false; // ALLTRADE56: ADX not hard �
 input bool   QualityDisableWeakPaths     = true;  // BEST: suppress weak VolBreakout unless stacked
 input int    QualityMPIScore             = 0;
 
-input bool   EnableInstantSniperMode     = true;
-input bool   AllowTrendOnlyInstantEntry  = true;  // last-resort fallback (OFF when BestPathsOnly)
+input bool   EnableInstantSniperMode     = false; // RETIRED live — InstantTrend offline
+input bool   AllowTrendOnlyInstantEntry  = false; // RETIRED — no trend-only scalp fallback
 input bool   AggressiveSniperEntries     = true;
 input bool   NeverBlockValidSniperEntry  = true;  // don't veto approved Cont/Rev
 input bool   ResolveConflictByTrend      = true;
@@ -277,16 +269,14 @@ input int  MinutesAfterNews = 30;
 input bool NewsAwarenessLogOncePerBar = true; // log at most once per EntryTF bar
 // Hard news block RETIRED (OK66): EnableNewsFilter / BlockHighImpact* removed — awareness only.
 
-input group "EVENT EXTRA TIGHTEN (still trades — stricter than regular quality)"
-// News hard-block stays OFF. Event tighten also OFF by default — awareness ≠ block.
-
-input bool   EnableEventQualityMode       = false; // OFF: do not raise ICE/MPI just because of news
-input bool   EventQualityAppliesToCrypto  = false; // ALLTRADE56: do not tighten BTC/ETH for USD news
-input bool   EventDisableWeakPaths        = true;  // keep weak paths off in events
-input bool   EventRequireStructureZone    = true;
-input bool   EventRequireTrendAndADX      = true;
-input int    EventQualityMPIScore         = 50;    // stricter than regular QualityMPIScore (40)
-input int    EventICE_MinScoreBoost       = 0;     // ALLTRADE56: no event ICE bump
+// EVENT TIGHTEN RETIRED (OK67) — news awareness must not raise ICE/MPI or block.
+input bool   EnableEventQualityMode       = false; // forced inert via EventQualityModeActive()
+input bool   EventQualityAppliesToCrypto  = false;
+input bool   EventDisableWeakPaths        = false;
+input bool   EventRequireStructureZone    = false;
+input bool   EventRequireTrendAndADX      = false;
+input int    EventQualityMPIScore         = 0;
+input int    EventICE_MinScoreBoost       = 0;
 input int    EventMinutesBeforeNews       = 30;
 input int    EventMinutesAfterNews        = 30;
 
@@ -585,9 +575,9 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded BUILD_ID=SA_CLEAN_66");
-   Print("CRITICAL: SOURCE must be SNIPER_AI_OK66 — remove PRISM STRATEGY if present");
-   Print("LIVE: APEX → ContFallback(BOS+zone) | AntiScalp=", EnableAntiScalpMode,
+   Print("SNIPER AI Loaded BUILD_ID=SA_PURE_67");
+   Print("CRITICAL: SOURCE must be SNIPER_AI_OK67 — remove PRISM STRATEGY if present");
+   Print("PURE LIVE: APEX → ContFallback(BOS+zone) ONLY | AntiScalp=", EnableAntiScalpMode,
          " SoftSession HardBlock=", APEX_SessionHardBlock,
          " NewsAware=", EnableNewsAwareness,
          " SpreadAlwaysAllow | MaxOpen=", MaxOpenTrades,
@@ -3341,7 +3331,7 @@ bool ExecuteBuy()
 
    // Sanity: direction still agrees — skip abort in UltraAggressiveFire
    // (path+engines already approved; price can wick without flipping EMA).
-   // Live gate is EvaluateSpecCompliantStrategies (Cont/Rev/Instant), not StrongBuySetup.
+   // Live gate is EvaluateStrategySignals (APEX → ContFallback only).
    if(!IsBullTrend() && !(UltraAggressiveFire || NeverBlockValidSniperEntry))
    {
       if(EnableVerboseLogging)
@@ -7253,16 +7243,7 @@ bool  g_EventQualityCached = false;
 
 bool EventQualityModeActive()
 {
-   if(!EnableEventQualityMode)
-      return false;
-
-   // Cache once per trading cycle — calendar scan is not free
-   if(g_EventQualityCycle == g_CycleCounter)
-      return g_EventQualityCached;
-
-   g_EventQualityCycle = g_CycleCounter;
-   g_EventQualityCached = IsHighImpactEventWindow();
-   return g_EventQualityCached;
+   return false; // OK67: news awareness must never tighten/block via EventQuality
 }
 
 // Regular sessions + events: quality gates stay on when AlwaysQuality is enabled.
@@ -9017,211 +8998,11 @@ int PathQualityRankScore(const string tag, const bool buy)
 // condition count.
 void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &strategyTag)
 {
+   // OK67 RETIRED — ContSniper/Rev/Instant/PRISM multi-path is not live
    buySignal = false;
    sellSignal = false;
    strategyTag = "";
-
-   string buyCandidates[];
-   string sellCandidates[];
-   int buyCount = 0, sellCount = 0;
-
-   ArrayResize(buyCandidates, 8);
-   ArrayResize(sellCandidates, 8);
-
-   // Aggressive sniper paths first (correct components, aggressive ORs),
-   // then classic PRISM names.
-   // BEST-NEXT48: BestPathsOnly → ContSniper + RevSniper only
-   if(AggressiveContinuationBuySetup()) buyCandidates[buyCount++] = "ContSniper";
-   if(AggressiveReversalBuySetup())     buyCandidates[buyCount++] = "RevSniper";
-   if(!BestPathsOnly)
-   {
-      if(InstantTrendSniperBuySetup())     buyCandidates[buyCount++] = "InstantTrend";
-      if(TrendPullbackBuySetup())          buyCandidates[buyCount++] = "TrendPullback";
-      if(LiquiditySweepBuySetup())         buyCandidates[buyCount++] = "LiquiditySweep";
-      if(FVGOrderBlockBuySetup())          buyCandidates[buyCount++] = "FVG+OB";
-      if(SpecVolatilityBreakoutBuySetup()) buyCandidates[buyCount++] = "VolBreakout(Spec)";
-   }
-
-   if(AggressiveContinuationSellSetup()) sellCandidates[sellCount++] = "ContSniper";
-   if(AggressiveReversalSellSetup())     sellCandidates[sellCount++] = "RevSniper";
-   if(!BestPathsOnly)
-   {
-      if(InstantTrendSniperSellSetup())     sellCandidates[sellCount++] = "InstantTrend";
-      if(TrendPullbackSellSetup())          sellCandidates[sellCount++] = "TrendPullback";
-      if(LiquiditySweepSellSetup())         sellCandidates[sellCount++] = "LiquiditySweep";
-      if(FVGOrderBlockSellSetup())          sellCandidates[sellCount++] = "FVG+OB";
-      if(SpecVolatilityBreakoutSellSetup()) sellCandidates[sellCount++] = "VolBreakout(Spec)";
-   }
-
-   // Conflict: never block both sides in aggressive sniper — take trend side.
-   if(buyCount > 0 && sellCount > 0)
-   {
-      if(ResolveConflictByTrend || NeverBlockValidSniperEntry)
-      {
-         if(IsBullTrend() && !IsBearTrend())
-         {
-            sellCount = 0;
-         }
-         else if(IsBearTrend() && !IsBullTrend())
-         {
-            buyCount = 0;
-         }
-         else
-         {
-            int buyScore = CalculatePRISMScore(true);
-            int sellScore = CalculatePRISMScore(false);
-            if(buyScore >= sellScore) sellCount = 0;
-            else buyCount = 0;
-         }
-         if(EnableVerboseLogging)
-            Print("Spec engine: conflict resolved by trend/score on ", BrokerSymbol,
-                  " -> ", (buyCount > 0 ? "BUY" : "SELL"));
-      }
-      else
-      {
-         if(EnableVerboseLogging)
-            Print("Spec engine: conflicting valid setups on ", BrokerSymbol, " (", buyCount, " buy vs ", sellCount, " sell) - rejecting, no trade.");
-         return;
-      }
-   }
-
-   if(buyCount == 0 && sellCount == 0)
-      return;
-
-   bool isBuy = (buyCount > 0);
-
-   int mpiScore = CalculatePRISMScore(isBuy);
-   int mpiFloor = EffectiveMinimumMPIScore();
-
-   // AGGRESSIVE INSTANT: never wait on MPI. Path already passed → fire.
-   if(AggressiveInstantQuality)
-   {
-      if(EnableVerboseLogging)
-         Print("AGGRESSIVE INSTANT: MPI=", mpiScore, " (informational only, no wait) on ",
-               BrokerSymbol);
-   }
-   else if(QualityGatesActive() && mpiFloor > 0 && mpiScore < mpiFloor)
-   {
-      if(EnableVerboseLogging || EnableSetupLogging)
-         Print("QUALITY SNIPER: MPI ", mpiScore, " < ", mpiFloor,
-               " on ", BrokerSymbol,
-               (EventQualityModeActive() ? " [EVENT TIGHTEN]" : " [REGULAR]"),
-               " - waiting for quality setup.");
-      return;
-   }
-   else if(!NeverBlockValidSniperEntry && mpiFloor > 0 && mpiScore < mpiFloor)
-   {
-      if(EnableVerboseLogging)
-         Print("PRISM: MPI score ", mpiScore, " below MinimumMPIScore (", mpiFloor, ") on ",
-               BrokerSymbol, " - rejecting, no trade.");
-      return;
-   }
-
-   // PRISM feature: only take buys in the discount half of the current
-   // range, sells in the premium half. Hard gate (fits this engine's
-   // "no additive score" design) but opt-in - off by default.
-   if(EnablePremiumDiscountFilter && !NeverBlockValidSniperEntry)
-   {
-      if(isBuy && !InDiscountZone())
-      {
-         if(EnableVerboseLogging)
-            Print("PRISM: buy candidate(s) valid but price is in premium zone, not discount - rejecting per EnablePremiumDiscountFilter.");
-         return;
-      }
-      if(!isBuy && !InPremiumZone())
-      {
-         if(EnableVerboseLogging)
-            Print("PRISM: sell candidate(s) valid but price is in discount zone, not premium - rejecting per EnablePremiumDiscountFilter.");
-         return;
-      }
-   }
-
-   string candidates[];
-   int candidateCount;
-
-   if(isBuy) { ArrayCopy(candidates, buyCandidates); candidateCount = buyCount; }
-   else      { ArrayCopy(candidates, sellCandidates); candidateCount = sellCount; }
-
-   // FULL UPGRADE: rank candidates by quality, then try engines in order.
-   // Prefer ContSniper/RevSniper; InstantTrend is aggressive fallback.
-   // If ContSniper fails ICE/IMCE, TryNextPath lets InstantTrend still fire.
-   string ordered[];
-   int    orderedScores[];
-   ArrayResize(ordered, candidateCount);
-   ArrayResize(orderedScores, candidateCount);
-
-   for(int c = 0; c < candidateCount; c++)
-   {
-      ordered[c] = candidates[c];
-      orderedScores[c] = PathQualityRankScore(candidates[c], isBuy);
-      if(EnableBeastMode)
-         orderedScores[c] += CountConfirmingConditions(isBuy); // tie-break boost
-   }
-
-   // Sort descending by quality score (simple bubble — max 8 candidates)
-   for(int i = 0; i < candidateCount - 1; i++)
-   {
-      for(int j = i + 1; j < candidateCount; j++)
-      {
-         if(orderedScores[j] > orderedScores[i])
-         {
-            int ts = orderedScores[i]; orderedScores[i] = orderedScores[j]; orderedScores[j] = ts;
-            string tt = ordered[i]; ordered[i] = ordered[j]; ordered[j] = tt;
-         }
-      }
-   }
-
-   string bestTag = "";
-   int tried = 0;
-   for(int c = 0; c < candidateCount; c++)
-   {
-      tried++;
-      if(PrismInstitutionalEnginesOK(isBuy, ordered[c]))
-      {
-         bestTag = ordered[c];
-         break;
-      }
-      if(!TryNextPathIfEnginesFail)
-         break;
-   }
-
-   if(bestTag == "")
-   {
-      if(EnableVerboseLogging || EnableSetupLogging)
-         Print("ULTRA CORE: ", candidateCount, " path(s) valid but engines rejected all on ",
-               BrokerSymbol, " (", (isBuy ? "BUY" : "SELL"), ")");
-      return;
-   }
-
-   if(isBuy) { buySignal = true;  strategyTag = bestTag; }
-   else      { sellSignal = true; strategyTag = bestTag; }
-
-   PRISMBeastScore fireBeast = UltraGetBeastScore(isBuy, bestTag);
-   Print("ULTRA CORE FIRE ", (isBuy ? "BUY" : "SELL"),
-         " [", bestTag, "] grade=", PRISMGetTradeGrade(isBuy, bestTag),
-         " Beast=", fireBeast.overall, " Conf=", fireBeast.confidencePct, "%",
-         " rank=", PathQualityRankScore(bestTag, isBuy),
-         " ICE=", GetInstitutionalConfidenceScore(isBuy),
-         " IMCE=", IMCEContextToString(GetIMCEContext()),
-         " tried=", tried, "/", candidateCount,
-         " on ", BrokerSymbol);
 }
-
-//+------------------------------------------------------------------+
-//|      PART 15g - TREND PULLBACK / LIQUIDITY SWEEP / FVG+OB (NEW)  |
-//+------------------------------------------------------------------+
-// These reuse detection functions from the structure/liquidity/pattern
-// engine (DetectBOS, DetectCHoCH, DetectLiquiditySweep, DetectBullishFVG/
-// DetectBearishFVG, DetectBullishOrderBlock/DetectBearishOrderBlock) but
-// combine them as hard AND-gates - every required condition must be true,
-// no point threshold, no additive score. This is the PRISM engine (the
-// EA's only strategy now): one specific combination must all be true at
-// once, rather than several weaker signals summing past a score
-// threshold.
-
-input group "TREND PULLBACK STRATEGY"
-
-input double PullbackMaxATRMultiple = 2.5; // price must be within this many ATRs of the trend EMA to count as "pulled back", not still extended
 
 bool TrendPullbackBuySetup()
 {
@@ -10828,69 +10609,10 @@ bool LCSSellSetup()
 
 void EvaluateLCSStrategies(bool &buySignal, bool &sellSignal, string &strategyTag)
 {
+   // OK67 RETIRED — LCS not on live path
    buySignal = false;
    sellSignal = false;
    strategyTag = "";
-   g_LCS_InvalidationPrice = 0.0;
-
-   if(!EnableLCSStrategy)
-      return;
-
-   string buyDetail = "", sellDetail = "";
-   double buyInv = 0.0, sellInv = 0.0;
-   bool buyOK = LCS_SetupOK(true, buyDetail, buyInv);
-   bool sellOK = LCS_SetupOK(false, sellDetail, sellInv);
-
-   if(LCS_LogValidation)
-   {
-      if(buyOK)
-         Print("LCS VALIDATE BUY: PASS - ", buyDetail, " on ", BrokerSymbol);
-      else if(EnableVerboseLogging || EnableSetupLogging)
-         Print("LCS VALIDATE BUY: FAIL - ", buyDetail, " on ", BrokerSymbol);
-
-      if(sellOK)
-         Print("LCS VALIDATE SELL: PASS - ", sellDetail, " on ", BrokerSymbol);
-      else if(EnableVerboseLogging || EnableSetupLogging)
-         Print("LCS VALIDATE SELL: FAIL - ", sellDetail, " on ", BrokerSymbol);
-   }
-
-   if(buyOK && sellOK)
-   {
-      string db = "", ds = "";
-      bool bull = LCS_BiasBull(db);
-      bool bear = LCS_BiasBear(ds);
-      if(bull && !bear)
-         sellOK = false;
-      else if(bear && !bull)
-         buyOK = false;
-      else
-      {
-         if(LCS_LogValidation)
-            Print("LCS: BUY+SELL conflict on ", BrokerSymbol, " — reject");
-         return;
-      }
-   }
-
-   if(buyOK)
-   {
-      buySignal = true;
-      strategyTag = "LCS";
-      g_LCS_InvalidationPrice = buyInv;
-      g_LCS_SweepBarTime = iTime(BrokerSymbol, LCS_EntryTF, 1);
-      g_LCS_LastDetail = buyDetail;
-      Print("ULTRA CORE FIRE BUY [LCS] ", buyDetail, " on ", BrokerSymbol);
-      return;
-   }
-   if(sellOK)
-   {
-      sellSignal = true;
-      strategyTag = "LCS";
-      g_LCS_InvalidationPrice = sellInv;
-      g_LCS_SweepBarTime = iTime(BrokerSymbol, LCS_EntryTF, 1);
-      g_LCS_LastDetail = sellDetail;
-      Print("ULTRA CORE FIRE SELL [LCS] ", sellDetail, " on ", BrokerSymbol);
-      return;
-   }
 }
 
 void MarkContFallbackFillIfNeeded()
@@ -10954,29 +10676,25 @@ bool ContFallbackAntiScalpGatesPass(string &failReason)
 
 bool ContFallbackSwingBuySetup()
 {
+   // OK67 PURE: always BOS + zone (no optional scalp shortcuts)
    if(!IsBullTrend())
       return false;
-   // Structure-only (no AggressiveContinuation / trend-only scalp path)
-   bool needBOS = EnableAntiScalpMode || ContFallbackRequireBOS;
-   bool needZone = EnableAntiScalpMode || ContFallbackRequireZone;
-   if(needBOS && !StructureDirectionalBOS(true))
+   if(!StructureDirectionalBOS(true))
       return false;
-   if(needZone && !(ActiveOrderBlock(true) || ActiveFVG(true)))
+   if(!(ActiveOrderBlock(true) || ActiveFVG(true)))
       return false;
-   return (needBOS || needZone); // if both optional, still require at least one structure cue
+   return true;
 }
 
 bool ContFallbackSwingSellSetup()
 {
    if(!IsBearTrend())
       return false;
-   bool needBOS = EnableAntiScalpMode || ContFallbackRequireBOS;
-   bool needZone = EnableAntiScalpMode || ContFallbackRequireZone;
-   if(needBOS && !StructureDirectionalBOS(false))
+   if(!StructureDirectionalBOS(false))
       return false;
-   if(needZone && !(ActiveOrderBlock(false) || ActiveFVG(false)))
+   if(!(ActiveOrderBlock(false) || ActiveFVG(false)))
       return false;
-   return (needBOS || needZone);
+   return true;
 }
 
 void EvaluateContFallback(bool &buySignal, bool &sellSignal, string &strategyTag)
@@ -11031,35 +10749,20 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    sellSignal = false;
    strategyTag = "";
 
-   // 1) APEX first (high-prob)
+   // OK67 PURE live path — nothing else may fire entries
+   // 1) APEX
    if(EnableAPEXStrategy)
    {
       EvaluateAPEXStrategies(buySignal, sellSignal, strategyTag);
       if(buySignal || sellSignal)
          return;
-      if(APEXOnlyLivePath && !EnableContFallback)
-         return;
    }
 
-   // 2) Cont fallback — structure-only when AntiScalp (OK64, no trend scalping)
+   // 2) ContFallback structure-only (BOS+zone)
    if(EnableContFallback)
-   {
       EvaluateContFallback(buySignal, sellSignal, strategyTag);
-      if(buySignal || sellSignal)
-         return;
-   }
 
-   // 3) LCS optional
-   if(EnableLCSStrategy)
-   {
-      EvaluateLCSStrategies(buySignal, sellSignal, strategyTag);
-      if(buySignal || sellSignal)
-         return;
-   }
-
-   // 4) Legacy PRISM only if explicitly not APEX-only and no Cont fallback
-   if(!APEXOnlyLivePath && !EnableContFallback)
-      EvaluateSpecCompliantStrategies(buySignal, sellSignal, strategyTag);
+   // LCS / ContSniper / RevSniper / InstantTrend / SpecCompliant — RETIRED (not called)
 }
 
 //+------------------------------------------------------------------+
@@ -11625,6 +11328,8 @@ void MarkSignalApproved(bool buy)
 
 bool StrongBuySetup()
 {
+   return false; // OK67 RETIRED — not on live path
+
    // MANDATORY confirmations first, always - see MandatoryConfirmationsPassed().
    // The optional, additive score below never even runs if these don't
    // clear, by construction.
@@ -11669,6 +11374,8 @@ bool StrongBuySetup()
 
 bool StrongSellSetup()
 {
+   return false; // OK67 RETIRED — not on live path
+
    if(!MandatoryConfirmationsPassed(false))
       return false;
 
@@ -11924,21 +11631,18 @@ void PrintSetupDiagnostics()
 
    DiagLastBarTimeArr[idx] = barTime;
 
-   // OK62: when APEX is the only live path, do NOT print Cont/Rev/Instant
-   // "live=blocked" spam — that made users think PRISM was still live.
-   if(EnableAPEXStrategy && (APEXOnlyLivePath || EnableContFallback))
-   {
-      Print("---- LIVE DIAGNOSTICS BUILD=SA_CLEAN_66 (", BrokerSymbol, ") ----");
-      Print("APEX waiting BUY:  ", (g_APEX_LastBuyFail == "" ? "(none)" : g_APEX_LastBuyFail));
-      Print("APEX waiting SELL: ", (g_APEX_LastSellFail == "" ? "(none)" : g_APEX_LastSellFail));
-      Print("ContFallback ON=", EnableContFallback,
-            " BypassEngines=", ContFallbackBypassEngines,
-            " | bullTrend=", IsBullTrend(), " bearTrend=", IsBearTrend());
-      Print("NOTE: FIRE [APEX] or FIRE [ContFallback] swing BOS+zone | news aware, spread never blocks");
-      Print("NOTE: If source=PRISM STRATEGY you have the WRONG EA attached");
-      return;
-   }
+   // OK67 PURE: only APEX/ContFallback diagnostics (never ContSniper spam)
+   Print("---- LIVE DIAGNOSTICS BUILD=SA_PURE_67 (", BrokerSymbol, ") ----");
+   Print("APEX waiting BUY:  ", (g_APEX_LastBuyFail == "" ? "(none)" : g_APEX_LastBuyFail));
+   Print("APEX waiting SELL: ", (g_APEX_LastSellFail == "" ? "(none)" : g_APEX_LastSellFail));
+   Print("ContFallback ON=", EnableContFallback,
+         " BypassEngines=", ContFallbackBypassEngines,
+         " | bullTrend=", IsBullTrend(), " bearTrend=", IsBearTrend());
+   Print("NOTE: LIVE PATH ONLY = APEX → ContFallback BOS+zone");
+   Print("NOTE: news aware, spread never blocks | remove PRISM STRATEGY if source says that");
+   return;
 
+   // RETIRED ContSniper diagnostics below (unreachable)
    Print("---- SETUP DIAGNOSTICS (", BrokerSymbol, " ", EnumToString(EntryTF), ", mode=", EnumToString(StrategyMode), ") ----");
 
    {
@@ -12089,7 +11793,7 @@ void InstantExecution()
       return;
    }
 
-   // EvaluateStrategySignals() runs PRISM, the EA's only strategy now.
+   // EvaluateStrategySignals() = APEX → ContFallback only (OK67 PURE).
    bool buySignal, sellSignal;
    string strategyTag;
    EvaluateStrategySignals(buySignal, sellSignal, strategyTag);

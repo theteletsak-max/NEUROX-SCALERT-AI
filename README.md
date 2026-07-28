@@ -25,15 +25,15 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 
 ### Install (MT5) — single file (compile-safe)
 
-Use **[`SNIPER_AI_OK66.mq5`](SNIPER_AI_OK66.mq5)**  
-`BUILD_ID: SA_CLEAN_66`
+Use **[`SNIPER_AI_OK67.mq5`](SNIPER_AI_OK67.mq5)**  
+`BUILD_ID: SA_PURE_67`
 
 1. **Remove `PRISM STRATEGY` from every chart**  
-2. Copy **`SNIPER_AI_OK66.mq5`** → F7  
-3. Attach **SNIPER_AI_OK66** (source must not say PRISM STRATEGY)  
-4. Experts: `SA_CLEAN_66` + `NEWS AWARE` / `FIRE [APEX]` or `FIRE [ContFallback]`  
+2. Copy **`SNIPER_AI_OK67.mq5`** → F7  
+3. Attach **SNIPER_AI_OK67** (source must not say PRISM STRATEGY)  
+4. Experts: `SA_PURE_67` + `NEWS AWARE` / `FIRE [APEX]` or `FIRE [ContFallback]`  
 
-**OK66:** Cleaned duplicates — news awareness only, spread always allows, ContFallback structure-only anti-scalp. Soft session anytime.
+**OK67:** PURE live path — APEX → ContFallback only. ContSniper/LCS/Instant/news-block/spread-block retired. Soft session anytime.
 
 See [`DOWNLOAD_SNIPER_AI.txt`](DOWNLOAD_SNIPER_AI.txt)
 
