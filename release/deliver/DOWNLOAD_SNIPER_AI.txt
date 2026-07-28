@@ -1,12 +1,12 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK59.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK61.mq5
 
-BUILD_ID: SA_APEX_SESSION_59
+BUILD_ID: SA_APEX_SOFTSESS_61
 Comment: SNIPER AI
 
-APEX + London/NY kill-zone session filter (GMT).
-OFF = 24/7: set EnableAPEXSessionFilter=false.
+Session filter ON (marks London/NY) but soft — trades anytime.
+Hard kill-zone only: APEX_SessionHardBlock=true.
 
-INSTALL: remove PRISM STRATEGY → F7 OK59 → fresh attach →
-BUILD_ID=SA_APEX_SESSION_59
+INSTALL: remove PRISM STRATEGY → F7 OK61 → fresh attach →
+BUILD_ID=SA_APEX_SOFTSESS_61

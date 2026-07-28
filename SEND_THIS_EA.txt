@@ -2,35 +2,31 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK60.mq5
-BUILD_ID: SA_APEX_FIXFAIL_60
+File:     SNIPER_AI_OK61.mq5
+BUILD_ID: SA_APEX_SOFTSESS_61
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK60.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK61.mq5
 
 ──────────────────────────────────────
-WHY YOU SAW CONSTANT "APEX FAIL"
+SESSION FILTER + TRADE ANYTIME
 ──────────────────────────────────────
-1. FAIL printed every tick for BUY and SELL — normal waiting looked broken
-2. Hard HH/HL structure + MA both required → almost never passed
-3. Session filter + crypto also blocked
+EnableAPEXSessionFilter = true   → tracks London/NY kill zones
+APEX_SessionHardBlock   = false  → does NOT block (trades anytime)
 
-OK60 FIX:
-  • FAIL log max 1x per H1 bar per side (not every tick)
-  • Structure hard-require OFF; bias = structure OR MA
-  • Zone soft-fallback to Active FVG/OB
-  • Sessions widened London 7-11 / NY 12-17 GMT
-  • Crypto exempt from session filter
-  • PASS / FIRE [APEX] still always print
+PASS detail shows:
+  session: IN kill-zone …
+  session: OUTSIDE … soft — still allowed anytime
 
-24/7: EnableAPEXSessionFilter=false
+Kill-zone ONLY (old hard mode):
+  APEX_SessionHardBlock = true
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
-1. Remove old SNIPER* / PRISM STRATEGY
-2. F7 SNIPER_AI_OK60.mq5
-3. Fresh attach → BUILD_ID=SA_APEX_FIXFAIL_60
-4. Experts: "FAIL lines are NORMAL while waiting"
+1. Remove PRISM STRATEGY from EVERY chart
+2. F7 SNIPER_AI_OK61.mq5
+3. Fresh attach → BUILD_ID=SA_APEX_SOFTSESS_61
+4. Experts: Soft: trade ANYTIME + mark London/NY

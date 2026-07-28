@@ -1,12 +1,12 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK60.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK61.mq5
 
-BUILD_ID: SA_APEX_FIXFAIL_60
+BUILD_ID: SA_APEX_SOFTSESS_61
 Comment: SNIPER AI
 
-FIX: APEX FAIL spam + overly hard bias/zone. Throttle FAIL logs,
-softer bias (MA or structure), wider sessions, crypto session-exempt.
+Session filter ON (marks London/NY) but soft — trades anytime.
+Hard kill-zone only: APEX_SessionHardBlock=true.
 
-INSTALL: remove PRISM STRATEGY → F7 OK60 → fresh attach →
-BUILD_ID=SA_APEX_FIXFAIL_60
+INSTALL: remove PRISM STRATEGY → F7 OK61 → fresh attach →
+BUILD_ID=SA_APEX_SOFTSESS_61

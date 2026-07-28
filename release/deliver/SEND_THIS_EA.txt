@@ -2,35 +2,31 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK59.mq5
-BUILD_ID: SA_APEX_SESSION_59
+File:     SNIPER_AI_OK61.mq5
+BUILD_ID: SA_APEX_SOFTSESS_61
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK59.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK61.mq5
 
 ──────────────────────────────────────
-NEW: APEX SESSION / KILL-ZONE FILTER
+SESSION FILTER + TRADE ANYTIME
 ──────────────────────────────────────
-EnableAPEXSessionFilter = true (default ON so you can see it)
+EnableAPEXSessionFilter = true   → tracks London/NY kill zones
+APEX_SessionHardBlock   = false  → does NOT block (trades anytime)
 
-London  07:00–10:00 GMT
-NY      12:00–16:00 GMT
-Asia    OFF by default
+PASS detail shows:
+  session: IN kill-zone …
+  session: OUTSIDE … soft — still allowed anytime
 
-Outside kill-zone → Experts:
-  APEX VALIDATE … FAIL - session: OUTSIDE kill-zone hour=…
-
-24/7 anytime: Inputs → EnableAPEXSessionFilter = false
-
-APEX core unchanged (structure → pool → sweep → displacement → zone → fire, no post-FIRE veto).
+Kill-zone ONLY (old hard mode):
+  APEX_SessionHardBlock = true
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
-1. Remove PRISM STRATEGY from every chart
-2. Copy SNIPER_AI_OK59.mq5 → MQL5/Experts/
-3. F7 — confirm SA_APEX_SESSION_59
-4. Fresh attach → Experts: BUILD_ID=SA_APEX_SESSION_59
-   + APEX59 SESSION: Filter=true …
+1. Remove PRISM STRATEGY from EVERY chart
+2. F7 SNIPER_AI_OK61.mq5
+3. Fresh attach → BUILD_ID=SA_APEX_SOFTSESS_61
+4. Experts: Soft: trade ANYTIME + mark London/NY
