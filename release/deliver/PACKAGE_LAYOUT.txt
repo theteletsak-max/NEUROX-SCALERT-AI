@@ -1,0 +1,26 @@
+SNIPER AI — PACKAGE LAYOUT (EVERYTHING IN PLACE)
+
+CURRENT (use these):
+  SNIPER_AI_OK72.mq5          Live EA          BUILD=SA_QUALITY_72
+  SNIPER_AI.mq5               Mirror of OK72
+  SNIPER_IDP.mq5              Companion IND    BUILD=IDP_1
+  SNIPER_AI.zip               Full current pack (EA + IDP + docs)
+
+  CURRENT.txt / SEND_THIS_EA.txt / INSTALL.txt
+  DOWNLOAD_SNIPER_AI.txt / IDP_README.txt / README.md
+
+MT5 drop-in mirrors:
+  MQL5/Experts/SNIPER_AI_OK72.mq5
+  MQL5/Experts/SNIPER_AI.mq5
+  MQL5/Indicators/SNIPER_IDP.mq5
+
+Release pack (same as root current):
+  release/deliver/            CURRENT ONLY + SNIPER_AI.zip
+
+Archive (do not attach):
+  release/archive/            Older SNIPER_AI_OK11..OK71 builds
+  release/archive/zips/       Older zip packs
+  mt5/SniperAI/               Legacy modular experiment
+
+Trade comment: SNIPER AI
+Remove PRISM STRATEGY before attach.

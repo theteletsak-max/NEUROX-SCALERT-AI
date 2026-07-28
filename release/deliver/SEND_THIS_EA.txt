@@ -25,6 +25,9 @@ IN PLACE
 ✓ Anti-scalp structure (no trend spam)
 ✓ PRISM/ContSniper live path retired
 ✓ SNIPER IDP companion pulse indicator
+✓ release/deliver = current only
+✓ release/archive = OK11..OK71 (do not attach)
+✓ SNIPER_AI.zip = EA + IDP + docs
 
 Look for:
   BUILD_ID=SA_QUALITY_72
@@ -43,3 +46,5 @@ INSTALL
 6. Attach SNIPER_IDP on same chart (H1)
 7. Experts must show SA_QUALITY_72 · source SNIPER_AI_OK72
 8. Algo Trading ON · AutoTrading ON
+
+See PACKAGE_LAYOUT.txt · CURRENT.txt · INSTALL.txt

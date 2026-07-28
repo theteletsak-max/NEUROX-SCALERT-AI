@@ -11,7 +11,8 @@ MetaTrader 5 — **EA + companion indicator** (single product set).
 | [`SNIPER_AI_OK72.mq5`](SNIPER_AI_OK72.mq5) | Expert Advisor | `SA_QUALITY_72` |
 | [`SNIPER_IDP.mq5`](SNIPER_IDP.mq5) | Institutional Displacement Pulse | `IDP_1` |
 
-Mirrors: `SNIPER_AI.mq5`, `MQL5/Experts/`, `MQL5/Indicators/`, `release/deliver/`
+Mirrors: `SNIPER_AI.mq5`, `MQL5/Experts/`, `MQL5/Indicators/`, `release/deliver/`  
+Layout: [`PACKAGE_LAYOUT.txt`](PACKAGE_LAYOUT.txt) · Pack: [`SNIPER_AI.zip`](SNIPER_AI.zip)
 
 Downloads:
 - EA: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK72.mq5
@@ -45,5 +46,5 @@ See [`SEND_THIS_EA.txt`](SEND_THIS_EA.txt) · [`CURRENT.txt`](CURRENT.txt) · [`
 
 ## Legacy
 
-- Older `SNIPER_AI_OK*.mq5` builds = archive only — do **not** attach
+- Older `SNIPER_AI_OK11..OK71` → `release/archive/` — do **not** attach
 - `mt5/SniperAI/` = legacy modular experiment — do **not** use live
