@@ -2,40 +2,46 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK57.mq5
-BUILD_ID: SA_PRISM_LCS_57
+File:     SNIPER_AI_OK58.mq5
+BUILD_ID: SA_APEX_WORLD_58
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK57.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK58.mq5
 
 Raw:
-https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK57.mq5
+https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK58.mq5
 
 ──────────────────────────────────────
-LIVE STRATEGY = LCS (NEW)
+LIVE = APEX (WORLD-CLASS FROM SCRATCH)
 ──────────────────────────────────────
-Liquidity Continuity Sniper — high-prob only:
+The best path I would build unconstrained:
 
-  1. H4 bias clear (SMA200 side)
-  2. H1 stop-hunt sweep AGAINST bias
-  3. Reclaim + displacement
-  4. FVG/OB zone in trade direction
-  5. SL beyond sweep extreme
+  1. H4 structural bias (HH+HL / LH+LL) + MA align
+  2. Map liquidity pool (equal highs/lows)
+  3. Stop-hunt sweep OF that pool
+  4. Reclaim + displacement (body/ATR; tick-vol soft)
+  5. Unmitigated FVG/OB only
+  6. SL beyond sweep (reject if > MaxSL ATR)
+  7. FIRE once — NO post-FIRE veto (tag APEX)
 
-PRISM Cont/Rev are IDLE (LCSOnlyLivePath=true).
-Experts will show: LCS VALIDATE … / ULTRA CORE FIRE … [LCS]
+PRISM Cont/Rev idle. LCS idle (fallback only if you enable it).
+
+Experts look for:
+  APEX VALIDATE … PASS/FAIL
+  ULTRA CORE FIRE … [APEX]
+  ULTRA APEX PASS (no post-FIRE veto)
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. Remove PRISM STRATEGY from EVERY chart
 2. Delete old SNIPER* .ex5
-3. Copy SNIPER_AI_OK57.mq5 → MQL5/Experts/
-4. F7 — confirm SA_PRISM_LCS_57
+3. Copy SNIPER_AI_OK58.mq5 → MQL5/Experts/
+4. F7 — confirm SA_APEX_WORLD_58
 5. Attach FRESH · Algo Trading ON
-6. Experts MUST show BUILD_ID=SA_PRISM_LCS_57
-   + LCS57: Enable=true OnlyLive=true BiasTF=PERIOD_H4 EntryTF=PERIOD_H1
+6. Experts MUST show BUILD_ID=SA_APEX_WORLD_58
+   + APEX58 WORLD: Enable=true OnlyLive=true
 
-Fewer trades = high probability by design.
+Fewer trades. Higher standard. That is the point.

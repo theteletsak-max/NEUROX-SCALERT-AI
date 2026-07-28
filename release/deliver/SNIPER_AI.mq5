@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_LCS_57                                      |
-//| SNIPER AI - LCS live: H4 bias → H1 sweep → reclaim → FVG/OB     |
+//| BUILD_ID: SA_APEX_WORLD_58                                     |
+//| SNIPER AI - APEX: world-class liquidity continuity from scratch |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.25"
-#property description "SNIPER AI OK57: Liquidity Continuity Sniper (LCS) is the live high-prob path"
-#property description "PRISM Cont/Rev idle when LCSOnlyLivePath=true — remove PRISM STRATEGY from charts"
+#property version   "5.26"
+#property description "SNIPER AI OK58: APEX live — structural bias + liquidity pool sweep + displacement + unmitigated zone"
+#property description "No post-FIRE veto. Remove PRISM STRATEGY. BUILD_ID=SA_APEX_WORLD_58"
 
 #include <Trade/Trade.mqh>
 
@@ -87,13 +87,41 @@ input bool   EnableAdaptivePathRanking   = true;  // boost tags with proven win-
 input int    AdaptivePathMinTrades       = 10;    // min closed trades before win-rate ranks
 input bool   PrintPathStatsOnInit        = true;
 
-input group "LCS - LIQUIDITY CONTINUITY SNIPER (LIVE)"
-// High-prob path: H4 bias → H1 stop-hunt sweep against bias → reclaim +
-// displacement → enter only in FVG/OB → SL beyond sweep extreme.
-// LCSOnlyLivePath=true → PRISM Cont/Rev/Instant are NOT on the live path.
+input group "APEX - WORLD-CLASS LIQUIDITY SNIPER (LIVE)"
+// From-scratch best path: structural HTF bias (swings+MA) → map liquidity
+// pool → stop-hunt sweep of that pool → displacement reclaim with tick-vol
+// expansion → enter only unmitigated FVG/OB → SL beyond sweep.
+// ONE decision. NO post-FIRE veto (tag APEX bypasses ICE/IMCE/Ultra re-check).
 
-input bool   EnableLCSStrategy           = true;
-input bool   LCSOnlyLivePath             = true;
+input bool   EnableAPEXStrategy          = true;
+input bool   APEXOnlyLivePath            = true;   // LIVE = APEX only (recommended)
+input ENUM_TIMEFRAMES APEX_BiasTF        = PERIOD_H4;
+input ENUM_TIMEFRAMES APEX_EntryTF       = PERIOD_H1;
+input int    APEX_BiasMA_Period          = 200;
+input int    APEX_SwingStrength          = 2;      // bars left/right for swing pivot
+input int    APEX_SwingLookback          = 40;      // BiasTF bars to map structure
+input int    APEX_PoolLookback           = 30;      // EntryTF bars to find equal H/L pool
+input double APEX_EqualTolATR            = 0.12;    // equal high/low tolerance vs ATR
+input int    APEX_SweepLookback          = 16;
+input double APEX_MinSweepWickRatio      = 0.42;
+input double APEX_MinSweepDepthATR       = 0.10;
+input double APEX_DispMinBodyRatio       = 0.58;
+input double APEX_DispMinATR             = 0.70;
+input double APEX_TickVolExpansion       = 1.25;    // bar1 tick vol vs avg (1.0=off soft)
+input bool   APEX_RequireTickVol         = false;   // hard tick-vol gate (off = soft boost)
+input bool   APEX_RequireUnmitigatedZone = true;
+input bool   APEX_RequireStructureBias   = true;    // HH/HL or LH/LL — not MA alone
+input bool   APEX_RequireMAAlign         = true;    // price side of Bias MA
+input bool   APEX_UseSweepSL             = true;
+input double APEX_SL_BufferATR           = 0.12;
+input double APEX_MaxSL_ATR              = 3.5;     // reject if sweep SL absurdly wide
+input bool   APEX_LogValidation          = true;
+
+input group "LCS - LIQUIDITY CONTINUITY SNIPER (FALLBACK)"
+// Used only if APEXOnlyLivePath=false. APEX is the live world-class path.
+
+input bool   EnableLCSStrategy           = false;  // OFF while APEX owns live
+input bool   LCSOnlyLivePath             = false;
 input ENUM_TIMEFRAMES LCS_BiasTF         = PERIOD_H4;
 input ENUM_TIMEFRAMES LCS_EntryTF        = PERIOD_H1;
 input int    LCS_BiasMA_Period           = 200;
@@ -234,7 +262,12 @@ input int    EventMinutesAfterNews        = 30;
 
 bool TradingAllowed=true;
 
-// LCS runtime (set when LCS setup passes; consumed by Execute for sweep SL)
+// APEX runtime (world-class path invalidation → Execute SL)
+double   g_APEX_InvalidationPrice = 0.0;
+datetime g_APEX_SweepBarTime      = 0;
+string   g_APEX_LastDetail        = "";
+
+// LCS runtime (fallback path)
 double   g_LCS_InvalidationPrice = 0.0;
 datetime g_LCS_SweepBarTime      = 0;
 string   g_LCS_LastDetail        = "";
@@ -513,21 +546,21 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_LCS_57");
-   Print("IMPORTANT: Experts source must be SNIPER_AI_OK57 / SNIPER_AI — NOT PRISM STRATEGY");
-   Print("LCS57: Enable=", EnableLCSStrategy,
-         " OnlyLive=", LCSOnlyLivePath,
-         " BiasTF=", EnumToString(LCS_BiasTF),
-         " EntryTF=", EnumToString(LCS_EntryTF),
-         " Zone=", LCS_RequireZone,
-         " Disp=", LCS_RequireDisplacement,
-         " SweepSL=", LCS_UseSweepSL);
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_APEX_WORLD_58");
+   Print("IMPORTANT: Experts source must be SNIPER_AI_OK58 / SNIPER_AI — NOT PRISM STRATEGY");
+   Print("APEX58 WORLD: Enable=", EnableAPEXStrategy,
+         " OnlyLive=", APEXOnlyLivePath,
+         " Bias=", EnumToString(APEX_BiasTF),
+         " Entry=", EnumToString(APEX_EntryTF),
+         " StructBias=", APEX_RequireStructureBias,
+         " UnmitZone=", APEX_RequireUnmitigatedZone,
+         " SweepSL=", APEX_UseSweepSL,
+         " | NO post-FIRE veto on tag APEX");
+   Print("LCS fallback Enable=", EnableLCSStrategy, " OnlyLive=", LCSOnlyLivePath);
    Print("ALLTRADE56 retained: soft caps/DD/daily/dup/event");
-   Print("CONTFIRE55 retained: Cont/Rev HP soft (PRISM fallback only if LCSOnly=false)");
    Print("TRADEUNBLOCK53 retained: DrawdownShield=", EnableDrawdownProtection,
          " ResetPeakOnInit=", ResetPeakEquityOnInit,
          " CurrentDD=", DoubleToString(GetCurrentDrawdown(), 2), "%");
-   Print("AUDITOK52 retained: sticky pre-TP1 BE arm");
    Print("DEFENDPLUS: PreTP1BE=", DefensePreTP1AdverseBE,
          " MAE_ATR=", DefenseMAE_ATR,
          " EventICE_Boost=", EventICE_MinScoreBoost,
@@ -3357,13 +3390,23 @@ bool ExecuteBuy()
    GetTradeDistances(slDistance, tp1Distance, tp2Distance, tp3Distance);
 
    sl = ask - slDistance;
-   // LCS high-prob invalidation: SL beyond sweep extreme when wider/safer than ATR SL
-   if(LCS_UseSweepSL && g_PendingStrategyTag == "LCS" && g_LCS_InvalidationPrice > 0.0)
+   // APEX/LCS structural SL beyond sweep extreme (wider/safer wins)
+   if(APEX_UseSweepSL && g_PendingStrategyTag == "APEX" && g_APEX_InvalidationPrice > 0.0)
+   {
+      double apexSL = g_APEX_InvalidationPrice;
+      if(apexSL < ask)
+      {
+         if(apexSL < sl)
+            sl = apexSL;
+         Print("APEX BUY SL → sweep invalidation ", DoubleToString(sl, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+               " on ", BrokerSymbol);
+      }
+   }
+   else if(LCS_UseSweepSL && g_PendingStrategyTag == "LCS" && g_LCS_InvalidationPrice > 0.0)
    {
       double lcsSL = g_LCS_InvalidationPrice;
       if(lcsSL < ask)
       {
-         // Prefer structural SL; if tighter than ATR SL keep the wider (safer) stop
          if(lcsSL < sl)
             sl = lcsSL;
          Print("LCS BUY SL → sweep invalidation ", DoubleToString(sl, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
@@ -3634,7 +3677,18 @@ bool ExecuteSell()
    GetTradeDistances(slDistance, tp1Distance, tp2Distance, tp3Distance);
 
    sl = bid + slDistance;
-   if(LCS_UseSweepSL && g_PendingStrategyTag == "LCS" && g_LCS_InvalidationPrice > 0.0)
+   if(APEX_UseSweepSL && g_PendingStrategyTag == "APEX" && g_APEX_InvalidationPrice > 0.0)
+   {
+      double apexSL = g_APEX_InvalidationPrice;
+      if(apexSL > bid)
+      {
+         if(apexSL > sl)
+            sl = apexSL;
+         Print("APEX SELL SL → sweep invalidation ", DoubleToString(sl, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+               " on ", BrokerSymbol);
+      }
+   }
+   else if(LCS_UseSweepSL && g_PendingStrategyTag == "LCS" && g_LCS_InvalidationPrice > 0.0)
    {
       double lcsSL = g_LCS_InvalidationPrice;
       if(lcsSL > bid)
@@ -7921,11 +7975,12 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
    bool revTag = PRISM_IsReversalTag(strategyTag);
    bool aggro = UltraAggressiveFire || NeverBlockValidSniperEntry || AggressiveInstantQuality;
    bool lcsTag = (strategyTag == "LCS");
+   bool apexTag = (strategyTag == "APEX");
 
    if(GetFilterATR() <= 0.0)
    {
-      // ALLTRADE56: Cont/Rev/LCS already selected — Execute uses fixed-stop fallback.
-      if((strategyTag == "ContSniper" || strategyTag == "RevSniper" || lcsTag) &&
+      // ALLTRADE56: Cont/Rev/LCS/APEX already selected — Execute uses fixed-stop fallback.
+      if((strategyTag == "ContSniper" || strategyTag == "RevSniper" || lcsTag || apexTag) &&
          (NeverBlockValidSniperEntry || UltraAggressiveFire))
       {
          if(EnableVerboseLogging || EnableSetupLogging)
@@ -7939,7 +7994,12 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
       }
    }
 
-   // LCS already passed its own high-prob checklist — do not re-veto
+   // APEX / LCS already passed full checklist — NEVER post-FIRE veto
+   if(apexTag)
+   {
+      Print("ULTRA APEX PASS (no post-FIRE veto) on ", BrokerSymbol, " — ", g_APEX_LastDetail);
+      return true;
+   }
    if(lcsTag && (NeverBlockValidSniperEntry || UltraAggressiveFire || !UltraSniperEntryGate))
    {
       if(EnableVerboseLogging || EnableSetupLogging)
@@ -8872,9 +8932,8 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
 
 bool PrismInstitutionalEnginesOK(bool buy, const string strategyTag)
 {
-   // LCS embeds bias/sweep/reclaim/zone/displacement — skip PRISM ICE/IMCE/SMT
-   // re-veto so high-prob LCS FIRE is not killed by Cont/Rev engines.
-   if(strategyTag == "LCS")
+   // APEX / LCS embed their own world-class checklist — no ICE/IMCE/SMT re-veto
+   if(strategyTag == "APEX" || strategyTag == "LCS")
       return true;
 
    if(EnableBeastMode && PRISM_IsReversalTag(strategyTag) && !PRISMReversalQualityOK(buy))
@@ -9631,6 +9690,589 @@ bool VolatilityBreakoutSellSetup()
 }
 
 //+------------------------------------------------------------------+
+//| APEX - WORLD-CLASS LIQUIDITY CONTINUITY (from scratch)           |
+//+------------------------------------------------------------------+
+// Best path I would build unconstrained:
+//   Structural HTF bias (swings + MA) → liquidity pool (equal H/L / swing)
+//   → stop-hunt of THAT pool → displacement reclaim + optional tick-vol
+//   → unmitigated FVG/OB only → SL beyond sweep (cap MaxSL ATR)
+//   → FIRE once. Tag APEX = zero post-FIRE veto.
+
+double APEX_AvgRange(const ENUM_TIMEFRAMES tf, const int bars)
+{
+   int n = MathMax(bars, 2);
+   double sum = 0.0;
+   int used = 0;
+   for(int i = 1; i <= n; i++)
+   {
+      double hi = iHigh(BrokerSymbol, tf, i);
+      double lo = iLow(BrokerSymbol, tf, i);
+      if(hi <= 0.0 || lo <= 0.0 || hi < lo)
+         continue;
+      sum += (hi - lo);
+      used++;
+   }
+   return (used > 0) ? (sum / used) : 0.0;
+}
+
+double APEX_BiasSMA()
+{
+   int p = MathMax(APEX_BiasMA_Period, 10);
+   if(Bars(BrokerSymbol, APEX_BiasTF) < p + 5)
+      return 0.0;
+   double sum = 0.0;
+   for(int i = 0; i < p; i++)
+      sum += iClose(BrokerSymbol, APEX_BiasTF, i);
+   return sum / p;
+}
+
+bool APEX_IsSwingHigh(const int bar)
+{
+   int s = MathMax(APEX_SwingStrength, 1);
+   ENUM_TIMEFRAMES tf = APEX_BiasTF;
+   double h = iHigh(BrokerSymbol, tf, bar);
+   if(h <= 0.0)
+      return false;
+   for(int i = 1; i <= s; i++)
+   {
+      if(iHigh(BrokerSymbol, tf, bar - i) >= h)
+         return false;
+      if(iHigh(BrokerSymbol, tf, bar + i) > h)
+         return false;
+   }
+   return true;
+}
+
+bool APEX_IsSwingLow(const int bar)
+{
+   int s = MathMax(APEX_SwingStrength, 1);
+   ENUM_TIMEFRAMES tf = APEX_BiasTF;
+   double l = iLow(BrokerSymbol, tf, bar);
+   if(l <= 0.0)
+      return false;
+   for(int i = 1; i <= s; i++)
+   {
+      if(iLow(BrokerSymbol, tf, bar - i) <= l && iLow(BrokerSymbol, tf, bar - i) > 0.0)
+         return false;
+      if(iLow(BrokerSymbol, tf, bar + i) < l)
+         return false;
+   }
+   return true;
+}
+
+bool APEX_StructureBull(string &detail)
+{
+   ENUM_TIMEFRAMES tf = APEX_BiasTF;
+   int lb = MathMax(APEX_SwingLookback, 20);
+   int sh1 = 0, sh2 = 0, sl1 = 0, sl2 = 0;
+   for(int i = APEX_SwingStrength + 1; i <= lb; i++)
+   {
+      if(sh1 == 0 && APEX_IsSwingHigh(i)) sh1 = i;
+      else if(sh1 > 0 && sh2 == 0 && APEX_IsSwingHigh(i)) sh2 = i;
+      if(sl1 == 0 && APEX_IsSwingLow(i)) sl1 = i;
+      else if(sl1 > 0 && sl2 == 0 && APEX_IsSwingLow(i)) sl2 = i;
+      if(sh1 > 0 && sh2 > 0 && sl1 > 0 && sl2 > 0)
+         break;
+   }
+   if(sh1 == 0 || sh2 == 0 || sl1 == 0 || sl2 == 0)
+   {
+      detail = "APEX struct: not enough BiasTF swings";
+      return false;
+   }
+   double h1 = iHigh(BrokerSymbol, tf, sh1);
+   double h2 = iHigh(BrokerSymbol, tf, sh2);
+   double l1 = iLow(BrokerSymbol, tf, sl1);
+   double l2 = iLow(BrokerSymbol, tf, sl2);
+   // Bullish structure: most recent swing high > prior, most recent swing low > prior
+   // (sh1 is more recent than sh2)
+   bool hh = (h1 > h2);
+   bool hl = (l1 > l2);
+   if(!(hh && hl))
+   {
+      detail = "APEX struct: no HH+HL bull structure";
+      return false;
+   }
+   detail = "APEX struct: BULL HH+HL";
+   return true;
+}
+
+bool APEX_StructureBear(string &detail)
+{
+   ENUM_TIMEFRAMES tf = APEX_BiasTF;
+   int lb = MathMax(APEX_SwingLookback, 20);
+   int sh1 = 0, sh2 = 0, sl1 = 0, sl2 = 0;
+   for(int i = APEX_SwingStrength + 1; i <= lb; i++)
+   {
+      if(sh1 == 0 && APEX_IsSwingHigh(i)) sh1 = i;
+      else if(sh1 > 0 && sh2 == 0 && APEX_IsSwingHigh(i)) sh2 = i;
+      if(sl1 == 0 && APEX_IsSwingLow(i)) sl1 = i;
+      else if(sl1 > 0 && sl2 == 0 && APEX_IsSwingLow(i)) sl2 = i;
+      if(sh1 > 0 && sh2 > 0 && sl1 > 0 && sl2 > 0)
+         break;
+   }
+   if(sh1 == 0 || sh2 == 0 || sl1 == 0 || sl2 == 0)
+   {
+      detail = "APEX struct: not enough BiasTF swings";
+      return false;
+   }
+   double h1 = iHigh(BrokerSymbol, tf, sh1);
+   double h2 = iHigh(BrokerSymbol, tf, sh2);
+   double l1 = iLow(BrokerSymbol, tf, sl1);
+   double l2 = iLow(BrokerSymbol, tf, sl2);
+   bool lh = (h1 < h2);
+   bool ll = (l1 < l2);
+   if(!(lh && ll))
+   {
+      detail = "APEX struct: no LH+LL bear structure";
+      return false;
+   }
+   detail = "APEX struct: BEAR LH+LL";
+   return true;
+}
+
+bool APEX_BiasBull(string &detail)
+{
+   string sDetail = "";
+   if(APEX_RequireStructureBias && !APEX_StructureBull(sDetail))
+   {
+      detail = sDetail;
+      return false;
+   }
+   if(APEX_RequireMAAlign)
+   {
+      double sma = APEX_BiasSMA();
+      double c0 = iClose(BrokerSymbol, APEX_BiasTF, 0);
+      double c1 = iClose(BrokerSymbol, APEX_BiasTF, 1);
+      if(sma <= 0.0 || !(c0 > sma && c1 > sma))
+      {
+         detail = "APEX bias: price not clearly above Bias MA";
+         return false;
+      }
+   }
+   detail = "APEX bias: BULL";
+   return true;
+}
+
+bool APEX_BiasBear(string &detail)
+{
+   string sDetail = "";
+   if(APEX_RequireStructureBias && !APEX_StructureBear(sDetail))
+   {
+      detail = sDetail;
+      return false;
+   }
+   if(APEX_RequireMAAlign)
+   {
+      double sma = APEX_BiasSMA();
+      double c0 = iClose(BrokerSymbol, APEX_BiasTF, 0);
+      double c1 = iClose(BrokerSymbol, APEX_BiasTF, 1);
+      if(sma <= 0.0 || !(c0 < sma && c1 < sma))
+      {
+         detail = "APEX bias: price not clearly below Bias MA";
+         return false;
+      }
+   }
+   detail = "APEX bias: BEAR";
+   return true;
+}
+
+// Map liquidity pool on EntryTF: equal highs (sell pool) or equal lows (buy pool)
+bool APEX_FindBuyPool(double &poolLevel)   // sell-side liquidity = lows
+{
+   poolLevel = 0.0;
+   ENUM_TIMEFRAMES tf = APEX_EntryTF;
+   double atr = APEX_AvgRange(tf, 14);
+   double tol = (atr > 0.0) ? (atr * APEX_EqualTolATR) : (SymbolInfoDouble(BrokerSymbol, SYMBOL_POINT) * 20.0);
+   int lb = MathMax(APEX_PoolLookback, 10);
+
+   // Prefer equal lows (two distinct lows within tolerance)
+   for(int i = 2; i <= lb - 2; i++)
+   {
+      double l1 = iLow(BrokerSymbol, tf, i);
+      if(l1 <= 0.0) continue;
+      for(int j = i + 2; j <= lb; j++)
+      {
+         double l2 = iLow(BrokerSymbol, tf, j);
+         if(l2 <= 0.0) continue;
+         if(MathAbs(l1 - l2) <= tol)
+         {
+            poolLevel = MathMin(l1, l2);
+            return true;
+         }
+      }
+   }
+   // Fallback: most recent swing-ish low (lowest of last N excluding bar0/1)
+   double lowest = iLow(BrokerSymbol, tf, 3);
+   for(int k = 4; k <= lb; k++)
+   {
+      double l = iLow(BrokerSymbol, tf, k);
+      if(l > 0.0 && l < lowest) lowest = l;
+   }
+   if(lowest > 0.0)
+   {
+      poolLevel = lowest;
+      return true;
+   }
+   return false;
+}
+
+bool APEX_FindSellPool(double &poolLevel)  // buy-side liquidity = highs
+{
+   poolLevel = 0.0;
+   ENUM_TIMEFRAMES tf = APEX_EntryTF;
+   double atr = APEX_AvgRange(tf, 14);
+   double tol = (atr > 0.0) ? (atr * APEX_EqualTolATR) : (SymbolInfoDouble(BrokerSymbol, SYMBOL_POINT) * 20.0);
+   int lb = MathMax(APEX_PoolLookback, 10);
+
+   for(int i = 2; i <= lb - 2; i++)
+   {
+      double h1 = iHigh(BrokerSymbol, tf, i);
+      if(h1 <= 0.0) continue;
+      for(int j = i + 2; j <= lb; j++)
+      {
+         double h2 = iHigh(BrokerSymbol, tf, j);
+         if(h2 <= 0.0) continue;
+         if(MathAbs(h1 - h2) <= tol)
+         {
+            poolLevel = MathMax(h1, h2);
+            return true;
+         }
+      }
+   }
+   double highest = iHigh(BrokerSymbol, tf, 3);
+   for(int k = 4; k <= lb; k++)
+   {
+      double h = iHigh(BrokerSymbol, tf, k);
+      if(h > highest) highest = h;
+   }
+   if(highest > 0.0)
+   {
+      poolLevel = highest;
+      return true;
+   }
+   return false;
+}
+
+bool APEX_SweepOfPool(const bool buy, const double poolLevel, int &sweepBar, double &sweepExtreme)
+{
+   sweepBar = 0;
+   sweepExtreme = 0.0;
+   if(poolLevel <= 0.0)
+      return false;
+   ENUM_TIMEFRAMES tf = APEX_EntryTF;
+   double atr = APEX_AvgRange(tf, 14);
+   double minDepth = (atr > 0.0) ? (atr * APEX_MinSweepDepthATR) : 0.0;
+   int lb = MathMax(APEX_SweepLookback, 3);
+
+   for(int i = 1; i <= lb; i++)
+   {
+      double hi = iHigh(BrokerSymbol, tf, i);
+      double lo = iLow(BrokerSymbol, tf, i);
+      double cl = iClose(BrokerSymbol, tf, i);
+      double range = hi - lo;
+      if(range <= 0.0)
+         continue;
+
+      if(buy)
+      {
+         // Sell-side pool swept (lows taken) then close back above pool
+         if(lo < poolLevel - minDepth && cl > poolLevel)
+         {
+            double wick = MathMin(cl, poolLevel) - lo;
+            if(wick / range >= APEX_MinSweepWickRatio)
+            {
+               sweepBar = i;
+               sweepExtreme = lo;
+               return true;
+            }
+         }
+      }
+      else
+      {
+         if(hi > poolLevel + minDepth && cl < poolLevel)
+         {
+            double wick = hi - MathMax(cl, poolLevel);
+            if(wick / range >= APEX_MinSweepWickRatio)
+            {
+               sweepBar = i;
+               sweepExtreme = hi;
+               return true;
+            }
+         }
+      }
+   }
+   return false;
+}
+
+bool APEX_HasDisplacement(const bool buy)
+{
+   ENUM_TIMEFRAMES tf = APEX_EntryTF;
+   double o = iOpen(BrokerSymbol, tf, 1);
+   double c = iClose(BrokerSymbol, tf, 1);
+   double h = iHigh(BrokerSymbol, tf, 1);
+   double l = iLow(BrokerSymbol, tf, 1);
+   double range = h - l;
+   if(range <= 0.0)
+      return false;
+   if(buy && !(c > o))
+      return false;
+   if(!buy && !(c < o))
+      return false;
+   if(MathAbs(c - o) / range < APEX_DispMinBodyRatio)
+      return false;
+   double atr = APEX_AvgRange(tf, 14);
+   if(atr > 0.0 && (range / atr) < APEX_DispMinATR)
+      return false;
+
+   // Tick volume expansion (soft or hard)
+   if(APEX_TickVolExpansion > 1.0)
+   {
+      long v1 = iTickVolume(BrokerSymbol, tf, 1);
+      double avg = 0.0;
+      int n = 0;
+      for(int i = 2; i <= 15; i++)
+      {
+         long v = iTickVolume(BrokerSymbol, tf, i);
+         if(v > 0) { avg += (double)v; n++; }
+      }
+      if(n > 0)
+      {
+         avg /= n;
+         bool expanded = (avg > 0.0 && (double)v1 >= avg * APEX_TickVolExpansion);
+         if(APEX_RequireTickVol && !expanded)
+            return false;
+      }
+   }
+   return true;
+}
+
+bool APEX_HasReclaim(const bool buy, const double poolLevel)
+{
+   ENUM_TIMEFRAMES tf = APEX_EntryTF;
+   double c1 = iClose(BrokerSymbol, tf, 1);
+   double o1 = iOpen(BrokerSymbol, tf, 1);
+   if(buy)
+      return (c1 > o1 && c1 > poolLevel);
+   return (c1 < o1 && c1 < poolLevel);
+}
+
+bool APEX_BullishFVG_Unmitigated()
+{
+   ENUM_TIMEFRAMES tf = APEX_EntryTF;
+   double low1 = iLow(BrokerSymbol, tf, 1);
+   double high3 = iHigh(BrokerSymbol, tf, 3);
+   if(!(low1 > 0.0 && high3 > 0.0 && low1 > high3))
+      return false;
+   // Unmitigated: current price has not fully traded through the gap bottom
+   double bid = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
+   return (bid >= high3);
+}
+
+bool APEX_BearishFVG_Unmitigated()
+{
+   ENUM_TIMEFRAMES tf = APEX_EntryTF;
+   double high1 = iHigh(BrokerSymbol, tf, 1);
+   double low3 = iLow(BrokerSymbol, tf, 3);
+   if(!(high1 > 0.0 && low3 > 0.0 && high1 < low3))
+      return false;
+   double ask = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
+   return (ask <= low3);
+}
+
+bool APEX_BullishOB_Unmitigated()
+{
+   ENUM_TIMEFRAMES tf = APEX_EntryTF;
+   double o2 = iOpen(BrokerSymbol, tf, 2);
+   double c2 = iClose(BrokerSymbol, tf, 2);
+   double o1 = iOpen(BrokerSymbol, tf, 1);
+   double c1 = iClose(BrokerSymbol, tf, 1);
+   if(!(c2 < o2 && c1 > o1))
+      return false;
+   double bid = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
+   double obLow = iLow(BrokerSymbol, tf, 2);
+   double obHigh = iHigh(BrokerSymbol, tf, 2);
+   // Still in/above OB — not closed fully below
+   return (bid >= obLow && iClose(BrokerSymbol, tf, 0) >= obLow && bid <= obHigh * 1.01);
+}
+
+bool APEX_BearishOB_Unmitigated()
+{
+   ENUM_TIMEFRAMES tf = APEX_EntryTF;
+   double o2 = iOpen(BrokerSymbol, tf, 2);
+   double c2 = iClose(BrokerSymbol, tf, 2);
+   double o1 = iOpen(BrokerSymbol, tf, 1);
+   double c1 = iClose(BrokerSymbol, tf, 1);
+   if(!(c2 > o2 && c1 < o1))
+      return false;
+   double ask = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
+   double obLow = iLow(BrokerSymbol, tf, 2);
+   double obHigh = iHigh(BrokerSymbol, tf, 2);
+   return (ask <= obHigh && iClose(BrokerSymbol, tf, 0) <= obHigh && ask >= obLow * 0.99);
+}
+
+bool APEX_HasUnmitigatedZone(const bool buy)
+{
+   if(buy)
+      return (APEX_BullishFVG_Unmitigated() || APEX_BullishOB_Unmitigated());
+   return (APEX_BearishFVG_Unmitigated() || APEX_BearishOB_Unmitigated());
+}
+
+bool APEX_SetupOK(const bool buy, string &detail, double &invalidation)
+{
+   detail = "";
+   invalidation = 0.0;
+   g_APEX_LastDetail = "";
+
+   if(!EnableAPEXStrategy)
+   {
+      detail = "APEX disabled";
+      return false;
+   }
+   if(Bars(BrokerSymbol, APEX_BiasTF) < APEX_BiasMA_Period + 10 ||
+      Bars(BrokerSymbol, APEX_EntryTF) < APEX_PoolLookback + 10)
+   {
+      detail = "APEX: insufficient Bias/Entry history";
+      return false;
+   }
+
+   string biasDetail = "";
+   if(buy)
+   {
+      if(!APEX_BiasBull(biasDetail)) { detail = biasDetail; return false; }
+   }
+   else
+   {
+      if(!APEX_BiasBear(biasDetail)) { detail = biasDetail; return false; }
+   }
+
+   double pool = 0.0;
+   if(buy)
+   {
+      if(!APEX_FindBuyPool(pool)) { detail = "APEX: no sell-side liquidity pool (lows)"; return false; }
+   }
+   else
+   {
+      if(!APEX_FindSellPool(pool)) { detail = "APEX: no buy-side liquidity pool (highs)"; return false; }
+   }
+
+   int sweepBar = 0;
+   double sweepExt = 0.0;
+   if(!APEX_SweepOfPool(buy, pool, sweepBar, sweepExt))
+   {
+      detail = buy ? "APEX: pool not swept (need lows taken + reclaim close)"
+                   : "APEX: pool not swept (need highs taken + reclaim close)";
+      return false;
+   }
+
+   if(!APEX_HasReclaim(buy, pool))
+   {
+      detail = "APEX: need reclaim close beyond pool after sweep";
+      return false;
+   }
+   if(!APEX_HasDisplacement(buy))
+   {
+      detail = APEX_RequireTickVol
+         ? "APEX: need displacement (body/ATR/tickVol)"
+         : "APEX: need displacement (body/ATR)";
+      return false;
+   }
+   if(APEX_RequireUnmitigatedZone && !APEX_HasUnmitigatedZone(buy))
+   {
+      detail = "APEX: need unmitigated FVG/OB zone";
+      return false;
+   }
+
+   double atr = APEX_AvgRange(APEX_EntryTF, 14);
+   double buf = (atr > 0.0) ? (atr * APEX_SL_BufferATR) : 0.0;
+   invalidation = buy ? (sweepExt - buf) : (sweepExt + buf);
+
+   // Reject absurd SL distance
+   double px = buy ? SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK)
+                   : SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
+   if(px > 0.0 && atr > 0.0 && APEX_MaxSL_ATR > 0.0)
+   {
+      double dist = MathAbs(px - invalidation);
+      if(dist > atr * APEX_MaxSL_ATR)
+      {
+         detail = "APEX: sweep SL too wide vs ATR (risk reject)";
+         return false;
+      }
+   }
+
+   detail = StringFormat("APEX OK %s pool=%s sweep@%d zone=%s inv=%s",
+                         buy ? "BUY" : "SELL",
+                         DoubleToString(pool, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+                         sweepBar,
+                         APEX_HasUnmitigatedZone(buy) ? "Y" : "N",
+                         DoubleToString(invalidation, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)));
+   return true;
+}
+
+void EvaluateAPEXStrategies(bool &buySignal, bool &sellSignal, string &strategyTag)
+{
+   buySignal = false;
+   sellSignal = false;
+   strategyTag = "";
+   g_APEX_InvalidationPrice = 0.0;
+
+   if(!EnableAPEXStrategy)
+      return;
+
+   string buyDetail = "", sellDetail = "";
+   double buyInv = 0.0, sellInv = 0.0;
+   bool buyOK = APEX_SetupOK(true, buyDetail, buyInv);
+   bool sellOK = APEX_SetupOK(false, sellDetail, sellInv);
+
+   if(APEX_LogValidation)
+   {
+      if(buyOK)
+         Print("APEX VALIDATE BUY: PASS - ", buyDetail, " on ", BrokerSymbol);
+      else if(EnableVerboseLogging || EnableSetupLogging)
+         Print("APEX VALIDATE BUY: FAIL - ", buyDetail, " on ", BrokerSymbol);
+      if(sellOK)
+         Print("APEX VALIDATE SELL: PASS - ", sellDetail, " on ", BrokerSymbol);
+      else if(EnableVerboseLogging || EnableSetupLogging)
+         Print("APEX VALIDATE SELL: FAIL - ", sellDetail, " on ", BrokerSymbol);
+   }
+
+   if(buyOK && sellOK)
+   {
+      string db = "", ds = "";
+      bool bull = APEX_BiasBull(db);
+      bool bear = APEX_BiasBear(ds);
+      if(bull && !bear) sellOK = false;
+      else if(bear && !bull) buyOK = false;
+      else
+      {
+         if(APEX_LogValidation)
+            Print("APEX: BUY+SELL conflict — reject on ", BrokerSymbol);
+         return;
+      }
+   }
+
+   if(buyOK)
+   {
+      buySignal = true;
+      strategyTag = "APEX";
+      g_APEX_InvalidationPrice = buyInv;
+      g_APEX_SweepBarTime = iTime(BrokerSymbol, APEX_EntryTF, 1);
+      g_APEX_LastDetail = buyDetail;
+      Print("ULTRA CORE FIRE BUY [APEX] ", buyDetail, " on ", BrokerSymbol);
+      return;
+   }
+   if(sellOK)
+   {
+      sellSignal = true;
+      strategyTag = "APEX";
+      g_APEX_InvalidationPrice = sellInv;
+      g_APEX_SweepBarTime = iTime(BrokerSymbol, APEX_EntryTF, 1);
+      g_APEX_LastDetail = sellDetail;
+      Print("ULTRA CORE FIRE SELL [APEX] ", sellDetail, " on ", BrokerSymbol);
+      return;
+   }
+}
+
+//+------------------------------------------------------------------+
 //| LCS - LIQUIDITY CONTINUITY SNIPER (high-prob live engine)        |
 //+------------------------------------------------------------------+
 // From-scratch path (OK57):
@@ -10090,8 +10732,21 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    sellSignal = false;
    strategyTag = "";
 
-   // OK57: LCS is the live high-prob engine when enabled+OnlyLive.
-   // PRISM Cont/Rev remain available only if LCSOnlyLivePath=false.
+   // OK58: APEX is the world-class live engine when enabled+OnlyLive.
+   if(EnableAPEXStrategy && APEXOnlyLivePath)
+   {
+      EvaluateAPEXStrategies(buySignal, sellSignal, strategyTag);
+      return;
+   }
+
+   if(EnableAPEXStrategy)
+   {
+      EvaluateAPEXStrategies(buySignal, sellSignal, strategyTag);
+      if(buySignal || sellSignal)
+         return;
+   }
+
+   // LCS fallback (OK57) if APEX not exclusive / missed
    if(EnableLCSStrategy && LCSOnlyLivePath)
    {
       EvaluateLCSStrategies(buySignal, sellSignal, strategyTag);
@@ -10798,7 +11453,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_LCS_57\n",
+         "Comment: SNIPER AI | BUILD: SA_APEX_WORLD_58\n",
          "=============================================="
       );
       return;
@@ -10820,7 +11475,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_LCS_57\n",
+         "BUILD: SA_APEX_WORLD_58\n",
          "=========================================="
       );
       return;
