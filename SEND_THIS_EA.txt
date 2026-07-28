@@ -2,35 +2,35 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK59.mq5
-BUILD_ID: SA_APEX_SESSION_59
+File:     SNIPER_AI_OK60.mq5
+BUILD_ID: SA_APEX_FIXFAIL_60
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK59.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK60.mq5
 
 ──────────────────────────────────────
-NEW: APEX SESSION / KILL-ZONE FILTER
+WHY YOU SAW CONSTANT "APEX FAIL"
 ──────────────────────────────────────
-EnableAPEXSessionFilter = true (default ON so you can see it)
+1. FAIL printed every tick for BUY and SELL — normal waiting looked broken
+2. Hard HH/HL structure + MA both required → almost never passed
+3. Session filter + crypto also blocked
 
-London  07:00–10:00 GMT
-NY      12:00–16:00 GMT
-Asia    OFF by default
+OK60 FIX:
+  • FAIL log max 1x per H1 bar per side (not every tick)
+  • Structure hard-require OFF; bias = structure OR MA
+  • Zone soft-fallback to Active FVG/OB
+  • Sessions widened London 7-11 / NY 12-17 GMT
+  • Crypto exempt from session filter
+  • PASS / FIRE [APEX] still always print
 
-Outside kill-zone → Experts:
-  APEX VALIDATE … FAIL - session: OUTSIDE kill-zone hour=…
-
-24/7 anytime: Inputs → EnableAPEXSessionFilter = false
-
-APEX core unchanged (structure → pool → sweep → displacement → zone → fire, no post-FIRE veto).
+24/7: EnableAPEXSessionFilter=false
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
-1. Remove PRISM STRATEGY from every chart
-2. Copy SNIPER_AI_OK59.mq5 → MQL5/Experts/
-3. F7 — confirm SA_APEX_SESSION_59
-4. Fresh attach → Experts: BUILD_ID=SA_APEX_SESSION_59
-   + APEX59 SESSION: Filter=true …
+1. Remove old SNIPER* / PRISM STRATEGY
+2. F7 SNIPER_AI_OK60.mq5
+3. Fresh attach → BUILD_ID=SA_APEX_FIXFAIL_60
+4. Experts: "FAIL lines are NORMAL while waiting"

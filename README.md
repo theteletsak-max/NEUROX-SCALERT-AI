@@ -25,21 +25,19 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 
 ### Install (MT5) — single file (compile-safe)
 
-Use **[`SNIPER_AI_OK59.mq5`](SNIPER_AI_OK59.mq5)**  
-`BUILD_ID: SA_APEX_SESSION_59`
+Use **[`SNIPER_AI_OK60.mq5`](SNIPER_AI_OK60.mq5)**  
+`BUILD_ID: SA_APEX_FIXFAIL_60`
 
 1. Close MetaEditor
 2. **File → Open Data Folder** → `MQL5/Experts/`
 3. **Delete** any old `Sniper*` / `SNIPER*` / `PRISM*` `.mq5` / `.ex5` files
-4. Copy **`SNIPER_AI_OK59.mq5`**
-5. Open it, confirm `SA_APEX_SESSION_59`, compile **(F7)**
-6. **Remove** `PRISM STRATEGY` → attach **this** file fresh → Algo Trading ON
-7. Experts: `BUILD_ID=SA_APEX_SESSION_59` + `APEX59 SESSION: Filter=true`
-8. For 24/7: Inputs → **`EnableAPEXSessionFilter=false`**
+4. Copy **`SNIPER_AI_OK60.mq5`**
+5. Open it, confirm `SA_APEX_FIXFAIL_60`, compile **(F7)**
+6. Remove `PRISM STRATEGY` → attach fresh → Algo Trading ON
+7. Experts: `BUILD_ID=SA_APEX_FIXFAIL_60` — FAIL lines max 1x/bar (normal while waiting). Look for `PASS` / `FIRE [APEX]`.
+8. Anytime 24/7: `EnableAPEXSessionFilter=false`
 
-Also mirrored as [`SNIPER_AI.mq5`](SNIPER_AI.mq5).
-
-**OK59:** APEX + optional London/NY kill-zone filter (GMT). Core APEX unchanged. Filter ON by default so you can observe it; turn OFF to trade anytime.
+**OK60:** Fixed APEX FAIL spam + softened bias/zone. Session filter kept (widened); crypto exempt.
 
 See [`DOWNLOAD_SNIPER_AI.txt`](DOWNLOAD_SNIPER_AI.txt)
 
