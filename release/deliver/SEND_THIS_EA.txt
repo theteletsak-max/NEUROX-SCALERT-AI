@@ -16,7 +16,7 @@ ANTI-SCALP (CODED HARD)
 • ContFallback trend-only DISABLED when EnableAntiScalpMode=true
 • ContFallback needs BOS + OB/FVG (structure), not EMA side alone
 • Once per EntryTF bar + 180 min ContFallback cooldown after fill
-• Wider SL (1.5x) + min hold 12 H1 bars before trail/mgmt
+• Wider SL (1.5x) + min hold 24 H1 bars before trail/mgmt
 • MaxOpenTrades=1
 
 Still fires: APEX first, then ContFallback swing BOS+zone only.

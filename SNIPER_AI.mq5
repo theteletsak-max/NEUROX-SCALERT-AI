@@ -103,7 +103,7 @@ input bool   ContFallbackRequireBOS      = true;   // must have directional BOS
 input bool   ContFallbackRequireZone     = true;   // must have OB or FVG
 input bool   ContFallbackOncePerBar      = true;   // max 1 ContFallback signal per EntryTF bar
 input int    ContFallbackCooldownMinutes = 180;    // minutes after ContFallback FILL before next ContFallback
-input int    ContFallbackMinimumHoldBars = 12;     // EntryTF bars before trail/trend mgmt (H1≈12h)
+input int    ContFallbackMinimumHoldBars = 24;     // EntryTF bars before trail/trend mgmt (H1≈24h)
 input double ContFallbackSL_ATR_Boost    = 1.5;    // wider SL — not a scalp stop
 input int    ContFallbackMaxOpen         = 1;      // max open ContFallback positions on this symbol
 input bool   ContFallbackDisableAdaptiveHold = true; // do not shorten hold in ranging for ContFallback/APEX
@@ -4367,8 +4367,8 @@ void ManageOpenTrades()
       int stHold = FindTradeState(ticket);
       string holdTag = (stHold >= 0) ? TradeStates[stHold].strategyTag : "";
       bool swingTag = (holdTag == "ContFallback" || holdTag == "APEX" || holdTag == "LCS");
-      if(EnableAntiScalpMode && swingTag && ContFallbackMinimumHoldBars > effectiveMinHoldBars)
-         effectiveMinHoldBars = ContFallbackMinimumHoldBars;
+      if(EnableAntiScalpMode && swingTag)
+         effectiveMinHoldBars = (int)MathMax(effectiveMinHoldBars, ContFallbackMinimumHoldBars);
 
       // UPGRADE: adapt the minimum hold requirement to the current market
       // regime - a ranging market doesn't reward the same patience a
