@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_QUALITY_72                                      |
-//| SNIPER AI - anytime + strong quality setups (session detect, soft)  |
-//| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
+//| BUILD_ID: SA_QUALITY_73                                      |
+//| SNIPER AI - anytime + strong quality + IDP signal core            |
+//| Comment: SNIPER AI | IDP iCustom confluence | No RSI/MACD/Stoch  |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.40"
-#property description "SNIPER AI OK72: ANYTIME + STRONG QUALITY — soft sessions; ContFallback needs ADX trend + score + structure"
-#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK72. BUILD=SA_QUALITY_72"
+#property version   "5.41"
+#property description "SNIPER AI OK73: ANYTIME + STRONG QUALITY + SNIPER_IDP signal core (iCustom)"
+#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK73. BUILD=SA_QUALITY_73"
 
 #include <Trade/Trade.mqh>
 
@@ -24,6 +24,20 @@ input group "GENERAL"
 
 input long MagicNumber = 40001;
 input string TradeComment = "SNIPER AI";
+
+input group "SNIPER IDP — SIGNAL CORE (EA reads indicator like a bot)"
+// EA loads SNIPER_IDP via iCustom and gates live FIRE on pulse direction.
+// Compile SNIPER_IDP.mq5 into MQL5/Indicators/ first (same Data Folder).
+input bool   EnableIDPConfluence     = true;   // master: read IDP into signal core
+input bool   IDP_HardGate            = true;   // true=must agree to FIRE; false=log only
+input bool   IDP_RequireStrong       = false;  // false=QUALITY |pulse|; true=STRONG only
+input double IDP_MinAbsPulse         = 45.0;   // QUALITY floor (matches IDP)
+input double IDP_StrongAbsPulse      = 70.0;   // STRONG floor
+input int    IDP_PulseShift          = 1;      // 1=closed bar (stable); 0=forming
+input string IDP_IndicatorName       = "SNIPER_IDP"; // Indicators folder name (no .ex5)
+input bool   IDP_ApplyToAPEX         = true;   // gate APEX through IDP
+input bool   IDP_ApplyToContFallback = true;   // gate ContFallback through IDP
+input bool   IDP_LogGate             = true;   // print IDP pass/fail
 
 input group "PRISM BEAST MODE ENGINE (support only — not a live entry path)"
 // OK67: live entries are APEX/ContFallback only. Beast/Ultra still finalize those tags.
@@ -101,7 +115,7 @@ input double ContFallbackSL_ATR_Boost    = 1.5;    // wider SL — not a scalp s
 input int    ContFallbackMaxOpen         = 1;      // max open ContFallback positions on this symbol
 input bool   ContFallbackDisableAdaptiveHold = true; // do not shorten hold in ranging for ContFallback/APEX
 
-input group "CONT STRUCTURE — STRONG QUALITY (OK72, trades ANYTIME)"
+input group "CONT STRUCTURE — STRONG QUALITY (OK73, trades ANYTIME + IDP)"
 // Anytime: sessions never hard-block.
 // Strong quality ContFallback: ADX trend + BOS + fresh zone + (near OR disp) + min score.
 // STRONG grade = near+disp+fresh OB. QUALITY grade = solid score with ZoneOrDisp.
@@ -343,6 +357,7 @@ double   MonthlyStartBalance=0.0;
 // Arrays instead of single handles so each symbol in MultiSymbolList gets
 // its own indicator instance; index-matched to MultiSymbolList[].
 int EMAHandles[];
+int IDPHandles[]; // SNIPER_IDP iCustom per MultiSymbolList symbol
 int ADXHandles[];
 int ATRHandlesArr[];
 int FilterATRHandles[];
@@ -598,11 +613,12 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded BUILD_ID=SA_QUALITY_72");
-   Print("CRITICAL: SOURCE must be SNIPER_AI_OK72 — remove PRISM STRATEGY if present");
-   Print("QUALITY72: ANYTIME + STRONG/QUALITY setups | AntiScalp=", EnableAntiScalpMode,
-         " ANYTIME HardBlock=", APEX_SessionHardBlock, " (must be false)
+   Print("SNIPER AI Loaded BUILD_ID=SA_QUALITY_73");
+   Print("CRITICAL: SOURCE must be SNIPER_AI_OK73 — remove PRISM STRATEGY if present");
+   Print("QUALITY73: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
+         " HardBlock=", APEX_SessionHardBlock, " (must be false)",
          " NewsAware=", EnableNewsAwareness,
+         " IDP=", EnableIDPConfluence,
          " SpreadAlwaysAllow | MaxOpen=", MaxOpenTrades,
          " Lot=", LotSize);
    Print("APEX ", EnumToString(APEX_BiasTF), "/", EnumToString(APEX_EntryTF),
@@ -617,7 +633,14 @@ int OnInit()
    Print("ANYTIME: SessionHardBlock=", APEX_SessionHardBlock,
          " | SessionDetect=", EnableSessionDetect,
          " | Spread/News never hard-block | ContFallback=", EnableContFallback);
-   Print("COMPANION INDICATOR: SNIPER_IDP (Institutional Displacement Pulse) — attach from MQL5/Indicators");
+   Print("IDP SIGNAL CORE: Enable=", EnableIDPConfluence,
+         " HardGate=", IDP_HardGate,
+         " RequireStrong=", IDP_RequireStrong,
+         " MinAbs=", IDP_MinAbsPulse,
+         " StrongAbs=", IDP_StrongAbsPulse,
+         " Shift=", IDP_PulseShift,
+         " Name=", IDP_IndicatorName);
+   Print("IDP: compile MQL5/Indicators/SNIPER_IDP.mq5 — EA reads it via iCustom (chart attach optional)");
    UpdateNewsAwareness();
    {
       string sn="", sd=""; bool a=false,b=false,c=false,d=false; int h=-1;
@@ -643,6 +666,7 @@ void ResizePerSymbolTrackingArrays()
    ArrayResize(LastTradeWasLossArr, n);
    ArrayResize(LastLossCloseTimeArr, n);
    ArrayResize(EMAHandles, n);
+   ArrayResize(IDPHandles, n);
    ArrayResize(ADXHandles, n);
    ArrayResize(ATRHandlesArr, n);
    ArrayResize(FilterATRHandles, n);
@@ -713,6 +737,8 @@ void ResizePerSymbolTrackingArrays()
       LastTradeWasLossArr[i]  = false;
       LastLossCloseTimeArr[i] = 0;
       EMAHandles[i]           = INVALID_HANDLE;
+      if(i < ArraySize(IDPHandles))
+         IDPHandles[i] = INVALID_HANDLE;
       ADXHandles[i]           = INVALID_HANDLE;
       ATRHandlesArr[i]        = INVALID_HANDLE;
       FilterATRHandles[i]     = INVALID_HANDLE;
@@ -823,6 +849,12 @@ void OnDeinit(const int reason)
    {
       if(i < ArraySize(EMAHandles) && EMAHandles[i] != INVALID_HANDLE)
          IndicatorRelease(EMAHandles[i]);
+
+      if(i < ArraySize(IDPHandles) && IDPHandles[i] != INVALID_HANDLE)
+      {
+         IndicatorRelease(IDPHandles[i]);
+         IDPHandles[i] = INVALID_HANDLE;
+      }
 
       if(i < ArraySize(ADXHandles) && ADXHandles[i] != INVALID_HANDLE)
          IndicatorRelease(ADXHandles[i]);
@@ -976,6 +1008,8 @@ bool ContStruct_GetFreshZone(const bool buy, double &zTop, double &zBot, string 
 bool ContStruct_PriceNearZone(const bool buy, const double zTop, const double zBot);
 bool ContStruct_HasDisplacement(const bool buy);
 bool ContFallbackBestStructureOK(const bool buy, string &detail);
+bool IDP_GetPulse(double &pulse, string &detail);
+bool IDP_ConfluenceOK(const bool buy, string &detail);
 string ContStruct_Grade(const bool buy);
 bool NewsAwarenessInWindow(string &detail);
 bool APEX_InKillZone(string &detail);
@@ -1550,6 +1584,26 @@ bool InitializeIndicators()
       {
          Print("Failed to create Slow EMA Handle for ", sym);
          return false;
+      }
+
+      // SNIPER IDP signal core — EA reads companion indicator like a bot
+      if(i < ArraySize(IDPHandles))
+         IDPHandles[i] = INVALID_HANDLE;
+      if(EnableIDPConfluence)
+      {
+         IDPHandles[i] = iCustom(sym, EntryTF, IDP_IndicatorName);
+         if(IDPHandles[i] == INVALID_HANDLE)
+         {
+            Print("IDP WARNING: iCustom(", IDP_IndicatorName, ") failed for ", sym,
+                  " — compile MQL5/Indicators/SNIPER_IDP.mq5 (F7). HardGate=", IDP_HardGate);
+            if(IDP_HardGate)
+            {
+               Print("IDP INIT FAILED: HardGate ON and SNIPER_IDP not available for ", sym);
+               return false;
+            }
+         }
+         else
+            Print("IDP signal core linked: ", IDP_IndicatorName, " on ", sym, " ", EnumToString(EntryTF));
       }
    }
 
@@ -10258,13 +10312,32 @@ bool APEX_SetupOK(const bool buy, string &detail, double &invalidation)
       }
    }
 
-   detail = StringFormat("APEX OK %s pool=%s sweep@%d zone=%s inv=%s | %s",
+   if(IDP_ApplyToAPEX)
+   {
+      string idpDetail = "";
+      if(!IDP_ConfluenceOK(buy, idpDetail))
+      {
+         detail = "APEX IDP block: " + idpDetail;
+         return false;
+      }
+   }
+
+   string idpNote = "";
+   if(EnableIDPConfluence && IDP_ApplyToAPEX)
+   {
+      double p = 0.0; string pd = "";
+      if(IDP_GetPulse(p, pd))
+         idpNote = " | " + pd;
+   }
+
+   detail = StringFormat("APEX OK %s pool=%s sweep@%d zone=%s inv=%s | %s%s",
                          buy ? "BUY" : "SELL",
                          DoubleToString(pool, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
                          sweepBar,
                          APEX_HasUnmitigatedZone(buy) ? "Y" : "N",
                          DoubleToString(invalidation, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
-                         sessDetail);
+                         sessDetail,
+                         idpNote);
    return true;
 }
 
@@ -11050,6 +11123,108 @@ string ContStruct_Grade(const bool buy)
    return "QUALITY";
 }
 
+//================ SNIPER IDP — EA SIGNAL CORE ========================//
+// Reads SNIPER_IDP buffer 0 (pulse -100..+100) via iCustom.
+// BUY needs +pulse, SELL needs -pulse, at QUALITY or STRONG threshold.
+
+bool IDP_EnsureHandle(const int idx)
+{
+   if(!EnableIDPConfluence)
+      return false;
+   if(idx < 0 || idx >= ArraySize(IDPHandles))
+      return false;
+   if(IDPHandles[idx] != INVALID_HANDLE)
+      return true;
+
+   IDPHandles[idx] = iCustom(BrokerSymbol, EntryTF, IDP_IndicatorName);
+   if(IDPHandles[idx] == INVALID_HANDLE)
+   {
+      if(IDP_LogGate)
+         Print("IDP: handle missing for ", BrokerSymbol, " — compile Indicators/", IDP_IndicatorName);
+      return false;
+   }
+   return true;
+}
+
+bool IDP_GetPulse(double &pulse, string &detail)
+{
+   pulse = 0.0;
+   detail = "";
+   if(!EnableIDPConfluence)
+   {
+      detail = "IDP off";
+      return false;
+   }
+
+   int idx = GetSymbolIndex(BrokerSymbol);
+   if(!IDP_EnsureHandle(idx))
+   {
+      detail = "IDP not loaded";
+      return false;
+   }
+
+   int shift = MathMax(IDP_PulseShift, 0);
+   double buf[];
+   ArraySetAsSeries(buf, true);
+   if(CopyBuffer(IDPHandles[idx], 0, shift, 1, buf) != 1)
+   {
+      detail = "IDP CopyBuffer fail";
+      return false;
+   }
+
+   pulse = buf[0];
+   detail = StringFormat("IDP pulse=%.1f shift=%d", pulse, shift);
+   return true;
+}
+
+bool IDP_ConfluenceOK(const bool buy, string &detail)
+{
+   detail = "";
+   if(!EnableIDPConfluence)
+   {
+      detail = "IDP off";
+      return true; // not part of core when disabled
+   }
+
+   double pulse = 0.0;
+   string pd = "";
+   if(!IDP_GetPulse(pulse, pd))
+   {
+      detail = pd;
+      if(!IDP_HardGate)
+      {
+         if(IDP_LogGate)
+            Print("IDP soft-allow (no pulse): ", pd, " on ", BrokerSymbol);
+         return true;
+      }
+      return false;
+   }
+
+   double need = IDP_RequireStrong ? IDP_StrongAbsPulse : IDP_MinAbsPulse;
+   if(need < 0.0) need = 0.0;
+
+   bool ok = buy ? (pulse >= need) : (pulse <= -need);
+   string grade = (MathAbs(pulse) >= IDP_StrongAbsPulse) ? "STRONG"
+                : (MathAbs(pulse) >= IDP_MinAbsPulse) ? "QUALITY" : "WEAK";
+
+   detail = StringFormat("%s %s need %s%.0f (got %.1f)",
+                         pd, grade, buy ? "+" : "-", need, pulse);
+
+   if(ok)
+   {
+      if(IDP_LogGate)
+         Print("IDP PASS ", (buy ? "BUY" : "SELL"), " — ", detail, " on ", BrokerSymbol);
+      return true;
+   }
+
+   if(IDP_LogGate)
+      Print("IDP FAIL ", (buy ? "BUY" : "SELL"), " — ", detail, " on ", BrokerSymbol);
+
+   if(!IDP_HardGate)
+      return true; // annotate only
+   return false;
+}
+
 bool ContFallbackBestStructureOK(const bool buy, string &detail)
 {
    detail = "";
@@ -11122,14 +11297,32 @@ bool ContFallbackBestStructureOK(const bool buy, string &detail)
       return false;
    }
 
+   if(IDP_ApplyToContFallback)
+   {
+      string idpDetail = "";
+      if(!IDP_ConfluenceOK(buy, idpDetail))
+      {
+         detail = "IDP block: " + idpDetail;
+         return false;
+      }
+   }
+
    string grade = ContStruct_Grade(buy);
-   detail = StringFormat("%s %s + %s%s%s score=%d",
+   string idpNote = "";
+   if(EnableIDPConfluence && IDP_ApplyToContFallback)
+   {
+      double p = 0.0; string pd = "";
+      if(IDP_GetPulse(p, pd))
+         idpNote = StringFormat(" | %s", pd);
+   }
+   detail = StringFormat("%s %s + %s%s%s score=%d%s",
                          grade,
                          ContStruct_RequireTwoBarBOS ? "BOS2" : "BOS",
                          kind,
                          near ? " + near" : "",
                          disp ? " + disp" : "",
-                         score);
+                         score,
+                         idpNote);
    return true;
 }
 
@@ -11207,7 +11400,7 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    sellSignal = false;
    strategyTag = "";
 
-   // OK68 LIVE: APEX → ContFallback best structure only
+   // OK73 LIVE: APEX → ContFallback, both gated by SNIPER_IDP pulse (iCustom)
    // 1) APEX
    if(EnableAPEXStrategy)
    {
@@ -12175,7 +12368,7 @@ string LiveMarketSummary()
 void PrintLiveMarketAnalysis()
 {
    AnalyzeLiveMarket(true);
-   Print("---- MARKET ANALYSIS BUILD=SA_QUALITY_72 (", BrokerSymbol, ") ----");
+   Print("---- MARKET ANALYSIS BUILD=SA_QUALITY_73 (", BrokerSymbol, ") ----");
    Print("SESSION=", g_LiveMkt.sessionName,
          " hour=", g_LiveMkt.sessionHour,
          (APEX_UseGMT ? " GMT" : " SERVER"),

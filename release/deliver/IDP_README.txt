@@ -1,18 +1,20 @@
 SNIPER IDP — Institutional Displacement Pulse
 BUILD_ID: IDP_1
 
-THE companion indicator for SNIPER AI OK72.
+THE companion indicator for SNIPER AI OK73.
 
-Scores into ONE pulse:
+EA signal core reads this via iCustom:
+  buffer 0 = pulse (−100..+100)
+  BUY needs +pulse, SELL needs −pulse
+  QUALITY |pulse| ≥ 45 (default hard gate)
+  STRONG  |pulse| ≥ 70
+
+Pulse scores:
   1) Liquidity sweep wick
   2) Displacement impulse
   3) Directional BOS
   4) Trend side vs EMA
   5) Range expansion
 
-Read:
-  |pulse| ≥ 70  → STRONG (lime/red)
-  |pulse| ≥ 45  → QUALITY
-  near 0        → no impulse
-
-Install: MQL5/Indicators/SNIPER_IDP.mq5 → F7 → attach on H1 with OK72 EA
+Install: MQL5/Indicators/SNIPER_IDP.mq5 → F7 BEFORE attaching OK73 EA
+Chart attach is optional (visual); EA loads it itself.

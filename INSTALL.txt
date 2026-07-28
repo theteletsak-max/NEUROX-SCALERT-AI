@@ -1,13 +1,14 @@
 SNIPER AI — INSTALL CHECKLIST
 
 [ ] Remove PRISM STRATEGY from all charts
-[ ] Copy SNIPER_AI_OK72.mq5 → MQL5/Experts/ → compile F7
-[ ] Copy SNIPER_IDP.mq5 → MQL5/Indicators/ → compile F7
-[ ] Attach SNIPER_AI_OK72
-[ ] Attach SNIPER_IDP (same symbol/TF)
-[ ] Journal shows BUILD_ID=SA_QUALITY_72
-[ ] Journal shows SNIPER IDP Loaded BUILD_ID=IDP_1
+[ ] Copy SNIPER_IDP.mq5 → MQL5/Indicators/ → compile F7 FIRST
+[ ] Copy SNIPER_AI_OK73.mq5 → MQL5/Experts/ → compile F7
+[ ] Attach SNIPER_AI_OK73
+[ ] (Optional) Attach SNIPER_IDP on chart for visual pulse
+[ ] Journal shows BUILD_ID=SA_QUALITY_73
+[ ] Journal shows IDP signal core linked / IDP PASS|FAIL
 [ ] Trade comment = SNIPER AI
 [ ] Algo Trading ON
 
-Do NOT attach older SNIPER_AI_OK6x files.
+Do NOT attach older SNIPER_AI_OK6x/OK72 files.
+EA reads IDP via iCustom — indicator must be compiled even if not on chart.

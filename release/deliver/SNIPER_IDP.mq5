@@ -10,7 +10,7 @@
 #property version   "1.00"
 #property description "SNIPER IDP — Institutional Displacement Pulse"
 #property description "Scores BOS pressure + sweep wick + displacement + trend side into ONE pulse"
-#property description "Companion to SNIPER_AI_OK72. Use on EntryTF (H1 recommended)."
+#property description "Companion to SNIPER_AI_OK73. EA loads via iCustom. EntryTF H1 recommended."
 #property indicator_separate_window
 #property indicator_buffers 4
 #property indicator_plots   3

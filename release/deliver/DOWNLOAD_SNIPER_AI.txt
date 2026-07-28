@@ -1,15 +1,15 @@
 SNIPER AI — DOWNLOAD (EVERYTHING IN PLACE)
 
 EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK72.mq5
-BUILD_ID: SA_QUALITY_72
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK73.mq5
+BUILD_ID: SA_QUALITY_73
 
 INDICATOR:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_IDP.mq5
 BUILD_ID: IDP_1
 
 Anytime + strong quality ContFallback/APEX.
-Companion pulse: sweep + displacement + BOS + trend side.
+EA signal core reads IDP via iCustom (HardGate ON).
 
 REMOVE PRISM STRATEGY.
-INSTALL: F7 OK72 + F7 IDP → attach both → SA_QUALITY_72 + IDP_1
+INSTALL: F7 IDP first → F7 OK73 → attach EA → SA_QUALITY_73

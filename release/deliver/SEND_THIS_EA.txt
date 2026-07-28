@@ -2,15 +2,15 @@
         SNIPER AI — FULL PACKAGE
 ══════════════════════════════════════
 
-EA:        SNIPER_AI_OK72.mq5
-BUILD_ID:  SA_QUALITY_72
+EA:        SNIPER_AI_OK73.mq5
+BUILD_ID:  SA_QUALITY_73
 Comment:   SNIPER AI
 
 INDICATOR: SNIPER_IDP.mq5
 BUILD_ID:  IDP_1
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK72.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK73.mq5
 
 DOWNLOAD IDP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_IDP.mq5
@@ -19,19 +19,18 @@ https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compi
 IN PLACE
 ──────────────────────────────────────
 ✓ APEX → ContFallback STRONG/QUALITY
+✓ IDP signal core (EA iCustom hard-gate)
 ✓ Trade anytime (session detect, soft)
 ✓ Clean market analysis
 ✓ News aware · spread never blocks
 ✓ Anti-scalp structure (no trend spam)
 ✓ PRISM/ContSniper live path retired
 ✓ SNIPER IDP companion pulse indicator
-✓ release/deliver = current only
-✓ release/archive = OK11..OK71 (do not attach)
-✓ SNIPER_AI.zip = EA + IDP + docs
 
 Look for:
-  BUILD_ID=SA_QUALITY_72
-  SNIPER IDP Loaded BUILD_ID=IDP_1
+  BUILD_ID=SA_QUALITY_73
+  IDP signal core linked
+  IDP PASS / IDP FAIL
   SESSION DETECT: …
   FIRE [APEX] / FIRE [ContFallback] STRONG|QUALITY
 
@@ -40,11 +39,11 @@ INSTALL
 ──────────────────────────────────────
 1. REMOVE "PRISM STRATEGY" from EVERY chart
 2. Delete old SNIPER*.ex5
-3. Copy SNIPER_AI_OK72.mq5 → MQL5/Experts/ → F7
-4. Copy SNIPER_IDP.mq5 → MQL5/Indicators/ → F7
-5. Attach SNIPER_AI_OK72 (NOT Prism, NOT old OK6x)
-6. Attach SNIPER_IDP on same chart (H1)
-7. Experts must show SA_QUALITY_72 · source SNIPER_AI_OK72
+3. Copy SNIPER_IDP.mq5 → MQL5/Indicators/ → F7 FIRST
+4. Copy SNIPER_AI_OK73.mq5 → MQL5/Experts/ → F7
+5. Attach SNIPER_AI_OK73 (NOT Prism, NOT old OK72)
+6. Optional: attach SNIPER_IDP on chart (visual)
+7. Experts must show SA_QUALITY_73 · IDP linked
 8. Algo Trading ON · AutoTrading ON
 
 See PACKAGE_LAYOUT.txt · CURRENT.txt · INSTALL.txt
