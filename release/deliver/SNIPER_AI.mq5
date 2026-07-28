@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_TRADEUNBLOCK_53                             |
-//| SNIPER AI - unblock entries: DD shield OFF + reset peak on init |
+//| BUILD_ID: SA_PRISM_TRADEFIRE_54                                |
+//| SNIPER AI - Cont FIRE was blocked by broken duplicate-bar guard |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.21"
-#property description "SNIPER AI OK53: drawdown shield OFF by default + peak equity reset on init"
-#property description "Fixes live 'cannot trade' when PeakEquity GV stuck above MaxDrawdownPercent"
+#property version   "5.22"
+#property description "SNIPER AI OK54: fix ContSniper FIRE then duplicate-bar suppress (0==0 / closed fill)"
+#property description "OK53 DD unblock retained: DrawdownShield OFF + PeakEquity reset on init"
 
 #include <Trade/Trade.mqh>
 
@@ -34,7 +34,11 @@ input bool   EnableSniperMode                = true;  // aggressive fire when be
 input bool   BeastUseUnifiedStructure        = true;  // MPI/ICE/rank share one structure snapshot
 input bool   BeastRequireReversalStack       = true;  // RevSniper/LiquiditySweep need liquidity stack
 input int    BeastMinReversalLiquidityScore  = 8;     // BEST: higher Rev liquidity floor (max 15)
-input bool   BeastDuplicateBarGuard          = true;  // one approval per bar per direction
+// TRADEFIRE54: was blocking ContSniper after ULTRA CORE FIRE when
+// iTime(EntryTF)==0 matched unset LastApproved==0, OR after a fill that
+// defense already closed on the same bar. Guard now only suppresses when
+// a real prior fill bar matches AND that direction is still open.
+input bool   BeastDuplicateBarGuard          = true;  // one LIVE open fill per bar per direction
 input bool   BeastCaptureSignalSnapshot      = true;  // record MPI/ICE at decision time
 input bool   EnableBeastDashboard            = true;  // rich HUD when EnableDashboard=true
 
@@ -483,11 +487,11 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_TRADEUNBLOCK_53");
-   Print("TRADEUNBLOCK53: DrawdownShield=", EnableDrawdownProtection,
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_TRADEFIRE_54");
+   Print("TRADEFIRE54: duplicate-bar guard fixed (no 0==0 false positive; allow re-fire if prior fill closed)");
+   Print("TRADEUNBLOCK53 retained: DrawdownShield=", EnableDrawdownProtection,
          " ResetPeakOnInit=", ResetPeakEquityOnInit,
-         " CurrentDD=", DoubleToString(GetCurrentDrawdown(), 2), "%",
-         " (was blocking live entries when PeakEquity stuck above MaxDD)");
+         " CurrentDD=", DoubleToString(GetCurrentDrawdown(), 2), "%");
    Print("AUDITOK52 retained: sticky pre-TP1 BE arm");
    Print("DEFENDPLUS: PreTP1BE=", DefensePreTP1AdverseBE,
          " MAE_ATR=", DefenseMAE_ATR,
@@ -3254,7 +3258,11 @@ bool ExecuteBuy()
    // counting after a *successful* trade - so a persistently-failing
    // attempt, e.g. invalid stops, would retry every tick with no limit).
    if(TimeCurrent() - LastAttemptTimeArr[symIdx] < AttemptCooldownSeconds)
+   {
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("BUY aborted: attempt cooldown (", AttemptCooldownSeconds, "s) on ", BrokerSymbol);
       return false;
+   }
 
    if(!RiskManagementOK())
       return false;
@@ -3514,7 +3522,11 @@ bool ExecuteSell()
    ConfigureFillingMode(BrokerSymbol);
 
    if(TimeCurrent() - LastAttemptTimeArr[symIdx] < AttemptCooldownSeconds)
+   {
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("SELL aborted: attempt cooldown (", AttemptCooldownSeconds, "s) on ", BrokerSymbol);
       return false;
+   }
 
    if(!RiskManagementOK())
       return false;
@@ -8668,9 +8680,9 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
    if(EnableBeastMode && BeastDuplicateBarGuard && IsDuplicateSignal(buy))
    {
       UltraSetReject("duplicate bar guard");
-      if(EnableVerboseLogging || EnableSetupLogging)
-         Print("BEAST: duplicate bar guard suppressed ", (buy ? "BUY" : "SELL"),
-               " on ", BrokerSymbol);
+      // Always visible — this was the live ContSniper blocker after ULTRA CORE FIRE
+      Print("BEAST: duplicate bar guard suppressed ", (buy ? "BUY" : "SELL"),
+            " on ", BrokerSymbol, " (open position already on this EntryTF bar)");
       return false;
    }
 
@@ -9946,11 +9958,33 @@ bool MandatoryConfirmationsPassed(bool buy)
 // (Part 1) for the full rationale: CooldownFinished() only throttles by
 // elapsed time since the last FILLED trade, which says nothing about
 // whether THIS approval is a re-fire of the same signal that already
-// triggered earlier on the same still-forming bar (possible with
+// filled earlier on the same still-forming bar (possible with
 // EnableTickLevelSignalDetection on and a short TradeCooldownMinutes).
-// This is a second, independent, bar-identity-based guard - a direction
-// can be approved at most once per bar per symbol, full stop, regardless
-// of how the cooldown timer is configured.
+// TRADEFIRE54: never treat unset (0) bar times as a match — that was
+// suppressing ContSniper on every tick when EntryTF history was not ready
+// (iTime==0 == LastApproved init 0). Also do not suppress if the prior
+// fill on this bar was already closed (defense/SL) — allow a fresh fire.
+bool HasOpenEADirectionPosition(bool buy)
+{
+   ENUM_POSITION_TYPE want = buy ? POSITION_TYPE_BUY : POSITION_TYPE_SELL;
+
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0)
+         continue;
+      if(!PositionSelectByTicket(ticket))
+         continue;
+      if(PositionGetInteger(POSITION_MAGIC) != MagicNumber)
+         continue;
+      if(PositionGetString(POSITION_SYMBOL) != BrokerSymbol)
+         continue;
+      if((ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE) == want)
+         return true;
+   }
+   return false;
+}
+
 bool IsDuplicateSignal(bool buy)
 {
    int idx = GetSymbolIndex(BrokerSymbol);
@@ -9958,11 +9992,31 @@ bool IsDuplicateSignal(bool buy)
       return false;
 
    datetime currentBarTime = iTime(BrokerSymbol, EntryTF, 0);
+   // No valid bar identity → never suppress (was 0==0 false positive)
+   if(currentBarTime <= 0)
+      return false;
 
+   datetime lastApproved = 0;
    if(buy)
-      return (idx < ArraySize(LastApprovedBuyBarTimeArr) && LastApprovedBuyBarTimeArr[idx] == currentBarTime);
+   {
+      if(idx < ArraySize(LastApprovedBuyBarTimeArr))
+         lastApproved = LastApprovedBuyBarTimeArr[idx];
+   }
    else
-      return (idx < ArraySize(LastApprovedSellBarTimeArr) && LastApprovedSellBarTimeArr[idx] == currentBarTime);
+   {
+      if(idx < ArraySize(LastApprovedSellBarTimeArr))
+         lastApproved = LastApprovedSellBarTimeArr[idx];
+   }
+
+   // Never approved this symbol/direction, or different bar → not a duplicate
+   if(lastApproved <= 0 || lastApproved != currentBarTime)
+      return false;
+
+   // Same bar was marked after a fill — only suppress while that position is still open
+   if(!HasOpenEADirectionPosition(buy))
+      return false;
+
+   return true;
 }
 
 void MarkSignalApproved(bool buy)
@@ -9972,6 +10026,9 @@ void MarkSignalApproved(bool buy)
       return;
 
    datetime currentBarTime = iTime(BrokerSymbol, EntryTF, 0);
+   // Do not stamp 0 — would re-create the 0==0 suppress bug
+   if(currentBarTime <= 0)
+      return;
 
    if(buy)
    {
@@ -10117,7 +10174,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_TRADEUNBLOCK_53\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_TRADEFIRE_54\n",
          "=============================================="
       );
       return;
@@ -10139,7 +10196,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_TRADEUNBLOCK_53\n",
+         "BUILD: SA_PRISM_TRADEFIRE_54\n",
          "=========================================="
       );
       return;

@@ -2,45 +2,42 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK53.mq5
-BUILD_ID: SA_PRISM_TRADEUNBLOCK_53
+File:     SNIPER_AI_OK54.mq5
+BUILD_ID: SA_PRISM_TRADEFIRE_54
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK53.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK54.mq5
+
+Raw:
+https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK54.mq5
 
 ──────────────────────────────────────
-WHY IT COULD NOT TRADE (FIXED OK53)
+WHY IT COULD NOT TRADE (FIXED OK54)
 ──────────────────────────────────────
-Journal: "Trading blocked: Max drawdown from peak equity reached (53%)"
-→ EnableDrawdownProtection was ON, PeakEquity GV stuck, MaxDD=20%
-→ ALL new entries hard-blocked via RiskManagementOK
+Journal showed:
+  ULTRA CORE FIRE SELL [ContSniper] grade=A+ ...
+  BEAST: duplicate bar guard suppressed SELL
 
-OK53 FIX:
-  EnableDrawdownProtection = false (default)
-  ResetPeakEquityOnInit = true (wipes stuck PeakEquity GV on attach)
+Root cause: duplicate-bar guard treated unset times as a match
+(iTime(EntryTF)==0 == LastApproved init 0) → ContSniper NEVER filled.
+Also suppressed for the rest of the bar after a fill that defense closed.
 
-ContSniper "ULTRA CORE FIRE" then "duplicate bar guard" is normal
-after a fill (or prior approve) on the same EntryTF bar — not the
-main cannot-trade cause.
+OK54 FIX:
+  • Never match bar time 0
+  • Only suppress if same EntryTF bar was filled AND that direction is still open
+  • OK53 DD unblock retained (DrawdownShield=false)
+
+REV VALIDATE FAIL = RevSniper quality working (needs sweep/OB) — not a bug.
+ContSniper is the path that should execute.
 
 ──────────────────────────────────────
 INSTALL (REQUIRED)
 ──────────────────────────────────────
-1. Delete old SNIPER* from Experts + charts
-2. Copy SNIPER_AI_OK53.mq5 → MQL5/Experts/
-3. F7 — confirm SA_PRISM_TRADEUNBLOCK_53
-4. Attach fresh (do not keep old Inputs template)
-5. EntryTF must match chart (H4 chart → EntryTF=H4)
-6. Experts must show:
-   BUILD_ID=SA_PRISM_TRADEUNBLOCK_53
-   DrawdownShield=false
-   PeakEquity reset ...
-7. Optional if still blocked: Tools → Global Variables
-   delete SniperCoreAI_40001_PeakEquity (or your Magic)
-
-──────────────────────────────────────
-RETAINED
-──────────────────────────────────────
-Cont/Rev quality · ICE/IMCE · ladder · defend+ · spread-free · open caps
+1. Delete old SNIPER* / PRISM* from Experts + all charts
+2. Copy SNIPER_AI_OK54.mq5 → MQL5/Experts/
+3. F7 — confirm SA_PRISM_TRADEFIRE_54
+4. Attach FRESH (do not keep old Inputs)
+5. EntryTF must match chart (H4 → EntryTF=H4)
+6. Experts must show BUILD_ID=SA_PRISM_TRADEFIRE_54
