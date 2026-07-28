@@ -2,50 +2,41 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK68.mq5
-BUILD_ID: SA_STRUCT_BEST_68
+File:     SNIPER_AI_OK69.mq5
+BUILD_ID: SA_CANTRADE_69
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK68.mq5
-
-Package mirrors (same code):
-  SNIPER_AI.mq5
-  MQL5/Experts/SNIPER_AI.mq5
-  release/deliver/SNIPER_AI_OK68.mq5
-  release/deliver/SNIPER_AI.zip
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK69.mq5
 
 ──────────────────────────────────────
-LIVE PATH (EVERYTHING IN PLACE)
+CAN TRADE (OK69)
 ──────────────────────────────────────
-1) APEX first (liquidity sweep + unmitigated zone)
-2) ContFallback best structure:
-   trend → BOS → fresh OB/quality FVG → price at zone
-   → displacement → discount/premium
+Live: APEX → ContFallback
 
-Also in place:
-  • Soft session (ON, no hard block)
-  • News awareness (ON, no hard block)
-  • Spread never blocks
-  • Anti-scalp hold/cooldown/SL
-  • MaxOpenTrades = 1
-  • ContSniper/PRISM multi-path RETIRED
+Why OK68 rarely filled:
+  required near-zone AND displacement AND discount/premium together
+
+OK69 fixes:
+  • ContFallback: BOS + fresh zone, then Zone OR Disp
+  • Discount/premium OFF (was blocking after BOS)
+  • Two-bar BOS optional
+  • APEX unmitigated zone OFF again (can fill)
+  • Shorter ContFallback cooldown (60m)
+  • News/spread still never hard-block
+
+Still NOT scalping: needs BOS + zone structure, engines bypassed on ContFallback.
 
 Look for:
-  BUILD_ID=SA_STRUCT_BEST_68
-  FIRE [APEX]
-  FIRE [ContFallback] BEST …
+  BUILD_ID=SA_CANTRADE_69
+  FIRE [APEX] or FIRE [ContFallback] STRUCT …
 
 ──────────────────────────────────────
-INSTALL (CRITICAL)
+INSTALL
 ──────────────────────────────────────
-1. REMOVE "PRISM STRATEGY" from EVERY chart
-2. Delete old SNIPER*.ex5
-3. Copy SNIPER_AI_OK68.mq5 → MQL5/Experts/
-4. F7
-5. Attach SNIPER_AI_OK68 (NOT Prism, NOT old OK6x)
-6. Experts MUST show:
-   BUILD_ID=SA_STRUCT_BEST_68
-   SOURCE = SNIPER_AI_OK68
-7. Algo Trading ON · AutoTrading ON
+1. REMOVE "PRISM STRATEGY"
+2. Copy SNIPER_AI_OK69.mq5 → MQL5/Experts/
+3. F7 → attach SNIPER_AI_OK69
+4. Experts: BUILD_ID=SA_CANTRADE_69
+5. Algo Trading ON

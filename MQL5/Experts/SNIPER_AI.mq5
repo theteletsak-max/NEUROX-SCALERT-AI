@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_STRUCT_BEST_68                                      |
-//| SNIPER AI - best structure ContFallback (BOS+fresh zone+displacement)  |
+//| BUILD_ID: SA_CANTRADE_69                                      |
+//| SNIPER AI - can trade: APEX + ContFallback structure that actually fills  |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.36"
-#property description "SNIPER AI OK68: BEST structure — ContFallback needs fresh BOS + fresh OB/quality FVG + price-in-zone + displacement"
-#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK68. BUILD=SA_STRUCT_BEST_68"
+#property version   "5.37"
+#property description "SNIPER AI OK69: CAN TRADE — quality ContFallback without impossible stacked gates; APEX unmitigated soft"
+#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK69. BUILD=SA_CANTRADE_69"
 
 #include <Trade/Trade.mqh>
 
@@ -95,25 +95,28 @@ input bool   EnableAntiScalpMode         = true;   // ALWAYS on for ContFallback
 input bool   EnableContFallback          = true;   // second live path — structure Cont only
 input bool   ContFallbackBypassEngines   = true;   // ContFallback skips ICE/IMCE after structure pass
 input bool   ContFallbackOncePerBar      = true;   // max 1 ContFallback signal per EntryTF bar
-input int    ContFallbackCooldownMinutes = 180;    // minutes after ContFallback FILL before next ContFallback
+input int    ContFallbackCooldownMinutes = 60;     // OK69: can re-enter sooner (still anti-scalp)
 input int    ContFallbackMinimumHoldBars = 24;     // EntryTF bars before trail/trend mgmt (H1≈24h)
 input double ContFallbackSL_ATR_Boost    = 1.5;    // wider SL — not a scalp stop
 input int    ContFallbackMaxOpen         = 1;      // max open ContFallback positions on this symbol
 input bool   ContFallbackDisableAdaptiveHold = true; // do not shorten hold in ranging for ContFallback/APEX
 
-input group "CONT STRUCTURE BEST (OK68 — live ContFallback quality)"
-// Best continuation structure: directional BOS → fresh demand/supply → price at zone → displacement.
-input int    ContStruct_BOS_MaxBars          = 8;     // directional BOS must be within N EntryTF bars
-input bool   ContStruct_RequireTwoBarBOS     = true;  // two closes beyond swing (cuts fake breaks)
-input bool   ContStruct_FreshOBOnly          = true;  // reject mitigated OBs (fresh only)
-input double ContStruct_MinFVG_ATR           = 0.25;  // min FVG size vs ATR
-input double ContStruct_MaxFVGFillPct        = 45.0;  // reject mostly-filled FVGs
-input double ContStruct_ZoneProximityATR     = 0.80;  // price must trade near OB/FVG
-input bool   ContStruct_RequireDisplacement  = true;  // impulse body after structure
-input double ContStruct_MinDispBodyRatio     = 0.50;  // body/range of displace bar
-input double ContStruct_MinDispATR           = 0.35;  // displace range vs ATR
+input group "CONT STRUCTURE (OK69 — quality that CAN TRADE)"
+// Required: trend + directional BOS + fresh OB/quality FVG.
+// Then EITHER price-at-zone OR displacement (both together was nearly impossible).
+// Discount/premium is optional soft preference — OFF so continuations can fill.
+input int    ContStruct_BOS_MaxBars          = 12;    // directional BOS within N EntryTF bars
+input bool   ContStruct_RequireTwoBarBOS     = false; // OK69: single-bar BOS OK (two-bar optional)
+input bool   ContStruct_FreshOBOnly          = true;  // prefer fresh OB; FVG still allowed
+input double ContStruct_MinFVG_ATR           = 0.15;  // min FVG size vs ATR
+input double ContStruct_MaxFVGFillPct        = 70.0;  // allow partially filled FVGs
+input double ContStruct_ZoneProximityATR     = 1.25;  // wider: price near OB/FVG
+input bool   ContStruct_RequireDisplacement  = false; // OK69 OFF — use ZoneOrDisp instead
+input bool   ContStruct_ZoneOrDisplacement   = true;  // OK69: pass if near-zone OR displacement
+input double ContStruct_MinDispBodyRatio     = 0.42;  // body/range of displace bar
+input double ContStruct_MinDispATR           = 0.30;  // displace range vs ATR
 input bool   ContStruct_RequireHTF_BOS       = false; // optional same-dir BOS on Bias/HTF
-input bool   ContStruct_PreferDiscountPrem   = true;  // BUY in discount / SELL in premium of recent range
+input bool   ContStruct_PreferDiscountPrem   = false; // OK69 OFF — was blocking most Cont fills after BOS
 input bool   ContStruct_LogDetail            = true;
 
 input ENUM_TIMEFRAMES APEX_BiasTF        = PERIOD_H4;
@@ -130,7 +133,7 @@ input double APEX_DispMinBodyRatio       = 0.42;   // OK62 relaxed
 input double APEX_DispMinATR             = 0.40;   // OK62 relaxed
 input double APEX_TickVolExpansion       = 1.25;    // bar1 tick vol vs avg (1.0=off soft)
 input bool   APEX_RequireTickVol         = false;
-input bool   APEX_RequireUnmitigatedZone = true;   // OK68: best structure — enter unmitigated FVG/OB
+input bool   APEX_RequireUnmitigatedZone = false;  // OK69: OFF so APEX can fill (zone still preferred in path)
 input bool   APEX_RequireStructureBias   = false;
 input bool   APEX_RequireMAAlign         = true;
 input bool   APEX_BiasNeedStructOrMA     = true;
@@ -591,9 +594,9 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded BUILD_ID=SA_STRUCT_BEST_68");
-   Print("CRITICAL: SOURCE must be SNIPER_AI_OK68 — remove PRISM STRATEGY if present");
-   Print("STRUCT68: APEX → ContFallback BEST structure | AntiScalp=", EnableAntiScalpMode,
+   Print("SNIPER AI Loaded BUILD_ID=SA_CANTRADE_69");
+   Print("CRITICAL: SOURCE must be SNIPER_AI_OK69 — remove PRISM STRATEGY if present");
+   Print("CANTRADE69: APEX → ContFallback BEST structure | AntiScalp=", EnableAntiScalpMode,
          " SoftSession HardBlock=", APEX_SessionHardBlock,
          " NewsAware=", EnableNewsAwareness,
          " SpreadAlwaysAllow | MaxOpen=", MaxOpenTrades,
@@ -604,9 +607,15 @@ int OnInit()
    Print("CONT STRUCT: BOS<=", ContStruct_BOS_MaxBars,
          " TwoBar=", ContStruct_RequireTwoBarBOS,
          " FreshOB=", ContStruct_FreshOBOnly,
-         " Disp=", ContStruct_RequireDisplacement,
+         " ZoneOrDisp=", ContStruct_ZoneOrDisplacement,
+         " RequireDisp=", ContStruct_RequireDisplacement,
+         " DiscountPrem=", ContStruct_PreferDiscountPrem,
          " ZoneATR=", ContStruct_ZoneProximityATR,
-         " HTF_BOS=", ContStruct_RequireHTF_BOS);
+         " CF_Cooldown=", ContFallbackCooldownMinutes);
+   Print("CAN TRADE: APEX unmitigated soft=", APEX_RequireUnmitigatedZone,
+         " ContFallback=", EnableContFallback,
+         " BypassEngines=", ContFallbackBypassEngines,
+         " Spread/News never hard-block");
    UpdateNewsAwareness();
    if(PrintPathStatsOnInit)
       PrintStrategyPerformanceReport();
@@ -2591,8 +2600,8 @@ input bool EnableVerboseLogging = false;
 input double StopLossPoints   = 500;
 input double TakeProfitPoints = 1000;
 input int    SlippagePoints   = 20;
-input int TradeCooldownMinutes = 60;  // OK64: wait after ANY fill (ContFallback has its own longer cooldown)
-input int AttemptCooldownSeconds = 30; // OK64: less rapid re-attempt spam
+input int TradeCooldownMinutes = 15;  // OK69: shorter idle wait (NeverBlock often bypasses anyway)
+input int AttemptCooldownSeconds = 5;  // OK69: allow retries after requote/fail
 
 // #12 Broker filling / slippage profiles (per instrument class)
 input group "SLIPPAGE PROFILES (#12)"
@@ -10935,13 +10944,33 @@ bool ContFallbackBestStructureOK(const bool buy, string &detail)
       return false;
    }
 
-   if(!ContStruct_PriceNearZone(buy, zTop, zBot))
+   bool near = ContStruct_PriceNearZone(buy, zTop, zBot);
+   bool disp = ContStruct_HasDisplacement(buy);
+
+   // OK69: near-zone OR displacement (both-required was almost never true after a BOS)
+   if(ContStruct_ZoneOrDisplacement)
    {
-      detail = "price not at structure zone (" + kind + ")";
-      return false;
+      if(!near && !disp)
+      {
+         detail = "need price-at-zone OR displacement (" + kind + ")";
+         return false;
+      }
+   }
+   else
+   {
+      if(!near)
+      {
+         detail = "price not at structure zone (" + kind + ")";
+         return false;
+      }
+      if(ContStruct_RequireDisplacement && !disp)
+      {
+         detail = "no displacement impulse";
+         return false;
+      }
    }
 
-   if(ContStruct_RequireDisplacement && !ContStruct_HasDisplacement(buy))
+   if(ContStruct_RequireDisplacement && !ContStruct_ZoneOrDisplacement && !disp)
    {
       detail = "no displacement impulse";
       return false;
@@ -10959,10 +10988,11 @@ bool ContFallbackBestStructureOK(const bool buy, string &detail)
       return false;
    }
 
-   detail = StringFormat("BEST %s + %s + near-zone%s%s",
+   detail = StringFormat("STRUCT %s + %s%s%s%s",
                          ContStruct_RequireTwoBarBOS ? "BOS2" : "BOS",
                          kind,
-                         ContStruct_RequireDisplacement ? " + disp" : "",
+                         near ? " + near-zone" : "",
+                         disp ? " + disp" : "",
                          ContStruct_PreferDiscountPrem ? (buy ? " + discount" : " + premium") : "");
    return true;
 }
@@ -11924,13 +11954,13 @@ void PrintSetupDiagnostics()
    DiagLastBarTimeArr[idx] = barTime;
 
    // OK67 PURE: only APEX/ContFallback diagnostics (never ContSniper spam)
-   Print("---- LIVE DIAGNOSTICS BUILD=SA_STRUCT_BEST_68 (", BrokerSymbol, ") ----");
+   Print("---- LIVE DIAGNOSTICS BUILD=SA_CANTRADE_69 (", BrokerSymbol, ") ----");
    Print("APEX waiting BUY:  ", (g_APEX_LastBuyFail == "" ? "(none)" : g_APEX_LastBuyFail));
    Print("APEX waiting SELL: ", (g_APEX_LastSellFail == "" ? "(none)" : g_APEX_LastSellFail));
    Print("ContFallback ON=", EnableContFallback,
          " BypassEngines=", ContFallbackBypassEngines,
          " | bullTrend=", IsBullTrend(), " bearTrend=", IsBearTrend());
-   Print("NOTE: LIVE = APEX → ContFallback BEST structure (fresh BOS+zone+disp)");
+   Print("NOTE: LIVE = APEX → ContFallback STRUCT (BOS+zone, ZoneOrDisp) — can trade");
    Print("NOTE: news aware, spread never blocks | remove PRISM STRATEGY if source says that");
    return;
 

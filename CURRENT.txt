@@ -1,17 +1,12 @@
 SNIPER AI — CURRENT BUILD
 
-File:     SNIPER_AI_OK68.mq5
-BUILD_ID: SA_STRUCT_BEST_68
-Branch:   cursor/sniper-ai-compile-fix-b12d
+File:     SNIPER_AI_OK69.mq5
+BUILD_ID: SA_CANTRADE_69
 Comment:  SNIPER AI
 
-Live: APEX → ContFallback (best structure)
-News: aware, no hard block
-Spread: never blocks
-Session: soft (anytime)
-Anti-scalp: ON
+Can trade: APEX → ContFallback (BOS+zone, ZoneOrDisp)
+News aware · spread never blocks · soft session · anti-scalp (not trend spam)
 
-Download:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK68.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK69.mq5
 
 REMOVE PRISM STRATEGY before attach.

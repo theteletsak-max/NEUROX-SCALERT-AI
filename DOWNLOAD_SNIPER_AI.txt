@@ -1,15 +1,11 @@
-SNIPER AI — DOWNLOAD (CURRENT)
+SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK68.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK69.mq5
 
-BUILD_ID: SA_STRUCT_BEST_68
+BUILD_ID: SA_CANTRADE_69
 Comment: SNIPER AI
 
-Everything in place:
-  APEX → ContFallback best structure
-  news aware · spread never blocks · soft session · anti-scalp
+CAN TRADE: APEX + ContFallback structure (Zone OR Disp). News/spread never block.
+REMOVE PRISM STRATEGY.
 
-REMOVE PRISM STRATEGY or you keep running the wrong EA.
-
-INSTALL: remove PRISM STRATEGY → F7 OK68 → attach SNIPER_AI_OK68 →
-BUILD_ID=SA_STRUCT_BEST_68
+INSTALL: F7 OK69 → BUILD_ID=SA_CANTRADE_69 · FIRE [APEX] / FIRE [ContFallback]
