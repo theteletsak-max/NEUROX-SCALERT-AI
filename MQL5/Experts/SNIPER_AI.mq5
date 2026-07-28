@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_AUDITOK_52                                 |
-//| SNIPER AI - full audit OK + fix pre-TP1 BE sticky arm (#7)       |
+//| BUILD_ID: SA_PRISM_TRADEUNBLOCK_53                             |
+//| SNIPER AI - unblock entries: DD shield OFF + reset peak on init |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.20"
-#property description "SNIPER AI audit OK52: sticky pre-TP1 adverse BE arm fixed"
-#property description "OK51 defend+ MAE/event ICE/slip profiles retained"
+#property version   "5.21"
+#property description "SNIPER AI OK53: drawdown shield OFF by default + peak equity reset on init"
+#property description "Fixes live 'cannot trade' when PeakEquity GV stuck above MaxDrawdownPercent"
 
 #include <Trade/Trade.mqh>
 
@@ -470,6 +470,11 @@ int OnInit()
 
    RestoreStrategyPerformance();
 
+   // TRADEUNBLOCK53: wipe stuck PeakEquity GV so a re-enabled DD shield
+   // starts from current equity (was permanently blocking at ~50%+ DD).
+   if(ResetPeakEquityOnInit)
+      ResetPeakEquityToCurrent();
+
    CreateChartBackground();
 
    if(EnableMultiSymbolTrading)
@@ -478,8 +483,12 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_AUDITOK_52");
-   Print("AUDITOK52: pre-TP1 BE uses sticky peakAdverse arm (OK51 #7 fixed)");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_TRADEUNBLOCK_53");
+   Print("TRADEUNBLOCK53: DrawdownShield=", EnableDrawdownProtection,
+         " ResetPeakOnInit=", ResetPeakEquityOnInit,
+         " CurrentDD=", DoubleToString(GetCurrentDrawdown(), 2), "%",
+         " (was blocking live entries when PeakEquity stuck above MaxDD)");
+   Print("AUDITOK52 retained: sticky pre-TP1 BE arm");
    Print("DEFENDPLUS: PreTP1BE=", DefensePreTP1AdverseBE,
          " MAE_ATR=", DefenseMAE_ATR,
          " EventICE_Boost=", EventICE_MinScoreBoost,
@@ -1792,34 +1801,47 @@ double GetCurrentDrawdown()
 // Drawdown Protection
 //=============================================================//
 
-// CHANGED per explicit request: drawdown protection is now OFF by
-// default. Be clear-eyed about what this means - your own Journal showed
-// it correctly detecting a genuine 23.29% drop from your account's peak
-// equity and stopping trading. This toggle doesn't fix a bug; it removes
-// that stop. With it off, nothing in this EA will halt trading or close
-// positions no matter how large the drawdown gets - MaxDailyLossPercent
-// (Part 5, separate input) still applies unless you also disable that.
-// Set EnableDrawdownProtection back to true if you want this safety net
-// again.
+// TRADEUNBLOCK (OK53): drawdown protection is OFF by default.
+// Live Journals showed PeakEquity GV stuck (~50%+ DD vs MaxDrawdownPercent=20)
+// which hard-blocked ALL new entries via RiskManagementOK → DrawdownProtection.
+// With shield off, this EA will not halt new entries or emergency-flat on peak DD.
+// MaxDailyLossPercent / weekly / monthly (separate inputs) still apply unless disabled.
+// Set EnableDrawdownProtection=true if you want the peak-equity safety net again.
+// ResetPeakEquityOnInit=true clears the stuck GV on attach so re-enabling starts clean.
 
-input bool EnableDrawdownProtection = true;  // DEFEND: block new risk + emergency close on max DD
+input bool EnableDrawdownProtection = false;  // OFF: was blocking all entries when PeakEquity stuck
 
 input bool EnableEmergencyCloseOnDrawdown = true;
 
+// Clear SniperCoreAI_<Magic>_PeakEquity on every OnInit and seed from current equity.
+// Needed when shield is re-enabled after a deep drawdown so trading is not permanently dead.
+input bool ResetPeakEquityOnInit = true;  // TRADEUNBLOCK: wipe stuck peak equity GV on attach
+
 bool DrawdownEmergencyCloseTriggered = false;
 
-// ADDED per request: after the emergency close fires, trading was
-// technically re-allowed the instant equity ticked back above half the
-// drawdown threshold - which could be within seconds on a fast-moving
-// account, immediately re-opening new risk right after a protective flat.
-// This adds a mandatory pause: no new trade can open for
-// MaxDrawdownCooldownMinutes after the emergency close, regardless of how
-// quickly equity recovers. Existing position management (SL/TP/trailing
-// on anything already open) is unaffected - this only gates NEW entries.
-// (Only relevant at all if EnableDrawdownProtection is turned back on.)
+// After emergency close, no new trade for MaxDrawdownCooldownMinutes
+// regardless of how quickly equity recovers. Position management unaffected.
+// (Only relevant if EnableDrawdownProtection is turned back on.)
 input int MaxDrawdownCooldownMinutes = 5;
 
 datetime DrawdownEmergencyCloseTime = 0;
+datetime g_LastDrawdownBlockPrint = 0;
+
+void ResetPeakEquityToCurrent()
+{
+   string key = PeakEquityGVName();
+   double equity = AccountInfoDouble(ACCOUNT_EQUITY);
+   if(!MathIsValidNumber(equity) || equity <= 0.0)
+      return;
+
+   double oldPeak = 0.0;
+   if(GlobalVariableCheck(key))
+      oldPeak = GlobalVariableGet(key);
+
+   GlobalVariableSet(key, equity);
+   Print("TRADEUNBLOCK: PeakEquity reset ", DoubleToString(oldPeak, 2),
+         " → ", DoubleToString(equity, 2), " (GV ", key, ")");
+}
 
 bool DrawdownProtection()
 {
@@ -1830,7 +1852,13 @@ bool DrawdownProtection()
 
    if(dd >= MaxDrawdownPercent)
    {
-      Print("Trading blocked: Max drawdown from peak equity reached (", DoubleToString(dd,2), "%)");
+      // Rate-limit: one print per 60s (was flooding Experts every FinalTradeCheck)
+      if(TimeCurrent() - g_LastDrawdownBlockPrint >= 60)
+      {
+         g_LastDrawdownBlockPrint = TimeCurrent();
+         Print("Trading blocked: Max drawdown from peak equity reached (", DoubleToString(dd,2),
+               "%). Fix: Inputs → EnableDrawdownProtection=false OR ResetPeakEquityOnInit=true + re-attach.");
+      }
 
       if(EnableEmergencyCloseOnDrawdown && !DrawdownEmergencyCloseTriggered)
       {
@@ -10089,7 +10117,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_AUDITOK_52\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_TRADEUNBLOCK_53\n",
          "=============================================="
       );
       return;
@@ -10111,7 +10139,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_AUDITOK_52\n",
+         "BUILD: SA_PRISM_TRADEUNBLOCK_53\n",
          "=========================================="
       );
       return;

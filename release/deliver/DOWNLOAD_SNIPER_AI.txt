@@ -1,11 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK45.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK53.mq5
 
-BUILD_ID: SA_PRISM_SIGNAL_OK_45
-Comment:  SNIPER AI
+BUILD_ID: SA_PRISM_TRADEUNBLOCK_53
+Comment: SNIPER AI
 
-Signal OK: Cont same-direction BOS + SMT directional. Rev polarity correct.
-Quality + ladder + defense + harden retained.
+FIX: cannot trade — drawdown shield was blocking (~54% DD vs 20% max).
+OK53: EnableDrawdownProtection=false + ResetPeakEquityOnInit=true.
 
-INSTALL: delete old SNIPER* → F7 → re-attach → EntryTF=H4 → BUILD_ID=SA_PRISM_SIGNAL_OK_45
+INSTALL: delete old SNIPER* → F7 → fresh attach → EntryTF=chart TF → confirm BUILD_ID=SA_PRISM_TRADEUNBLOCK_53 and DrawdownShield=false

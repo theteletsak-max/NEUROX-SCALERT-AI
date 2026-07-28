@@ -25,20 +25,20 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 
 ### Install (MT5) — single file (compile-safe)
 
-Use **[`SNIPER_AI_OK52.mq5`](SNIPER_AI_OK52.mq5)**  
-`BUILD_ID: SA_PRISM_AUDITOK_52`
+Use **[`SNIPER_AI_OK53.mq5`](SNIPER_AI_OK53.mq5)**  
+`BUILD_ID: SA_PRISM_TRADEUNBLOCK_53`
 
 1. Close MetaEditor
 2. **File → Open Data Folder** → `MQL5/Experts/`
 3. **Delete** any old `Sniper*` / `SNIPER*` `.mq5` / `.ex5` files
-4. Copy **`SNIPER_AI_OK52.mq5`**
-5. Open it, confirm `SA_PRISM_AUDITOK_52`, compile **(F7)**
-6. Attach → set **EntryTF** (H4 if chart is H4) / **LotSize** / **MaxOpenTrades** → enable **Algo Trading**
-7. Full-audit build: sticky pre-TP1 BE · MAE · event ICE · slip profiles · spread-free · Cont/Rev-only
+4. Copy **`SNIPER_AI_OK53.mq5`**
+5. Open it, confirm `SA_PRISM_TRADEUNBLOCK_53`, compile **(F7)**
+6. Attach **fresh** (do not keep old Inputs) → set **EntryTF** (H4 if chart is H4) / **LotSize** / **MaxOpenTrades** → enable **Algo Trading**
+7. Confirm Experts: `DrawdownShield=false` and PeakEquity reset (OK53 unblocks stuck DD)
 
 Also mirrored as [`SNIPER_AI.mq5`](SNIPER_AI.mq5) and [`release/deliver/SNIPER_AI.mq5`](release/deliver/SNIPER_AI.mq5).
 
-**OK52:** Full code audit — fixed dead pre-TP1 BE arm. OK51 defend+ retained.
+**OK53:** Trade unblock — `EnableDrawdownProtection=false` + `ResetPeakEquityOnInit` (live Journals showed ~54% peak DD blocking all entries). OK52 sticky pre-TP1 BE retained.
 
 See [`DOWNLOAD_SNIPER_AI.txt`](DOWNLOAD_SNIPER_AI.txt) · [`docs/SNIPER_AI_COMPILE_FIXES.md`](docs/SNIPER_AI_COMPILE_FIXES.md)
 
