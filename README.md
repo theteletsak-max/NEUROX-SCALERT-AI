@@ -25,20 +25,20 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 
 ### Install (MT5) — single file (compile-safe)
 
-Use **[`SNIPER_AI_OK56.mq5`](SNIPER_AI_OK56.mq5)**  
-`BUILD_ID: SA_PRISM_ALLTRADE_56`
+Use **[`SNIPER_AI_OK57.mq5`](SNIPER_AI_OK57.mq5)**  
+`BUILD_ID: SA_PRISM_LCS_57`
 
 1. Close MetaEditor
 2. **File → Open Data Folder** → `MQL5/Experts/`
 3. **Delete** any old `Sniper*` / `SNIPER*` / `PRISM*` `.mq5` / `.ex5` files
-4. Copy **`SNIPER_AI_OK56.mq5`**
-5. Open it, confirm `SA_PRISM_ALLTRADE_56`, compile **(F7)**
-6. **Remove** any chart EA named `PRISM STRATEGY` → attach **this** file fresh on each symbol → **EntryTF**=chart TF → Algo Trading ON
-7. Experts must show `BUILD_ID=SA_PRISM_ALLTRADE_56` (not `PRISM STRATEGY`)
+4. Copy **`SNIPER_AI_OK57.mq5`**
+5. Open it, confirm `SA_PRISM_LCS_57`, compile **(F7)**
+6. **Remove** any chart EA named `PRISM STRATEGY` → attach **this** file fresh → Algo Trading ON
+7. Experts must show `BUILD_ID=SA_PRISM_LCS_57` and `LCS57: Enable=true OnlyLive=true`
 
 Also mirrored as [`SNIPER_AI.mq5`](SNIPER_AI.mq5) and [`release/deliver/SNIPER_AI.mq5`](release/deliver/SNIPER_AI.mq5).
 
-**OK56:** All-symbol trade — account caps/currency/daily/weekly/monthly/dup/event/margin false blockers off or unlimited; suffix-safe symbol index; Cont FIRE retained. Still Cont/Rev quality path (not random spam).
+**OK57:** Live strategy = **LCS** (Liquidity Continuity Sniper) — H4 bias → H1 sweep → reclaim + displacement → FVG/OB → SL beyond sweep. PRISM Cont/Rev idle when `LCSOnlyLivePath=true`. High-prob, fewer setups.
 
 See [`DOWNLOAD_SNIPER_AI.txt`](DOWNLOAD_SNIPER_AI.txt) · [`docs/SNIPER_AI_COMPILE_FIXES.md`](docs/SNIPER_AI_COMPILE_FIXES.md)
 

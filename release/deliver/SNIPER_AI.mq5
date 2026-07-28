@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_ALLTRADE_56                                 |
-//| SNIPER AI - trade all symbols: remove false account/entry blocks|
+//| BUILD_ID: SA_PRISM_LCS_57                                      |
+//| SNIPER AI - LCS live: H4 bias → H1 sweep → reclaim → FVG/OB     |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.24"
-#property description "SNIPER AI OK56: all-symbol trade — caps/DD/daily/dup/event soft; suffix-safe index"
-#property description "Remove PRISM STRATEGY from charts — attach THIS file; BUILD_ID=SA_PRISM_ALLTRADE_56"
+#property version   "5.25"
+#property description "SNIPER AI OK57: Liquidity Continuity Sniper (LCS) is the live high-prob path"
+#property description "PRISM Cont/Rev idle when LCSOnlyLivePath=true — remove PRISM STRATEGY from charts"
 
 #include <Trade/Trade.mqh>
 
@@ -86,6 +86,29 @@ input bool   TryNextPathIfEnginesFail    = true;  // Cont fail engines → try I
 input bool   EnableAdaptivePathRanking   = true;  // boost tags with proven win-rate
 input int    AdaptivePathMinTrades       = 10;    // min closed trades before win-rate ranks
 input bool   PrintPathStatsOnInit        = true;
+
+input group "LCS - LIQUIDITY CONTINUITY SNIPER (LIVE)"
+// High-prob path: H4 bias → H1 stop-hunt sweep against bias → reclaim +
+// displacement → enter only in FVG/OB → SL beyond sweep extreme.
+// LCSOnlyLivePath=true → PRISM Cont/Rev/Instant are NOT on the live path.
+
+input bool   EnableLCSStrategy           = true;
+input bool   LCSOnlyLivePath             = true;
+input ENUM_TIMEFRAMES LCS_BiasTF         = PERIOD_H4;
+input ENUM_TIMEFRAMES LCS_EntryTF        = PERIOD_H1;
+input int    LCS_BiasMA_Period           = 200;
+input int    LCS_SweepLookbackBars       = 12;
+input int    LCS_SwingPadBars            = 5;
+input double LCS_MinSweepWickRatio       = 0.40;
+input double LCS_MinSweepDepthATR        = 0.08;
+input double LCS_DispMinBodyRatio        = 0.55;
+input double LCS_DispMinATR              = 0.60;
+input bool   LCS_RequireZone             = true;
+input bool   LCS_RequireDisplacement     = true;
+input bool   LCS_UseSweepSL              = true;
+input double LCS_SL_BufferATR            = 0.10;
+input bool   LCS_LogValidation           = true;
+
 input bool   EnableAlwaysQualityMode     = true;
 input bool   QualityRequireStructureZone = true;  // Cont needs BOS/OB/FVG (or pullback)
 input bool   QualityRequireTrendAndADX   = false; // ALLTRADE56: ADX not hard — was blocking valid Cont
@@ -162,7 +185,7 @@ input bool UseATR = true;
 input group "TIMEFRAMES"
 
 input ENUM_TIMEFRAMES TrendTF = PERIOD_H4;
-input ENUM_TIMEFRAMES EntryTF = PERIOD_M15;
+input ENUM_TIMEFRAMES EntryTF = PERIOD_H1; // OK57: align management bars with LCS entry TF
 
 input group "LONG TERM HOLDING"
 
@@ -210,6 +233,11 @@ input int    EventMinutesAfterNews        = 30;
 //======================== GLOBALS ==================================//
 
 bool TradingAllowed=true;
+
+// LCS runtime (set when LCS setup passes; consumed by Execute for sweep SL)
+double   g_LCS_InvalidationPrice = 0.0;
+datetime g_LCS_SweepBarTime      = 0;
+string   g_LCS_LastDetail        = "";
 
 string BrokerSymbol="";
 
@@ -485,20 +513,17 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_ALLTRADE_56");
-   Print("IMPORTANT: Experts source must be SNIPER_AI_OK56 / SNIPER_AI — if you see PRISM STRATEGY, remove that EA");
-   Print("ALLTRADE56: MaxTotal=", MaxTotalOpenTradesAllSymbols,
-         " MaxPerCcy=", MaxOpenTradesPerCurrency,
-         " DailyLoss=", EnableDailyLossProtection,
-         " Weekly=", EnableWeeklyLossProtection,
-         " Monthly=", EnableMonthlyLossProtection,
-         " DupGuard=", BeastDuplicateBarGuard,
-         " EventQ=", EnableEventQualityMode,
-         " MinMargin%=", MinMarginLevelPercent,
-         " ICE=", ICE_MinScore,
-         " ADXhard=", QualityRequireTrendAndADX);
-   Print("CONTFIRE55 retained: Cont/Rev HP soft under NeverBlock");
-   Print("TRADEFIRE54 retained: duplicate-bar 0==0 fix");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_LCS_57");
+   Print("IMPORTANT: Experts source must be SNIPER_AI_OK57 / SNIPER_AI — NOT PRISM STRATEGY");
+   Print("LCS57: Enable=", EnableLCSStrategy,
+         " OnlyLive=", LCSOnlyLivePath,
+         " BiasTF=", EnumToString(LCS_BiasTF),
+         " EntryTF=", EnumToString(LCS_EntryTF),
+         " Zone=", LCS_RequireZone,
+         " Disp=", LCS_RequireDisplacement,
+         " SweepSL=", LCS_UseSweepSL);
+   Print("ALLTRADE56 retained: soft caps/DD/daily/dup/event");
+   Print("CONTFIRE55 retained: Cont/Rev HP soft (PRISM fallback only if LCSOnly=false)");
    Print("TRADEUNBLOCK53 retained: DrawdownShield=", EnableDrawdownProtection,
          " ResetPeakOnInit=", ResetPeakEquityOnInit,
          " CurrentDD=", DoubleToString(GetCurrentDrawdown(), 2), "%");
@@ -3332,6 +3357,19 @@ bool ExecuteBuy()
    GetTradeDistances(slDistance, tp1Distance, tp2Distance, tp3Distance);
 
    sl = ask - slDistance;
+   // LCS high-prob invalidation: SL beyond sweep extreme when wider/safer than ATR SL
+   if(LCS_UseSweepSL && g_PendingStrategyTag == "LCS" && g_LCS_InvalidationPrice > 0.0)
+   {
+      double lcsSL = g_LCS_InvalidationPrice;
+      if(lcsSL < ask)
+      {
+         // Prefer structural SL; if tighter than ATR SL keep the wider (safer) stop
+         if(lcsSL < sl)
+            sl = lcsSL;
+         Print("LCS BUY SL → sweep invalidation ", DoubleToString(sl, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+               " on ", BrokerSymbol);
+      }
+   }
    tp1Price = ask + tp1Distance; // soft TP1 — EA locks SL here then runs to TP2
    tp2Price = ask + tp2Distance;
    tp3Price = ask + tp3Distance;
@@ -3596,6 +3634,17 @@ bool ExecuteSell()
    GetTradeDistances(slDistance, tp1Distance, tp2Distance, tp3Distance);
 
    sl = bid + slDistance;
+   if(LCS_UseSweepSL && g_PendingStrategyTag == "LCS" && g_LCS_InvalidationPrice > 0.0)
+   {
+      double lcsSL = g_LCS_InvalidationPrice;
+      if(lcsSL > bid)
+      {
+         if(lcsSL > sl)
+            sl = lcsSL;
+         Print("LCS SELL SL → sweep invalidation ", DoubleToString(sl, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+               " on ", BrokerSymbol);
+      }
+   }
    tp1Price = bid - tp1Distance;
    tp2Price = bid - tp2Distance;
    tp3Price = bid - tp3Distance;
@@ -7871,12 +7920,12 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
    bool soft = (UltraInstantTrendSoftGates && strategyTag == "InstantTrend" && !BestQualitySetups);
    bool revTag = PRISM_IsReversalTag(strategyTag);
    bool aggro = UltraAggressiveFire || NeverBlockValidSniperEntry || AggressiveInstantQuality;
+   bool lcsTag = (strategyTag == "LCS");
 
    if(GetFilterATR() <= 0.0)
    {
-      // ALLTRADE56: Cont/Rev already selected — Execute uses fixed-stop fallback.
-      // Do not veto FIRE solely because ATR handle not ready yet.
-      if((strategyTag == "ContSniper" || strategyTag == "RevSniper") &&
+      // ALLTRADE56: Cont/Rev/LCS already selected — Execute uses fixed-stop fallback.
+      if((strategyTag == "ContSniper" || strategyTag == "RevSniper" || lcsTag) &&
          (NeverBlockValidSniperEntry || UltraAggressiveFire))
       {
          if(EnableVerboseLogging || EnableSetupLogging)
@@ -7888,6 +7937,14 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
          failReason = "risk: ATR unavailable";
          return false;
       }
+   }
+
+   // LCS already passed its own high-prob checklist — do not re-veto
+   if(lcsTag && (NeverBlockValidSniperEntry || UltraAggressiveFire || !UltraSniperEntryGate))
+   {
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("ULTRA LCS PASS on ", BrokerSymbol, " — ", g_LCS_LastDetail);
+      return true;
    }
 
    // CONTFIRE55: Cont/Rev already passed path setups + ICE/IMCE before FIRE.
@@ -8815,6 +8872,11 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
 
 bool PrismInstitutionalEnginesOK(bool buy, const string strategyTag)
 {
+   // LCS embeds bias/sweep/reclaim/zone/displacement — skip PRISM ICE/IMCE/SMT
+   // re-veto so high-prob LCS FIRE is not killed by Cont/Rev engines.
+   if(strategyTag == "LCS")
+      return true;
+
    if(EnableBeastMode && PRISM_IsReversalTag(strategyTag) && !PRISMReversalQualityOK(buy))
    {
       UltraSetReject("reversal stack insufficient for " + strategyTag);
@@ -9568,16 +9630,481 @@ bool VolatilityBreakoutSellSetup()
    return (closeBar < channelLow - margin);
 }
 
+//+------------------------------------------------------------------+
+//| LCS - LIQUIDITY CONTINUITY SNIPER (high-prob live engine)        |
+//+------------------------------------------------------------------+
+// From-scratch path (OK57):
+//   1) BiasTF (H4) clear SMA bias
+//   2) EntryTF (H1) stop-hunt sweep AGAINST bias (sell-side for BUY, buy-side for SELL)
+//   3) Reclaim + displacement in bias direction
+//   4) Price interacting with FVG or OB from that move
+//   5) Invalidation = sweep extreme (used as SL when LCS_UseSweepSL)
+
+double LCS_AvgRange(const ENUM_TIMEFRAMES tf, const int bars)
+{
+   int n = MathMax(bars, 2);
+   double sum = 0.0;
+   int used = 0;
+   for(int i = 1; i <= n; i++)
+   {
+      double hi = iHigh(BrokerSymbol, tf, i);
+      double lo = iLow(BrokerSymbol, tf, i);
+      if(hi <= 0.0 || lo <= 0.0 || hi < lo)
+         continue;
+      sum += (hi - lo);
+      used++;
+   }
+   return (used > 0) ? (sum / used) : 0.0;
+}
+
+double LCS_BiasSMA()
+{
+   int p = MathMax(LCS_BiasMA_Period, 10);
+   if(Bars(BrokerSymbol, LCS_BiasTF) < p + 5)
+      return 0.0;
+   double sum = 0.0;
+   for(int i = 0; i < p; i++)
+      sum += iClose(BrokerSymbol, LCS_BiasTF, i);
+   return sum / p;
+}
+
+bool LCS_BiasBull(string &detail)
+{
+   double sma = LCS_BiasSMA();
+   double c0 = iClose(BrokerSymbol, LCS_BiasTF, 0);
+   double c1 = iClose(BrokerSymbol, LCS_BiasTF, 1);
+   if(sma <= 0.0 || c0 <= 0.0)
+   {
+      detail = "bias: BiasTF history/SMA unavailable";
+      return false;
+   }
+   // Clear bull bias: price and prior close above SMA (no chop hug required beyond side)
+   if(!(c0 > sma && c1 > sma))
+   {
+      detail = "bias: not clear bull (close vs SMA200 H4)";
+      return false;
+   }
+   detail = "bias: BULL";
+   return true;
+}
+
+bool LCS_BiasBear(string &detail)
+{
+   double sma = LCS_BiasSMA();
+   double c0 = iClose(BrokerSymbol, LCS_BiasTF, 0);
+   double c1 = iClose(BrokerSymbol, LCS_BiasTF, 1);
+   if(sma <= 0.0 || c0 <= 0.0)
+   {
+      detail = "bias: BiasTF history/SMA unavailable";
+      return false;
+   }
+   if(!(c0 < sma && c1 < sma))
+   {
+      detail = "bias: not clear bear (close vs SMA200 H4)";
+      return false;
+   }
+   detail = "bias: BEAR";
+   return true;
+}
+
+bool LCS_IsBuySideSweepAt(const int bar, double &sweepExtreme)
+{
+   sweepExtreme = 0.0;
+   if(bar < 1)
+      return false;
+   ENUM_TIMEFRAMES tf = LCS_EntryTF;
+   double currentHigh = iHigh(BrokerSymbol, tf, bar);
+   double currentLow  = iLow(BrokerSymbol, tf, bar);
+   double close = iClose(BrokerSymbol, tf, bar);
+   double barRange = currentHigh - currentLow;
+   if(barRange <= 0.0)
+      return false;
+
+   double previousHigh = iHigh(BrokerSymbol, tf, bar + 1);
+   int pad = MathMax(LCS_SwingPadBars, 2);
+   for(int j = bar + 2; j <= bar + pad + 1; j++)
+   {
+      double h = iHigh(BrokerSymbol, tf, j);
+      if(h > previousHigh) previousHigh = h;
+   }
+
+   double atr = LCS_AvgRange(tf, 14);
+   double minDepth = (atr > 0.0) ? (atr * LCS_MinSweepDepthATR) : 0.0;
+   if(!(currentHigh > previousHigh + minDepth && close < previousHigh))
+      return false;
+
+   double wick = currentHigh - MathMax(close, previousHigh);
+   if(wick / barRange < LCS_MinSweepWickRatio)
+      return false;
+
+   sweepExtreme = currentHigh;
+   return true;
+}
+
+bool LCS_IsSellSideSweepAt(const int bar, double &sweepExtreme)
+{
+   sweepExtreme = 0.0;
+   if(bar < 1)
+      return false;
+   ENUM_TIMEFRAMES tf = LCS_EntryTF;
+   double currentHigh = iHigh(BrokerSymbol, tf, bar);
+   double currentLow  = iLow(BrokerSymbol, tf, bar);
+   double close = iClose(BrokerSymbol, tf, bar);
+   double barRange = currentHigh - currentLow;
+   if(barRange <= 0.0)
+      return false;
+
+   double previousLow = iLow(BrokerSymbol, tf, bar + 1);
+   int pad = MathMax(LCS_SwingPadBars, 2);
+   for(int j = bar + 2; j <= bar + pad + 1; j++)
+   {
+      double l = iLow(BrokerSymbol, tf, j);
+      if(l < previousLow && l > 0.0) previousLow = l;
+   }
+
+   double atr = LCS_AvgRange(tf, 14);
+   double minDepth = (atr > 0.0) ? (atr * LCS_MinSweepDepthATR) : 0.0;
+   if(!(currentLow < previousLow - minDepth && close > previousLow))
+      return false;
+
+   double wick = MathMin(close, previousLow) - currentLow;
+   if(wick / barRange < LCS_MinSweepWickRatio)
+      return false;
+
+   sweepExtreme = currentLow;
+   return true;
+}
+
+int LCS_FindCorrectSweep(const bool buy, double &sweepExtreme)
+{
+   sweepExtreme = 0.0;
+   int lb = MathMax(LCS_SweepLookbackBars, 2);
+   for(int i = 1; i <= lb; i++)
+   {
+      double ext = 0.0;
+      if(buy && LCS_IsSellSideSweepAt(i, ext))
+      {
+         sweepExtreme = ext;
+         return i;
+      }
+      if(!buy && LCS_IsBuySideSweepAt(i, ext))
+      {
+         sweepExtreme = ext;
+         return i;
+      }
+   }
+   return 0;
+}
+
+bool LCS_HasDisplacement(const bool buy)
+{
+   ENUM_TIMEFRAMES tf = LCS_EntryTF;
+   double o = iOpen(BrokerSymbol, tf, 1);
+   double c = iClose(BrokerSymbol, tf, 1);
+   double h = iHigh(BrokerSymbol, tf, 1);
+   double l = iLow(BrokerSymbol, tf, 1);
+   double range = h - l;
+   if(range <= 0.0)
+      return false;
+   if(buy && !(c > o))
+      return false;
+   if(!buy && !(c < o))
+      return false;
+   double bodyRatio = MathAbs(c - o) / range;
+   if(bodyRatio < LCS_DispMinBodyRatio)
+      return false;
+   double atr = LCS_AvgRange(tf, 14);
+   if(atr <= 0.0)
+      return true;
+   return ((range / atr) >= LCS_DispMinATR);
+}
+
+bool LCS_HasReclaim(const bool buy, const int sweepBar)
+{
+   // After sweep, price must be back on the correct side of the swept level
+   // and print a directional closed bar (bar 1).
+   ENUM_TIMEFRAMES tf = LCS_EntryTF;
+   double c1 = iClose(BrokerSymbol, tf, 1);
+   double o1 = iOpen(BrokerSymbol, tf, 1);
+   if(buy)
+   {
+      if(!(c1 > o1))
+         return false;
+      // reclaim above the sweep low extreme already implied by sell-side sweep close
+      // also require close above midpoint of sweep bar
+      double mid = 0.5 * (iHigh(BrokerSymbol, tf, sweepBar) + iLow(BrokerSymbol, tf, sweepBar));
+      return (c1 >= mid);
+   }
+   if(!(c1 < o1))
+      return false;
+   double midS = 0.5 * (iHigh(BrokerSymbol, tf, sweepBar) + iLow(BrokerSymbol, tf, sweepBar));
+   return (c1 <= midS);
+}
+
+bool LCS_BullishFVG()
+{
+   ENUM_TIMEFRAMES tf = LCS_EntryTF;
+   // Classic 3-candle imbalance: low[1] > high[3]
+   double low1 = iLow(BrokerSymbol, tf, 1);
+   double high3 = iHigh(BrokerSymbol, tf, 3);
+   return (low1 > 0.0 && high3 > 0.0 && low1 > high3);
+}
+
+bool LCS_BearishFVG()
+{
+   ENUM_TIMEFRAMES tf = LCS_EntryTF;
+   double high1 = iHigh(BrokerSymbol, tf, 1);
+   double low3 = iLow(BrokerSymbol, tf, 3);
+   return (high1 > 0.0 && low3 > 0.0 && high1 < low3);
+}
+
+bool LCS_BullishOB()
+{
+   // Last opposing (bearish) candle before bullish displacement, still relevant
+   ENUM_TIMEFRAMES tf = LCS_EntryTF;
+   double o2 = iOpen(BrokerSymbol, tf, 2);
+   double c2 = iClose(BrokerSymbol, tf, 2);
+   double o1 = iOpen(BrokerSymbol, tf, 1);
+   double c1 = iClose(BrokerSymbol, tf, 1);
+   if(!(c2 < o2 && c1 > o1))
+      return false;
+   double bid = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
+   double obLow = iLow(BrokerSymbol, tf, 2);
+   double obHigh = iHigh(BrokerSymbol, tf, 2);
+   // Price still at/above OB (not fully traded through below)
+   return (bid >= obLow && bid <= obHigh * 1.002);
+}
+
+bool LCS_BearishOB()
+{
+   ENUM_TIMEFRAMES tf = LCS_EntryTF;
+   double o2 = iOpen(BrokerSymbol, tf, 2);
+   double c2 = iClose(BrokerSymbol, tf, 2);
+   double o1 = iOpen(BrokerSymbol, tf, 1);
+   double c1 = iClose(BrokerSymbol, tf, 1);
+   if(!(c2 > o2 && c1 < o1))
+      return false;
+   double ask = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
+   double obLow = iLow(BrokerSymbol, tf, 2);
+   double obHigh = iHigh(BrokerSymbol, tf, 2);
+   return (ask <= obHigh && ask >= obLow * 0.998);
+}
+
+bool LCS_HasZone(const bool buy)
+{
+   if(buy)
+      return (LCS_BullishFVG() || LCS_BullishOB() || ActiveFVG(true) || ActiveOrderBlock(true));
+   return (LCS_BearishFVG() || LCS_BearishOB() || ActiveFVG(false) || ActiveOrderBlock(false));
+}
+
+bool LCS_SetupOK(const bool buy, string &detail, double &invalidation)
+{
+   detail = "";
+   invalidation = 0.0;
+   g_LCS_LastDetail = "";
+
+   if(!EnableLCSStrategy)
+   {
+      detail = "LCS disabled";
+      return false;
+   }
+
+   if(Bars(BrokerSymbol, LCS_BiasTF) < LCS_BiasMA_Period + 5 ||
+      Bars(BrokerSymbol, LCS_EntryTF) < LCS_SweepLookbackBars + 10)
+   {
+      detail = "LCS: insufficient Bias/Entry TF bars";
+      return false;
+   }
+
+   string biasDetail = "";
+   if(buy)
+   {
+      if(!LCS_BiasBull(biasDetail))
+      {
+         detail = biasDetail;
+         return false;
+      }
+   }
+   else
+   {
+      if(!LCS_BiasBear(biasDetail))
+      {
+         detail = biasDetail;
+         return false;
+      }
+   }
+
+   double sweepExt = 0.0;
+   int sweepBar = LCS_FindCorrectSweep(buy, sweepExt);
+   if(sweepBar <= 0 || sweepExt <= 0.0)
+   {
+      detail = buy ? "LCS: need sell-side sweep (lows taken) on EntryTF"
+                   : "LCS: need buy-side sweep (highs taken) on EntryTF";
+      return false;
+   }
+
+   if(!LCS_HasReclaim(buy, sweepBar))
+   {
+      detail = "LCS: need reclaim after sweep";
+      return false;
+   }
+
+   bool disp = LCS_HasDisplacement(buy);
+   if(LCS_RequireDisplacement && !disp)
+   {
+      detail = "LCS: need displacement candle in bias direction";
+      return false;
+   }
+
+   bool zone = LCS_HasZone(buy);
+   if(LCS_RequireZone && !zone)
+   {
+      detail = "LCS: need FVG/OB zone in trade direction";
+      return false;
+   }
+
+   // Invalidation = beyond sweep extreme
+   double atr = LCS_AvgRange(LCS_EntryTF, 14);
+   double buf = (atr > 0.0) ? (atr * LCS_SL_BufferATR) : 0.0;
+   invalidation = buy ? (sweepExt - buf) : (sweepExt + buf);
+   // For BUY, SL below sweep low; sweepExt IS the low. Subtract buffer.
+   // For SELL, SL above sweep high; add buffer. Already set.
+
+   detail = StringFormat("LCS OK %s sweep@%d zone=%s disp=%s inv=%s",
+                         buy ? "BUY" : "SELL",
+                         sweepBar,
+                         zone ? "Y" : "N",
+                         disp ? "Y" : "N",
+                         DoubleToString(invalidation, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)));
+   return true;
+}
+
+bool LCSBuySetup()
+{
+   string detail = "";
+   double inv = 0.0;
+   bool ok = LCS_SetupOK(true, detail, inv);
+   g_LCS_LastDetail = detail;
+   if(ok)
+   {
+      g_LCS_InvalidationPrice = inv;
+      g_LCS_SweepBarTime = iTime(BrokerSymbol, LCS_EntryTF, 1);
+      if(LCS_LogValidation)
+         Print("LCS VALIDATE BUY: PASS - ", detail, " on ", BrokerSymbol);
+      return true;
+   }
+   if(LCS_LogValidation && (EnableVerboseLogging || EnableSetupLogging))
+      Print("LCS VALIDATE BUY: FAIL - ", detail, " on ", BrokerSymbol);
+   return false;
+}
+
+bool LCSSellSetup()
+{
+   string detail = "";
+   double inv = 0.0;
+   bool ok = LCS_SetupOK(false, detail, inv);
+   g_LCS_LastDetail = detail;
+   if(ok)
+   {
+      g_LCS_InvalidationPrice = inv;
+      g_LCS_SweepBarTime = iTime(BrokerSymbol, LCS_EntryTF, 1);
+      if(LCS_LogValidation)
+         Print("LCS VALIDATE SELL: PASS - ", detail, " on ", BrokerSymbol);
+      return true;
+   }
+   if(LCS_LogValidation && (EnableVerboseLogging || EnableSetupLogging))
+      Print("LCS VALIDATE SELL: FAIL - ", detail, " on ", BrokerSymbol);
+   return false;
+}
+
+void EvaluateLCSStrategies(bool &buySignal, bool &sellSignal, string &strategyTag)
+{
+   buySignal = false;
+   sellSignal = false;
+   strategyTag = "";
+   g_LCS_InvalidationPrice = 0.0;
+
+   if(!EnableLCSStrategy)
+      return;
+
+   string buyDetail = "", sellDetail = "";
+   double buyInv = 0.0, sellInv = 0.0;
+   bool buyOK = LCS_SetupOK(true, buyDetail, buyInv);
+   bool sellOK = LCS_SetupOK(false, sellDetail, sellInv);
+
+   if(LCS_LogValidation)
+   {
+      if(buyOK)
+         Print("LCS VALIDATE BUY: PASS - ", buyDetail, " on ", BrokerSymbol);
+      else if(EnableVerboseLogging || EnableSetupLogging)
+         Print("LCS VALIDATE BUY: FAIL - ", buyDetail, " on ", BrokerSymbol);
+
+      if(sellOK)
+         Print("LCS VALIDATE SELL: PASS - ", sellDetail, " on ", BrokerSymbol);
+      else if(EnableVerboseLogging || EnableSetupLogging)
+         Print("LCS VALIDATE SELL: FAIL - ", sellDetail, " on ", BrokerSymbol);
+   }
+
+   if(buyOK && sellOK)
+   {
+      string db = "", ds = "";
+      bool bull = LCS_BiasBull(db);
+      bool bear = LCS_BiasBear(ds);
+      if(bull && !bear)
+         sellOK = false;
+      else if(bear && !bull)
+         buyOK = false;
+      else
+      {
+         if(LCS_LogValidation)
+            Print("LCS: BUY+SELL conflict on ", BrokerSymbol, " — reject");
+         return;
+      }
+   }
+
+   if(buyOK)
+   {
+      buySignal = true;
+      strategyTag = "LCS";
+      g_LCS_InvalidationPrice = buyInv;
+      g_LCS_SweepBarTime = iTime(BrokerSymbol, LCS_EntryTF, 1);
+      g_LCS_LastDetail = buyDetail;
+      Print("ULTRA CORE FIRE BUY [LCS] ", buyDetail, " on ", BrokerSymbol);
+      return;
+   }
+   if(sellOK)
+   {
+      sellSignal = true;
+      strategyTag = "LCS";
+      g_LCS_InvalidationPrice = sellInv;
+      g_LCS_SweepBarTime = iTime(BrokerSymbol, LCS_EntryTF, 1);
+      g_LCS_LastDetail = sellDetail;
+      Print("ULTRA CORE FIRE SELL [LCS] ", sellDetail, " on ", BrokerSymbol);
+      return;
+   }
+}
+
 void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategyTag)
 {
    buySignal = false;
    sellSignal = false;
    strategyTag = "";
 
-   // PRISM is the EA's only strategy now - legacy SMC/mean-reversion/
-   // adaptive-regime/trend-following/volatility-breakout-only dispatch
-   // branches have been removed. Their underlying functions are still
-   // defined (harmless) but nothing calls them anymore.
+   // OK57: LCS is the live high-prob engine when enabled+OnlyLive.
+   // PRISM Cont/Rev remain available only if LCSOnlyLivePath=false.
+   if(EnableLCSStrategy && LCSOnlyLivePath)
+   {
+      EvaluateLCSStrategies(buySignal, sellSignal, strategyTag);
+      return;
+   }
+
+   if(EnableLCSStrategy)
+   {
+      EvaluateLCSStrategies(buySignal, sellSignal, strategyTag);
+      if(buySignal || sellSignal)
+         return;
+   }
+
    EvaluateSpecCompliantStrategies(buySignal, sellSignal, strategyTag);
 }
 
@@ -10271,7 +10798,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_ALLTRADE_56\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_LCS_57\n",
          "=============================================="
       );
       return;
@@ -10293,7 +10820,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_ALLTRADE_56\n",
+         "BUILD: SA_PRISM_LCS_57\n",
          "=========================================="
       );
       return;

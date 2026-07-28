@@ -2,54 +2,40 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK56.mq5
-BUILD_ID: SA_PRISM_ALLTRADE_56
+File:     SNIPER_AI_OK57.mq5
+BUILD_ID: SA_PRISM_LCS_57
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK56.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK57.mq5
 
 Raw:
-https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK56.mq5
+https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK57.mq5
 
 ──────────────────────────────────────
-BUG HUNT → ALLTRADE FIXES (OK56)
+LIVE STRATEGY = LCS (NEW)
 ──────────────────────────────────────
-FALSE BLOCKERS REMOVED / DEFAULTED OFF:
-  • MaxTotalOpenTradesAllSymbols = 0 (was 9 — blocked multi-chart)
-  • MaxOpenTradesPerCurrency = 0 (was 4 — EUR/GBP/XAU share USD)
-  • EnableDailyLossProtection = false (NEW — was always on)
-  • Weekly / Monthly loss protection = false
-  • BeastDuplicateBarGuard = false
-  • EnableEventQualityMode = false + EventICE boost 0
-  • MinMarginLevelPercent = 0 (was 200%)
-  • QualityRequireTrendAndADX = false
-  • ICE_MinScore = 25 (was 32)
-  • Drawdown shield stays OFF (OK53)
+Liquidity Continuity Sniper — high-prob only:
 
-CODE HARDENING:
-  • GetSymbolIndex suffix-safe (EURUSD ↔ EURUSD.m)
-  • Lot normalize from SYMBOL_VOLUME_STEP (not fixed 2dp)
-  • ATR missing: Cont/Rev fail-open under NeverBlock
-  • Cooldown never blocks under NeverBlock/AggressiveFire
-  • EntryTF iTime==0 no longer deadlocks bar gate
-  • Cont FIRE still cannot be HP-vetoed (OK55)
-  • Loud FIRE BLOCKED / Execute FAILED prints
+  1. H4 bias clear (SMA200 side)
+  2. H1 stop-hunt sweep AGAINST bias
+  3. Reclaim + displacement
+  4. FVG/OB zone in trade direction
+  5. SL beyond sweep extreme
 
-KEPT (quality Cont/Rev, not spam):
-  • BestPathsOnly Cont+Rev
-  • Structure zone for Cont
-  • ICE/IMCE engines
-  • MaxOpenTrades=3 per symbol
+PRISM Cont/Rev are IDLE (LCSOnlyLivePath=true).
+Experts will show: LCS VALIDATE … / ULTRA CORE FIRE … [LCS]
 
 ──────────────────────────────────────
-INSTALL (REQUIRED)
+INSTALL
 ──────────────────────────────────────
 1. Remove PRISM STRATEGY from EVERY chart
 2. Delete old SNIPER* .ex5
-3. Copy SNIPER_AI_OK56.mq5 → MQL5/Experts/
-4. F7 — confirm SA_PRISM_ALLTRADE_56
-5. Attach FRESH on each symbol · EntryTF=chart TF
-6. Experts MUST show BUILD_ID=SA_PRISM_ALLTRADE_56
-   NOT "PRISM STRATEGY"
+3. Copy SNIPER_AI_OK57.mq5 → MQL5/Experts/
+4. F7 — confirm SA_PRISM_LCS_57
+5. Attach FRESH · Algo Trading ON
+6. Experts MUST show BUILD_ID=SA_PRISM_LCS_57
+   + LCS57: Enable=true OnlyLive=true BiasTF=PERIOD_H4 EntryTF=PERIOD_H1
+
+Fewer trades = high probability by design.
