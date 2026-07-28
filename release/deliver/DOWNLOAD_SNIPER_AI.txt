@@ -1,11 +1,12 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK53.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK54.mq5
 
-BUILD_ID: SA_PRISM_TRADEUNBLOCK_53
+BUILD_ID: SA_PRISM_TRADEFIRE_54
 Comment: SNIPER AI
 
-FIX: cannot trade — drawdown shield was blocking (~54% DD vs 20% max).
-OK53: EnableDrawdownProtection=false + ResetPeakEquityOnInit=true.
+FIX: ContSniper ULTRA CORE FIRE was blocked by broken duplicate-bar guard
+(0==0 false positive / closed-fill same bar). Now only suppresses while
+that direction is still open on the same EntryTF bar.
 
-INSTALL: delete old SNIPER* → F7 → fresh attach → EntryTF=chart TF → confirm BUILD_ID=SA_PRISM_TRADEUNBLOCK_53 and DrawdownShield=false
+INSTALL: delete old SNIPER* → F7 → fresh attach → EntryTF=chart TF → BUILD_ID=SA_PRISM_TRADEFIRE_54

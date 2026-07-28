@@ -2,42 +2,35 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK54.mq5
-BUILD_ID: SA_PRISM_TRADEFIRE_54
+File:     SNIPER_AI_OK55.mq5
+BUILD_ID: SA_PRISM_CONTFIRE_55
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK54.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK55.mq5
 
 Raw:
-https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK54.mq5
+https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK55.mq5
 
 ──────────────────────────────────────
-WHY IT COULD NOT TRADE (FIXED OK54)
+WHAT YOUR SCREENSHOT SHOWS
 ──────────────────────────────────────
-Journal showed:
-  ULTRA CORE FIRE SELL [ContSniper] grade=A+ ...
-  BEAST: duplicate bar guard suppressed SELL
+Source column = "PRISM STRATEGY"  → WRONG / OLD EA still attached
+ULTRA CORE FIRE SELL [ContSniper] A+  → Cont path IS valid
+REV VALIDATE FAIL                   → RevSniper only (ignore when Cont fires)
 
-Root cause: duplicate-bar guard treated unset times as a match
-(iTime(EntryTF)==0 == LastApproved init 0) → ContSniper NEVER filled.
-Also suppressed for the rest of the bar after a fill that defense closed.
-
-OK54 FIX:
-  • Never match bar time 0
-  • Only suppress if same EntryTF bar was filled AND that direction is still open
-  • OK53 DD unblock retained (DrawdownShield=false)
-
-REV VALIDATE FAIL = RevSniper quality working (needs sweep/OB) — not a bug.
-ContSniper is the path that should execute.
+OK55 FIX: Cont FIRE was then killed by post-FIRE HP confirms (need 4)
+with throttled/silent reject — no "SELL approved", no order.
 
 ──────────────────────────────────────
-INSTALL (REQUIRED)
+INSTALL (DO THIS EXACTLY)
 ──────────────────────────────────────
-1. Delete old SNIPER* / PRISM* from Experts + all charts
-2. Copy SNIPER_AI_OK54.mq5 → MQL5/Experts/
-3. F7 — confirm SA_PRISM_TRADEFIRE_54
-4. Attach FRESH (do not keep old Inputs)
-5. EntryTF must match chart (H4 → EntryTF=H4)
-6. Experts must show BUILD_ID=SA_PRISM_TRADEFIRE_54
+1. Remove PRISM STRATEGY from EVERY chart (right-click chart → Expert list → Remove)
+2. Delete old SNIPER* / PRISM* .ex5 from MQL5/Experts/
+3. Copy SNIPER_AI_OK55.mq5 → MQL5/Experts/
+4. F7 — confirm SA_PRISM_CONTFIRE_55
+5. Attach THIS file fresh · EntryTF=H4 on H4 · Algo Trading ON
+6. Experts MUST show:
+     SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_CONTFIRE_55
+   NOT "PRISM STRATEGY"

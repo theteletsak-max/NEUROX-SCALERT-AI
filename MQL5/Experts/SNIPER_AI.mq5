@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_TRADEFIRE_54                                |
-//| SNIPER AI - Cont FIRE was blocked by broken duplicate-bar guard |
+//| BUILD_ID: SA_PRISM_CONTFIRE_55                                 |
+//| SNIPER AI - Cont FIRE must execute (no post-FIRE HP veto)       |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.22"
-#property description "SNIPER AI OK54: fix ContSniper FIRE then duplicate-bar suppress (0==0 / closed fill)"
-#property description "OK53 DD unblock retained: DrawdownShield OFF + PeakEquity reset on init"
+#property version   "5.23"
+#property description "SNIPER AI OK55: ContSniper FIRE no longer vetoed by post-FIRE HP confirms"
+#property description "If Experts source says PRISM STRATEGY you attached the WRONG EA — use this file"
 
 #include <Trade/Trade.mqh>
 
@@ -487,8 +487,10 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_TRADEFIRE_54");
-   Print("TRADEFIRE54: duplicate-bar guard fixed (no 0==0 false positive; allow re-fire if prior fill closed)");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_PRISM_CONTFIRE_55");
+   Print("IMPORTANT: Experts source must be SNIPER_AI_OK55 / SNIPER_AI — if you see PRISM STRATEGY, remove that EA and attach THIS file");
+   Print("CONTFIRE55: Cont/Rev after path+engines FIRE cannot be vetoed by HP confirms (NeverBlock/AggressiveFire)");
+   Print("TRADEFIRE54 retained: duplicate-bar 0==0 fix");
    Print("TRADEUNBLOCK53 retained: DrawdownShield=", EnableDrawdownProtection,
          " ResetPeakOnInit=", ResetPeakEquityOnInit,
          " CurrentDD=", DoubleToString(GetCurrentDrawdown(), 2), "%");
@@ -7806,15 +7808,28 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
       return false;
    }
 
-   // SAFE42: BestQuality alone enforces HP confirms (not only when UltraHighProbability)
+   // CONTFIRE55: Cont/Rev already passed path setups + ICE/IMCE before FIRE.
+   // Post-FIRE HP confirm veto was killing A+ ContSniper with silent/throttled
+   // ULTRA REJECT — Journal showed FIRE then nothing / no fill.
+   // NeverBlockValidSniperEntry / UltraAggressiveFire → HP is informational only.
    if(BestQualitySetups && UltraHP_MinConfirmations > 0 &&
       (strategyTag == "ContSniper" || strategyTag == "RevSniper"))
    {
       int conf = CountConfirmingConditions(buy);
       if(conf < UltraHP_MinConfirmations)
       {
-         failReason = StringFormat("HP quality: confirms %d < %d", conf, UltraHP_MinConfirmations);
-         return false;
+         if(NeverBlockValidSniperEntry || UltraAggressiveFire || AggressiveInstantQuality)
+         {
+            if(EnableVerboseLogging || EnableSetupLogging)
+               Print("HP soft: confirms ", conf, "/", UltraHP_MinConfirmations,
+                     " on ", strategyTag, " ", BrokerSymbol,
+                     " — allowing (NeverBlock/AggressiveFire, path already selected)");
+         }
+         else
+         {
+            failReason = StringFormat("HP quality: confirms %d < %d", conf, UltraHP_MinConfirmations);
+            return false;
+         }
       }
    }
 
@@ -10174,7 +10189,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_PRISM_TRADEFIRE_54\n",
+         "Comment: SNIPER AI | BUILD: SA_PRISM_CONTFIRE_55\n",
          "=============================================="
       );
       return;
@@ -10196,7 +10211,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_TRADEFIRE_54\n",
+         "BUILD: SA_PRISM_CONTFIRE_55\n",
          "=========================================="
       );
       return;
@@ -10511,7 +10526,12 @@ void InstantExecution()
    if(buySignal)
    {
       if((EnableBeastMode || EnableUltraCore) && !PRISMFinalizeApproval(true, strategyTag))
+      {
+         Print("FIRE BLOCKED after ", strategyTag, " BUY select: ",
+               (g_UltraLastReject == "" ? "FinalizeApproval failed" : g_UltraLastReject),
+               " on ", BrokerSymbol);
          return;
+      }
 
       Print("BUY approved (", BrokerSymbol, ") [", strategyTag, "]");
       g_PendingStrategyTag = strategyTag;
@@ -10520,6 +10540,8 @@ void InstantExecution()
          if(EnableBeastMode && BeastDuplicateBarGuard)
             MarkSignalApproved(true);
       }
+      else
+         Print("BUY approved but ExecuteBuy FAILED on ", BrokerSymbol, " [", strategyTag, "]");
       if(EnableUltraCore && UltraHealthMonitor)
       {
          g_UltraLastDecisionMs = (long)GetTickCount() - g_UltraDecisionStartMs;
@@ -10531,7 +10553,12 @@ void InstantExecution()
    if(sellSignal)
    {
       if((EnableBeastMode || EnableUltraCore) && !PRISMFinalizeApproval(false, strategyTag))
+      {
+         Print("FIRE BLOCKED after ", strategyTag, " SELL select: ",
+               (g_UltraLastReject == "" ? "FinalizeApproval failed" : g_UltraLastReject),
+               " on ", BrokerSymbol);
          return;
+      }
 
       Print("SELL approved (", BrokerSymbol, ") [", strategyTag, "]");
       g_PendingStrategyTag = strategyTag;
@@ -10540,6 +10567,8 @@ void InstantExecution()
          if(EnableBeastMode && BeastDuplicateBarGuard)
             MarkSignalApproved(false);
       }
+      else
+         Print("SELL approved but ExecuteSell FAILED on ", BrokerSymbol, " [", strategyTag, "]");
       if(EnableUltraCore && UltraHealthMonitor)
       {
          g_UltraLastDecisionMs = (long)GetTickCount() - g_UltraDecisionStartMs;

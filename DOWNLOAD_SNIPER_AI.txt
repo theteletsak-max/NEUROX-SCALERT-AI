@@ -1,12 +1,12 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK54.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK55.mq5
 
-BUILD_ID: SA_PRISM_TRADEFIRE_54
+BUILD_ID: SA_PRISM_CONTFIRE_55
 Comment: SNIPER AI
 
-FIX: ContSniper ULTRA CORE FIRE was blocked by broken duplicate-bar guard
-(0==0 false positive / closed-fill same bar). Now only suppresses while
-that direction is still open on the same EntryTF bar.
+Your log source "PRISM STRATEGY" = wrong EA. Cont FIRE was real; post-FIRE HP
+veto blocked the fill. OK55: Cont/Rev FIRE executes (HP soft under NeverBlock).
 
-INSTALL: delete old SNIPER* → F7 → fresh attach → EntryTF=chart TF → BUILD_ID=SA_PRISM_TRADEFIRE_54
+INSTALL: remove PRISM STRATEGY from all charts → F7 OK55 → fresh attach →
+Experts must show BUILD_ID=SA_PRISM_CONTFIRE_55 (not PRISM STRATEGY)
