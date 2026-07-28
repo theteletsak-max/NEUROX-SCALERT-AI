@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_APEX_SWING_64                                      |
-//| SNIPER AI - APEX swing sniper; ContFallback structure-only (NO scalping)  |
+//| BUILD_ID: SA_NEWS_SPREADFREE_65                                      |
+//| SNIPER AI - knows news (no hard block) + NEVER blocks on high spread  |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.32"
-#property description "SNIPER AI OK64: ANTI-SCALP — ContFallback trend-only DISABLED; structure + hold + cooldown"
-#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK64. BUILD=SA_APEX_SWING_64"
+#property version   "5.33"
+#property description "SNIPER AI OK65: news awareness ON (no hard block) + spread NEVER blocks trades"
+#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK65. BUILD=SA_NEWS_SPREADFREE_65"
 
 #include <Trade/Trade.mqh>
 
@@ -271,19 +271,23 @@ input bool             EnableHTFConfirmation = false; // OFF: HTF was a hard blo
 input ENUM_TIMEFRAMES  HigherTimeframe = PERIOD_H4;
 
 input group "NEWS FILTER"
+// OK65: KNOW news (calendar awareness + Journal logs). Hard-block stays OFF.
+// EnableNewsAwareness=true → EA sees CPI/NFP/FOMC windows and prints them.
+// EnableNewsFilter=false → NEVER pauses trading for news.
 
-input bool EnableNewsFilter = false; // KEEP OFF - hard pause during CPI is what blocked you before
+input bool EnableNewsAwareness = true;  // OK65: know/log high-impact news windows (does NOT block)
+input bool EnableNewsFilter = false;    // KEEP OFF - hard pause during CPI blocked you before
 input int  MinutesBeforeNews = 30;
 input int  MinutesAfterNews = 30;
-input bool BlockHighImpactNews = true;   // only used if EnableNewsFilter=true
+input bool BlockHighImpactNews = true;  // only if EnableNewsFilter=true (still OFF by default)
 input bool BlockMediumImpactNews = false;
 input bool NonScalpDisableNewsFilter = true;
+input bool NewsAwarenessLogOncePerBar = true; // log news window at most once per EntryTF bar
 
 input group "EVENT EXTRA TIGHTEN (still trades — stricter than regular quality)"
-// News hard-block stays OFF. Events use the same quality system, with a
-// higher MPI floor so only the cleanest sniper setups fire in the spike.
+// News hard-block stays OFF. Event tighten also OFF by default — awareness ≠ block.
 
-input bool   EnableEventQualityMode       = false; // ALLTRADE56: OFF — was tightening ICE around news
+input bool   EnableEventQualityMode       = false; // OFF: do not raise ICE/MPI just because of news
 input bool   EventQualityAppliesToCrypto  = false; // ALLTRADE56: do not tighten BTC/ETH for USD news
 input bool   EventDisableWeakPaths        = true;  // keep weak paths off in events
 input bool   EventRequireStructureZone    = true;
@@ -367,6 +371,8 @@ datetime LastLossCloseTimeArr[];
 // OK64 anti-scalp ContFallback tracking (NeverBlock cannot bypass these)
 datetime g_ContFallbackLastSignalBar = 0;
 datetime g_ContFallbackLastFillTime  = 0;
+datetime g_NewsAwareLastLogBar       = 0;
+string   g_NewsAwareLastDetail       = "";
 
 // FIX: same class of bug as above, found during this review - these were
 // previously single globals/statics shared across every symbol instead of
@@ -587,8 +593,14 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_APEX_SWING_64");
-   Print("CRITICAL: Experts SOURCE must be SNIPER_AI_OK64 or SNIPER_AI — if it says PRISM STRATEGY, REMOVE that EA now");
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_NEWS_SPREADFREE_65");
+   Print("CRITICAL: Experts SOURCE must be SNIPER_AI_OK65 or SNIPER_AI — if it says PRISM STRATEGY, REMOVE that EA now");
+   Print("NEWS65: Awareness=", EnableNewsAwareness,
+         " HardBlock=", EnableNewsFilter, " (must stay false)",
+         " EventTighten=", EnableEventQualityMode);
+   Print("SPREAD65: NeverBlockOnHighSpread=", NeverBlockOnHighSpread,
+         " EnableSpreadFilter=", EnableSpreadFilter,
+         " — high spread NEVER stops trades when NeverBlock=true");
    Print("ANTISCALP64: AntiScalp=", EnableAntiScalpMode,
          " ContFallback=", EnableContFallback,
          " TrendOnly=", ContFallbackTrendOnly, " (IGNORED if AntiScalp ON)",
@@ -607,7 +619,10 @@ int OnInit()
          " MAE_ATR=", DefenseMAE_ATR,
          " EventICE_Boost=", EventICE_MinScoreBoost,
          " SlipProfiles=", EnableSlippageProfiles);
-   Print("SPREADFREE: EnableSpreadFilter=", EnableSpreadFilter);
+   Print("SPREADFREE: NeverBlock=", NeverBlockOnHighSpread,
+         " EnableSpreadFilter=", EnableSpreadFilter, " (ignored when NeverBlock=true)");
+
+   UpdateNewsAwareness(); // initial news status on load
    Print("BESTNEXT: BOS lookback=", DirectionalBOS_LookbackBars,
          " | BestPathsOnly=", BestPathsOnly);
    Print("OPENCAPS: Enforce=", EnforceOpenTradeCaps,
@@ -948,6 +963,7 @@ string PRISMGetTradeGrade(bool buy, const string strategyTag);
 int CalculatePRISMScore(bool buy);
 int EffectiveMinimumMPIScore();
 void MarkContFallbackFillIfNeeded(); // OK64 anti-scalp fill stamp (defined near ContFallback)
+void UpdateNewsAwareness(); // OK65 news know/log (no block)
 bool HasStructureConfluence(bool buy);
 bool HasHTFStructureConfluence(bool buy);
 bool IsVolatilityExpanding();
@@ -3983,18 +3999,22 @@ bool CooldownFinished()
 //================ PROTECTION SETTINGS ==============================//
 
 input group "SPREAD (optional — OFF = trade anyway)"
-// Your request: trade even when spread is high.
-// EnableSpreadFilter=false → never blocks on spread.
-// MaxSpreadPoints<=0 also means unlimited when filter is ON.
+// OK65 HARD: NeverBlockOnHighSpread=true → CheckSpread ALWAYS allows (input cannot block).
+// EnableSpreadFilter stays false; high spread during news does NOT stop entries.
 
-input bool   EnableSpreadFilter = false;  // OFF: high spread does NOT block entries
-input double MaxSpreadPoints    = 10000;  // only used if EnableSpreadFilter=true (0=unlimited)
+input bool   NeverBlockOnHighSpread = true; // OK65 HARD override — high spread NEVER blocks
+input bool   EnableSpreadFilter = false;    // OFF: high spread does NOT block entries
+input double MaxSpreadPoints    = 10000;    // only used if filter ON AND NeverBlockOnHighSpread=false
 
 
 //================ CHECK SPREAD =====================================//
 
 bool CheckSpread()
 {
+   // OK65: hard override — never refuse a trade because spread is wide
+   if(NeverBlockOnHighSpread)
+      return true;
+
    // SPREADFREE50: default OFF — always allow execution regardless of spread
    if(!EnableSpreadFilter || MaxSpreadPoints <= 0.0)
       return true;
@@ -12136,7 +12156,9 @@ void PrintSetupDiagnostics()
             " QualityGatesACTIVE=", QualityGatesActive(),
             " EventTighten=", eventQ,
             " MPI floor=", EffectiveMinimumMPIScore(),
-            " NewsHardBlock=", EnableNewsFilter);
+            " NewsHardBlock=", EnableNewsFilter,
+            " NewsAware=", EnableNewsAwareness,
+            " SpreadNeverBlock=", NeverBlockOnHighSpread);
       Print("NOTE: ULTRA CORE PreferQuality=", PreferQualityPaths,
             " TryNextPath=", TryNextPathIfEnginesFail,
             " Beast=", UltraGetBeastScore(true, "ContSniper").overall,
@@ -12188,6 +12210,9 @@ void InstantExecution()
             " — skip (check DetectBrokerSymbol / MultiSymbolList)");
       return;
    }
+
+   // OK65: know news (log only) — never used to refuse entries here
+   UpdateNewsAwareness();
 
    if(EnableUltraCore && UltraHealthMonitor)
       g_UltraDecisionStartMs = (long)GetTickCount();
@@ -12364,8 +12389,89 @@ void InstantExecution()
 // EURUSD). If the calendar isn't available on this account/server, it
 // fails safe (returns true / trading allowed) rather than blocking forever.
 
+// OK65: awareness — detect & log high-impact news without blocking trades.
+bool NewsAwarenessInWindow(string &detail)
+{
+   detail = "";
+   string baseCcy, quoteCcy;
+   PRISM_GetSymbolCurrencies(baseCcy, quoteCcy);
+
+   datetime from = TimeCurrent() - MinutesAfterNews  * 60;
+   datetime to   = TimeCurrent() + MinutesBeforeNews * 60;
+
+   MqlCalendarValue values[];
+   int total = CalendarValueHistory(values, from, to, NULL, NULL);
+   if(total <= 0)
+   {
+      detail = "news: calendar clear / unavailable";
+      return false;
+   }
+
+   string names = "";
+   int hit = 0;
+   for(int i = 0; i < total; i++)
+   {
+      MqlCalendarEvent event;
+      if(!CalendarEventById(values[i].event_id, event))
+         continue;
+      if(event.importance != CALENDAR_IMPORTANCE_HIGH)
+         continue;
+
+      MqlCalendarCountry country;
+      if(!CalendarCountryById(event.country_id, country))
+         continue;
+      if(!PRISM_CalendarCurrencyRelevant(country.currency, baseCcy, quoteCcy, false))
+         continue;
+
+      hit++;
+      if(StringLen(names) < 120)
+      {
+         if(names != "") names += "; ";
+         names += country.currency + " " + event.name;
+      }
+   }
+
+   if(hit <= 0)
+   {
+      detail = "news: no relevant high-impact in window";
+      return false;
+   }
+
+   detail = StringFormat("news AWARE high-impact x%d [%s] — NOT blocking trades", hit, names);
+   return true;
+}
+
+void UpdateNewsAwareness()
+{
+   if(!EnableNewsAwareness)
+      return;
+
+   datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
+   if(NewsAwarenessLogOncePerBar && barTime > 0 && barTime == g_NewsAwareLastLogBar)
+      return;
+
+   string detail = "";
+   bool inWin = NewsAwarenessInWindow(detail);
+   g_NewsAwareLastDetail = detail;
+
+   if(inWin)
+   {
+      if(barTime > 0)
+         g_NewsAwareLastLogBar = barTime;
+      Print("NEWS AWARE: ", detail, " on ", BrokerSymbol,
+            " | SpreadNeverBlocks=", NeverBlockOnHighSpread);
+   }
+   else if(EnableVerboseLogging)
+   {
+      if(barTime > 0)
+         g_NewsAwareLastLogBar = barTime;
+      Print("NEWS AWARE: ", detail, " on ", BrokerSymbol);
+   }
+}
+
 bool NewsTradingAllowed()
 {
+   // OK65: hard-block stays OFF by default. Awareness does not pause trading.
    if(!EnableNewsFilter)
       return true;
 

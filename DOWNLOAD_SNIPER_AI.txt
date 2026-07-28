@@ -1,12 +1,12 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK64.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK65.mq5
 
-BUILD_ID: SA_APEX_SWING_64
+BUILD_ID: SA_NEWS_SPREADFREE_65
 Comment: SNIPER AI
 
-ANTI-SCALP: ContFallback trend spam OFF. Needs BOS+zone, once/bar, 180m cooldown, longer hold.
+Knows news (log only). Never hard-blocks for news. High spread NEVER blocks trades.
 REMOVE PRISM STRATEGY or you keep running the wrong EA.
 
-INSTALL: remove PRISM STRATEGY → F7 OK64 → attach SNIPER_AI_OK64 →
-BUILD_ID=SA_APEX_SWING_64 · FIRE [APEX] or FIRE [ContFallback] swing BOS+zone
+INSTALL: remove PRISM STRATEGY → F7 OK65 → attach SNIPER_AI_OK65 →
+BUILD_ID=SA_NEWS_SPREADFREE_65 · look for NEWS AWARE / FIRE [APEX]

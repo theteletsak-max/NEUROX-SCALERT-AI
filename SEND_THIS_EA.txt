@@ -2,39 +2,33 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK64.mq5
-BUILD_ID: SA_APEX_SWING_64
+File:     SNIPER_AI_OK65.mq5
+BUILD_ID: SA_NEWS_SPREADFREE_65
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK64.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK65.mq5
 
 ──────────────────────────────────────
-ANTI-SCALP (CODED HARD)
+NEWS + SPREAD (OK65)
 ──────────────────────────────────────
-• ContFallback trend-only DISABLED when EnableAntiScalpMode=true
-• ContFallback needs BOS + OB/FVG (structure), not EMA side alone
-• Once per EntryTF bar + 180 min ContFallback cooldown after fill
-• Wider SL (1.5x) + min hold 24 H1 bars before trail/mgmt
-• MaxOpenTrades=1
+• Knows news: EnableNewsAwareness=true (calendar log)
+• Does NOT hard-block trades for news (EnableNewsFilter=false)
+• High spread NEVER blocks (NeverBlockOnHighSpread=true)
 
-Still fires: APEX first, then ContFallback swing BOS+zone only.
-
-Look for:
-  ULTRA CORE FIRE … [APEX]
-  or ULTRA CORE FIRE … [ContFallback] swing BOS+zone
-  NEVER: "trend-continuation execute" while AntiScalp ON
+Look for: NEWS AWARE: … — NOT blocking trades
+Also keeps OK64 anti-scalp ContFallback rules.
 
 ──────────────────────────────────────
 INSTALL (CRITICAL)
 ──────────────────────────────────────
 1. REMOVE "PRISM STRATEGY" from EVERY chart
 2. Delete old SNIPER*.ex5
-3. Copy SNIPER_AI_OK64.mq5 → MQL5/Experts/
+3. Copy SNIPER_AI_OK65.mq5 → MQL5/Experts/
 4. F7
-5. Attach SNIPER_AI_OK64 (NOT Prism)
+5. Attach SNIPER_AI_OK65 (NOT Prism)
 6. Experts MUST show:
-   BUILD_ID=SA_APEX_SWING_64
-   SOURCE = SNIPER_AI_OK64 (not PRISM STRATEGY)
+   BUILD_ID=SA_NEWS_SPREADFREE_65
+   SOURCE = SNIPER_AI_OK65 (not PRISM STRATEGY)
 7. Algo Trading ON · AutoTrading ON
