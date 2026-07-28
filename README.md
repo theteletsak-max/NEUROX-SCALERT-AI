@@ -25,15 +25,15 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 
 ### Install (MT5) — single file (compile-safe)
 
-Use **[`SNIPER_AI_OK63.mq5`](SNIPER_AI_OK63.mq5)**  
-`BUILD_ID: SA_APEX_EXEC_63`
+Use **[`SNIPER_AI_OK64.mq5`](SNIPER_AI_OK64.mq5)**  
+`BUILD_ID: SA_APEX_SWING_64`
 
 1. **Remove `PRISM STRATEGY` from every chart**  
-2. Copy **`SNIPER_AI_OK63.mq5`** → F7  
-3. Attach **SNIPER_AI_OK63** (source must not say PRISM STRATEGY)  
-4. Experts: `SA_APEX_EXEC_63` + `FIRE [ContFallback]` or `FIRE [APEX]`  
+2. Copy **`SNIPER_AI_OK64.mq5`** → F7  
+3. Attach **SNIPER_AI_OK64** (source must not say PRISM STRATEGY)  
+4. Experts: `SA_APEX_SWING_64` + `FIRE [ContFallback]` or `FIRE [APEX]`  
 
-**OK63:** APEX first, then **ContFallback executes on trend** (ICE/IMCE bypassed). Soft session still anytime.
+**OK64:** Anti-scalp coded hard — ContFallback trend-only OFF; needs BOS+zone, once/bar, 180m cooldown, longer hold. APEX first. Soft session anytime.
 
 See [`DOWNLOAD_SNIPER_AI.txt`](DOWNLOAD_SNIPER_AI.txt)
 

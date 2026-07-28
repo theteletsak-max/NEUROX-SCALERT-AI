@@ -1,12 +1,12 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK63.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK64.mq5
 
-BUILD_ID: SA_APEX_EXEC_63
+BUILD_ID: SA_APEX_SWING_64
 Comment: SNIPER AI
 
-EXECUTES: APEX first, then ContFallback on trend (engines bypassed).
-REMOVE PRISM STRATEGY or you will keep seeing ContSniper blocked / no valid setup.
+ANTI-SCALP: ContFallback trend spam OFF. Needs BOS+zone, once/bar, 180m cooldown, longer hold.
+REMOVE PRISM STRATEGY or you keep running the wrong EA.
 
-INSTALL: remove PRISM STRATEGY → F7 OK63 → attach SNIPER_AI_OK63 →
-BUILD_ID=SA_APEX_EXEC_63 · look for FIRE [ContFallback]
+INSTALL: remove PRISM STRATEGY → F7 OK64 → attach SNIPER_AI_OK64 →
+BUILD_ID=SA_APEX_SWING_64 · FIRE [APEX] or FIRE [ContFallback] swing BOS+zone

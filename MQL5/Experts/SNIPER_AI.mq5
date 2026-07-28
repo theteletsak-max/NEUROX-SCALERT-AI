@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_APEX_EXEC_63                                      |
-//| SNIPER AI - APEX first, Cont fallback EXECUTES when APEX waits  |
+//| BUILD_ID: SA_APEX_SWING_64                                      |
+//| SNIPER AI - APEX swing sniper; ContFallback structure-only (NO scalping)  |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.31"
-#property description "SNIPER AI OK63: APEX + Cont fallback that EXECUTES (engines bypass on ContFallback)"
-#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK63. BUILD=SA_APEX_EXEC_63"
+#property version   "5.32"
+#property description "SNIPER AI OK64: ANTI-SCALP — ContFallback trend-only DISABLED; structure + hold + cooldown"
+#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK64. BUILD=SA_APEX_SWING_64"
 
 #include <Trade/Trade.mqh>
 
@@ -94,10 +94,19 @@ input group "APEX - WORLD-CLASS LIQUIDITY SNIPER (LIVE)"
 // ONE decision. NO post-FIRE veto (tag APEX bypasses ICE/IMCE/Ultra re-check).
 
 input bool   EnableAPEXStrategy          = true;
-input bool   APEXOnlyLivePath            = false;  // OK63: false so Cont fallback can execute
-input bool   EnableContFallback          = true;   // OK63: when APEX waits, Cont still EXECUTES
-input bool   ContFallbackTrendOnly       = true;   // trend direction enough for fallback fire
-input bool   ContFallbackBypassEngines   = true;   // skip ICE/IMCE/SMT on ContFallback (must fill)
+input bool   APEXOnlyLivePath            = false;  // ContFallback still allowed (structure-only)
+input bool   EnableAntiScalpMode         = true;   // OK64 HARD: blocks ContFallback trend-scalping in code
+input bool   EnableContFallback          = true;   // structure Cont only (BOS+zone) — NOT trend spam
+input bool   ContFallbackTrendOnly       = false;  // OK64 OFF — was the scalp engine (ignored if AntiScalp ON)
+input bool   ContFallbackBypassEngines   = true;   // ContFallback still skips ICE/IMCE after structure pass
+input bool   ContFallbackRequireBOS      = true;   // must have directional BOS
+input bool   ContFallbackRequireZone     = true;   // must have OB or FVG
+input bool   ContFallbackOncePerBar      = true;   // max 1 ContFallback signal per EntryTF bar
+input int    ContFallbackCooldownMinutes = 180;    // minutes after ContFallback FILL before next ContFallback
+input int    ContFallbackMinimumHoldBars = 12;     // EntryTF bars before trail/trend mgmt (H1≈12h)
+input double ContFallbackSL_ATR_Boost    = 1.5;    // wider SL — not a scalp stop
+input int    ContFallbackMaxOpen         = 1;      // max open ContFallback positions on this symbol
+input bool   ContFallbackDisableAdaptiveHold = true; // do not shorten hold in ranging for ContFallback/APEX
 input ENUM_TIMEFRAMES APEX_BiasTF        = PERIOD_H4;
 input ENUM_TIMEFRAMES APEX_EntryTF       = PERIOD_H1;
 input int    APEX_BiasMA_Period          = 200;
@@ -196,7 +205,7 @@ input group "OPEN TRADES CAPS (adjustable — set in Inputs)"
 // Turn EnforceOpenTradeCaps=false to ignore ALL open-trade count limits.
 
 input bool   EnforceOpenTradeCaps         = true;  // master: false = no open-trade count blocks
-input int    MaxOpenTrades                = 3;     // THIS symbol (0 = unlimited)
+input int    MaxOpenTrades                = 1;     // OK64 anti-scalp: one position (was 3)
 input int    MaxTotalOpenTradesAllSymbols = 0;     // ALLTRADE56: 0=unlimited — was 9 blocking multi-chart
 input int    MaxOpenTradesPerCurrency     = 0;     // ALLTRADE56: 0=off — was 4 blocking EUR/GBP/XAU USD share
 
@@ -244,7 +253,7 @@ input ENUM_TIMEFRAMES EntryTF = PERIOD_H1; // OK57: align management bars with L
 input group "LONG TERM HOLDING"
 
 input bool EnableLongTermHolding = true;
-input int  MinimumHoldBars = 20;
+input int  MinimumHoldBars = 24; // OK64: longer hold on EntryTF (H1≈24h)
 
 input group "ATR TRAILING STOP"
 
@@ -354,6 +363,10 @@ datetime LastTradeTimeArr[];
 datetime LastAttemptTimeArr[];
 bool     LastTradeWasLossArr[];
 datetime LastLossCloseTimeArr[];
+
+// OK64 anti-scalp ContFallback tracking (NeverBlock cannot bypass these)
+datetime g_ContFallbackLastSignalBar = 0;
+datetime g_ContFallbackLastFillTime  = 0;
 
 // FIX: same class of bug as above, found during this review - these were
 // previously single globals/statics shared across every symbol instead of
@@ -574,11 +587,18 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_APEX_EXEC_63");
-   Print("CRITICAL: Experts SOURCE must be SNIPER_AI_OK63 or SNIPER_AI — if it says PRISM STRATEGY, REMOVE that EA now");
-   Print("EXEC63: APEX first, then ContFallback=", EnableContFallback,
-         " TrendOnly=", ContFallbackTrendOnly,
-         " BypassEngines=", ContFallbackBypassEngines,
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_APEX_SWING_64");
+   Print("CRITICAL: Experts SOURCE must be SNIPER_AI_OK64 or SNIPER_AI — if it says PRISM STRATEGY, REMOVE that EA now");
+   Print("ANTISCALP64: AntiScalp=", EnableAntiScalpMode,
+         " ContFallback=", EnableContFallback,
+         " TrendOnly=", ContFallbackTrendOnly, " (IGNORED if AntiScalp ON)",
+         " RequireBOS=", ContFallbackRequireBOS,
+         " RequireZone=", ContFallbackRequireZone,
+         " OncePerBar=", ContFallbackOncePerBar,
+         " CF_CooldownMin=", ContFallbackCooldownMinutes,
+         " CF_MinHoldBars=", ContFallbackMinimumHoldBars,
+         " CF_SLBoost=", ContFallbackSL_ATR_Boost,
+         " CF_MaxOpen=", ContFallbackMaxOpen,
          " APEXOnly=", APEXOnlyLivePath);
    Print("SoftSession HardBlock=", APEX_SessionHardBlock, " (false=trade anytime)");
    Print("APEX Bias=", EnumToString(APEX_BiasTF), " Entry=", EnumToString(APEX_EntryTF));
@@ -927,6 +947,7 @@ PRISMStructureSnapshot PRISM_GetStructureSnapshot(bool buy, int recency = -1);
 string PRISMGetTradeGrade(bool buy, const string strategyTag);
 int CalculatePRISMScore(bool buy);
 int EffectiveMinimumMPIScore();
+void MarkContFallbackFillIfNeeded(); // OK64 anti-scalp fill stamp (defined near ContFallback)
 bool HasStructureConfluence(bool buy);
 bool HasHTFStructureConfluence(bool buy);
 bool IsVolatilityExpanding();
@@ -2628,8 +2649,8 @@ input bool EnableVerboseLogging = false;
 input double StopLossPoints   = 500;
 input double TakeProfitPoints = 1000;
 input int    SlippagePoints   = 20;
-input int TradeCooldownMinutes = 0;   // 0 = no wait after fill (MaxOpenTrades is the limit)
-input int AttemptCooldownSeconds = 1;
+input int TradeCooldownMinutes = 60;  // OK64: wait after ANY fill (ContFallback has its own longer cooldown)
+input int AttemptCooldownSeconds = 30; // OK64: less rapid re-attempt spam
 
 // #12 Broker filling / slippage profiles (per instrument class)
 input group "SLIPPAGE PROFILES (#12)"
@@ -3012,6 +3033,11 @@ void GetTradeDistances(double &slDistance, double &tp1Distance, double &tp2Dista
    // the whole trade proportionally, not just the stop-loss.
    if(IsNonScalpSymbol())
       slDistance = slDistance * NonScalpSLMultiplierBoost;
+
+   // OK64: ContFallback / APEX get wider SL so they cannot behave like scalps
+   if(EnableAntiScalpMode && ContFallbackSL_ATR_Boost > 1.0 &&
+      (g_PendingStrategyTag == "ContFallback" || g_PendingStrategyTag == "APEX" || g_PendingStrategyTag == "LCS"))
+      slDistance = slDistance * ContFallbackSL_ATR_Boost;
 
    tp1Distance = slDistance * TP1_RR_Ratio;
    tp2Distance = slDistance * TP2_RR_Ratio;
@@ -3553,6 +3579,7 @@ bool ExecuteBuy()
       Print("BUY executed successfully.");
       ulong posTicket = ResolvePositionTicket(trade.ResultOrder());
       LastTradeTimeArr[symIdx] = TimeCurrent();
+      MarkContFallbackFillIfNeeded();
       RegisterTradeState(posTicket, tp1Price, tp2Price, tp3Price, true);
       RecordSignalSnapshot(posTicket, true);
       return true;
@@ -3628,6 +3655,7 @@ bool ExecuteBuy()
 
          Print("BUY executed successfully (no-stops fallback).");
          LastTradeTimeArr[symIdx] = TimeCurrent();
+         MarkContFallbackFillIfNeeded();
          RegisterTradeState(newTicket, tp1Price, tp2Price, tp3Price, true);
          RecordSignalSnapshot(newTicket, true);
          return true;
@@ -3817,6 +3845,7 @@ bool ExecuteSell()
       Print("SELL executed successfully.");
       ulong posTicket = ResolvePositionTicket(trade.ResultOrder());
       LastTradeTimeArr[symIdx] = TimeCurrent();
+      MarkContFallbackFillIfNeeded();
       RegisterTradeState(posTicket, tp1Price, tp2Price, tp3Price, false);
       RecordSignalSnapshot(posTicket, false);
       return true;
@@ -3882,6 +3911,7 @@ bool ExecuteSell()
 
          Print("SELL executed successfully (no-stops fallback).");
          LastTradeTimeArr[symIdx] = TimeCurrent();
+         MarkContFallbackFillIfNeeded();
          RegisterTradeState(newTicket, tp1Price, tp2Price, tp3Price, false);
          RecordSignalSnapshot(newTicket, false);
          return true;
@@ -4333,11 +4363,21 @@ void ManageOpenTrades()
       // window used for forex pairs.
       int effectiveMinHoldBars = IsNonScalpSymbol() ? NonScalpMinimumHoldBars : MinimumHoldBars;
 
+      // OK64: ContFallback / APEX / LCS are swing tags — force longer hold
+      int stHold = FindTradeState(ticket);
+      string holdTag = (stHold >= 0) ? TradeStates[stHold].strategyTag : "";
+      bool swingTag = (holdTag == "ContFallback" || holdTag == "APEX" || holdTag == "LCS");
+      if(EnableAntiScalpMode && swingTag && ContFallbackMinimumHoldBars > effectiveMinHoldBars)
+         effectiveMinHoldBars = ContFallbackMinimumHoldBars;
+
       // UPGRADE: adapt the minimum hold requirement to the current market
       // regime - a ranging market doesn't reward the same patience a
       // genuine trend does, so require less time before management can
       // step in while ranging.
-      if(EnableAdaptiveHoldTime && EnableRegimeDetection && GetMarketRegime() == REGIME_RANGING)
+      bool allowAdaptiveHold = EnableAdaptiveHoldTime && EnableRegimeDetection && GetMarketRegime() == REGIME_RANGING;
+      if(allowAdaptiveHold && ContFallbackDisableAdaptiveHold && swingTag)
+         allowAdaptiveHold = false;
+      if(allowAdaptiveHold)
          effectiveMinHoldBars = (int)MathMax(1.0, effectiveMinHoldBars * RangingHoldTimeFactor);
 
       datetime openTime = (datetime)PositionGetInteger(POSITION_TIME);
@@ -10963,6 +11003,100 @@ void EvaluateLCSStrategies(bool &buySignal, bool &sellSignal, string &strategyTa
    }
 }
 
+void MarkContFallbackFillIfNeeded()
+{
+   if(g_PendingStrategyTag == "ContFallback" || g_PendingStrategyTag == "APEX" || g_PendingStrategyTag == "LCS")
+   {
+      g_ContFallbackLastFillTime = TimeCurrent();
+      datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
+      if(barTime > 0)
+         g_ContFallbackLastSignalBar = barTime;
+   }
+}
+
+int CountOpenContFallbackPositions()
+{
+   int count = 0;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0 || !PositionSelectByTicket(ticket))
+         continue;
+      if(PositionGetString(POSITION_SYMBOL) != BrokerSymbol)
+         continue;
+      if(PositionGetInteger(POSITION_MAGIC) != MagicNumber)
+         continue;
+      int st = FindTradeState(ticket);
+      if(st >= 0 && TradeStates[st].strategyTag == "ContFallback")
+         count++;
+   }
+   return count;
+}
+
+bool ContFallbackAntiScalpGatesPass(string &failReason)
+{
+   failReason = "";
+   if(ContFallbackMaxOpen > 0 && CountOpenContFallbackPositions() >= ContFallbackMaxOpen)
+   {
+      failReason = "ContFallbackMaxOpen";
+      return false;
+   }
+   if(ContFallbackCooldownMinutes > 0 && g_ContFallbackLastFillTime > 0)
+   {
+      int waited = (int)(TimeCurrent() - g_ContFallbackLastFillTime);
+      if(waited < ContFallbackCooldownMinutes * 60)
+      {
+         failReason = "ContFallbackCooldown";
+         return false;
+      }
+   }
+   if(EnableAntiScalpMode || ContFallbackOncePerBar)
+   {
+      datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
+      if(barTime > 0 && g_ContFallbackLastSignalBar == barTime)
+      {
+         failReason = "ContFallbackOncePerBar";
+         return false;
+      }
+   }
+   return true;
+}
+
+bool ContFallbackSwingBuySetup()
+{
+   if(!IsBullTrend())
+      return false;
+   bool bos = StructureDirectionalBOS(true);
+   bool zone = ActiveOrderBlock(true) || ActiveFVG(true);
+   // HARD anti-scalp: force BOS+zone even if inputs were turned off
+   bool needBOS = EnableAntiScalpMode || ContFallbackRequireBOS;
+   bool needZone = EnableAntiScalpMode || ContFallbackRequireZone;
+   if(needBOS && !bos)
+      return false;
+   if(needZone && !zone)
+      return false;
+   if(!needBOS && !needZone)
+      return AggressiveContinuationBuySetup();
+   return true;
+}
+
+bool ContFallbackSwingSellSetup()
+{
+   if(!IsBearTrend())
+      return false;
+   bool bos = StructureDirectionalBOS(false);
+   bool zone = ActiveOrderBlock(false) || ActiveFVG(false);
+   bool needBOS = EnableAntiScalpMode || ContFallbackRequireBOS;
+   bool needZone = EnableAntiScalpMode || ContFallbackRequireZone;
+   if(needBOS && !bos)
+      return false;
+   if(needZone && !zone)
+      return false;
+   if(!needBOS && !needZone)
+      return AggressiveContinuationSellSetup();
+   return true;
+}
+
 void EvaluateContFallback(bool &buySignal, bool &sellSignal, string &strategyTag)
 {
    buySignal = false;
@@ -10970,6 +11104,14 @@ void EvaluateContFallback(bool &buySignal, bool &sellSignal, string &strategyTag
    strategyTag = "";
    if(!EnableContFallback)
       return;
+
+   string gateFail = "";
+   if(!ContFallbackAntiScalpGatesPass(gateFail))
+   {
+      if(EnableVerboseLogging || APEX_LogFailsEveryBar)
+         Print("ContFallback blocked [", gateFail, "] on ", BrokerSymbol);
+      return;
+   }
 
    bool bull = IsBullTrend();
    bool bear = IsBearTrend();
@@ -10983,9 +11125,10 @@ void EvaluateContFallback(bool &buySignal, bool &sellSignal, string &strategyTag
          bull = false;
    }
 
-   if(ContFallbackTrendOnly)
+   // OK64 HARD: EnableAntiScalpMode forces TrendOnly OFF in code
+   bool allowTrendOnly = ContFallbackTrendOnly && !EnableAntiScalpMode;
+   if(allowTrendOnly)
    {
-      // EXEC63: clear trend bias → fire ContFallback (engines bypassed)
       if(!bull && !bear)
       {
          double ema = GetEMA();
@@ -11000,32 +11143,40 @@ void EvaluateContFallback(bool &buySignal, bool &sellSignal, string &strategyTag
       {
          buySignal = true;
          strategyTag = "ContFallback";
-         Print("ULTRA CORE FIRE BUY [ContFallback] trend-continuation execute on ", BrokerSymbol);
+         datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
+         if(barTime > 0) g_ContFallbackLastSignalBar = barTime;
+         Print("ULTRA CORE FIRE BUY [ContFallback] trend-continuation (AntiScalp OFF) on ", BrokerSymbol);
          return;
       }
       if(bear && !bull)
       {
          sellSignal = true;
          strategyTag = "ContFallback";
-         Print("ULTRA CORE FIRE SELL [ContFallback] trend-continuation execute on ", BrokerSymbol);
+         datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
+         if(barTime > 0) g_ContFallbackLastSignalBar = barTime;
+         Print("ULTRA CORE FIRE SELL [ContFallback] trend-continuation (AntiScalp OFF) on ", BrokerSymbol);
          return;
       }
       return;
    }
 
-   // Structure-assisted fallback
-   if(bull && !bear && AggressiveContinuationBuySetup())
+   // Structure-only ContFallback (anti-scalp default)
+   if(bull && !bear && ContFallbackSwingBuySetup())
    {
       buySignal = true;
       strategyTag = "ContFallback";
-      Print("ULTRA CORE FIRE BUY [ContFallback] Cont setup on ", BrokerSymbol);
+      datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
+      if(barTime > 0) g_ContFallbackLastSignalBar = barTime;
+      Print("ULTRA CORE FIRE BUY [ContFallback] swing BOS+zone on ", BrokerSymbol);
       return;
    }
-   if(bear && !bull && AggressiveContinuationSellSetup())
+   if(bear && !bull && ContFallbackSwingSellSetup())
    {
       sellSignal = true;
       strategyTag = "ContFallback";
-      Print("ULTRA CORE FIRE SELL [ContFallback] Cont setup on ", BrokerSymbol);
+      datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
+      if(barTime > 0) g_ContFallbackLastSignalBar = barTime;
+      Print("ULTRA CORE FIRE SELL [ContFallback] swing BOS+zone on ", BrokerSymbol);
       return;
    }
 }
@@ -11046,7 +11197,7 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
          return;
    }
 
-   // 2) Cont fallback — MUST execute when APEX waits (OK63)
+   // 2) Cont fallback — structure-only when AntiScalp (OK64, no trend scalping)
    if(EnableContFallback)
    {
       EvaluateContFallback(buySignal, sellSignal, strategyTag);
