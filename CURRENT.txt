@@ -1,12 +1,18 @@
-SNIPER AI — CURRENT BUILD
+SNIPER AI — EVERYTHING IN PLACE
 
-File:     SNIPER_AI_OK72.mq5
-BUILD_ID: SA_QUALITY_72
-Comment:  SNIPER AI
+EA:         SNIPER_AI_OK72.mq5
+BUILD_ID:   SA_QUALITY_72
+Comment:    SNIPER AI
 
-Anytime (soft sessions) + strong quality ContFallback/APEX.
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK72.mq5
+INDICATOR:  SNIPER_IDP.mq5
+BUILD_ID:   IDP_1
+Name:       Institutional Displacement Pulse
+
+Live: APEX → ContFallback STRONG/QUALITY
+Anytime: session detect soft (no hard block)
+News aware · spread never blocks
+
+EA:  https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK72.mq5
+IDP: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_IDP.mq5
 
 REMOVE PRISM STRATEGY before attach.
-
-Companion indicator: SNIPER_IDP.mq5 (Institutional Displacement Pulse)

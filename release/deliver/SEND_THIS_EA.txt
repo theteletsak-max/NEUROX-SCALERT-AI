@@ -1,49 +1,45 @@
 ══════════════════════════════════════
-        SNIPER AI  —  EXPERT ADVISOR
+        SNIPER AI — FULL PACKAGE
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK72.mq5
-BUILD_ID: SA_QUALITY_72
-Comment:  SNIPER AI
-Platform: MetaTrader 5
+EA:        SNIPER_AI_OK72.mq5
+BUILD_ID:  SA_QUALITY_72
+Comment:   SNIPER AI
+
+INDICATOR: SNIPER_IDP.mq5
+BUILD_ID:  IDP_1
 
 DOWNLOAD EA:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK72.mq5
 
+DOWNLOAD IDP:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_IDP.mq5
+
 ──────────────────────────────────────
-ANYTIME + STRONG QUALITY (OK72)
+IN PLACE
 ──────────────────────────────────────
-• Trade ANYTIME — session detect ON, HardBlock OFF
-• ContFallback only on STRONG/QUALITY setups:
-    ADX trend · skip ranging · BOS · fresh zone
-    near OR disp · min structure score
-• Grades: STRONG (best) or QUALITY
-• APEX still first (stronger displacement)
-• News/spread never hard-block
+✓ APEX → ContFallback STRONG/QUALITY
+✓ Trade anytime (session detect, soft)
+✓ Clean market analysis
+✓ News aware · spread never blocks
+✓ Anti-scalp structure (no trend spam)
+✓ PRISM/ContSniper live path retired
+✓ SNIPER IDP companion pulse indicator
 
 Look for:
-  FIRE [ContFallback] STRONG …
-  FIRE [ContFallback] QUALITY …
-  FIRE [APEX]
+  BUILD_ID=SA_QUALITY_72
+  SNIPER IDP Loaded BUILD_ID=IDP_1
   SESSION DETECT: …
+  FIRE [APEX] / FIRE [ContFallback] STRONG|QUALITY
 
 ──────────────────────────────────────
-BEST INDICATOR (created for this bot)
+INSTALL
 ──────────────────────────────────────
-File: SNIPER_IDP.mq5
-Name: Institutional Displacement Pulse
-Why:  one score for sweep + displacement + BOS + trend side
-      (exactly what APEX/ContFallback trade)
-
-Install indicator:
-  Copy SNIPER_IDP.mq5 → MQL5/Indicators/ → F7 → attach on chart
-
-STRONG = |pulse| ≥ 70   QUALITY = |pulse| ≥ 45
-
-──────────────────────────────────────
-INSTALL EA
-──────────────────────────────────────
-1. REMOVE "PRISM STRATEGY"
-2. Copy SNIPER_AI_OK72.mq5 → MQL5/Experts/
-3. F7 → attach SNIPER_AI_OK72
-4. Experts: BUILD_ID=SA_QUALITY_72
+1. REMOVE "PRISM STRATEGY" from EVERY chart
+2. Delete old SNIPER*.ex5
+3. Copy SNIPER_AI_OK72.mq5 → MQL5/Experts/ → F7
+4. Copy SNIPER_IDP.mq5 → MQL5/Indicators/ → F7
+5. Attach SNIPER_AI_OK72 (NOT Prism, NOT old OK6x)
+6. Attach SNIPER_IDP on same chart (H1)
+7. Experts must show SA_QUALITY_72 · source SNIPER_AI_OK72
+8. Algo Trading ON · AutoTrading ON

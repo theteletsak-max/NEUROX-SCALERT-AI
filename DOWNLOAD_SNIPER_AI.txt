@@ -1,13 +1,15 @@
-SNIPER AI — DOWNLOAD
+SNIPER AI — DOWNLOAD (EVERYTHING IN PLACE)
 
+EA:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK72.mq5
-
 BUILD_ID: SA_QUALITY_72
-Comment: SNIPER AI
 
-ANYTIME trading + STRONG/QUALITY ContFallback setups. Session detect soft.
+INDICATOR:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_IDP.mq5
+BUILD_ID: IDP_1
+
+Anytime + strong quality ContFallback/APEX.
+Companion pulse: sweep + displacement + BOS + trend side.
+
 REMOVE PRISM STRATEGY.
-
-INSTALL: F7 OK72 → BUILD_ID=SA_QUALITY_72
-
-INDICATOR: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_IDP.mq5
+INSTALL: F7 OK72 + F7 IDP → attach both → SA_QUALITY_72 + IDP_1
