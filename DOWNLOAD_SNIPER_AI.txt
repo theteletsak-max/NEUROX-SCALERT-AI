@@ -1,11 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK67.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK68.mq5
 
-BUILD_ID: SA_PURE_67
+BUILD_ID: SA_STRUCT_BEST_68
 Comment: SNIPER AI
 
-PURE: APEX → ContFallback only. ContSniper/LCS/Instant retired. News aware, spread never blocks.
+BEST ContFallback structure: BOS + fresh OB/FVG + price-in-zone + displacement + discount/premium.
 REMOVE PRISM STRATEGY.
 
-INSTALL: F7 OK67 → BUILD_ID=SA_PURE_67
+INSTALL: F7 OK68 → BUILD_ID=SA_STRUCT_BEST_68

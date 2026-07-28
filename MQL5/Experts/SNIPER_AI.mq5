@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PURE_67                                      |
-//| SNIPER AI - PURE live path: APEX → ContFallback only  |
+//| BUILD_ID: SA_STRUCT_BEST_68                                      |
+//| SNIPER AI - best structure ContFallback (BOS+fresh zone+displacement)  |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.35"
-#property description "SNIPER AI OK67: PURE — delete contradictions; live path APEX→ContFallback only"
-#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK67. BUILD=SA_PURE_67"
+#property version   "5.36"
+#property description "SNIPER AI OK68: BEST structure — ContFallback needs fresh BOS + fresh OB/quality FVG + price-in-zone + displacement"
+#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK68. BUILD=SA_STRUCT_BEST_68"
 
 #include <Trade/Trade.mqh>
 
@@ -100,6 +100,22 @@ input int    ContFallbackMinimumHoldBars = 24;     // EntryTF bars before trail/
 input double ContFallbackSL_ATR_Boost    = 1.5;    // wider SL — not a scalp stop
 input int    ContFallbackMaxOpen         = 1;      // max open ContFallback positions on this symbol
 input bool   ContFallbackDisableAdaptiveHold = true; // do not shorten hold in ranging for ContFallback/APEX
+
+input group "CONT STRUCTURE BEST (OK68 — live ContFallback quality)"
+// Best continuation structure: directional BOS → fresh demand/supply → price at zone → displacement.
+input int    ContStruct_BOS_MaxBars          = 8;     // directional BOS must be within N EntryTF bars
+input bool   ContStruct_RequireTwoBarBOS     = true;  // two closes beyond swing (cuts fake breaks)
+input bool   ContStruct_FreshOBOnly          = true;  // reject mitigated OBs (fresh only)
+input double ContStruct_MinFVG_ATR           = 0.25;  // min FVG size vs ATR
+input double ContStruct_MaxFVGFillPct        = 45.0;  // reject mostly-filled FVGs
+input double ContStruct_ZoneProximityATR     = 0.80;  // price must trade near OB/FVG
+input bool   ContStruct_RequireDisplacement  = true;  // impulse body after structure
+input double ContStruct_MinDispBodyRatio     = 0.50;  // body/range of displace bar
+input double ContStruct_MinDispATR           = 0.35;  // displace range vs ATR
+input bool   ContStruct_RequireHTF_BOS       = false; // optional same-dir BOS on Bias/HTF
+input bool   ContStruct_PreferDiscountPrem   = true;  // BUY in discount / SELL in premium of recent range
+input bool   ContStruct_LogDetail            = true;
+
 input ENUM_TIMEFRAMES APEX_BiasTF        = PERIOD_H4;
 input ENUM_TIMEFRAMES APEX_EntryTF       = PERIOD_H1;
 input int    APEX_BiasMA_Period          = 200;
@@ -114,7 +130,7 @@ input double APEX_DispMinBodyRatio       = 0.42;   // OK62 relaxed
 input double APEX_DispMinATR             = 0.40;   // OK62 relaxed
 input double APEX_TickVolExpansion       = 1.25;    // bar1 tick vol vs avg (1.0=off soft)
 input bool   APEX_RequireTickVol         = false;
-input bool   APEX_RequireUnmitigatedZone = false;  // OK62: OFF — was blocking most APEX fires
+input bool   APEX_RequireUnmitigatedZone = true;   // OK68: best structure — enter unmitigated FVG/OB
 input bool   APEX_RequireStructureBias   = false;
 input bool   APEX_RequireMAAlign         = true;
 input bool   APEX_BiasNeedStructOrMA     = true;
@@ -180,7 +196,7 @@ input int    InstantMinimumMPIScore      = 0;
 input bool   InstantTwoOfThreeLiquidity  = true;
 input bool   InstantFvgOrOb              = true;
 input double InstantChannelBreakATR      = 0.35;
-input int    DirectionalBOS_LookbackBars = 12;    // BEST-NEXT: same-dir BOS within N bars (1=current only)
+input int    DirectionalBOS_LookbackBars = 8;     // OK68: tighter same-dir BOS window
 
 input group "TRADE SIZE & LIMITS (adjustable)"
 // Change these in EA Inputs after attach — they are live settings.
@@ -575,9 +591,9 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded BUILD_ID=SA_PURE_67");
-   Print("CRITICAL: SOURCE must be SNIPER_AI_OK67 — remove PRISM STRATEGY if present");
-   Print("PURE LIVE: APEX → ContFallback(BOS+zone) ONLY | AntiScalp=", EnableAntiScalpMode,
+   Print("SNIPER AI Loaded BUILD_ID=SA_STRUCT_BEST_68");
+   Print("CRITICAL: SOURCE must be SNIPER_AI_OK68 — remove PRISM STRATEGY if present");
+   Print("STRUCT68: APEX → ContFallback BEST structure | AntiScalp=", EnableAntiScalpMode,
          " SoftSession HardBlock=", APEX_SessionHardBlock,
          " NewsAware=", EnableNewsAwareness,
          " SpreadAlwaysAllow | MaxOpen=", MaxOpenTrades,
@@ -585,6 +601,12 @@ int OnInit()
    Print("APEX ", EnumToString(APEX_BiasTF), "/", EnumToString(APEX_EntryTF),
          " | ContFallback cooldown=", ContFallbackCooldownMinutes, "m hold=", ContFallbackMinimumHoldBars,
          " | DD shield=", EnableDrawdownProtection);
+   Print("CONT STRUCT: BOS<=", ContStruct_BOS_MaxBars,
+         " TwoBar=", ContStruct_RequireTwoBarBOS,
+         " FreshOB=", ContStruct_FreshOBOnly,
+         " Disp=", ContStruct_RequireDisplacement,
+         " ZoneATR=", ContStruct_ZoneProximityATR,
+         " HTF_BOS=", ContStruct_RequireHTF_BOS);
    UpdateNewsAwareness();
    if(PrintPathStatsOnInit)
       PrintStrategyPerformanceReport();
@@ -10674,27 +10696,288 @@ bool ContFallbackAntiScalpGatesPass(string &failReason)
    return true;
 }
 
-bool ContFallbackSwingBuySetup()
+//================ CONT STRUCTURE BEST (OK68) ========================//
+// World-class continuation structure — not PRISM ContSniper leftovers.
+// Stack: clear trend → recent directional BOS → FRESH OB or quality FVG
+// → price interacting with that zone → displacement impulse → optional HTF BOS.
+
+bool ContStruct_TwoBarDirectionalBOS(const bool buy)
 {
-   // OK67 PURE: always BOS + zone (no optional scalp shortcuts)
-   if(!IsBullTrend())
+   double swingHigh = GetRecentHigh();
+   double swingLow  = GetRecentLow();
+   if(swingHigh == EMPTY_VALUE || swingLow == EMPTY_VALUE)
       return false;
-   if(!StructureDirectionalBOS(true))
+
+   double close1 = iClose(BrokerSymbol, EntryTF, 1);
+   double close2 = iClose(BrokerSymbol, EntryTF, 2);
+   double close3 = iClose(BrokerSymbol, EntryTF, 3);
+   double atr = GetFilterATR();
+   double margin = (atr > 0.0) ? (atr * BOS_MinBreakATRMultiple) : 0.0;
+
+   if(buy)
+      return (close3 <= swingHigh &&
+              close2 > swingHigh + margin &&
+              close1 > swingHigh + margin);
+   return (close3 >= swingLow &&
+           close2 < swingLow - margin &&
+           close1 < swingLow - margin);
+}
+
+bool ContStruct_HasQualityBOS(const bool buy)
+{
+   if(ContStruct_RequireTwoBarBOS)
+   {
+      if(ContStruct_TwoBarDirectionalBOS(buy))
+         return true;
+      // still accept a very fresh single-bar BOS inside lookback if two-bar not ready
+      if(DetectDirectionalBOS(EntryTF, buy))
+         return true;
+   }
+   return RecentDirectionalBOS(buy, ContStruct_BOS_MaxBars);
+}
+
+bool ContStruct_GetFreshZone(const bool buy, double &zTop, double &zBot, string &kind)
+{
+   zTop = 0.0;
+   zBot = 0.0;
+   kind = "";
+
+   UpdateOrderBlockTracking();
+   UpdateFVGTracking();
+
+   int idx = GetSymbolIndex(BrokerSymbol);
+   double atr = GetFilterATR();
+
+   // 1) Fresh (unmitigated) order block — best demand/supply
+   bool freshOB = IsOrderBlockFreshAndValid(buy);
+   if(!freshOB && !ContStruct_FreshOBOnly)
+      freshOB = ActiveOrderBlock(buy); // only if user allows mitigated
+
+   if(freshOB && idx >= 0)
+   {
+      if(buy)
+      {
+         zTop = OB_Bull_TopArr[idx];
+         zBot = OB_Bull_BottomArr[idx];
+         kind = OB_Bull_MitigatedArr[idx] ? "OB-mitigated" : "OB-fresh";
+      }
+      else
+      {
+         zTop = OB_Bear_TopArr[idx];
+         zBot = OB_Bear_BottomArr[idx];
+         kind = OB_Bear_MitigatedArr[idx] ? "OB-mitigated" : "OB-fresh";
+      }
+      if(zTop > zBot && zBot > 0.0)
+         return true;
+   }
+   else if(freshOB)
+   {
+      // untracked symbol fallback — use last 2-bar OB geometry
+      zTop = iHigh(BrokerSymbol, EntryTF, 2);
+      zBot = iLow(BrokerSymbol, EntryTF, 2);
+      kind = "OB-detect";
+      if(zTop > zBot)
+         return true;
+   }
+
+   // 2) Quality FVG — active, not mostly filled, meaningful size
+   if(idx >= 0)
+   {
+      bool fvgOn = buy ? FVG_Bull_ActiveArr[idx] : FVG_Bear_ActiveArr[idx];
+      if(!fvgOn)
+         fvgOn = ActiveFVG(buy);
+      if(fvgOn)
+      {
+         double fill = buy ? FVG_Bull_FilledPctArr[idx] : FVG_Bear_FilledPctArr[idx];
+         zTop = buy ? FVG_Bull_TopArr[idx] : FVG_Bear_TopArr[idx];
+         zBot = buy ? FVG_Bull_BottomArr[idx] : FVG_Bear_BottomArr[idx];
+         double gap = zTop - zBot;
+         if(gap <= 0.0)
+            return false;
+         if(fill > ContStruct_MaxFVGFillPct)
+            return false;
+         if(atr > 0.0 && gap < atr * ContStruct_MinFVG_ATR)
+            return false;
+         kind = StringFormat("FVG(fill=%.0f%%)", fill);
+         return true;
+      }
+   }
+   else if(ActiveFVG(buy))
+   {
+      // fallback detect sizes
+      if(buy)
+      {
+         zBot = iHigh(BrokerSymbol, EntryTF, 3);
+         zTop = iLow(BrokerSymbol, EntryTF, 1);
+      }
+      else
+      {
+         zTop = iLow(BrokerSymbol, EntryTF, 3);
+         zBot = iHigh(BrokerSymbol, EntryTF, 1);
+         // bearish gap: top > bottom after swap
+         double tmp = zTop; zTop = MathMax(tmp, zBot); zBot = MathMin(tmp, zBot);
+      }
+      double gap = zTop - zBot;
+      if(gap > 0.0 && (atr <= 0.0 || gap >= atr * ContStruct_MinFVG_ATR))
+      {
+         kind = "FVG-detect";
+         return true;
+      }
+   }
+
+   return false;
+}
+
+bool ContStruct_PriceNearZone(const bool buy, const double zTop, const double zBot)
+{
+   if(zTop <= zBot)
       return false;
-   if(!(ActiveOrderBlock(true) || ActiveFVG(true)))
+   double atr = GetFilterATR();
+   double prox = (atr > 0.0) ? (atr * ContStruct_ZoneProximityATR) : 0.0;
+   double price = buy ? SymbolInfoDouble(BrokerSymbol, SYMBOL_BID)
+                      : SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
+   if(price <= 0.0)
+      return false;
+   // Must be interacting with the zone band (not miles away after BOS)
+   return (price <= zTop + prox && price >= zBot - prox);
+}
+
+bool ContStruct_InDiscountPremium(const bool buy)
+{
+   if(!ContStruct_PreferDiscountPrem)
+      return true;
+   int lb = 20;
+   double hi = iHigh(BrokerSymbol, EntryTF, 1);
+   double lo = iLow(BrokerSymbol, EntryTF, 1);
+   for(int i = 2; i <= lb; i++)
+   {
+      double h = iHigh(BrokerSymbol, EntryTF, i);
+      double l = iLow(BrokerSymbol, EntryTF, i);
+      if(h > hi) hi = h;
+      if(l < lo && l > 0.0) lo = l;
+   }
+   if(hi <= lo)
+      return true;
+   double mid = (hi + lo) * 0.5;
+   double price = buy ? SymbolInfoDouble(BrokerSymbol, SYMBOL_BID)
+                      : SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
+   if(buy)
+      return (price <= mid); // discount half for continuation buys into demand
+   return (price >= mid);    // premium half for continuation sells into supply
+}
+
+bool ContStruct_HasDisplacement(const bool buy)
+{
+   double o = iOpen(BrokerSymbol, EntryTF, 1);
+   double c = iClose(BrokerSymbol, EntryTF, 1);
+   double h = iHigh(BrokerSymbol, EntryTF, 1);
+   double l = iLow(BrokerSymbol, EntryTF, 1);
+   double range = h - l;
+   if(range <= 0.0)
+      return false;
+   double body = MathAbs(c - o);
+   if(body / range < ContStruct_MinDispBodyRatio)
+      return false;
+   if(buy && c <= o)
+      return false;
+   if(!buy && c >= o)
+      return false;
+   double atr = GetFilterATR();
+   if(atr > 0.0 && range < atr * ContStruct_MinDispATR)
       return false;
    return true;
 }
 
+bool ContStruct_HTF_OK(const bool buy)
+{
+   if(!ContStruct_RequireHTF_BOS)
+      return true;
+   if(DetectDirectionalBOS(APEX_BiasTF, buy))
+      return true;
+   if(DetectDirectionalBOS(HigherTimeframe, buy))
+      return true;
+   return RecentDirectionalBOS(buy, ContStruct_BOS_MaxBars) &&
+          ((buy && IsBullTrend()) || (!buy && IsBearTrend()));
+}
+
+int ContStruct_Score(const bool buy)
+{
+   // Used only to resolve BUY vs SELL conflict — higher = better structure
+   int s = 0;
+   if(ContStruct_HasQualityBOS(buy)) s += 40;
+   double zTop, zBot; string kind;
+   if(ContStruct_GetFreshZone(buy, zTop, zBot, kind))
+   {
+      s += (StringFind(kind, "OB-fresh") >= 0) ? 35 : 25;
+      if(ContStruct_PriceNearZone(buy, zTop, zBot)) s += 15;
+   }
+   if(ContStruct_HasDisplacement(buy)) s += 10;
+   if(ContStruct_InDiscountPremium(buy)) s += 5;
+   return s;
+}
+
+bool ContFallbackBestStructureOK(const bool buy, string &detail)
+{
+   detail = "";
+   if(buy && !IsBullTrend()) { detail = "no bull trend"; return false; }
+   if(!buy && !IsBearTrend()) { detail = "no bear trend"; return false; }
+
+   if(!ContStruct_HasQualityBOS(buy))
+   {
+      detail = "no quality directional BOS";
+      return false;
+   }
+
+   double zTop = 0.0, zBot = 0.0;
+   string kind = "";
+   if(!ContStruct_GetFreshZone(buy, zTop, zBot, kind))
+   {
+      detail = "no fresh OB / quality FVG";
+      return false;
+   }
+
+   if(!ContStruct_PriceNearZone(buy, zTop, zBot))
+   {
+      detail = "price not at structure zone (" + kind + ")";
+      return false;
+   }
+
+   if(ContStruct_RequireDisplacement && !ContStruct_HasDisplacement(buy))
+   {
+      detail = "no displacement impulse";
+      return false;
+   }
+
+   if(!ContStruct_InDiscountPremium(buy))
+   {
+      detail = buy ? "not in discount half" : "not in premium half";
+      return false;
+   }
+
+   if(!ContStruct_HTF_OK(buy))
+   {
+      detail = "HTF BOS missing";
+      return false;
+   }
+
+   detail = StringFormat("BEST %s + %s + near-zone%s%s",
+                         ContStruct_RequireTwoBarBOS ? "BOS2" : "BOS",
+                         kind,
+                         ContStruct_RequireDisplacement ? " + disp" : "",
+                         ContStruct_PreferDiscountPrem ? (buy ? " + discount" : " + premium") : "");
+   return true;
+}
+
+bool ContFallbackSwingBuySetup()
+{
+   string d = "";
+   return ContFallbackBestStructureOK(true, d);
+}
+
 bool ContFallbackSwingSellSetup()
 {
-   if(!IsBearTrend())
-      return false;
-   if(!StructureDirectionalBOS(false))
-      return false;
-   if(!(ActiveOrderBlock(false) || ActiveFVG(false)))
-      return false;
-   return true;
+   string d = "";
+   return ContFallbackBestStructureOK(false, d);
 }
 
 void EvaluateContFallback(bool &buySignal, bool &sellSignal, string &strategyTag)
@@ -10717,29 +11000,39 @@ void EvaluateContFallback(bool &buySignal, bool &sellSignal, string &strategyTag
    bool bear = IsBearTrend();
    if(bull && bear)
    {
-      if(CalculatePRISMScore(true) >= CalculatePRISMScore(false))
+      // Resolve by structure quality — not PRISM score
+      if(ContStruct_Score(true) >= ContStruct_Score(false))
          bear = false;
       else
          bull = false;
    }
 
-   if(bull && !bear && ContFallbackSwingBuySetup())
+   string detail = "";
+   if(bull && !bear && ContFallbackBestStructureOK(true, detail))
    {
       buySignal = true;
       strategyTag = "ContFallback";
       datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
       if(barTime > 0) g_ContFallbackLastSignalBar = barTime;
-      Print("ULTRA CORE FIRE BUY [ContFallback] swing BOS+zone on ", BrokerSymbol);
+      Print("ULTRA CORE FIRE BUY [ContFallback] ", detail, " on ", BrokerSymbol);
       return;
    }
-   if(bear && !bull && ContFallbackSwingSellSetup())
+   if(bear && !bull && ContFallbackBestStructureOK(false, detail))
    {
       sellSignal = true;
       strategyTag = "ContFallback";
       datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
       if(barTime > 0) g_ContFallbackLastSignalBar = barTime;
-      Print("ULTRA CORE FIRE SELL [ContFallback] swing BOS+zone on ", BrokerSymbol);
+      Print("ULTRA CORE FIRE SELL [ContFallback] ", detail, " on ", BrokerSymbol);
       return;
+   }
+
+   if(ContStruct_LogDetail && (EnableVerboseLogging || APEX_LogFailsEveryBar))
+   {
+      string db = "", ds = "";
+      ContFallbackBestStructureOK(true, db);
+      ContFallbackBestStructureOK(false, ds);
+      Print("ContFallback structure wait BUY[", db, "] SELL[", ds, "] on ", BrokerSymbol);
    }
 }
 
@@ -11632,13 +11925,13 @@ void PrintSetupDiagnostics()
    DiagLastBarTimeArr[idx] = barTime;
 
    // OK67 PURE: only APEX/ContFallback diagnostics (never ContSniper spam)
-   Print("---- LIVE DIAGNOSTICS BUILD=SA_PURE_67 (", BrokerSymbol, ") ----");
+   Print("---- LIVE DIAGNOSTICS BUILD=SA_STRUCT_BEST_68 (", BrokerSymbol, ") ----");
    Print("APEX waiting BUY:  ", (g_APEX_LastBuyFail == "" ? "(none)" : g_APEX_LastBuyFail));
    Print("APEX waiting SELL: ", (g_APEX_LastSellFail == "" ? "(none)" : g_APEX_LastSellFail));
    Print("ContFallback ON=", EnableContFallback,
          " BypassEngines=", ContFallbackBypassEngines,
          " | bullTrend=", IsBullTrend(), " bearTrend=", IsBearTrend());
-   Print("NOTE: LIVE PATH ONLY = APEX → ContFallback BOS+zone");
+   Print("NOTE: LIVE = APEX → ContFallback BEST structure (fresh BOS+zone+disp)");
    Print("NOTE: news aware, spread never blocks | remove PRISM STRATEGY if source says that");
    return;
 

@@ -2,31 +2,37 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK67.mq5
-BUILD_ID: SA_PURE_67
+File:     SNIPER_AI_OK68.mq5
+BUILD_ID: SA_STRUCT_BEST_68
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK67.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK68.mq5
 
 ──────────────────────────────────────
-PURE LIVE PATH (OK67)
+BEST STRUCTURE (OK68)
 ──────────────────────────────────────
-ONLY:
-  1) APEX
-  2) ContFallback (BOS + OB/FVG) — anti-scalp
+Live: APEX → ContFallback
 
-RETIRED / cannot fire:
-  ContSniper · RevSniper · InstantTrend · LCS · SpecCompliant
-  Hard news block · Spread block · Event ICE tighten
+ContFallback now requires FULL stack:
+  1) Clear trend
+  2) Quality directional BOS (2-bar preferred)
+  3) Fresh OB (not mitigated) OR quality FVG
+  4) Price at the zone
+  5) Displacement impulse
+  6) Discount (BUY) / Premium (SELL)
 
-Still: news AWARE (log only) · soft session · spread always allow
+APEX: unmitigated zone required again.
+
+Look for:
+  FIRE [ContFallback] BEST BOS2 + OB-fresh + near-zone + disp + discount
+  or FIRE [APEX]
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
 1. REMOVE "PRISM STRATEGY"
-2. Copy SNIPER_AI_OK67.mq5 → MQL5/Experts/
-3. F7 → attach SNIPER_AI_OK67
-4. Experts: BUILD_ID=SA_PURE_67
+2. Copy SNIPER_AI_OK68.mq5 → MQL5/Experts/
+3. F7 → attach SNIPER_AI_OK68
+4. Experts: BUILD_ID=SA_STRUCT_BEST_68
