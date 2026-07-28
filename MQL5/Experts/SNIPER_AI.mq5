@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_APEX_SESSION_59                                   |
-//| SNIPER AI - APEX + optional London/NY kill-zone session filter  |
+//| BUILD_ID: SA_APEX_FIXFAIL_60                                   |
+//| SNIPER AI - APEX: throttle FAIL spam + softer bias/zone gates   |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.27"
-#property description "SNIPER AI OK59: APEX + London/NY session kill-zone filter (toggle off for 24/7)"
-#property description "Set EnableAPEXSessionFilter=false to trade anytime. BUILD_ID=SA_APEX_SESSION_59"
+#property version   "5.28"
+#property description "SNIPER AI OK60: APEX FAIL log throttle + bias OR-gate + wider sessions"
+#property description "FAIL lines are normal while waiting — look for PASS / FIRE [APEX]"
 
 #include <Trade/Trade.mqh>
 
@@ -110,12 +110,14 @@ input double APEX_DispMinATR             = 0.70;
 input double APEX_TickVolExpansion       = 1.25;    // bar1 tick vol vs avg (1.0=off soft)
 input bool   APEX_RequireTickVol         = false;   // hard tick-vol gate (off = soft boost)
 input bool   APEX_RequireUnmitigatedZone = true;
-input bool   APEX_RequireStructureBias   = true;    // HH/HL or LH/LL — not MA alone
-input bool   APEX_RequireMAAlign         = true;    // price side of Bias MA
+input bool   APEX_RequireStructureBias   = false;   // OK60: OFF — HH/HL was rejecting most hours
+input bool   APEX_RequireMAAlign         = true;    // MA side is enough for bias when structure off
+input bool   APEX_BiasNeedStructOrMA     = true;    // OK60: PASS if structure OR MA (when both inputs on)
 input bool   APEX_UseSweepSL             = true;
 input double APEX_SL_BufferATR           = 0.12;
 input double APEX_MaxSL_ATR              = 3.5;     // reject if sweep SL absurdly wide
 input bool   APEX_LogValidation          = true;
+input bool   APEX_LogFailsEveryBar       = true;    // OK60: FAIL at most 1x/bar/side (not every tick)
 
 input group "APEX SESSION / KILL-ZONE FILTER"
 // Optional: only allow APEX entries in London / New York kill zones (GMT).
@@ -124,15 +126,15 @@ input group "APEX SESSION / KILL-ZONE FILTER"
 input bool   EnableAPEXSessionFilter     = true;   // ON to see kill-zone effect; OFF = anytime
 input bool   APEX_UseGMT                 = true;   // true=TimeGMT hours; false=broker server hours
 input bool   APEX_AllowLondon            = true;   // London kill zone
-input int    APEX_LondonStartHourGMT     = 7;      // inclusive (default 07:00 GMT)
-input int    APEX_LondonEndHourGMT       = 10;     // exclusive (default until 10:00 GMT)
+input int    APEX_LondonStartHourGMT     = 7;      // inclusive
+input int    APEX_LondonEndHourGMT       = 11;     // OK60: widened (was 10)
 input bool   APEX_AllowNewYork           = true;   // NY kill zone
-input int    APEX_NYStartHourGMT         = 12;     // inclusive (default 12:00 GMT)
-input int    APEX_NYEndHourGMT           = 16;     // exclusive (default until 16:00 GMT)
-input bool   APEX_AllowAsia              = false;  // Asia (usually quieter — off by default)
+input int    APEX_NYStartHourGMT         = 12;     // inclusive
+input int    APEX_NYEndHourGMT           = 17;     // OK60: widened (was 16)
+input bool   APEX_AllowAsia              = false;
 input int    APEX_AsiaStartHourGMT       = 0;
 input int    APEX_AsiaEndHourGMT         = 4;
-input bool   APEX_SessionFilterCryptoToo = true;   // apply to BTC/ETH as well when filter ON
+input bool   APEX_SessionFilterCryptoToo = false;  // OK60: crypto trades anytime even if filter ON
 
 input group "LCS - LIQUIDITY CONTINUITY SNIPER (FALLBACK)"
 // Used only if APEXOnlyLivePath=false. APEX is the live world-class path.
@@ -563,16 +565,17 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_APEX_SESSION_59");
-   Print("IMPORTANT: Experts source must be SNIPER_AI_OK59 / SNIPER_AI — NOT PRISM STRATEGY");
-   Print("APEX59 SESSION: Filter=", EnableAPEXSessionFilter,
-         " GMT=", APEX_UseGMT,
-         " London=", APEX_AllowLondon, " ", APEX_LondonStartHourGMT, "-", APEX_LondonEndHourGMT,
-         " NY=", APEX_AllowNewYork, " ", APEX_NYStartHourGMT, "-", APEX_NYEndHourGMT,
-         " Asia=", APEX_AllowAsia,
-         " CryptoToo=", APEX_SessionFilterCryptoToo,
-         " | set EnableAPEXSessionFilter=false for 24/7");
-   Print("APEX58 WORLD retained: Enable=", EnableAPEXStrategy,
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_APEX_FIXFAIL_60");
+   Print("IMPORTANT: Experts source must be SNIPER_AI_OK60 / SNIPER_AI — NOT PRISM STRATEGY");
+   Print("APEX60: FAIL lines are NORMAL while waiting (max 1x/bar). Look for PASS / FIRE [APEX]");
+   Print("APEX60: StructBias=", APEX_RequireStructureBias,
+         " MAAlign=", APEX_RequireMAAlign,
+         " StructOrMA=", APEX_BiasNeedStructOrMA,
+         " SessionFilter=", EnableAPEXSessionFilter,
+         " London=", APEX_LondonStartHourGMT, "-", APEX_LondonEndHourGMT,
+         " NY=", APEX_NYStartHourGMT, "-", APEX_NYEndHourGMT,
+         " CryptoExempt=", !APEX_SessionFilterCryptoToo);
+   Print("APEX58/59 retained: Enable=", EnableAPEXStrategy,
          " OnlyLive=", APEXOnlyLivePath,
          " Bias=", EnumToString(APEX_BiasTF),
          " Entry=", EnumToString(APEX_EntryTF),
@@ -9907,21 +9910,43 @@ bool APEX_StructureBear(string &detail)
 bool APEX_BiasBull(string &detail)
 {
    string sDetail = "";
-   if(APEX_RequireStructureBias && !APEX_StructureBull(sDetail))
-   {
-      detail = sDetail;
-      return false;
-   }
-   if(APEX_RequireMAAlign)
+   bool structOK = true;
+   if(APEX_RequireStructureBias || APEX_BiasNeedStructOrMA)
+      structOK = APEX_StructureBull(sDetail);
+
+   bool maOK = true;
+   if(APEX_RequireMAAlign || APEX_BiasNeedStructOrMA)
    {
       double sma = APEX_BiasSMA();
       double c0 = iClose(BrokerSymbol, APEX_BiasTF, 0);
       double c1 = iClose(BrokerSymbol, APEX_BiasTF, 1);
-      if(sma <= 0.0 || !(c0 > sma && c1 > sma))
+      maOK = (sma > 0.0 && c0 > sma && c1 > sma);
+      if(!maOK)
+         sDetail = (sDetail == "" ? "APEX bias: price not clearly above Bias MA" : sDetail);
+   }
+
+   // OK60: if StructOrMA — pass when either qualifies (and required flags don't both hard-fail)
+   if(APEX_BiasNeedStructOrMA && (APEX_RequireStructureBias || APEX_RequireMAAlign || true))
+   {
+      if(structOK || maOK)
       {
-         detail = "APEX bias: price not clearly above Bias MA";
-         return false;
+         detail = structOK && maOK ? "APEX bias: BULL struct+MA"
+                : (structOK ? "APEX bias: BULL structure" : "APEX bias: BULL MA");
+         return true;
       }
+      detail = (sDetail != "" ? sDetail : "APEX bias: no bull structure or MA");
+      return false;
+   }
+
+   if(APEX_RequireStructureBias && !structOK)
+   {
+      detail = sDetail;
+      return false;
+   }
+   if(APEX_RequireMAAlign && !maOK)
+   {
+      detail = "APEX bias: price not clearly above Bias MA";
+      return false;
    }
    detail = "APEX bias: BULL";
    return true;
@@ -9930,21 +9955,42 @@ bool APEX_BiasBull(string &detail)
 bool APEX_BiasBear(string &detail)
 {
    string sDetail = "";
-   if(APEX_RequireStructureBias && !APEX_StructureBear(sDetail))
-   {
-      detail = sDetail;
-      return false;
-   }
-   if(APEX_RequireMAAlign)
+   bool structOK = true;
+   if(APEX_RequireStructureBias || APEX_BiasNeedStructOrMA)
+      structOK = APEX_StructureBear(sDetail);
+
+   bool maOK = true;
+   if(APEX_RequireMAAlign || APEX_BiasNeedStructOrMA)
    {
       double sma = APEX_BiasSMA();
       double c0 = iClose(BrokerSymbol, APEX_BiasTF, 0);
       double c1 = iClose(BrokerSymbol, APEX_BiasTF, 1);
-      if(sma <= 0.0 || !(c0 < sma && c1 < sma))
+      maOK = (sma > 0.0 && c0 < sma && c1 < sma);
+      if(!maOK)
+         sDetail = (sDetail == "" ? "APEX bias: price not clearly below Bias MA" : sDetail);
+   }
+
+   if(APEX_BiasNeedStructOrMA)
+   {
+      if(structOK || maOK)
       {
-         detail = "APEX bias: price not clearly below Bias MA";
-         return false;
+         detail = structOK && maOK ? "APEX bias: BEAR struct+MA"
+                : (structOK ? "APEX bias: BEAR structure" : "APEX bias: BEAR MA");
+         return true;
       }
+      detail = (sDetail != "" ? sDetail : "APEX bias: no bear structure or MA");
+      return false;
+   }
+
+   if(APEX_RequireStructureBias && !structOK)
+   {
+      detail = sDetail;
+      return false;
+   }
+   if(APEX_RequireMAAlign && !maOK)
+   {
+      detail = "APEX bias: price not clearly below Bias MA";
+      return false;
    }
    detail = "APEX bias: BEAR";
    return true;
@@ -10187,8 +10233,15 @@ bool APEX_BearishOB_Unmitigated()
 bool APEX_HasUnmitigatedZone(const bool buy)
 {
    if(buy)
-      return (APEX_BullishFVG_Unmitigated() || APEX_BullishOB_Unmitigated());
-   return (APEX_BearishFVG_Unmitigated() || APEX_BearishOB_Unmitigated());
+   {
+      if(APEX_BullishFVG_Unmitigated() || APEX_BullishOB_Unmitigated())
+         return true;
+      // OK60 soft fallback: existing Active FVG/OB trackers
+      return (ActiveFVG(true) || ActiveOrderBlock(true));
+   }
+   if(APEX_BearishFVG_Unmitigated() || APEX_BearishOB_Unmitigated())
+      return true;
+   return (ActiveFVG(false) || ActiveOrderBlock(false));
 }
 
 bool APEX_SetupOK(const bool buy, string &detail, double &invalidation)
@@ -10306,16 +10359,39 @@ void EvaluateAPEXStrategies(bool &buySignal, bool &sellSignal, string &strategyT
    bool buyOK = APEX_SetupOK(true, buyDetail, buyInv);
    bool sellOK = APEX_SetupOK(false, sellDetail, sellInv);
 
+   // OK60: PASS always prints; FAIL at most once per EntryTF bar per side
+   // (was flooding Experts every tick — looked like the EA was broken).
    if(APEX_LogValidation)
    {
+      datetime bar = iTime(BrokerSymbol, APEX_EntryTF, 0);
+      static datetime lastFailBarBuy = 0, lastFailBarSell = 0;
+      static string lastFailSymBuy = "", lastFailSymSell = "";
+
       if(buyOK)
          Print("APEX VALIDATE BUY: PASS - ", buyDetail, " on ", BrokerSymbol);
-      else if(EnableVerboseLogging || EnableSetupLogging)
-         Print("APEX VALIDATE BUY: FAIL - ", buyDetail, " on ", BrokerSymbol);
+      else if(APEX_LogFailsEveryBar)
+      {
+         bool newBar = (bar != lastFailBarBuy || BrokerSymbol != lastFailSymBuy);
+         if(newBar && bar > 0)
+         {
+            lastFailBarBuy = bar;
+            lastFailSymBuy = BrokerSymbol;
+            Print("APEX VALIDATE BUY: FAIL - ", buyDetail, " on ", BrokerSymbol);
+         }
+      }
+
       if(sellOK)
          Print("APEX VALIDATE SELL: PASS - ", sellDetail, " on ", BrokerSymbol);
-      else if(EnableVerboseLogging || EnableSetupLogging)
-         Print("APEX VALIDATE SELL: FAIL - ", sellDetail, " on ", BrokerSymbol);
+      else if(APEX_LogFailsEveryBar)
+      {
+         bool newBarS = (bar != lastFailBarSell || BrokerSymbol != lastFailSymSell);
+         if(newBarS && bar > 0)
+         {
+            lastFailBarSell = bar;
+            lastFailSymSell = BrokerSymbol;
+            Print("APEX VALIDATE SELL: FAIL - ", sellDetail, " on ", BrokerSymbol);
+         }
+      }
    }
 
    if(buyOK && sellOK)
@@ -11536,7 +11612,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_APEX_WORLD_58\n",
+         "Comment: SNIPER AI | BUILD: SA_APEX_FIXFAIL_60\n",
          "=============================================="
       );
       return;
@@ -11558,7 +11634,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_APEX_WORLD_58\n",
+         "BUILD: SA_APEX_FIXFAIL_60\n",
          "=========================================="
       );
       return;
