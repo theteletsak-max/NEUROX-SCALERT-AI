@@ -1,12 +1,11 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK65.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK66.mq5
 
-BUILD_ID: SA_NEWS_SPREADFREE_65
+BUILD_ID: SA_CLEAN_66
 Comment: SNIPER AI
 
-Knows news (log only). Never hard-blocks for news. High spread NEVER blocks trades.
-REMOVE PRISM STRATEGY or you keep running the wrong EA.
+Cleaned duplicates: news aware (no hard block), spread never blocks, ContFallback structure-only.
+REMOVE PRISM STRATEGY.
 
-INSTALL: remove PRISM STRATEGY → F7 OK65 → attach SNIPER_AI_OK65 →
-BUILD_ID=SA_NEWS_SPREADFREE_65 · look for NEWS AWARE / FIRE [APEX]
+INSTALL: F7 OK66 → BUILD_ID=SA_CLEAN_66

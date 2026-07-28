@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_NEWS_SPREADFREE_65                                      |
-//| SNIPER AI - knows news (no hard block) + NEVER blocks on high spread  |
+//| BUILD_ID: SA_CLEAN_66                                      |
+//| SNIPER AI - cleaned: APEX+Cont swing, news aware, spread never blocks  |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.33"
-#property description "SNIPER AI OK65: news awareness ON (no hard block) + spread NEVER blocks trades"
-#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK65. BUILD=SA_NEWS_SPREADFREE_65"
+#property version   "5.34"
+#property description "SNIPER AI OK66: trim duplicates — one news path, spread always allow, ContFallback structure-only"
+#property description "REMOVE PRISM STRATEGY. Source must be SNIPER_AI_OK66. BUILD=SA_CLEAN_66"
 
 #include <Trade/Trade.mqh>
 
@@ -97,8 +97,7 @@ input bool   EnableAPEXStrategy          = true;
 input bool   APEXOnlyLivePath            = false;  // ContFallback still allowed (structure-only)
 input bool   EnableAntiScalpMode         = true;   // OK64 HARD: blocks ContFallback trend-scalping in code
 input bool   EnableContFallback          = true;   // structure Cont only (BOS+zone) — NOT trend spam
-input bool   ContFallbackTrendOnly       = false;  // OK64 OFF — was the scalp engine (ignored if AntiScalp ON)
-input bool   ContFallbackBypassEngines   = true;   // ContFallback still skips ICE/IMCE after structure pass
+input bool   ContFallbackBypassEngines   = true;   // ContFallback skips ICE/IMCE after structure pass
 input bool   ContFallbackRequireBOS      = true;   // must have directional BOS
 input bool   ContFallbackRequireZone     = true;   // must have OB or FVG
 input bool   ContFallbackOncePerBar      = true;   // max 1 ContFallback signal per EntryTF bar
@@ -150,7 +149,6 @@ input bool   APEX_AllowAsia              = false;
 input int    APEX_AsiaStartHourGMT       = 0;
 input int    APEX_AsiaEndHourGMT         = 4;
 input bool   APEX_SessionFilterCryptoToo = false;  // crypto: always anytime unless hard+this true
-input bool   APEX_LogSessionStatus       = true;   // print IN/OUT kill-zone (throttled)
 
 input group "LCS - LIQUIDITY CONTINUITY SNIPER (FALLBACK)"
 // Used only if APEXOnlyLivePath=false. APEX is the live world-class path.
@@ -270,19 +268,14 @@ input group "HIGHER TIMEFRAME CONFIRMATION"
 input bool             EnableHTFConfirmation = false; // OFF: HTF was a hard blocker; aggressive sniper uses entry-TF structure
 input ENUM_TIMEFRAMES  HigherTimeframe = PERIOD_H4;
 
-input group "NEWS FILTER"
-// OK65: KNOW news (calendar awareness + Journal logs). Hard-block stays OFF.
-// EnableNewsAwareness=true → EA sees CPI/NFP/FOMC windows and prints them.
-// EnableNewsFilter=false → NEVER pauses trading for news.
+input group "NEWS AWARENESS"
+// Know news via calendar logs. Hard-block retired — never pauses trading for news.
 
-input bool EnableNewsAwareness = true;  // OK65: know/log high-impact news windows (does NOT block)
-input bool EnableNewsFilter = false;    // KEEP OFF - hard pause during CPI blocked you before
+input bool EnableNewsAwareness = true;  // know/log high-impact news (does NOT block)
 input int  MinutesBeforeNews = 30;
 input int  MinutesAfterNews = 30;
-input bool BlockHighImpactNews = true;  // only if EnableNewsFilter=true (still OFF by default)
-input bool BlockMediumImpactNews = false;
-input bool NonScalpDisableNewsFilter = true;
-input bool NewsAwarenessLogOncePerBar = true; // log news window at most once per EntryTF bar
+input bool NewsAwarenessLogOncePerBar = true; // log at most once per EntryTF bar
+// Hard news block RETIRED (OK66): EnableNewsFilter / BlockHighImpact* removed — awareness only.
 
 input group "EVENT EXTRA TIGHTEN (still trades — stricter than regular quality)"
 // News hard-block stays OFF. Event tighten also OFF by default — awareness ≠ block.
@@ -372,7 +365,6 @@ datetime LastLossCloseTimeArr[];
 datetime g_ContFallbackLastSignalBar = 0;
 datetime g_ContFallbackLastFillTime  = 0;
 datetime g_NewsAwareLastLogBar       = 0;
-string   g_NewsAwareLastDetail       = "";
 
 // FIX: same class of bug as above, found during this review - these were
 // previously single globals/statics shared across every symbol instead of
@@ -593,73 +585,17 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_NEWS_SPREADFREE_65");
-   Print("CRITICAL: Experts SOURCE must be SNIPER_AI_OK65 or SNIPER_AI — if it says PRISM STRATEGY, REMOVE that EA now");
-   Print("NEWS65: Awareness=", EnableNewsAwareness,
-         " HardBlock=", EnableNewsFilter, " (must stay false)",
-         " EventTighten=", EnableEventQualityMode);
-   Print("SPREAD65: NeverBlockOnHighSpread=", NeverBlockOnHighSpread,
-         " EnableSpreadFilter=", EnableSpreadFilter,
-         " — high spread NEVER stops trades when NeverBlock=true");
-   Print("ANTISCALP64: AntiScalp=", EnableAntiScalpMode,
-         " ContFallback=", EnableContFallback,
-         " TrendOnly=", ContFallbackTrendOnly, " (IGNORED if AntiScalp ON)",
-         " RequireBOS=", ContFallbackRequireBOS,
-         " RequireZone=", ContFallbackRequireZone,
-         " OncePerBar=", ContFallbackOncePerBar,
-         " CF_CooldownMin=", ContFallbackCooldownMinutes,
-         " CF_MinHoldBars=", ContFallbackMinimumHoldBars,
-         " CF_SLBoost=", ContFallbackSL_ATR_Boost,
-         " CF_MaxOpen=", ContFallbackMaxOpen,
-         " APEXOnly=", APEXOnlyLivePath);
-   Print("SoftSession HardBlock=", APEX_SessionHardBlock, " (false=trade anytime)");
-   Print("APEX Bias=", EnumToString(APEX_BiasTF), " Entry=", EnumToString(APEX_EntryTF));
-   Print("TRADEUNBLOCK: DrawdownShield=", EnableDrawdownProtection);
-   Print("DEFENDPLUS: PreTP1BE=", DefensePreTP1AdverseBE,
-         " MAE_ATR=", DefenseMAE_ATR,
-         " EventICE_Boost=", EventICE_MinScoreBoost,
-         " SlipProfiles=", EnableSlippageProfiles);
-   Print("SPREADFREE: NeverBlock=", NeverBlockOnHighSpread,
-         " EnableSpreadFilter=", EnableSpreadFilter, " (ignored when NeverBlock=true)");
-
-   UpdateNewsAwareness(); // initial news status on load
-   Print("BESTNEXT: BOS lookback=", DirectionalBOS_LookbackBars,
-         " | BestPathsOnly=", BestPathsOnly);
-   Print("OPENCAPS: Enforce=", EnforceOpenTradeCaps,
-         " MaxOpen=", MaxOpenTrades, " MaxTotal=", MaxTotalOpenTradesAllSymbols);
-   Print("MARKET DEFENSE: ON=", EnableMarketDefense,
-         " DrawdownShield=", EnableDrawdownProtection);
-   Print("QUALITY+LADDER: BestQuality=", BestQualitySetups,
-         " HP_Confirms=", UltraHP_MinConfirmations,
-         " ForceLadder=", ForceSureProfitLadder);
-   Print("REVERSAL CORRECT SIGNALS: CorrectSideSweep=", ReversalRequireCorrectSideSweep,
-         " StrictReclaim=", ReversalStrictCorrectSignal,
-         " RejectWrongSide=", ReversalRejectWrongSideRecent,
-         " PreferStopHunt=", ReversalPreferStopHunt,
-         " Early=", EnableEarlyMarketReversal,
-         " RevNeedTrendADX=", ReversalRequireTrendADX);
-   Print("PRISM ULTRA SNIPER: AggressiveFire=", UltraAggressiveFire,
-         " AggressiveInstitutional=", AggressiveInstitutionalExecution,
-         " CooldownMin=", TradeCooldownMinutes, "/", NonScalpCooldownMinutes);
-   Print("REVERSAL: BUY=sell-side sweep+reclaim | SELL=buy-side sweep+reclaim");
-   Print("PRISM BEAST: BeastMode=", EnableBeastMode,
-         " SniperMode=", EnableSniperMode,
-         " UnifiedStructure=", BeastUseUnifiedStructure,
-         " ReversalStack=", BeastRequireReversalStack);
-   Print("FULL UPGRADE: PreferQuality=", PreferQualityPaths,
-         " TryNextPath=", TryNextPathIfEnginesFail,
-         " AdaptiveRank=", EnableAdaptivePathRanking,
-         " InstantFallback=", AllowTrendOnlyInstantEntry,
-         " NoMPIwait=", AggressiveInstantQuality);
-   Print("Engines: ICE_MinScore=", ICE_MinScore,
-         " | IMCE hard | SMT RevSniper | BEAST+ULTRA cached");
-   Print("Trade size: LotSize=", LotSize,
-         " | OpenCaps Enforce=", EnforceOpenTradeCaps,
-         " MaxOpen/symbol=", MaxOpenTrades,
-         " MaxTotal=", MaxTotalOpenTradesAllSymbols,
-         " MaxPerCurrency=", MaxOpenTradesPerCurrency,
-         " (0=unlimited)");
-   Print("TIP: set EntryTF to match chart (you use H4 — set EntryTF=H4)");
+   Print("SNIPER AI Loaded BUILD_ID=SA_CLEAN_66");
+   Print("CRITICAL: SOURCE must be SNIPER_AI_OK66 — remove PRISM STRATEGY if present");
+   Print("LIVE: APEX → ContFallback(BOS+zone) | AntiScalp=", EnableAntiScalpMode,
+         " SoftSession HardBlock=", APEX_SessionHardBlock,
+         " NewsAware=", EnableNewsAwareness,
+         " SpreadAlwaysAllow | MaxOpen=", MaxOpenTrades,
+         " Lot=", LotSize);
+   Print("APEX ", EnumToString(APEX_BiasTF), "/", EnumToString(APEX_EntryTF),
+         " | ContFallback cooldown=", ContFallbackCooldownMinutes, "m hold=", ContFallbackMinimumHoldBars,
+         " | DD shield=", EnableDrawdownProtection);
+   UpdateNewsAwareness();
    if(PrintPathStatsOnInit)
       PrintStrategyPerformanceReport();
 
@@ -1233,9 +1169,8 @@ void PrintStrategyPerformanceReport()
    Print("==== PER-STRATEGY PERFORMANCE (FULL UPGRADE) ====");
 
    // Focus on live PRISM tags first
-   string liveTags[7] = {"RevSniper", "ContSniper", "LiquiditySweep", "FVG+OB",
-                         "TrendPullback", "InstantTrend", "VolBreakout(Spec)"};
-   for(int t = 0; t < 7; t++)
+   string liveTags[3] = {"APEX", "ContFallback", "LCS"};
+   for(int t = 0; t < 3; t++)
    {
       int i = FindStrategyTagIndex(liveTags[t]);
       if(i < 0) continue;
@@ -1803,28 +1738,6 @@ string DetectBrokerSymbol(string symbol)
       return(symbol);
 
    return(_Symbol);
-}
-
-//====================== SPREAD ====================================//
-// NOTE: GetSpread()/IsSpreadOK() below and CheckSpread() in Part 9 used to
-// be two separate, duplicate implementations of the same spread check -
-// only CheckSpread() was ever actually called (via TradeProtectionOK()).
-// GetSpread()/IsSpreadOK() were dead code. Consolidated: GetSpread() is
-// kept as a small shared helper (also used by the dashboard), and
-// CheckSpread() now calls it instead of re-reading SYMBOL_ASK/BID/POINT
-// itself.
-//
-// REMOVED (this pass): IsTerminalConnected(), RefreshIndicators(),
-// IsTrendStrong(), IsVolatilityOK() - all four were defined but never
-// actually called anywhere in the file (confirmed by scanning every call
-// site, not just skimming). TERMINAL_TRADE_ALLOWED is checked directly
-// where it matters (TradeProtectionOK); UpdateIndicators()/TrendStrong()/
-// ATR checks are all called directly by their real call sites throughout
-// the strategy modules instead of through these unused wrappers.
-
-double GetSpread()
-{
-   return((double)SymbolInfoInteger(BrokerSymbol,SYMBOL_SPREAD));
 }
 
 //====================== TREND =====================================//
@@ -3544,12 +3457,6 @@ bool ExecuteBuy()
       // fast-changing gates (spread widened, terminal disabled trading)
       // right here rather than trusting the state from earlier in the
       // function.
-      if(!CheckSpread())
-      {
-         Print("BUY aborted: spread widened before send.");
-         return false;
-      }
-
       ResetLastError();
 
       result = trade.Buy(lot, BrokerSymbol, 0.0, sl, tp, TradeComment);
@@ -3810,12 +3717,6 @@ bool ExecuteSell()
 
    for(int attempt = 1; attempt <= MAX_SEND_RETRIES; attempt++)
    {
-      if(!CheckSpread())
-      {
-         Print("SELL aborted: spread widened before send.");
-         return false;
-      }
-
       ResetLastError();
 
       result = trade.Sell(lot, BrokerSymbol, 0.0, sl, tp, TradeComment);
@@ -3998,45 +3899,14 @@ bool CooldownFinished()
 
 //================ PROTECTION SETTINGS ==============================//
 
-input group "SPREAD (optional — OFF = trade anyway)"
-// OK65 HARD: NeverBlockOnHighSpread=true → CheckSpread ALWAYS allows (input cannot block).
-// EnableSpreadFilter stays false; high spread during news does NOT stop entries.
-
-input bool   NeverBlockOnHighSpread = true; // OK65 HARD override — high spread NEVER blocks
-input bool   EnableSpreadFilter = false;    // OFF: high spread does NOT block entries
-input double MaxSpreadPoints    = 10000;    // only used if filter ON AND NeverBlockOnHighSpread=false
-
+input group "SPREAD"
+// OK66: high spread NEVER blocks — CheckSpread is a no-op allow.
 
 //================ CHECK SPREAD =====================================//
 
 bool CheckSpread()
 {
-   // OK65: hard override — never refuse a trade because spread is wide
-   if(NeverBlockOnHighSpread)
-      return true;
-
-   // SPREADFREE50: default OFF — always allow execution regardless of spread
-   if(!EnableSpreadFilter || MaxSpreadPoints <= 0.0)
-      return true;
-
-   double ask = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
-   double bid = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
-   double point = SymbolInfoDouble(BrokerSymbol, SYMBOL_POINT);
-
-   if(point <= 0)
-      return true;
-
-   double spread = (ask - bid) / point;
-
-   if(spread > MaxSpreadPoints)
-   {
-      if(EnableVerboseLogging)
-         Print("Trading blocked: Spread too high (", DoubleToString(spread,1),
-               " > ", DoubleToString(MaxSpreadPoints,1), ")");
-      return false;
-   }
-
-   return true;
+   return true; // never block on spread (news spikes included)
 }
 
 
@@ -4101,18 +3971,12 @@ int CountOpenTrades()
 
 bool TradeProtectionOK()
 {
-   if(!CheckSpread())
-      return false;
-
+   // CheckSpread / NewsTradingAllowed are permanent allow (OK66) — only terminal gate remains
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
    {
       Print("Trading disabled by terminal");
       return false;
    }
-
-   if(!NewsTradingAllowed())
-      return false;
-
    return true;
 }
 //+------------------------------------------------------------------+
@@ -8062,7 +7926,7 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
    if(GetFilterATR() <= 0.0)
    {
       // ALLTRADE56: Cont/Rev/LCS/APEX already selected — Execute uses fixed-stop fallback.
-      if((strategyTag == "ContSniper" || strategyTag == "RevSniper" || lcsTag || apexTag) &&
+      if((strategyTag == "ContSniper" || strategyTag == "RevSniper" || strategyTag == "ContFallback" || lcsTag || apexTag) &&
          (NeverBlockValidSniperEntry || UltraAggressiveFire))
       {
          if(EnableVerboseLogging || EnableSetupLogging)
@@ -8082,7 +7946,7 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
       Print("ULTRA APEX PASS (no post-FIRE veto) on ", BrokerSymbol, " — ", g_APEX_LastDetail);
       return true;
    }
-   if(strategyTag == "ContFallback" || (strategyTag == "ContSniper" && EnableContFallback && ContFallbackBypassEngines))
+   if(strategyTag == "ContFallback")
    {
       Print("ULTRA CONT FALLBACK PASS (execute) on ", BrokerSymbol, " ", (buy ? "BUY" : "SELL"));
       return true;
@@ -8981,7 +8845,6 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
    if(EnableBeastMode && BeastDuplicateBarGuard && IsDuplicateSignal(buy))
    {
       UltraSetReject("duplicate bar guard");
-      // Always visible — this was the live ContSniper blocker after ULTRA CORE FIRE
       Print("BEAST: duplicate bar guard suppressed ", (buy ? "BUY" : "SELL"),
             " on ", BrokerSymbol, " (open position already on this EntryTF bar)");
       return false;
@@ -8997,6 +8860,16 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
       }
    }
 
+   // Live APEX/ContFallback/LCS already passed their own checklist — skip PRISM score spam
+   bool liveSwing = (strategyTag == "APEX" || strategyTag == "ContFallback" || strategyTag == "LCS");
+   if(liveSwing)
+   {
+      UltraSetApprove(strategyTag, "A", 100, 100);
+      if(EnableBeastMode && BeastCaptureSignalSnapshot)
+         CapturePendingSignalSnapshot(buy, strategyTag);
+      return true;
+   }
+
    PRISMBeastScore beast = UltraGetBeastScore(buy, strategyTag);
    string grade = PRISMGetTradeGrade(buy, strategyTag);
 
@@ -9010,8 +8883,6 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
    }
 
    UltraSetApprove(strategyTag, grade, beast.overall, beast.confidencePct);
-   // Do NOT MarkSignalApproved here — only after a successful fill so a
-   // failed send can still retry on the same bar (BeastDuplicateBarGuard).
    if(EnableBeastMode && BeastCaptureSignalSnapshot)
       CapturePendingSignalSnapshot(buy, strategyTag);
    return true;
@@ -9023,8 +8894,6 @@ bool PrismInstitutionalEnginesOK(bool buy, const string strategyTag)
    if(strategyTag == "APEX" || strategyTag == "LCS")
       return true;
    if(strategyTag == "ContFallback" && ContFallbackBypassEngines)
-      return true;
-   if(strategyTag == "ContSniper" && EnableContFallback && ContFallbackBypassEngines)
       return true;
 
    if(EnableBeastMode && PRISM_IsReversalTag(strategyTag) && !PRISMReversalQualityOK(buy))
@@ -11086,35 +10955,27 @@ bool ContFallbackSwingBuySetup()
 {
    if(!IsBullTrend())
       return false;
-   bool bos = StructureDirectionalBOS(true);
-   bool zone = ActiveOrderBlock(true) || ActiveFVG(true);
-   // HARD anti-scalp: force BOS+zone even if inputs were turned off
+   // Structure-only (no AggressiveContinuation / trend-only scalp path)
    bool needBOS = EnableAntiScalpMode || ContFallbackRequireBOS;
    bool needZone = EnableAntiScalpMode || ContFallbackRequireZone;
-   if(needBOS && !bos)
+   if(needBOS && !StructureDirectionalBOS(true))
       return false;
-   if(needZone && !zone)
+   if(needZone && !(ActiveOrderBlock(true) || ActiveFVG(true)))
       return false;
-   if(!needBOS && !needZone)
-      return AggressiveContinuationBuySetup();
-   return true;
+   return (needBOS || needZone); // if both optional, still require at least one structure cue
 }
 
 bool ContFallbackSwingSellSetup()
 {
    if(!IsBearTrend())
       return false;
-   bool bos = StructureDirectionalBOS(false);
-   bool zone = ActiveOrderBlock(false) || ActiveFVG(false);
    bool needBOS = EnableAntiScalpMode || ContFallbackRequireBOS;
    bool needZone = EnableAntiScalpMode || ContFallbackRequireZone;
-   if(needBOS && !bos)
+   if(needBOS && !StructureDirectionalBOS(false))
       return false;
-   if(needZone && !zone)
+   if(needZone && !(ActiveOrderBlock(false) || ActiveFVG(false)))
       return false;
-   if(!needBOS && !needZone)
-      return AggressiveContinuationSellSetup();
-   return true;
+   return (needBOS || needZone);
 }
 
 void EvaluateContFallback(bool &buySignal, bool &sellSignal, string &strategyTag)
@@ -11135,8 +10996,6 @@ void EvaluateContFallback(bool &buySignal, bool &sellSignal, string &strategyTag
 
    bool bull = IsBullTrend();
    bool bear = IsBearTrend();
-
-   // Avoid conflict
    if(bull && bear)
    {
       if(CalculatePRISMScore(true) >= CalculatePRISMScore(false))
@@ -11145,42 +11004,6 @@ void EvaluateContFallback(bool &buySignal, bool &sellSignal, string &strategyTag
          bull = false;
    }
 
-   // OK64 HARD: EnableAntiScalpMode forces TrendOnly OFF in code
-   bool allowTrendOnly = ContFallbackTrendOnly && !EnableAntiScalpMode;
-   if(allowTrendOnly)
-   {
-      if(!bull && !bear)
-      {
-         double ema = GetEMA();
-         double bid = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
-         if(ema > 0.0 && bid > 0.0)
-         {
-            if(bid > ema) bull = true;
-            else if(bid < ema) bear = true;
-         }
-      }
-      if(bull && !bear)
-      {
-         buySignal = true;
-         strategyTag = "ContFallback";
-         datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
-         if(barTime > 0) g_ContFallbackLastSignalBar = barTime;
-         Print("ULTRA CORE FIRE BUY [ContFallback] trend-continuation (AntiScalp OFF) on ", BrokerSymbol);
-         return;
-      }
-      if(bear && !bull)
-      {
-         sellSignal = true;
-         strategyTag = "ContFallback";
-         datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
-         if(barTime > 0) g_ContFallbackLastSignalBar = barTime;
-         Print("ULTRA CORE FIRE SELL [ContFallback] trend-continuation (AntiScalp OFF) on ", BrokerSymbol);
-         return;
-      }
-      return;
-   }
-
-   // Structure-only ContFallback (anti-scalp default)
    if(bull && !bear && ContFallbackSwingBuySetup())
    {
       buySignal = true;
@@ -12104,13 +11927,13 @@ void PrintSetupDiagnostics()
    // "live=blocked" spam — that made users think PRISM was still live.
    if(EnableAPEXStrategy && (APEXOnlyLivePath || EnableContFallback))
    {
-      Print("---- LIVE DIAGNOSTICS BUILD=SA_APEX_EXEC_63 (", BrokerSymbol, ") ----");
+      Print("---- LIVE DIAGNOSTICS BUILD=SA_CLEAN_66 (", BrokerSymbol, ") ----");
       Print("APEX waiting BUY:  ", (g_APEX_LastBuyFail == "" ? "(none)" : g_APEX_LastBuyFail));
       Print("APEX waiting SELL: ", (g_APEX_LastSellFail == "" ? "(none)" : g_APEX_LastSellFail));
-      Print("ContFallback ON=", EnableContFallback, " TrendOnly=", ContFallbackTrendOnly,
+      Print("ContFallback ON=", EnableContFallback,
             " BypassEngines=", ContFallbackBypassEngines,
             " | bullTrend=", IsBullTrend(), " bearTrend=", IsBearTrend());
-      Print("NOTE: ContFallback fires when APEX waits — look for FIRE [ContFallback] / FIRE [APEX]");
+      Print("NOTE: FIRE [APEX] or FIRE [ContFallback] swing BOS+zone | news aware, spread never blocks");
       Print("NOTE: If source=PRISM STRATEGY you have the WRONG EA attached");
       return;
    }
@@ -12156,9 +11979,8 @@ void PrintSetupDiagnostics()
             " QualityGatesACTIVE=", QualityGatesActive(),
             " EventTighten=", eventQ,
             " MPI floor=", EffectiveMinimumMPIScore(),
-            " NewsHardBlock=", EnableNewsFilter,
             " NewsAware=", EnableNewsAwareness,
-            " SpreadNeverBlock=", NeverBlockOnHighSpread);
+            " SpreadAlwaysAllow=true");
       Print("NOTE: ULTRA CORE PreferQuality=", PreferQualityPaths,
             " TryNextPath=", TryNextPathIfEnginesFail,
             " Beast=", UltraGetBeastScore(true, "ContSniper").overall,
@@ -12389,7 +12211,7 @@ void InstantExecution()
 // EURUSD). If the calendar isn't available on this account/server, it
 // fails safe (returns true / trading allowed) rather than blocking forever.
 
-// OK65: awareness — detect & log high-impact news without blocking trades.
+// OK66: ONE news path — awareness log only. Never hard-blocks trades.
 bool NewsAwarenessInWindow(string &detail)
 {
    detail = "";
@@ -12452,78 +12274,18 @@ void UpdateNewsAwareness()
 
    string detail = "";
    bool inWin = NewsAwarenessInWindow(detail);
-   g_NewsAwareLastDetail = detail;
+   if(barTime > 0)
+      g_NewsAwareLastLogBar = barTime;
 
    if(inWin)
-   {
-      if(barTime > 0)
-         g_NewsAwareLastLogBar = barTime;
-      Print("NEWS AWARE: ", detail, " on ", BrokerSymbol,
-            " | SpreadNeverBlocks=", NeverBlockOnHighSpread);
-   }
+      Print("NEWS AWARE: ", detail, " on ", BrokerSymbol, " | spread never blocks");
    else if(EnableVerboseLogging)
-   {
-      if(barTime > 0)
-         g_NewsAwareLastLogBar = barTime;
       Print("NEWS AWARE: ", detail, " on ", BrokerSymbol);
-   }
 }
 
 bool NewsTradingAllowed()
 {
-   // OK65: hard-block stays OFF by default. Awareness does not pause trading.
-   if(!EnableNewsFilter)
-      return true;
-
-   // FIX: BTC/ETH (matched by NonScalpSymbolKeywords) were being blocked
-   // by nearly every USD news release - see the input-group comment at
-   // the top of the file for the full explanation. Crypto gets the same
-   // exemption here it already gets for trend-exit/hold-time.
-   if(NonScalpDisableNewsFilter && IsNonScalpSymbol())
-      return true;
-
-   string baseCcy, quoteCcy;
-   PRISM_GetSymbolCurrencies(baseCcy, quoteCcy);
-
-   datetime from = TimeCurrent() - MinutesAfterNews  * 60;
-   datetime to   = TimeCurrent() + MinutesBeforeNews * 60;
-
-   MqlCalendarValue values[];
-
-   int total = CalendarValueHistory(values, from, to, NULL, NULL);
-
-   if(total <= 0)
-      return true;
-
-   for(int i = 0; i < total; i++)
-   {
-      MqlCalendarEvent event;
-
-      if(!CalendarEventById(values[i].event_id, event))
-         continue;
-
-      MqlCalendarCountry country;
-
-      if(!CalendarCountryById(event.country_id, country))
-         continue;
-
-      if(!PRISM_CalendarCurrencyRelevant(country.currency, baseCcy, quoteCcy, false))
-         continue;
-
-      if(event.importance == CALENDAR_IMPORTANCE_HIGH && BlockHighImpactNews)
-      {
-         Print("Trading blocked: high impact news (", country.currency, ") - ", event.name);
-         return false;
-      }
-
-      if(event.importance == CALENDAR_IMPORTANCE_MODERATE && BlockMediumImpactNews)
-      {
-         Print("Trading blocked: medium impact news (", country.currency, ") - ", event.name);
-         return false;
-      }
-   }
-
-   return true;
+   return true; // OK66: hard news block retired — awareness only
 }
 
 void DebugSignals()
