@@ -600,7 +600,7 @@ int OnInit()
 
    Print("SNIPER AI Loaded BUILD_ID=SA_QUALITY_72");
    Print("CRITICAL: SOURCE must be SNIPER_AI_OK72 — remove PRISM STRATEGY if present");
-   Print("QUALITY72: APEX → ContFallback BEST structure | AntiScalp=", EnableAntiScalpMode,
+   Print("QUALITY72: ANYTIME + STRONG/QUALITY setups | AntiScalp=", EnableAntiScalpMode,
          " ANYTIME HardBlock=", APEX_SessionHardBlock, " (must be false)
          " NewsAware=", EnableNewsAwareness,
          " SpreadAlwaysAllow | MaxOpen=", MaxOpenTrades,
