@@ -1,13 +1,12 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK57.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK59.mq5
 
-BUILD_ID: SA_PRISM_LCS_57
+BUILD_ID: SA_APEX_SESSION_59
 Comment: SNIPER AI
 
-NEW live strategy: LCS (Liquidity Continuity Sniper)
-H4 bias → H1 sweep → reclaim+displacement → FVG/OB → sweep SL
-PRISM Cont/Rev idle (LCSOnlyLivePath=true).
+APEX + London/NY kill-zone session filter (GMT).
+OFF = 24/7: set EnableAPEXSessionFilter=false.
 
-INSTALL: remove PRISM STRATEGY → F7 OK57 → fresh attach →
-BUILD_ID=SA_PRISM_LCS_57
+INSTALL: remove PRISM STRATEGY → F7 OK59 → fresh attach →
+BUILD_ID=SA_APEX_SESSION_59

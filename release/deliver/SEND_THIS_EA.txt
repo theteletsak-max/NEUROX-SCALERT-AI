@@ -2,40 +2,35 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK57.mq5
-BUILD_ID: SA_PRISM_LCS_57
+File:     SNIPER_AI_OK59.mq5
+BUILD_ID: SA_APEX_SESSION_59
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK57.mq5
-
-Raw:
-https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK57.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK59.mq5
 
 ──────────────────────────────────────
-LIVE STRATEGY = LCS (NEW)
+NEW: APEX SESSION / KILL-ZONE FILTER
 ──────────────────────────────────────
-Liquidity Continuity Sniper — high-prob only:
+EnableAPEXSessionFilter = true (default ON so you can see it)
 
-  1. H4 bias clear (SMA200 side)
-  2. H1 stop-hunt sweep AGAINST bias
-  3. Reclaim + displacement
-  4. FVG/OB zone in trade direction
-  5. SL beyond sweep extreme
+London  07:00–10:00 GMT
+NY      12:00–16:00 GMT
+Asia    OFF by default
 
-PRISM Cont/Rev are IDLE (LCSOnlyLivePath=true).
-Experts will show: LCS VALIDATE … / ULTRA CORE FIRE … [LCS]
+Outside kill-zone → Experts:
+  APEX VALIDATE … FAIL - session: OUTSIDE kill-zone hour=…
+
+24/7 anytime: Inputs → EnableAPEXSessionFilter = false
+
+APEX core unchanged (structure → pool → sweep → displacement → zone → fire, no post-FIRE veto).
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
-1. Remove PRISM STRATEGY from EVERY chart
-2. Delete old SNIPER* .ex5
-3. Copy SNIPER_AI_OK57.mq5 → MQL5/Experts/
-4. F7 — confirm SA_PRISM_LCS_57
-5. Attach FRESH · Algo Trading ON
-6. Experts MUST show BUILD_ID=SA_PRISM_LCS_57
-   + LCS57: Enable=true OnlyLive=true BiasTF=PERIOD_H4 EntryTF=PERIOD_H1
-
-Fewer trades = high probability by design.
+1. Remove PRISM STRATEGY from every chart
+2. Copy SNIPER_AI_OK59.mq5 → MQL5/Experts/
+3. F7 — confirm SA_APEX_SESSION_59
+4. Fresh attach → Experts: BUILD_ID=SA_APEX_SESSION_59
+   + APEX59 SESSION: Filter=true …

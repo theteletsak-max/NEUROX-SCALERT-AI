@@ -11536,7 +11536,7 @@ void CreateDashboard()
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_APEX_WORLD_58\n",
+         "Comment: SNIPER AI | BUILD: SA_APEX_SESSION_59\n",
          "=============================================="
       );
       return;

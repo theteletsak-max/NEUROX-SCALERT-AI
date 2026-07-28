@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_APEX_WORLD_58                                     |
-//| SNIPER AI - APEX: world-class liquidity continuity from scratch |
+//| BUILD_ID: SA_APEX_SESSION_59                                   |
+//| SNIPER AI - APEX + optional London/NY kill-zone session filter  |
 //| Comment: SNIPER AI | Dashboard off | No RSI/MACD/Stoch            |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.26"
-#property description "SNIPER AI OK58: APEX live — structural bias + liquidity pool sweep + displacement + unmitigated zone"
-#property description "No post-FIRE veto. Remove PRISM STRATEGY. BUILD_ID=SA_APEX_WORLD_58"
+#property version   "5.27"
+#property description "SNIPER AI OK59: APEX + London/NY session kill-zone filter (toggle off for 24/7)"
+#property description "Set EnableAPEXSessionFilter=false to trade anytime. BUILD_ID=SA_APEX_SESSION_59"
 
 #include <Trade/Trade.mqh>
 
@@ -116,6 +116,23 @@ input bool   APEX_UseSweepSL             = true;
 input double APEX_SL_BufferATR           = 0.12;
 input double APEX_MaxSL_ATR              = 3.5;     // reject if sweep SL absurdly wide
 input bool   APEX_LogValidation          = true;
+
+input group "APEX SESSION / KILL-ZONE FILTER"
+// Optional: only allow APEX entries in London / New York kill zones (GMT).
+// Turn EnableAPEXSessionFilter=false to trade anytime (24/7).
+
+input bool   EnableAPEXSessionFilter     = true;   // ON to see kill-zone effect; OFF = anytime
+input bool   APEX_UseGMT                 = true;   // true=TimeGMT hours; false=broker server hours
+input bool   APEX_AllowLondon            = true;   // London kill zone
+input int    APEX_LondonStartHourGMT     = 7;      // inclusive (default 07:00 GMT)
+input int    APEX_LondonEndHourGMT       = 10;     // exclusive (default until 10:00 GMT)
+input bool   APEX_AllowNewYork           = true;   // NY kill zone
+input int    APEX_NYStartHourGMT         = 12;     // inclusive (default 12:00 GMT)
+input int    APEX_NYEndHourGMT           = 16;     // exclusive (default until 16:00 GMT)
+input bool   APEX_AllowAsia              = false;  // Asia (usually quieter — off by default)
+input int    APEX_AsiaStartHourGMT       = 0;
+input int    APEX_AsiaEndHourGMT         = 4;
+input bool   APEX_SessionFilterCryptoToo = true;   // apply to BTC/ETH as well when filter ON
 
 input group "LCS - LIQUIDITY CONTINUITY SNIPER (FALLBACK)"
 // Used only if APEXOnlyLivePath=false. APEX is the live world-class path.
@@ -546,15 +563,19 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_APEX_WORLD_58");
-   Print("IMPORTANT: Experts source must be SNIPER_AI_OK58 / SNIPER_AI — NOT PRISM STRATEGY");
-   Print("APEX58 WORLD: Enable=", EnableAPEXStrategy,
+   Print("SNIPER AI Loaded Successfully BUILD_ID=SA_APEX_SESSION_59");
+   Print("IMPORTANT: Experts source must be SNIPER_AI_OK59 / SNIPER_AI — NOT PRISM STRATEGY");
+   Print("APEX59 SESSION: Filter=", EnableAPEXSessionFilter,
+         " GMT=", APEX_UseGMT,
+         " London=", APEX_AllowLondon, " ", APEX_LondonStartHourGMT, "-", APEX_LondonEndHourGMT,
+         " NY=", APEX_AllowNewYork, " ", APEX_NYStartHourGMT, "-", APEX_NYEndHourGMT,
+         " Asia=", APEX_AllowAsia,
+         " CryptoToo=", APEX_SessionFilterCryptoToo,
+         " | set EnableAPEXSessionFilter=false for 24/7");
+   Print("APEX58 WORLD retained: Enable=", EnableAPEXStrategy,
          " OnlyLive=", APEXOnlyLivePath,
          " Bias=", EnumToString(APEX_BiasTF),
          " Entry=", EnumToString(APEX_EntryTF),
-         " StructBias=", APEX_RequireStructureBias,
-         " UnmitZone=", APEX_RequireUnmitigatedZone,
-         " SweepSL=", APEX_UseSweepSL,
          " | NO post-FIRE veto on tag APEX");
    Print("LCS fallback Enable=", EnableLCSStrategy, " OnlyLive=", LCSOnlyLivePath);
    Print("ALLTRADE56 retained: soft caps/DD/daily/dup/event");
@@ -9698,6 +9719,59 @@ bool VolatilityBreakoutSellSetup()
 //   → unmitigated FVG/OB only → SL beyond sweep (cap MaxSL ATR)
 //   → FIRE once. Tag APEX = zero post-FIRE veto.
 
+bool APEX_HourInWindow(const int hour, const int startHour, const int endHour)
+{
+   // Supports normal windows (7-10) and wrap (e.g. 22-2): start>end means overnight
+   if(startHour == endHour)
+      return true; // full day if misconfigured equal
+   if(startHour < endHour)
+      return (hour >= startHour && hour < endHour);
+   return (hour >= startHour || hour < endHour);
+}
+
+bool APEX_InKillZone(string &detail)
+{
+   detail = "";
+   if(!EnableAPEXSessionFilter)
+   {
+      detail = "session: OFF (24/7)";
+      return true;
+   }
+
+   // Crypto can optionally bypass
+   if(!APEX_SessionFilterCryptoToo && IsNonScalpSymbol())
+   {
+      detail = "session: crypto exempt";
+      return true;
+   }
+
+   datetime now = APEX_UseGMT ? TimeGMT() : TimeCurrent();
+   MqlDateTime dt;
+   TimeToStruct(now, dt);
+   int hour = dt.hour;
+
+   bool london = APEX_AllowLondon && APEX_HourInWindow(hour, APEX_LondonStartHourGMT, APEX_LondonEndHourGMT);
+   bool ny     = APEX_AllowNewYork && APEX_HourInWindow(hour, APEX_NYStartHourGMT, APEX_NYEndHourGMT);
+   bool asia   = APEX_AllowAsia && APEX_HourInWindow(hour, APEX_AsiaStartHourGMT, APEX_AsiaEndHourGMT);
+
+   if(london || ny || asia)
+   {
+      detail = StringFormat("session: IN kill-zone hour=%d%s%s%s",
+                            hour,
+                            london ? " London" : "",
+                            ny ? " NY" : "",
+                            asia ? " Asia" : "");
+      return true;
+   }
+
+   detail = StringFormat("session: OUTSIDE kill-zone hour=%d GMT=%s (London %d-%d / NY %d-%d)",
+                         hour,
+                         APEX_UseGMT ? "Y" : "N",
+                         APEX_LondonStartHourGMT, APEX_LondonEndHourGMT,
+                         APEX_NYStartHourGMT, APEX_NYEndHourGMT);
+   return false;
+}
+
 double APEX_AvgRange(const ENUM_TIMEFRAMES tf, const int bars)
 {
    int n = MathMax(bars, 2);
@@ -10128,6 +10202,14 @@ bool APEX_SetupOK(const bool buy, string &detail, double &invalidation)
       detail = "APEX disabled";
       return false;
    }
+
+   string sessDetail = "";
+   if(!APEX_InKillZone(sessDetail))
+   {
+      detail = sessDetail;
+      return false;
+   }
+
    if(Bars(BrokerSymbol, APEX_BiasTF) < APEX_BiasMA_Period + 10 ||
       Bars(BrokerSymbol, APEX_EntryTF) < APEX_PoolLookback + 10)
    {
@@ -10199,12 +10281,13 @@ bool APEX_SetupOK(const bool buy, string &detail, double &invalidation)
       }
    }
 
-   detail = StringFormat("APEX OK %s pool=%s sweep@%d zone=%s inv=%s",
+   detail = StringFormat("APEX OK %s pool=%s sweep@%d zone=%s inv=%s | %s",
                          buy ? "BUY" : "SELL",
                          DoubleToString(pool, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
                          sweepBar,
                          APEX_HasUnmitigatedZone(buy) ? "Y" : "N",
-                         DoubleToString(invalidation, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)));
+                         DoubleToString(invalidation, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+                         sessDetail);
    return true;
 }
 

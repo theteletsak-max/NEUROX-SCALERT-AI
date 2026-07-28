@@ -2,46 +2,35 @@
         SNIPER AI  —  EXPERT ADVISOR
 ══════════════════════════════════════
 
-File:     SNIPER_AI_OK58.mq5
-BUILD_ID: SA_APEX_WORLD_58
+File:     SNIPER_AI_OK59.mq5
+BUILD_ID: SA_APEX_SESSION_59
 Comment:  SNIPER AI
 Platform: MetaTrader 5
 
 DOWNLOAD EA:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK58.mq5
-
-Raw:
-https://raw.githubusercontent.com/theteletsak-max/NEUROX-SCALERT-AI/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK58.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK59.mq5
 
 ──────────────────────────────────────
-LIVE = APEX (WORLD-CLASS FROM SCRATCH)
+NEW: APEX SESSION / KILL-ZONE FILTER
 ──────────────────────────────────────
-The best path I would build unconstrained:
+EnableAPEXSessionFilter = true (default ON so you can see it)
 
-  1. H4 structural bias (HH+HL / LH+LL) + MA align
-  2. Map liquidity pool (equal highs/lows)
-  3. Stop-hunt sweep OF that pool
-  4. Reclaim + displacement (body/ATR; tick-vol soft)
-  5. Unmitigated FVG/OB only
-  6. SL beyond sweep (reject if > MaxSL ATR)
-  7. FIRE once — NO post-FIRE veto (tag APEX)
+London  07:00–10:00 GMT
+NY      12:00–16:00 GMT
+Asia    OFF by default
 
-PRISM Cont/Rev idle. LCS idle (fallback only if you enable it).
+Outside kill-zone → Experts:
+  APEX VALIDATE … FAIL - session: OUTSIDE kill-zone hour=…
 
-Experts look for:
-  APEX VALIDATE … PASS/FAIL
-  ULTRA CORE FIRE … [APEX]
-  ULTRA APEX PASS (no post-FIRE veto)
+24/7 anytime: Inputs → EnableAPEXSessionFilter = false
+
+APEX core unchanged (structure → pool → sweep → displacement → zone → fire, no post-FIRE veto).
 
 ──────────────────────────────────────
 INSTALL
 ──────────────────────────────────────
-1. Remove PRISM STRATEGY from EVERY chart
-2. Delete old SNIPER* .ex5
-3. Copy SNIPER_AI_OK58.mq5 → MQL5/Experts/
-4. F7 — confirm SA_APEX_WORLD_58
-5. Attach FRESH · Algo Trading ON
-6. Experts MUST show BUILD_ID=SA_APEX_WORLD_58
-   + APEX58 WORLD: Enable=true OnlyLive=true
-
-Fewer trades. Higher standard. That is the point.
+1. Remove PRISM STRATEGY from every chart
+2. Copy SNIPER_AI_OK59.mq5 → MQL5/Experts/
+3. F7 — confirm SA_APEX_SESSION_59
+4. Fresh attach → Experts: BUILD_ID=SA_APEX_SESSION_59
+   + APEX59 SESSION: Filter=true …

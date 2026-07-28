@@ -1,13 +1,12 @@
 SNIPER AI — DOWNLOAD
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK58.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK59.mq5
 
-BUILD_ID: SA_APEX_WORLD_58
+BUILD_ID: SA_APEX_SESSION_59
 Comment: SNIPER AI
 
-APEX — world-class from-scratch live strategy:
-structural H4 bias → liquidity pool → sweep → displacement →
-unmitigated zone → sweep SL. Zero post-FIRE veto.
+APEX + London/NY kill-zone session filter (GMT).
+OFF = 24/7: set EnableAPEXSessionFilter=false.
 
-INSTALL: remove PRISM STRATEGY → F7 OK58 → fresh attach →
-BUILD_ID=SA_APEX_WORLD_58
+INSTALL: remove PRISM STRATEGY → F7 OK59 → fresh attach →
+BUILD_ID=SA_APEX_SESSION_59

@@ -25,22 +25,23 @@ Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
 
 ### Install (MT5) — single file (compile-safe)
 
-Use **[`SNIPER_AI_OK58.mq5`](SNIPER_AI_OK58.mq5)**  
-`BUILD_ID: SA_APEX_WORLD_58`
+Use **[`SNIPER_AI_OK59.mq5`](SNIPER_AI_OK59.mq5)**  
+`BUILD_ID: SA_APEX_SESSION_59`
 
 1. Close MetaEditor
 2. **File → Open Data Folder** → `MQL5/Experts/`
 3. **Delete** any old `Sniper*` / `SNIPER*` / `PRISM*` `.mq5` / `.ex5` files
-4. Copy **`SNIPER_AI_OK58.mq5`**
-5. Open it, confirm `SA_APEX_WORLD_58`, compile **(F7)**
-6. **Remove** any chart EA named `PRISM STRATEGY` → attach **this** file fresh → Algo Trading ON
-7. Experts must show `BUILD_ID=SA_APEX_WORLD_58` and `APEX58 WORLD: Enable=true OnlyLive=true`
+4. Copy **`SNIPER_AI_OK59.mq5`**
+5. Open it, confirm `SA_APEX_SESSION_59`, compile **(F7)**
+6. **Remove** `PRISM STRATEGY` → attach **this** file fresh → Algo Trading ON
+7. Experts: `BUILD_ID=SA_APEX_SESSION_59` + `APEX59 SESSION: Filter=true`
+8. For 24/7: Inputs → **`EnableAPEXSessionFilter=false`**
 
-Also mirrored as [`SNIPER_AI.mq5`](SNIPER_AI.mq5) and [`release/deliver/SNIPER_AI.mq5`](release/deliver/SNIPER_AI.mq5).
+Also mirrored as [`SNIPER_AI.mq5`](SNIPER_AI.mq5).
 
-**OK58:** Live strategy = **APEX** (world-class from scratch) — structural HTF bias + liquidity pool sweep + displacement + unmitigated zone + sweep SL. **No post-FIRE veto.** LCS/PRISM idle by default.
+**OK59:** APEX + optional London/NY kill-zone filter (GMT). Core APEX unchanged. Filter ON by default so you can observe it; turn OFF to trade anytime.
 
-See [`DOWNLOAD_SNIPER_AI.txt`](DOWNLOAD_SNIPER_AI.txt) · [`docs/SNIPER_AI_COMPILE_FIXES.md`](docs/SNIPER_AI_COMPILE_FIXES.md)
+See [`DOWNLOAD_SNIPER_AI.txt`](DOWNLOAD_SNIPER_AI.txt)
 
 
 ### Locked behaviour
