@@ -1,8 +1,7 @@
-SNIPER AI ULTRA OK93 — MODULAR ARCHITECTURE
+SNIPER AI ULTRA OK94 — ULTIMATE 00-30 STRUCTURE
 
-EA: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK93.mq5
-Modules: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/tree/cursor/sniper-ai-compile-fix-b12d/MQL5/Include/SNIPER_ULTRA
-Zip: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/SNIPER_AI.zip
+Full zip: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/SNIPER_AI.zip
+EA: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK94.mq5
+Modules: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/tree/cursor/sniper-ai-compile-fix-b12d/MQL5/Include/SNIPER_AI_ULTRA
 
-F7 → SA_ULTRA_93 | Comment: SNIPER AI | MaxOpen=3
-Copy Include/SNIPER_ULTRA into MQL5/Include/ before compile.
+F7 → SA_ULTRA_94 | Comment: SNIPER AI | MaxOpen=3

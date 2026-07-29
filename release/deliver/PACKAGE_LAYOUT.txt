@@ -1,4 +1,4 @@
-SNIPER_AI_OK93.mq5              = thin modular main
-SNIPER_AI.mq5                   = same
-Include/SNIPER_ULTRA/*.mqh      = modules 00-10 + Shell A/B
-SNIPER_AI.zip                   = EA + Include folder
+SNIPER_AI_OK94.mq5
+Include/SNIPER_AI_ULTRA/00_Types.mqh … 30_Recovery.mqh
+Include/SNIPER_AI_ULTRA/Shell_A + Shell_B
+Include/SNIPER_AI_ULTRA/SNIPER_AI_ULTRA.mqh (master)

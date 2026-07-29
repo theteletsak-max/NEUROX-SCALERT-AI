@@ -1,1 +1,1 @@
-SNIPER AI ULTRA modular = OK93 (SA_ULTRA_93)
+SNIPER AI ULTRA ultimate = OK94 (SA_ULTRA_94) modules 00-30
