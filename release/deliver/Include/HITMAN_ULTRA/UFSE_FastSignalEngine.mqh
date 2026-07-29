@@ -575,6 +575,18 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
          sig.reason = sig.reason + g_UltraDisc[didx].lastThesis;
       }
    }
+
+   // ULTRA UPGRADE PACK — Supreme Command final approval (L1/L20)
+   if(UltraUpgradeEnabled && UltraSupremeEnabled)
+   {
+      string supWhy = "";
+      if(!UltraSupreme_FinalizeEntry(s, u, sig, supWhy))
+      {
+         if(StringLen(supWhy) > 0) why = supWhy;
+         else why = "SUPREME WAIT";
+         return false;
+      }
+   }
    return true;
 }
 

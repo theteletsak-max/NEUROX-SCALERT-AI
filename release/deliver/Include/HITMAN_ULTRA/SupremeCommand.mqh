@@ -1,0 +1,191 @@
+#ifndef HITMAN_ULTRA_SUPREME_COMMAND_MQH
+#define HITMAN_ULTRA_SUPREME_COMMAND_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — LEVEL 1 / 20 SUPREME COMMAND + FINAL AI DECISION     |
+//| Global coordinator · mission manager · trade approval authority  |
+//+------------------------------------------------------------------+
+
+enum ENUM_SUPREME_DECISION
+{
+   SUP_BUY = 0,
+   SUP_SELL,
+   SUP_WAIT
+};
+
+struct UltraSupremeDecision
+{
+   ENUM_SUPREME_DECISION decision;
+   int confidence;
+   int tradeScore;
+   string grade;
+   string thesis;
+   string evo;
+   string reason;
+   bool approved;
+};
+
+UltraSupremeDecision g_UltraSupremeLast;
+
+string UltraSupreme_Name(const ENUM_SUPREME_DECISION d)
+{
+   if(d == SUP_BUY) return "BUY";
+   if(d == SUP_SELL) return "SELL";
+   return "WAIT";
+}
+
+// Final approval authority — consumes existing gates; does not re-stack them.
+bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, string &why)
+{
+   why = "";
+   UltraSupremeDecision d;
+   d.decision = SUP_WAIT;
+   d.confidence = u.score.confidence;
+   d.tradeScore = u.score.confidence;
+   d.grade = "IGNORE";
+   d.thesis = "";
+   d.evo = "STABLE";
+   d.reason = "";
+   d.approved = false;
+
+   if(!UltraUpgradeEnabled || !UltraSupremeEnabled)
+   {
+      d.approved = (sig.buy || sig.sell);
+      if(sig.buy) d.decision = SUP_BUY;
+      else if(sig.sell) d.decision = SUP_SELL;
+      d.reason = "supreme off — pass-through";
+      g_UltraSupremeLast = d;
+      return d.approved;
+   }
+
+   // System health hard gate (RED only)
+   if(!UltraSystemHealth_Update(s))
+   {
+      why = "SUPREME: health RED ";
+      why += g_UltraSysHealth.detail;
+      d.reason = why;
+      g_UltraSupremeLast = d;
+      return false;
+   }
+
+   if(!(sig.buy || sig.sell) || sig.tag == "NONE")
+   {
+      why = "SUPREME: no candidate";
+      d.reason = why;
+      g_UltraSupremeLast = d;
+      return false;
+   }
+
+   bool buySide = sig.buy;
+
+   // USM2 scoring (Level 4) + dynamic weights (Level 5)
+   UltraUSM2Scores usm;
+   if(UltraUSM2Enabled)
+   {
+      UltraUSM2_Score(s, u, buySide, usm);
+      g_UltraUSM2Last = usm;
+      d.confidence = usm.confidence;
+      d.tradeScore = usm.tradeScore;
+      d.grade = usm.grade;
+   }
+   else
+   {
+      d.confidence = u.score.confidence;
+      d.tradeScore = u.score.confidence;
+      d.grade = UltraUSM2_Grade((double)d.tradeScore);
+   }
+
+   // Signal evolution (Level 3)
+   UltraSignalEvo evo = UltraEvo_Evaluate(u, buySide);
+   d.evo = evo.label;
+   if(evo.state == SEVO_REVERSAL)
+   {
+      why = "SUPREME: signal evolution REVERSAL";
+      d.reason = why;
+      g_UltraSupremeLast = d;
+      return false;
+   }
+
+   // Soft floor on trade score
+   int floor = UltraFireFloor();
+   if(InstantQualityMode) floor = MathMin(floor, 45);
+   if(d.tradeScore < floor && d.confidence < UltraInstantFireConf)
+   {
+      if(!(InstantQualityMode && d.tradeScore >= floor - 8))
+      {
+         why = "SUPREME: trade score low ";
+         why += IntegerToString(d.tradeScore);
+         d.reason = why;
+         g_UltraSupremeLast = d;
+         return false;
+      }
+   }
+
+   // Ignore grade only in strict mode
+   if(UltraUpgradeStrict && d.grade == "IGNORE")
+   {
+      why = "SUPREME: grade IGNORE";
+      d.reason = why;
+      g_UltraSupremeLast = d;
+      return false;
+   }
+
+   // Build / attach thesis text (Level 11 entry side)
+   string thesis = UltraDisc_BuildThesis(u, buySide, sig.tag);
+   d.thesis = thesis;
+
+   // Memory note (Level 2)
+   UltraMemory_NoteDecision(sig.tag, d.confidence);
+
+   d.decision = buySide ? SUP_BUY : SUP_SELL;
+   d.approved = true;
+   d.reason = "APPROVED";
+   g_UltraSupremeLast = d;
+
+   if(UltraUpgradeLog)
+   {
+      string t = "SUPREME ";
+      t += UltraSupreme_Name(d.decision);
+      t += " conf="; t += IntegerToString(d.confidence);
+      t += " score="; t += IntegerToString(d.tradeScore);
+      t += " grade="; t += d.grade;
+      t += " evo="; t += d.evo;
+      UltraLogAI(t);
+   }
+   return true;
+}
+
+// Open-position command: HOLD / MANAGE / EXIT via hold+correction+smart exit
+ENUM_SMART_EXIT UltraSupreme_ManagePosition(const ulong ticket, const string s, const bool isBuy,
+                                            const UltraSnap &u, string &why)
+{
+   why = "";
+   if(!UltraUpgradeEnabled) return SX_NONE;
+
+   string tw = "";
+   bool thesisOK = UltraThesis_Revalidate(ticket, u, tw);
+   UltraCorrection corr = UltraCorr_Detect(u, isBuy);
+   UltraHoldScore hold = UltraHold_Evaluate(u, isBuy, thesisOK, corr);
+   UltraSmartExit sx = UltraSmartExit_Decide(hold, corr, thesisOK, false);
+   why = sx.reason;
+   if(StringLen(why) == 0)
+   {
+      why = "hold=";
+      why += hold.label;
+      why += " corr=";
+      why += corr.label;
+   }
+   return sx.action;
+}
+
+string UltraSupreme_Dashboard()
+{
+   string t = "SUPREME: ";
+   t += UltraSupreme_Name(g_UltraSupremeLast.decision);
+   t += " ";
+   t += g_UltraSupremeLast.grade;
+   t += " conf=";
+   t += IntegerToString(g_UltraSupremeLast.confidence);
+   return t;
+}
+
+#endif

@@ -102,6 +102,20 @@ input int    UltraDisciplineStableEvals  = 2;     // Rule #3: consecutive same-d
 input int    UltraDisciplineMTFMinAgree  = 3;     // Rule #6: H4..M5 agreement (of 5)
 input bool   UltraDisciplineNeedNewStruct= false; // Rule #11: require new structure after fill
 
+input group "31 · ULTRA UPGRADE PACK (Levels 1-20)"
+input bool   UltraUpgradeEnabled         = true;  // master switch for upgrade pack
+input bool   UltraUpgradeStrict          = false; // soft InstantQuality-compatible
+input bool   UltraUpgradeLog             = true;  // log supreme / thesis / exits
+input bool   UltraSupremeEnabled         = true;  // L1/L20 Supreme Command
+input bool   UltraUSM2Enabled            = true;  // L4 Ultra Scoring Machine 2.0
+input bool   UltraDynWeightsEnabled      = true;  // L5 Dynamic Weight Engine
+input bool   UltraSignalEvoEnabled       = true;  // L3 Signal Evolution
+input bool   UltraThesisEnabled          = true;  // L11 Trade Thesis Engine
+input bool   UltraHoldScoreEnabled       = true;  // L12 Hold Score
+input bool   UltraCorrectionEnabled      = true;  // L13 Correction Detector
+input bool   UltraSmartExitEnabled       = true;  // L14 Smart Exit
+input bool   UltraSystemHealthEnabled    = true;  // L15-17 System Health
+
 input group "31 · DASHBOARD INPUTS"
 input bool   UltraDashboardEnabled       = true;
 input bool   UltraDiagnosticsEnabled     = true;

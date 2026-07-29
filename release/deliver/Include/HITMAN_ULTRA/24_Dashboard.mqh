@@ -77,6 +77,16 @@ string UltraDashboardText(const string s)
    t += "\nSignal: "; t += dir; t += " ["; t += sig.tag; t += "] "; t += sig.reason;
    t += "\n"; t += UltraDefense_DashboardLine();
    t += " | "; t += UltraDiscipline_DashboardLine();
+   t += "\n"; t += UltraSupreme_Dashboard();
+   t += " | "; t += UltraThesis_Dashboard();
+   t += "\n"; t += UltraSystemHealth_Dashboard();
+   if(UltraUSM2Enabled && g_UltraUSM2Last.tradeScore > 0)
+   {
+      t += "\nUSM2: conf="; t += IntegerToString(g_UltraUSM2Last.confidence);
+      t += " score="; t += IntegerToString(g_UltraUSM2Last.tradeScore);
+      t += " "; t += g_UltraUSM2Last.grade;
+      t += " evo="; t += g_UltraSupremeLast.evo;
+   }
    t += "\nUFSE: "; t += UltraUFSE_Stats(s);
    t += "\n---- EXPLAIN ----\n"; t += explain;
    t += "\n===============================";

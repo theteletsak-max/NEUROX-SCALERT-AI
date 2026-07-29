@@ -11,6 +11,9 @@ order = [
     "29_MarketMemory.mqh",    "20_CapitalProtection.mqh","19_Execution.mqh","16_AI_Core.mqh",
     "DefenseLineEngine.mqh",
     "TradeEntryDiscipline.mqh",
+    "DynamicWeights.mqh","UltraScoringMachine2.mqh","SignalEvolution.mqh",
+    "TradeThesis.mqh","CorrectionDetector.mqh","HoldScore.mqh",
+    "SmartExit.mqh","SystemHealth.mqh","SupremeCommand.mqh",
     "UFSE_FastSignalEngine.mqh",
     "21_TradeManagement.mqh","22_MultiSymbol.mqh","23_MultiTimeframe.mqh",
     "25_Statistics.mqh","24_Dashboard.mqh",
@@ -28,7 +31,7 @@ header = '''//+-----------------------------------------------------------------
 #property copyright "HITMAN AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version   "1.00"
-#property description "HITMAN AI + UFSE + Defense + Entry Discipline v1.0"
+#property description "HITMAN AI ULTRA X — Upgrade Pack Levels 1-20"
 #property description "BUILD=HA_ULTRA_93 Comment=HITMAN AI MaxOpen=3"
 
 #include <Trade/Trade.mqh>

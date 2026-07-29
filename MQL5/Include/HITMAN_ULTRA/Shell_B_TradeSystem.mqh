@@ -87,6 +87,13 @@ int OnInit()
          " StableEvals=", UltraDisciplineStableEvals,
          " MTFMinAgree=", UltraDisciplineMTFMinAgree,
          " NeedNewStruct=", UltraYN(UltraDisciplineNeedNewStruct));
+   Print("ULTRA UPGRADE PACK: Enabled=", UltraYN(UltraUpgradeEnabled),
+         " Strict=", UltraYN(UltraUpgradeStrict),
+         " Supreme=", UltraYN(UltraSupremeEnabled),
+         " USM2=", UltraYN(UltraUSM2Enabled),
+         " Weights=", UltraYN(UltraDynWeightsEnabled),
+         " Thesis=", UltraYN(UltraThesisEnabled),
+         " SmartExit=", UltraYN(UltraSmartExitEnabled));
    if(EnableAPEXStrategy || EnableContFallback || EnableLCSStrategy)
       Print("OK93 WARNING: old APEX/ContFallback/LCS input ON — evaluators STUBBED; ULTRA only fires");
    Print("INSTANT OPEN + QUALITY PREFER MODE=", UltraYN(InstantQualityMode));
@@ -891,10 +898,30 @@ void RunTradingCycle(string symbol)
    // DEFENSE LINE 9 — EMERGENCY (connection / data / symbol recover)
    UltraDefense_Line9_Emergency(symbol);
 
+   // ULTRA UPGRADE — System Health (L15-17); RED blocks cycle entry path only
+   if(UltraUpgradeEnabled && UltraSystemHealthEnabled)
+   {
+      if(!UltraSystemHealth_Update(symbol))
+      {
+         ManageOpenTrades(); // still protect open positions
+         return;
+      }
+   }
+
+   // Performance throttle (L16) — skip heavy entry eval if too frequent
+   if(UltraUpgradeEnabled && UltraOpt_ShouldSkipHeavy(30))
+   {
+      ManageOpenTrades();
+      return;
+   }
+
    ManageOpenTrades();
 
    if(TradingAllowed)
       InstantExecution();
+
+   if(UltraUpgradeEnabled)
+      UltraOpt_MarkHeavyDone();
 }
 
 void OnTimer()
@@ -3860,6 +3887,40 @@ void ManageOpenTrades()
       {
          if(UltraDefense_Line8_Position(ticket, type, openPrice, price, currentSL, currentTP, defendState))
             continue;
+         if(!PositionSelectByTicket(ticket))
+            continue;
+         currentSL = PositionGetDouble(POSITION_SL);
+         currentTP = PositionGetDouble(POSITION_TP);
+      }
+
+      //================ ULTRA UPGRADE — HOLD / CORRECTION / SMART EXIT ========//
+      if(UltraUpgradeEnabled && UltraSmartExitEnabled)
+      {
+         bool isBuyPos = (type == POSITION_TYPE_BUY);
+         string sxWhy = "";
+         ENUM_SMART_EXIT sx = UltraSupreme_ManagePosition(ticket, BrokerSymbol, isBuyPos, g_UltraLastSnap, sxWhy);
+         if(sx == SX_CLOSE)
+         {
+            if(UltraUpgradeLog)
+               Print("SMART EXIT CLOSE ticket=", ticket, " ", sxWhy);
+            UltraThesis_Clear(ticket);
+            trade.PositionClose(ticket);
+            continue;
+         }
+         if(sx == SX_BE)
+         {
+            bool needsBE = isBuyPos ? (currentSL < openPrice) : (currentSL > openPrice || currentSL <= 0.0);
+            bool atProfit = isBuyPos ? (price >= openPrice) : (price <= openPrice);
+            if(needsBE && atProfit)
+            {
+               if(trade.PositionModify(ticket, openPrice, currentTP))
+               {
+                  currentSL = openPrice;
+                  if(UltraUpgradeLog)
+                     Print("SMART EXIT BE ticket=", ticket, " ", sxWhy);
+               }
+            }
+         }
          if(!PositionSelectByTicket(ticket))
             continue;
          currentSL = PositionGetDouble(POSITION_SL);
@@ -11788,6 +11849,7 @@ void InstantExecution()
       if(ExecuteBuy())
       {
          UltraDiscipline_OnFill(BrokerSymbol, true, strategyTag, g_UltraLastSnap);
+         UltraThesis_StoreLatest(BrokerSymbol, true, strategyTag, g_UltraLastSnap, g_UltraLastSignal.reason);
          if(EnableBeastMode && BeastDuplicateBarGuard)
             MarkSignalApproved(true);
       }
@@ -11816,6 +11878,7 @@ void InstantExecution()
       if(ExecuteSell())
       {
          UltraDiscipline_OnFill(BrokerSymbol, false, strategyTag, g_UltraLastSnap);
+         UltraThesis_StoreLatest(BrokerSymbol, false, strategyTag, g_UltraLastSnap, g_UltraLastSignal.reason);
          if(EnableBeastMode && BeastDuplicateBarGuard)
             MarkSignalApproved(false);
       }
