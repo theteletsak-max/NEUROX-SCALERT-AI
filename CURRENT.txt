@@ -1,12 +1,11 @@
-HITMAN AI — MASTER BLUEPRINT
+HITMAN AI — MASTER + ULTRA FAST SIGNAL ENGINE v1.0
 
 EA:       HITMAN_AI.mq5 / HITMAN_AI_OK93.mq5
 BUILD_ID: HA_ULTRA_93
 Comment:  HITMAN AI
 MaxOpen:  3
-EntryTF:  PERIOD_CURRENT (chart TF)
 
-Modules:  MQL5/Include/HITMAN_ULTRA/ (00-40)
-Doc:      MQL5/Include/HITMAN_ULTRA/MASTER_BLUEPRINT.txt
+UFSE: event cache · master-trend lock · signal lock · PASS/FAIL explain
+Modules: MQL5/Include/HITMAN_ULTRA/ + UFSE_FastSignalEngine.mqh
 
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI.mq5
