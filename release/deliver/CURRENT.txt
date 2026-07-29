@@ -1,15 +1,13 @@
 SNIPER AI — CURRENT
 
-EA:       SNIPER_AI_OK77.mq5
-BUILD_ID: SA_QUALITY_77
-Mode:     INSTANT QUALITY
+EA:       SNIPER_AI_OK78.mq5
+BUILD_ID: SA_QUALITY_78
+Mode:     INSTANT FIRE
 
-Faster fills when quality is ready:
-- Cont cooldown 12m (was 60)
-- IDP floor ±35 (was ±45), live bar shift 0
-- Cont score 48, ADX soft, ranging allowed if structure+IDP
-- Still NOT trend-only scalping
+- Cont cooldown = 0
+- Trade cooldown = 0
+- IDP soft (does not hard-block)
+- Structure APEX/Cont still required
+- MaxOpenTrades = 1
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK77.mq5
-
-Remove PRISM → F7 OK77 → attach → SA_QUALITY_77
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK78.mq5

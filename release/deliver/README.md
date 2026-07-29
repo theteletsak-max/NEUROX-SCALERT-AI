@@ -1,7 +1,7 @@
-# SNIPER AI — Instant Quality
+# SNIPER AI — Instant Fire
 
-Current: [`SNIPER_AI_OK77.mq5`](SNIPER_AI_OK77.mq5) — `SA_QUALITY_77`
+[`SNIPER_AI_OK78.mq5`](SNIPER_AI_OK78.mq5) — `SA_QUALITY_78`
 
-Fires as soon as structure + built-in IDP agree. Faster than OK76, still not scalp spam.
+Opens as soon as APEX/Cont structure is ready. IDP is soft (no hard block). Cooldowns off.
 
-Download: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK77.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK78.mq5

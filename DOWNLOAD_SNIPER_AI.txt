@@ -1,3 +1,3 @@
-EA (INSTANT QUALITY):
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK77.mq5
-BUILD_ID: SA_QUALITY_77
+EA (INSTANT):
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK78.mq5
+BUILD_ID: SA_QUALITY_78
