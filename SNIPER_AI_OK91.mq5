@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_QUALITY_81                                      |
-//| SNIPER AI - INSTANT OPEN + QUALITY PREFER                   |
-//| Comment: SNIPER AI | Instant open, quality prefer | No RSI/MACD/Stoch   |
+//| BUILD_ID: SA_PRIME_91                                             |
+//| SNIPER AI — OK81 EXEC SHELL + NEW STRATEGIES FROM SCRATCH         |
+//| Comment: SNIPER AI | MaxOpen=3 | Fib + Cont/Rev/Flash/Break       |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.49"
-#property description "SNIPER AI OK81: instant open + quality prefer"
-#property description "Remove PRISM. Source SNIPER_AI_OK81 BUILD=SA_QUALITY_81"
+#property version   "5.91"
+#property description "SNIPER AI OK91: keep exec shell, new strategies+Fib from scratch"
+#property description "Old APEX/ContFallback/BB/FastSlowEMA retired. BUILD=SA_PRIME_91"
 
 #include <Trade/Trade.mqh>
 
@@ -29,6 +29,47 @@ input group "INSTANT OPEN + QUALITY PREFER"
 // BEST QUALITY selects the trade (structure + IDP + ADX).
 // AGGRESSIVE INSTANT executes immediately once selected (tick path, no idle cooldown).
 input bool   InstantQualityMode          = true;   // profile banner / intent lock
+
+
+input group "PRIME STRATEGIES (FROM SCRATCH — OK91 LIVE)"
+// Old APEX/ContFallback/LCS/ContSniper/Instant live paths DELETED from router.
+// New engines + strategies below are the ONLY live entry path.
+input bool   Enable_FlashSweep   = true;   // liquidity sweep sniper
+input bool   Enable_ContSniper   = true;   // trend continuation
+input bool   Enable_RevSniper    = true;   // reversal after sweep+CHoCH
+input bool   Enable_FibSniper    = true;   // fibonacci zone sniper
+input bool   Enable_BreakImpulse = true;   // BOS + displacement
+input int    MinStrategyScore    = 58;     // 0-100
+input int    InstantFireScore    = 75;     // aggressive instant threshold
+input bool   BlockOppositeSameSymbol = true; // never buy+sell same symbol together
+
+input group "PRIME ENGINES (FROM SCRATCH)"
+input int    PRIME_SwingStrength     = 2;
+input int    PRIME_StructureLookback = 40;
+input int    PRIME_BOS_ConfirmBars   = 12;
+input int    PRIME_SweepLookback     = 20;
+input double PRIME_EqualTolATR       = 0.12;
+input double PRIME_SweepWickMin      = 0.28;
+input double PRIME_SweepDepthATR     = 0.06;
+input double PRIME_DispBodyMin       = 0.48;
+input double PRIME_DispATRMin        = 0.35;
+input double PRIME_FVG_MinATR        = 0.12;
+input bool   PRIME_PreferOrderBlock  = true;
+input double PRIME_VolExpandMult     = 1.20;
+input bool   PRIME_SoftPreferVolume  = true;
+input int    PRIME_MomentumBars      = 3;
+input bool   PRIME_BoostKillZone     = true;
+input bool   PRIME_BoostNewsVol      = true;
+
+input group "FIBONACCI ENGINE (FROM SCRATCH)"
+input double FibBuyLow         = 0.50;
+input double FibBuyHigh        = 0.886;
+input double FibSellLow        = 0.114;
+input double FibSellHigh       = 0.50;
+input bool   SoftPreferFib     = true;
+input ENUM_TIMEFRAMES PRIME_BiasTF  = PERIOD_H4;
+input ENUM_TIMEFRAMES PRIME_MacroTF = PERIOD_D1;
+
 
 input group "SNIPER IDP - BUILT INTO EA (signal core)"
 // Institutional Displacement Pulse computed INSIDE the EA (same math as SNIPER_IDP).
@@ -114,10 +155,10 @@ input group "APEX - WORLD-CLASS LIQUIDITY SNIPER (LIVE)"
 // expansion → enter only unmitigated FVG/OB → SL beyond sweep.
 // ONE decision. NO post-FIRE veto (tag APEX bypasses ICE/IMCE/Ultra re-check).
 
-input bool   EnableAPEXStrategy          = true;
+input bool   EnableAPEXStrategy          = false; // OK91 DELETED live — retired
 // OK67 PURE: live path is ONLY APEX → ContFallback (BOS+zone). No PRISM/LCS/ContSniper live.
 input bool   EnableAntiScalpMode         = false;  // OK81: off — was enabling wait gates
-input bool   EnableContFallback          = true;   // second live path — structure Cont only
+input bool   EnableContFallback          = false;  // OK91 DELETED live — retired
 input bool   ContFallbackBypassEngines   = true;   // ContFallback skips ICE/IMCE after structure pass
 input bool   ContFallbackOncePerBar      = false;  // OK81: never OncePerBar-block
 input int    ContFallbackCooldownMinutes = 0;      // OK81: NEVER ContFallbackCooldown block
@@ -244,7 +285,7 @@ input group "OPEN TRADES CAPS (adjustable — set in Inputs)"
 // Turn EnforceOpenTradeCaps=false to ignore ALL open-trade count limits.
 
 input bool   EnforceOpenTradeCaps         = true;  // master: false = no open-trade count blocks
-input int    MaxOpenTrades                = 1;     // OK64 anti-scalp: one position (was 3)
+input int    MaxOpenTrades                = 3;     // OK91: max 3 open trades
 input int    MaxTotalOpenTradesAllSymbols = 0;     // ALLTRADE56: 0=unlimited — was 9 blocking multi-chart
 input int    MaxOpenTradesPerCurrency     = 0;     // ALLTRADE56: 0=off — was 4 blocking EUR/GBP/XAU USD share
 
@@ -624,7 +665,7 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded BUILD_ID=SA_QUALITY_81");
+   Print("SNIPER AI Loaded BUILD_ID=SA_PRIME_91 MaxOpen=", MaxOpenTrades, " strategies=Flash/Cont/Rev/Fib/Break");
    Print("INSTANT OPEN + QUALITY PREFER MODE=", InstantQualityMode);
    Print("QUALITY SELECT: IDP_Hard=", IDP_HardGate, " MinPulse=", IDP_MinAbsPulse,
          " ContScore=", ContStruct_MinScore, " ADX=", ContStruct_RequireTrendADX,
@@ -1570,31 +1611,11 @@ bool InitializeIndicators()
       // RSI removed from PRISM stack (user request) — no iRSI handle.
       // Dead mean-reversion helpers can still read BB; GetRSI() returns empty.
       RSIHandlesArr[i] = INVALID_HANDLE;
-
-      BBHandlesArr[i] = iBands(sym, EntryTF, BB_Period, 0, BB_Deviation, PRICE_CLOSE);
-
-      if(BBHandlesArr[i] == INVALID_HANDLE)
-      {
-         Print("Failed to create Bollinger Bands Handle for ", sym);
-         return false;
-      }
-
-      // NEW - Trend-Following module (Part 15d).
-      FastEMAHandlesArr[i] = iMA(sym, EntryTF, TrendFollow_FastEMA_Period, 0, MODE_EMA, PRICE_CLOSE);
-
-      if(FastEMAHandlesArr[i] == INVALID_HANDLE)
-      {
-         Print("Failed to create Fast EMA Handle for ", sym);
-         return false;
-      }
-
-      SlowEMAHandlesArr[i] = iMA(sym, EntryTF, TrendFollow_SlowEMA_Period, 0, MODE_EMA, PRICE_CLOSE);
-
-      if(SlowEMAHandlesArr[i] == INVALID_HANDLE)
-      {
-         Print("Failed to create Slow EMA Handle for ", sym);
-         return false;
-      }
+      // OK91: DELETED old indicators — BB / FastEMA / SlowEMA no longer created.
+      // Signal path uses PRIME price-action engines (structure/liq/ICT/Fib/vol).
+      BBHandlesArr[i] = INVALID_HANDLE;
+      FastEMAHandlesArr[i] = INVALID_HANDLE;
+      SlowEMAHandlesArr[i] = INVALID_HANDLE;
    }
 
    ArraySetAsSeries(EMABuffer, true);
@@ -3092,7 +3113,7 @@ void GetTradeDistances(double &slDistance, double &tp1Distance, double &tp2Dista
 
    // OK64: ContFallback / APEX get wider SL so they cannot behave like scalps
    if(EnableAntiScalpMode && ContFallbackSL_ATR_Boost > 1.0 &&
-      (g_PendingStrategyTag == "ContFallback" || g_PendingStrategyTag == "APEX" || g_PendingStrategyTag == "LCS"))
+      (g_PendingStrategyTag == "ContFallback" || g_PendingStrategyTag == "APEX" || g_PendingStrategyTag == "LCS" || PRIME_IsLiveTag(g_PendingStrategyTag)))
       slDistance = slDistance * ContFallbackSL_ATR_Boost;
 
    tp1Distance = slDistance * TP1_RR_Ratio;
@@ -7299,6 +7320,7 @@ double EffectivePullbackATRMultiple()
 }
 
 bool EventQualityModeActive(); // forward
+bool PRIME_IsLiveTag(const string tag); // OK91 forward — used by Ultra/PRISM before PRIME module
 bool QualityGatesActive();
 
 int EffectiveMinimumMPIScore()
@@ -8039,7 +8061,7 @@ bool UltraSniperEntryOK(bool buy, const string strategyTag, string &failReason)
    bool revTag = PRISM_IsReversalTag(strategyTag);
    bool aggro = UltraAggressiveFire || NeverBlockValidSniperEntry || AggressiveInstantQuality;
    bool lcsTag = (strategyTag == "LCS");
-   bool apexTag = (strategyTag == "APEX");
+   bool apexTag = (strategyTag == "APEX" || PRIME_IsLiveTag(strategyTag));
 
    if(GetFilterATR() <= 0.0)
    {
@@ -8979,7 +9001,7 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
    }
 
    // Live APEX/ContFallback/LCS already passed their own checklist — skip PRISM score spam
-   bool liveSwing = (strategyTag == "APEX" || strategyTag == "ContFallback" || strategyTag == "LCS");
+   bool liveSwing = (strategyTag == "APEX" || strategyTag == "ContFallback" || strategyTag == "LCS" || PRIME_IsLiveTag(strategyTag));
    if(liveSwing)
    {
       UltraSetApprove(strategyTag, "A", 100, 100);
@@ -9008,8 +9030,8 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
 
 bool PrismInstitutionalEnginesOK(bool buy, const string strategyTag)
 {
-   // APEX / LCS / ContFallback embed own checklist — no ICE/IMCE/SMT re-veto
-   if(strategyTag == "APEX" || strategyTag == "LCS")
+   // APEX / LCS / ContFallback / PRIME embed own checklist — no ICE/IMCE/SMT re-veto
+   if(strategyTag == "APEX" || strategyTag == "LCS" || PRIME_IsLiveTag(strategyTag))
       return true;
    if(strategyTag == "ContFallback" && ContFallbackBypassEngines)
       return true;
@@ -11090,7 +11112,7 @@ void EvaluateLCSStrategies(bool &buySignal, bool &sellSignal, string &strategyTa
 
 void MarkContFallbackFillIfNeeded()
 {
-   if(g_PendingStrategyTag == "ContFallback" || g_PendingStrategyTag == "APEX" || g_PendingStrategyTag == "LCS")
+   if(g_PendingStrategyTag == "ContFallback" || g_PendingStrategyTag == "APEX" || g_PendingStrategyTag == "LCS" || PRIME_IsLiveTag(g_PendingStrategyTag))
    {
       g_ContFallbackLastFillTime = TimeCurrent();
       datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
@@ -11610,26 +11632,495 @@ void EvaluateContFallback(bool &buySignal, bool &sellSignal, string &strategyTag
    }
 }
 
+
+//====================================================================//
+// OK91 PRIME — ENGINES + STRATEGIES FROM SCRATCH (LIVE ENTRY PATH)
+// Old APEX / ContFallback / LCS / ContSniper / InstantTrend NOT called.
+//====================================================================//
+
+struct PRIME_Snap
+{
+   bool hh, hl, lh, ll;
+   bool bosBuy, bosSell;
+   bool chochBuy, chochSell;
+   bool bullTrend, bearTrend;
+   bool eqHigh, eqLow;
+   bool sweepBuy, sweepSell;
+   bool stopHuntBuy, stopHuntSell;
+   double poolLow, poolHigh;
+   double sweepExtBuy, sweepExtSell;
+   bool fvgBuy, fvgSell;
+   bool obBuy, obSell;
+   bool dispBuy, dispSell;
+   bool inDiscount, inPremium;
+   double fib0, fib100, fib382, fib500, fib618, fib786;
+   bool atFibBuy, atFibSell;
+   bool volExpand;
+   bool momBuy, momSell;
+   bool htfBull, htfBear, macroBull, macroBear;
+   double atr;
+   double swingHigh, swingLow;
+   bool killZone;
+   bool newsVol;
+};
+
+struct PRIME_Signal
+{
+   bool   buy;
+   bool   sell;
+   int    score;
+   string tag;
+   string reason;
+};
+
+ENUM_TIMEFRAMES PRIME_ETF()
+{
+   return (EntryTF == PERIOD_CURRENT) ? (ENUM_TIMEFRAMES)Period() : EntryTF;
+}
+
+double PRIME_ATR(const string s, const int period=14)
+{
+   int p = MathMax(period, 5);
+   ENUM_TIMEFRAMES tf = PRIME_ETF();
+   if(Bars(s, tf) < p + 5) return 0.0;
+   double sum = 0.0;
+   for(int i = 1; i <= p; i++)
+   {
+      double h = iHigh(s, tf, i), l = iLow(s, tf, i), pc = iClose(s, tf, i + 1);
+      sum += MathMax(h - l, MathMax(MathAbs(h - pc), MathAbs(l - pc)));
+   }
+   return sum / p;
+}
+
+double PRIME_SMA(const string s, const ENUM_TIMEFRAMES tf, const int period, const int shift=1)
+{
+   if(Bars(s, tf) < period + shift + 2) return 0.0;
+   double a = 0.0;
+   for(int i = shift; i < shift + period; i++)
+      a += iClose(s, tf, i);
+   return a / period;
+}
+
+bool PRIME_SwingHighAt(const string s, const ENUM_TIMEFRAMES tf, const int bar, const int strength)
+{
+   int bars = Bars(s, tf);
+   if(bar - strength < 0 || bar + strength >= bars) return false;
+   double h = iHigh(s, tf, bar);
+   for(int i = 1; i <= strength; i++)
+      if(iHigh(s, tf, bar - i) >= h || iHigh(s, tf, bar + i) >= h) return false;
+   return true;
+}
+
+bool PRIME_SwingLowAt(const string s, const ENUM_TIMEFRAMES tf, const int bar, const int strength)
+{
+   int bars = Bars(s, tf);
+   if(bar - strength < 0 || bar + strength >= bars) return false;
+   double l = iLow(s, tf, bar);
+   for(int i = 1; i <= strength; i++)
+      if(iLow(s, tf, bar - i) <= l || iLow(s, tf, bar + i) <= l) return false;
+   return true;
+}
+
+bool PRIME_FindSwings(const string s, const ENUM_TIMEFRAMES tf, const int lb, const int strength,
+                      int &iH1, int &iH2, int &iL1, int &iL2)
+{
+   iH1 = iH2 = iL1 = iL2 = 0;
+   int sw = MathMax(strength, 1), look = MathMax(lb, 20);
+   for(int i = sw + 1; i <= look; i++)
+   {
+      if(iH1 == 0 && PRIME_SwingHighAt(s, tf, i, sw)) iH1 = i;
+      else if(iH1 > 0 && iH2 == 0 && PRIME_SwingHighAt(s, tf, i, sw)) iH2 = i;
+      if(iL1 == 0 && PRIME_SwingLowAt(s, tf, i, sw)) iL1 = i;
+      else if(iL1 > 0 && iL2 == 0 && PRIME_SwingLowAt(s, tf, i, sw)) iL2 = i;
+      if(iH1 && iH2 && iL1 && iL2) break;
+   }
+   return (iH1 && iH2 && iL1 && iL2);
+}
+
+void PRIME_UpdateAware(const string s, PRIME_Snap &e)
+{
+   e.killZone = false;
+   e.newsVol = false;
+   MqlDateTime t; TimeToStruct(TimeGMT(), t);
+   int h = t.hour;
+   bool london = (h >= 7 && h < 16), ny = (h >= 12 && h < 21);
+   if(london || ny) e.killZone = true;
+   ENUM_TIMEFRAMES tf = PRIME_ETF();
+   if(e.atr > 0 && Bars(s, tf) > 25)
+   {
+      double avg = 0.0;
+      for(int i = 2; i <= 21; i++) avg += (iHigh(s, tf, i) - iLow(s, tf, i));
+      avg /= 20.0;
+      double r1 = iHigh(s, tf, 1) - iLow(s, tf, 1);
+      if(avg > 0 && r1 >= avg * 1.45) e.newsVol = true;
+   }
+}
+
+void PRIME_EngStructure(const string s, PRIME_Snap &e)
+{
+   ENUM_TIMEFRAMES tf = PRIME_ETF();
+   int iH1, iH2, iL1, iL2;
+   if(PRIME_FindSwings(s, tf, PRIME_StructureLookback, PRIME_SwingStrength, iH1, iH2, iL1, iL2))
+   {
+      double h1 = iHigh(s, tf, iH1), h2 = iHigh(s, tf, iH2);
+      double l1 = iLow(s, tf, iL1), l2 = iLow(s, tf, iL2);
+      e.hh = (h1 > h2); e.hl = (l1 > l2); e.lh = (h1 < h2); e.ll = (l1 < l2);
+      e.bullTrend = (e.hh && e.hl); e.bearTrend = (e.lh && e.ll);
+      e.swingHigh = h1; e.swingLow = l1;
+   }
+   else
+   {
+      e.swingHigh = iHigh(s, tf, iHighest(s, tf, MODE_HIGH, PRIME_StructureLookback, 1));
+      e.swingLow  = iLow(s, tf, iLowest(s, tf, MODE_LOW, PRIME_StructureLookback, 1));
+   }
+   double c1 = iClose(s, tf, 1);
+   e.bosBuy  = (e.swingHigh > 0 && c1 > e.swingHigh);
+   e.bosSell = (e.swingLow > 0 && c1 < e.swingLow);
+   e.chochBuy  = e.bosBuy && (e.ll || e.bearTrend);
+   e.chochSell = e.bosSell && (e.hh || e.bullTrend);
+   for(int i = 1; i <= PRIME_BOS_ConfirmBars; i++)
+   {
+      double c = iClose(s, tf, i);
+      if(c > e.swingHigh) e.bosBuy = true;
+      if(c < e.swingLow)  e.bosSell = true;
+   }
+}
+
+void PRIME_EngTrend(const string s, PRIME_Snap &e)
+{
+   int iH1, iH2, iL1, iL2;
+   if(PRIME_FindSwings(s, PRIME_BiasTF, 40, PRIME_SwingStrength, iH1, iH2, iL1, iL2))
+   {
+      bool hh = iHigh(s, PRIME_BiasTF, iH1) > iHigh(s, PRIME_BiasTF, iH2);
+      bool hl = iLow(s, PRIME_BiasTF, iL1) > iLow(s, PRIME_BiasTF, iL2);
+      bool lh = iHigh(s, PRIME_BiasTF, iH1) < iHigh(s, PRIME_BiasTF, iH2);
+      bool ll = iLow(s, PRIME_BiasTF, iL1) < iLow(s, PRIME_BiasTF, iL2);
+      e.htfBull = (hh && hl); e.htfBear = (lh && ll);
+   }
+   double smaH = PRIME_SMA(s, PRIME_BiasTF, 50);
+   double cH = iClose(s, PRIME_BiasTF, 1);
+   if(smaH > 0){ if(cH > smaH) e.htfBull = true; if(cH < smaH) e.htfBear = true; }
+   double smaD = PRIME_SMA(s, PRIME_MacroTF, 20);
+   double cD = iClose(s, PRIME_MacroTF, 1);
+   if(smaD > 0){ e.macroBull = (cD > smaD); e.macroBear = (cD < smaD); }
+}
+
+void PRIME_EngLiquidity(const string s, PRIME_Snap &e)
+{
+   ENUM_TIMEFRAMES tf = PRIME_ETF();
+   if(e.atr <= 0) return;
+   double tol = e.atr * PRIME_EqualTolATR;
+   int lb = MathMax(PRIME_StructureLookback / 2, 12);
+   double lo = iLow(s, tf, iLowest(s, tf, MODE_LOW, lb, 1));
+   double hi = iHigh(s, tf, iHighest(s, tf, MODE_HIGH, lb, 1));
+   int nL = 0, nH = 0;
+   for(int i = 1; i <= lb; i++)
+   {
+      if(MathAbs(iLow(s, tf, i) - lo) <= tol) nL++;
+      if(MathAbs(iHigh(s, tf, i) - hi) <= tol) nH++;
+   }
+   e.eqLow = (nL >= 2); e.eqHigh = (nH >= 2);
+   e.poolLow = e.eqLow ? lo : e.swingLow;
+   e.poolHigh = e.eqHigh ? hi : e.swingHigh;
+   double minD = e.atr * PRIME_SweepDepthATR;
+   int swlb = MathMax(PRIME_SweepLookback, 5);
+   for(int i = 1; i <= swlb; i++)
+   {
+      double h = iHigh(s, tf, i), l = iLow(s, tf, i), c = iClose(s, tf, i);
+      double rng = h - l; if(rng <= 0) continue;
+      if(!e.sweepBuy && e.poolLow > 0 && l < e.poolLow - minD && c > e.poolLow)
+      {
+         if((MathMin(c, e.poolLow) - l) / rng >= PRIME_SweepWickMin)
+         { e.sweepBuy = true; e.sweepExtBuy = l; }
+      }
+      if(!e.sweepSell && e.poolHigh > 0 && h > e.poolHigh + minD && c < e.poolHigh)
+      {
+         if((h - MathMax(c, e.poolHigh)) / rng >= PRIME_SweepWickMin)
+         { e.sweepSell = true; e.sweepExtSell = h; }
+      }
+      double body = MathAbs(c - iOpen(s, tf, i));
+      double upper = h - MathMax(c, iOpen(s, tf, i));
+      double lower = MathMin(c, iOpen(s, tf, i)) - l;
+      if(lower / rng >= 0.45 && c > iOpen(s, tf, i)) e.stopHuntBuy = true;
+      if(upper / rng >= 0.45 && c < iOpen(s, tf, i)) e.stopHuntSell = true;
+   }
+}
+
+void PRIME_EngICT(const string s, PRIME_Snap &e)
+{
+   ENUM_TIMEFRAMES tf = PRIME_ETF();
+   double o1 = iOpen(s, tf, 1), c1 = iClose(s, tf, 1), h1 = iHigh(s, tf, 1), l1 = iLow(s, tf, 1);
+   double r1 = h1 - l1;
+   if(r1 > 0)
+   {
+      double br = MathAbs(c1 - o1) / r1;
+      bool atrOK = (e.atr <= 0) || (r1 >= e.atr * PRIME_DispATRMin);
+      if(br >= PRIME_DispBodyMin && atrOK){ e.dispBuy = (c1 > o1); e.dispSell = (c1 < o1); }
+   }
+   double gapB = iLow(s, tf, 1) - iHigh(s, tf, 3);
+   double gapS = iLow(s, tf, 3) - iHigh(s, tf, 1);
+   if(gapB > 0 && (e.atr <= 0 || gapB >= e.atr * PRIME_FVG_MinATR)) e.fvgBuy = true;
+   if(gapS > 0 && (e.atr <= 0 || gapS >= e.atr * PRIME_FVG_MinATR)) e.fvgSell = true;
+   double o2 = iOpen(s, tf, 2), c2 = iClose(s, tf, 2);
+   if(e.dispBuy && c2 < o2) e.obBuy = true;
+   if(e.dispSell && c2 > o2) e.obSell = true;
+   if(e.swingHigh > e.swingLow)
+   {
+      double mid = (e.swingHigh + e.swingLow) * 0.5;
+      double px = SymbolInfoDouble(s, SYMBOL_BID);
+      e.inDiscount = (px <= mid); e.inPremium = (px >= mid);
+   }
+}
+
+void PRIME_EngFib(const string s, PRIME_Snap &e)
+{
+   e.fib100 = e.swingHigh; e.fib0 = e.swingLow;
+   double rng = e.fib100 - e.fib0;
+   if(rng <= 0) return;
+   e.fib382 = e.fib0 + rng * 0.382;
+   e.fib500 = e.fib0 + rng * 0.500;
+   e.fib618 = e.fib0 + rng * 0.618;
+   e.fib786 = e.fib0 + rng * 0.786;
+   double pos = (SymbolInfoDouble(s, SYMBOL_BID) - e.fib0) / rng;
+   e.atFibBuy  = (pos >= FibBuyLow && pos <= FibBuyHigh);
+   e.atFibSell = (pos >= FibSellLow && pos <= FibSellHigh);
+}
+
+void PRIME_EngVolMom(const string s, PRIME_Snap &e)
+{
+   ENUM_TIMEFRAMES tf = PRIME_ETF();
+   double v1 = (double)iTickVolume(s, tf, 1), sum = 0.0;
+   for(int i = 2; i <= 21; i++) sum += (double)iTickVolume(s, tf, i);
+   double avg = sum / 20.0;
+   e.volExpand = (avg > 0 && v1 >= avg * PRIME_VolExpandMult);
+   int up = 0, dn = 0;
+   for(int i = 1; i <= PRIME_MomentumBars; i++)
+   {
+      if(iClose(s, tf, i) > iOpen(s, tf, i)) up++;
+      if(iClose(s, tf, i) < iOpen(s, tf, i)) dn++;
+   }
+   e.momBuy = (up >= 2); e.momSell = (dn >= 2);
+   if(PRIME_MomentumBars < 3){ e.momBuy = (up >= PRIME_MomentumBars); e.momSell = (dn >= PRIME_MomentumBars); }
+}
+
+void PRIME_Clear(PRIME_Snap &e)
+{
+   ZeroMemory(e);
+}
+
+void PRIME_Build(const string s, PRIME_Snap &e)
+{
+   PRIME_Clear(e);
+   e.atr = PRIME_ATR(s, ATR_Period);
+   PRIME_EngStructure(s, e);
+   PRIME_EngTrend(s, e);
+   PRIME_EngLiquidity(s, e);
+   PRIME_EngICT(s, e);
+   PRIME_EngFib(s, e);
+   PRIME_EngVolMom(s, e);
+   PRIME_UpdateAware(s, e);
+}
+
+int PRIME_Score(const PRIME_Snap &e, const bool buy)
+{
+   int sc = 0;
+   if(buy)
+   {
+      if(e.htfBull) sc += 12; if(e.macroBull) sc += 8; if(e.bullTrend) sc += 10;
+      if(e.bosBuy) sc += 10; if(e.chochBuy) sc += 8;
+      if(e.sweepBuy) sc += 18; if(e.stopHuntBuy) sc += 6;
+      if(e.dispBuy) sc += 12; if(e.fvgBuy) sc += 8; if(e.obBuy) sc += 8;
+      if(e.atFibBuy || e.inDiscount) sc += 8;
+      if(e.volExpand && e.dispBuy) sc += 6; if(e.momBuy) sc += 4;
+   }
+   else
+   {
+      if(e.htfBear) sc += 12; if(e.macroBear) sc += 8; if(e.bearTrend) sc += 10;
+      if(e.bosSell) sc += 10; if(e.chochSell) sc += 8;
+      if(e.sweepSell) sc += 18; if(e.stopHuntSell) sc += 6;
+      if(e.dispSell) sc += 12; if(e.fvgSell) sc += 8; if(e.obSell) sc += 8;
+      if(e.atFibSell || e.inPremium) sc += 8;
+      if(e.volExpand && e.dispSell) sc += 6; if(e.momSell) sc += 4;
+   }
+   if(PRIME_BoostKillZone && e.killZone) sc += 4;
+   if(PRIME_BoostNewsVol && e.newsVol && ((buy && e.dispBuy) || (!buy && e.dispSell))) sc += 5;
+   if(SoftPreferFib)
+   {
+      if(buy && !e.atFibBuy && !e.inDiscount) sc -= 3;
+      if(!buy && !e.atFibSell && !e.inPremium) sc -= 3;
+   }
+   if(PRIME_SoftPreferVolume && !e.volExpand) sc -= 2;
+   if(sc < 0) sc = 0; if(sc > 100) sc = 100;
+   return sc;
+}
+
+void PRIME_ResolveSides(PRIME_Signal &r, const int sb, const int ss)
+{
+   if(r.buy && r.sell)
+   {
+      if(sb >= ss) r.sell = false; else r.buy = false;
+      r.score = MathMax(sb, ss);
+   }
+}
+
+PRIME_Signal PRIME_FlashSweep(const PRIME_Snap &e)
+{
+   PRIME_Signal r; r.buy = r.sell = false; r.score = 0; r.tag = "FlashSweep"; r.reason = "";
+   int sb = PRIME_Score(e, true), ss = PRIME_Score(e, false);
+   bool b = e.sweepBuy && e.dispBuy && (e.htfBull || e.bullTrend || e.macroBull);
+   bool s = e.sweepSell && e.dispSell && (e.htfBear || e.bearTrend || e.macroBear);
+   if(b && sb >= MinStrategyScore){ r.buy = true; r.score = sb; r.reason = "FLASH sweep+disp+bias"; }
+   if(s && ss >= MinStrategyScore){ r.sell = true; r.score = ss; r.reason = "FLASH sweep+disp+bias"; }
+   PRIME_ResolveSides(r, sb, ss);
+   return r;
+}
+
+PRIME_Signal PRIME_ContSniper(const PRIME_Snap &e)
+{
+   PRIME_Signal r; r.buy = r.sell = false; r.score = 0; r.tag = "ContSniper"; r.reason = "";
+   int sb = PRIME_Score(e, true), ss = PRIME_Score(e, false);
+   bool b = (e.htfBull || e.bullTrend) && (e.bosBuy || e.obBuy || e.fvgBuy) && (e.dispBuy || e.momBuy);
+   bool s = (e.htfBear || e.bearTrend) && (e.bosSell || e.obSell || e.fvgSell) && (e.dispSell || e.momSell);
+   if(PRIME_PreferOrderBlock)
+   {
+      if(b && !(e.obBuy || e.fvgBuy || e.bosBuy)) b = false;
+      if(s && !(e.obSell || e.fvgSell || e.bosSell)) s = false;
+   }
+   if(b && sb >= MinStrategyScore){ r.buy = true; r.score = sb; r.reason = "CONT trend+structure+impulse"; }
+   if(s && ss >= MinStrategyScore){ r.sell = true; r.score = ss; r.reason = "CONT trend+structure+impulse"; }
+   PRIME_ResolveSides(r, sb, ss);
+   return r;
+}
+
+PRIME_Signal PRIME_RevSniper(const PRIME_Snap &e)
+{
+   PRIME_Signal r; r.buy = r.sell = false; r.score = 0; r.tag = "RevSniper"; r.reason = "";
+   int sb = PRIME_Score(e, true), ss = PRIME_Score(e, false);
+   bool b = e.sweepBuy && (e.chochBuy || e.dispBuy) && (e.obBuy || e.fvgBuy || e.stopHuntBuy) && e.inDiscount;
+   bool s = e.sweepSell && (e.chochSell || e.dispSell) && (e.obSell || e.fvgSell || e.stopHuntSell) && e.inPremium;
+   if(b && sb >= MinStrategyScore){ r.buy = true; r.score = sb + 2; r.reason = "REV sweep+choch/disp+zone"; }
+   if(s && ss >= MinStrategyScore){ r.sell = true; r.score = ss + 2; r.reason = "REV sweep+choch/disp+zone"; }
+   PRIME_ResolveSides(r, sb, ss);
+   if(r.score > 100) r.score = 100;
+   return r;
+}
+
+PRIME_Signal PRIME_FibSniper(const PRIME_Snap &e)
+{
+   PRIME_Signal r; r.buy = r.sell = false; r.score = 0; r.tag = "FibSniper"; r.reason = "";
+   int sb = PRIME_Score(e, true), ss = PRIME_Score(e, false);
+   bool b = e.atFibBuy && (e.htfBull || e.bullTrend) && (e.dispBuy || e.momBuy || e.obBuy) && (e.inDiscount || e.sweepBuy);
+   bool s = e.atFibSell && (e.htfBear || e.bearTrend) && (e.dispSell || e.momSell || e.obSell) && (e.inPremium || e.sweepSell);
+   if(b && sb >= MinStrategyScore){ r.buy = true; r.score = sb; r.reason = "FIB zone+bias+impulse"; }
+   if(s && ss >= MinStrategyScore){ r.sell = true; r.score = ss; r.reason = "FIB zone+bias+impulse"; }
+   PRIME_ResolveSides(r, sb, ss);
+   return r;
+}
+
+PRIME_Signal PRIME_BreakImpulse(const PRIME_Snap &e)
+{
+   PRIME_Signal r; r.buy = r.sell = false; r.score = 0; r.tag = "BreakImpulse"; r.reason = "";
+   int sb = PRIME_Score(e, true), ss = PRIME_Score(e, false);
+   bool b = e.bosBuy && e.dispBuy && (e.volExpand || e.momBuy) && (e.htfBull || e.macroBull || e.bullTrend);
+   bool s = e.bosSell && e.dispSell && (e.volExpand || e.momSell) && (e.htfBear || e.macroBear || e.bearTrend);
+   if(b && sb >= MinStrategyScore){ r.buy = true; r.score = sb; r.reason = "BREAK BOS+disp+vol/mom"; }
+   if(s && ss >= MinStrategyScore){ r.sell = true; r.score = ss; r.reason = "BREAK BOS+disp+vol/mom"; }
+   PRIME_ResolveSides(r, sb, ss);
+   return r;
+}
+
+bool PRIME_IsLiveTag(const string tag)
+{
+   return (tag == "FlashSweep" || tag == "ContSniper" || tag == "RevSniper" ||
+           tag == "FibSniper" || tag == "BreakImpulse");
+}
+
+int PRIME_SymDir(const string s)
+{
+   bool b = false, sel = false;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong t = PositionGetTicket(i);
+      if(t == 0 || !PositionSelectByTicket(t)) continue;
+      if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+      if(PositionGetString(POSITION_SYMBOL) != s) continue;
+      long ty = PositionGetInteger(POSITION_TYPE);
+      if(ty == POSITION_TYPE_BUY) b = true;
+      if(ty == POSITION_TYPE_SELL) sel = true;
+   }
+   if(b && sel) return 2;
+   if(b) return 1;
+   if(sel) return -1;
+   return 0;
+}
+
+PRIME_Signal PRIME_PickBest(const PRIME_Snap &e)
+{
+   PRIME_Signal best; best.buy = best.sell = false; best.score = -1; best.tag = "NONE"; best.reason = "no setup";
+   PRIME_Signal arr[5];
+   int n = 0;
+   if(Enable_FlashSweep)   arr[n++] = PRIME_FlashSweep(e);
+   if(Enable_ContSniper)   arr[n++] = PRIME_ContSniper(e);
+   if(Enable_RevSniper)    arr[n++] = PRIME_RevSniper(e);
+   if(Enable_FibSniper)    arr[n++] = PRIME_FibSniper(e);
+   if(Enable_BreakImpulse) arr[n++] = PRIME_BreakImpulse(e);
+   for(int i = 0; i < n; i++)
+   {
+      if(!(arr[i].buy || arr[i].sell)) continue;
+      if(arr[i].score > best.score) best = arr[i];
+   }
+   if(best.score >= 0 && best.score < MinStrategyScore && best.score < InstantFireScore)
+   {
+      best.buy = best.sell = false; best.tag = "NONE"; best.reason = "below score";
+   }
+   return best;
+}
+
+
 void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategyTag)
 {
    buySignal = false;
    sellSignal = false;
    strategyTag = "";
 
-   // OK76 LIVE: APEX → ContFallback, both gated by built-in IDP pulse
-   // 1) APEX
-   if(EnableAPEXStrategy)
+   // OK91 LIVE: PRIME from-scratch strategies ONLY (old APEX/ContFallback deleted from router)
+   PRIME_Snap snap;
+   PRIME_Build(BrokerSymbol, snap);
+   PRIME_Signal best = PRIME_PickBest(snap);
+
+   if(!(best.buy || best.sell) || best.tag == "NONE")
    {
-      EvaluateAPEXStrategies(buySignal, sellSignal, strategyTag);
-      if(buySignal || sellSignal)
-         return;
+      if(EnableVerboseLogging || ContStruct_LogDetail)
+         Print("PRIME wait score/setup on ", BrokerSymbol,
+               " fibBuy=", snap.atFibBuy, " fibSell=", snap.atFibSell,
+               " sweepB=", snap.sweepBuy, " sweepS=", snap.sweepSell,
+               " atr=", DoubleToString(snap.atr, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)));
+      return;
    }
 
-   // 2) ContFallback BEST structure (BOS + fresh zone + disp + discount/premium)
-   if(EnableContFallback)
-      EvaluateContFallback(buySignal, sellSignal, strategyTag);
+   // Never buy+sell same symbol together
+   if(BlockOppositeSameSymbol)
+   {
+      int d = PRIME_SymDir(BrokerSymbol);
+      if(best.buy && d < 0)
+      {
+         Print("PRIME blocked BUY: open SELL already on ", BrokerSymbol);
+         return;
+      }
+      if(best.sell && d > 0)
+      {
+         Print("PRIME blocked SELL: open BUY already on ", BrokerSymbol);
+         return;
+      }
+   }
 
-   // LCS / ContSniper / RevSniper / InstantTrend / SpecCompliant — RETIRED (not called)
+   buySignal = best.buy;
+   sellSignal = best.sell;
+   strategyTag = best.tag;
+   Print("PRIME FIRE ", (best.buy ? "BUY" : "SELL"), " [", best.tag, "] score=", best.score,
+         " ", best.reason, " on ", BrokerSymbol,
+         " fib=", (best.buy ? snap.atFibBuy : snap.atFibSell),
+         " sessionBoost=", snap.killZone);
 }
 
 //+------------------------------------------------------------------+
@@ -12584,7 +13075,7 @@ string LiveMarketSummary()
 void PrintLiveMarketAnalysis()
 {
    AnalyzeLiveMarket(true);
-   Print("---- MARKET ANALYSIS BUILD=SA_QUALITY_81 (", BrokerSymbol, ") ----");
+   Print("---- MARKET ANALYSIS BUILD=SA_PRIME_91 (", BrokerSymbol, ") ----");
    Print("SESSION=", g_LiveMkt.sessionName,
          " hour=", g_LiveMkt.sessionHour,
          (APEX_UseGMT ? " GMT" : " SERVER"),
@@ -12727,7 +13218,7 @@ void InstantExecution()
       return;
    }
 
-   // EvaluateStrategySignals() = APEX → ContFallback only (OK67 PURE).
+   // EvaluateStrategySignals() = OK91 PRIME (Flash/Cont/Rev/Fib/Break) only.
    bool buySignal, sellSignal;
    string strategyTag;
    EvaluateStrategySignals(buySignal, sellSignal, strategyTag);

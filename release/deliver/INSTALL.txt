@@ -1,6 +1,7 @@
-1. Download SNIPER_AI_OK81.mq5 (or SNIPER_AI.mq5 from zip)
-2. Copy to MetaTrader 5 → MQL5/Experts/
-3. Compile in MetaEditor (F7)
+1. Download SNIPER_AI_OK91.mq5
+2. Copy to MQL5/Experts/
+3. Compile (F7)
 4. Attach to chart
-5. Journal must show: BUILD_ID=SA_QUALITY_81
-6. Trade comment must be: SNIPER AI
+5. Journal: BUILD_ID=SA_PRIME_91
+6. Comment must be: SNIPER AI
+7. MaxOpenTrades=3

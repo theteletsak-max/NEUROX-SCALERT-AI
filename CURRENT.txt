@@ -1,10 +1,18 @@
-SNIPER AI — CURRENT (FULL EA — NOT FROM SCRATCH)
+SNIPER AI — CURRENT (OK91)
 
-EA:       SNIPER_AI_OK81.mq5
-BUILD_ID: SA_QUALITY_81
-Lines:    ~13074
+EA:       SNIPER_AI_OK91.mq5
+BUILD_ID: SA_PRIME_91
+Base:     OK81 exec shell (~13k) — NOT a full rewrite
 Comment:  SNIPER AI
+MaxOpen:  3
 
-This is the full live EA base (~13k lines). Do NOT replace with from-scratch rewrites.
+CHANGED:
+- MaxOpenTrades = 3
+- DELETED live: APEX, ContFallback (off + not in router)
+- DELETED indicators: BB, FastEMA, SlowEMA (no longer created)
+- NEW from-scratch engines: Structure, Trend, Liquidity, ICT, Fibonacci, Volume/Momentum
+- NEW strategies: FlashSweep | ContSniper | RevSniper | FibSniper | BreakImpulse
+- Never buy+sell same symbol together
+- Keeps: ExecuteBuy/Sell, TP1/TP2/TP3, margin, multi-symbol, session/news aware
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK81.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK91.mq5

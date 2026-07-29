@@ -1,5 +1,6 @@
-EA: SNIPER_AI_OK81.mq5
-BUILD_ID: SA_QUALITY_81
+EA: SNIPER_AI_OK91.mq5
+BUILD_ID: SA_PRIME_91
 Comment: SNIPER AI
+MaxOpen: 3
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK81.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK91.mq5

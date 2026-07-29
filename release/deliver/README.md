@@ -1,11 +1,8 @@
-# SNIPER AI — Live EA
+# SNIPER AI OK91
 
-**File:** `SNIPER_AI_OK81.mq5`  
-**BUILD_ID:** `SA_QUALITY_81`  
-**Comment:** `SNIPER AI`  
-**Size:** ~13074 lines (full EA — not a from-scratch rewrite)
+**BUILD_ID:** `SA_PRIME_91`  
+**Base:** OK81 execution shell (kept)  
+**Live path:** new from-scratch strategies + Fibonacci  
+**MaxOpen:** 3 · Comment: `SNIPER AI`
 
-## Install
-1. Put `SNIPER_AI_OK81.mq5` in `MQL5/Experts/`
-2. Compile (F7)
-3. Attach to chart — Journal must show `SA_QUALITY_81`
+Strategies: FlashSweep · ContSniper · RevSniper · FibSniper · BreakImpulse

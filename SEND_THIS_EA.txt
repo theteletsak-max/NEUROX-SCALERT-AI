@@ -1,5 +1,5 @@
-SNIPER AI OK81 — FULL EA (~13074 lines)
+SNIPER AI OK91 — PRIME on OK81 shell
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK81.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK91.mq5
 
-F7 → SA_QUALITY_81 | Comment: SNIPER AI
+F7 → SA_PRIME_91 | Comment: SNIPER AI | MaxOpen=3 | Fib + 5 strategies
