@@ -1,1 +1,1 @@
-ARCHIVE. Current is SNIPER_AI_OK78.
+ARCHIVE. Current is SNIPER_AI_OK79.

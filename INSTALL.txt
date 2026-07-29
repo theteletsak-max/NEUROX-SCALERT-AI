@@ -1,3 +1,3 @@
-[ ] SNIPER_AI_OK78.mq5 → Experts → F7
-[ ] Attach → Journal SA_QUALITY_78 + INSTANT FIRE MODE
+[ ] SNIPER_AI_OK79.mq5 → Experts → F7
+[ ] Attach → Journal: SA_QUALITY_79 + AGGRESSIVE INSTANT + BEST QUALITY
 [ ] Algo Trading ON

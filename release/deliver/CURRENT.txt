@@ -1,13 +1,17 @@
 SNIPER AI — CURRENT
 
-EA:       SNIPER_AI_OK78.mq5
-BUILD_ID: SA_QUALITY_78
-Mode:     INSTANT FIRE
+EA:       SNIPER_AI_OK79.mq5
+BUILD_ID: SA_QUALITY_79
+Mode:     AGGRESSIVE INSTANT + BEST QUALITY
 
-- Cont cooldown = 0
-- Trade cooldown = 0
-- IDP soft (does not hard-block)
-- Structure APEX/Cont still required
-- MaxOpenTrades = 1
+QUALITY selects:
+- IDP hard ±45
+- Cont score ≥58 + ADX + skip ranging + 2-bar BOS prefer
+- APEX quality displacement
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK78.mq5
+INSTANT executes when selected:
+- Trade cooldown 0
+- Attempt 1s
+- Tick-level + NeverBlock + UltraAggressiveFire
+
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK79.mq5

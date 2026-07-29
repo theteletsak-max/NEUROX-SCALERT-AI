@@ -1,7 +1,7 @@
-SNIPER AI OK78 — INSTANT FIRE
+SNIPER AI OK79 — AGGRESSIVE INSTANT + BEST QUALITY
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK78.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK79.mq5
 
-BUILD_ID: SA_QUALITY_78
-No Cont/trade cooldown. IDP soft. Fires when APEX/Cont structure ready.
-F7 → attach → SA_QUALITY_78
+BUILD_ID: SA_QUALITY_79
+Best quality decides. Aggressive instant executes.
+F7 → attach → SA_QUALITY_79
