@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
 //| BUILD_ID: SA_ULTRA_93                                             |
-//| SNIPER AI ULTRA — MODULAR PROFESSIONAL ARCHITECTURE               |
+//| SNIPER AI ULTRA — RECOMMENDED PROJECT STRUCTURE (00-31)           |
 //| Comment: SNIPER AI | MaxOpen=3                                    |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version   "9.30"
-#property description "SNIPER AI ULTRA modular architecture (Include/SNIPER_ULTRA)"
-#property description "Modules 01-09 + Shell. BUILD=SA_ULTRA_93"
+#property description "SNIPER AI ULTRA recommended structure Include/SNIPER_ULTRA 00-31"
+#property description "BUILD=SA_ULTRA_93"
 
 #include <Trade/Trade.mqh>
 
@@ -16,11 +16,8 @@
 
 CTrade trade;
 
-//======================== MODULE LOAD ORDER ========================//
-// Shell A : classic inputs/globals/forwards (Magic, MaxOpen, TP...)
-// Ultra   : Types → Inputs → Core → MTF → Market → Diag → Capital →
-//           Execution → AI → MultiSymbol → Dashboard
-// Shell B : ExecuteBuy/Sell, ManageOpenTrades, OnTick/OnTimer, ...
+//==================== RECOMMENDED MODULE LOAD ORDER ================//
+// Shell A → SNIPER_ULTRA (00-31) → Shell B
 //===================================================================//
 
 #include <SNIPER_ULTRA/Shell_A_InputsGlobals.mqh>

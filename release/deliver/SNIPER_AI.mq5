@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_ULTRA_94                                             |
-//| SNIPER AI ULTRA — ULTIMATE PROJECT STRUCTURE (00-30)              |
+//| BUILD_ID: SA_ULTRA_93                                             |
+//| SNIPER AI ULTRA — RECOMMENDED PROJECT STRUCTURE (00-31)           |
 //| Comment: SNIPER AI | MaxOpen=3                                    |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "9.40"
-#property description "SNIPER AI ULTRA ultimate modular structure 00-30"
-#property description "Include/SNIPER_AI_ULTRA. BUILD=SA_ULTRA_94"
+#property version   "9.30"
+#property description "SNIPER AI ULTRA recommended structure Include/SNIPER_ULTRA 00-31"
+#property description "BUILD=SA_ULTRA_93"
 
 #include <Trade/Trade.mqh>
 
@@ -16,12 +16,12 @@
 
 CTrade trade;
 
-//==================== ULTIMATE MODULE LOAD ORDER ===================//
-// Shell A → SNIPER_AI_ULTRA (00-30) → Shell B
+//==================== RECOMMENDED MODULE LOAD ORDER ================//
+// Shell A → SNIPER_ULTRA (00-31) → Shell B
 //===================================================================//
 
-#include <SNIPER_AI_ULTRA/Shell_A_InputsGlobals.mqh>
-#include <SNIPER_AI_ULTRA/SNIPER_AI_ULTRA.mqh>
-#include <SNIPER_AI_ULTRA/Shell_B_TradeSystem.mqh>
+#include <SNIPER_ULTRA/Shell_A_InputsGlobals.mqh>
+#include <SNIPER_ULTRA/SNIPER_ULTRA.mqh>
+#include <SNIPER_ULTRA/Shell_B_TradeSystem.mqh>
 
-// Event handlers: OnInit/OnTick/OnTimer/OnDeinit live in Shell_B.
+// Event handlers live in Shell_B (OnInit/OnTick/OnTimer/OnDeinit/...).

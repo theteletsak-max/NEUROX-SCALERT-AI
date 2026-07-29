@@ -1,17 +1,21 @@
-SNIPER AI ULTRA — ULTIMATE STRUCTURE (OK94)
+SNIPER AI ULTRA — RECOMMENDED STRUCTURE (OK93)
 
-EA:       SNIPER_AI_OK94.mq5
-BUILD_ID: SA_ULTRA_94
+EA:       SNIPER_AI_OK93.mq5  (also SNIPER_AI.mq5)
+BUILD_ID: SA_ULTRA_93
 Comment:  SNIPER AI
 MaxOpen:  3
 
-Modules: MQL5/Include/SNIPER_AI_ULTRA/  (00-30)
-00 Types … 30 Recovery (+ Shell_A/B + master)
+Include/SNIPER_ULTRA/
+  00_Types … 30_Recovery
+  31_Inputs
+  Shell_A_InputsGlobals.mqh
+  Shell_B_TradeSystem.mqh
+  SNIPER_ULTRA.mqh
 
 INSTALL:
-1) SNIPER_AI_OK94.mq5 → MQL5/Experts/
-2) Include/SNIPER_AI_ULTRA/ → MQL5/Include/SNIPER_AI_ULTRA/
-3) F7 → Journal SA_ULTRA_94
+1) SNIPER_AI_OK93.mq5 → MQL5/Experts/
+2) Include/SNIPER_ULTRA/ → MQL5/Include/SNIPER_ULTRA/
+3) F7 → Journal SA_ULTRA_93
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK94.mq5
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/tree/cursor/sniper-ai-compile-fix-b12d/MQL5/Include/SNIPER_AI_ULTRA
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK93.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/tree/cursor/sniper-ai-compile-fix-b12d/MQL5/Include/SNIPER_ULTRA

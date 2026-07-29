@@ -1,5 +1,9 @@
-# SNIPER AI ULTRA OK94 — Ultimate 00–30 Structure
+# SNIPER AI ULTRA — Recommended Structure (OK93)
 
-**BUILD_ID:** `SA_ULTRA_94` · **Comment:** `SNIPER AI` · **MaxOpen:** 3
+```
+SNIPER_AI.mq5
+SNIPER_AI_OK93.mq5
+Include/SNIPER_ULTRA/   (00–31 + Shell A/B + master)
+```
 
-Full module tree under `Include/SNIPER_AI_ULTRA/` (Types through Recovery).
+**BUILD_ID:** `SA_ULTRA_93` · **Comment:** `SNIPER AI` · **MaxOpen:** 3

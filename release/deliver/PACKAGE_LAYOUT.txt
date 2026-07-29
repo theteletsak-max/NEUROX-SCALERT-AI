@@ -1,4 +1,7 @@
-SNIPER_AI_OK94.mq5
-Include/SNIPER_AI_ULTRA/00_Types.mqh … 30_Recovery.mqh
-Include/SNIPER_AI_ULTRA/Shell_A + Shell_B
-Include/SNIPER_AI_ULTRA/SNIPER_AI_ULTRA.mqh (master)
+SNIPER_AI.mq5
+SNIPER_AI_OK93.mq5
+Include/SNIPER_ULTRA/00_Types.mqh … 30_Recovery.mqh
+Include/SNIPER_ULTRA/31_Inputs.mqh
+Include/SNIPER_ULTRA/Shell_A_InputsGlobals.mqh
+Include/SNIPER_ULTRA/Shell_B_TradeSystem.mqh
+Include/SNIPER_ULTRA/SNIPER_ULTRA.mqh
