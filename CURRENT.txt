@@ -1,15 +1,19 @@
-SNIPER AI ULTRA — CURRENT (OK92R)
+SNIPER AI ULTRA — MODULAR (OK93)
 
-EA:       SNIPER_AI_OK92.mq5
-BUILD_ID: SA_ULTRA_92R
+EA:       SNIPER_AI_OK93.mq5
+BUILD_ID: SA_ULTRA_93
 Comment:  SNIPER AI
 MaxOpen:  3
 
-CLEANUP:
-- Old live strategies REMOVED/STUBBED: APEX, ContFallback, LCS, SpecCompliant
-- IDP live gate REMOVED (soft-pass only)
-- Old PRISM/Beast dashboard REMOVED
-- BB/FastEMA/SlowEMA not created
-- LIVE PATH: ULTRA only (no dual-fire duplication)
+MODULES (MQL5/Include/SNIPER_ULTRA/):
+01 Core | 02 Market | 03 AI | 04 Execution | 05 Capital
+06 MultiSymbol | 07 MTF | 08 Dashboard | 09 Diagnostics
++ Shell_A inputs/globals + Shell_B trade system
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK92.mq5
+INSTALL:
+1) Copy SNIPER_AI_OK93.mq5 → MQL5/Experts/
+2) Copy folder Include/SNIPER_ULTRA → MQL5/Include/SNIPER_ULTRA/
+3) F7 compile → Journal SA_ULTRA_93
+
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/tree/cursor/sniper-ai-compile-fix-b12d/MQL5/Include/SNIPER_ULTRA
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK93.mq5

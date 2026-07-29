@@ -1,5 +1,11 @@
-1. Download SNIPER_AI_OK92.mq5
-2. Copy to MQL5/Experts/
-3. Compile (F7)
-4. Journal must show: BUILD_ID=SA_ULTRA_92R
-5. Comment: SNIPER AI | MaxOpen=3
+MODULAR INSTALL (required)
+
+1. Copy SNIPER_AI_OK93.mq5  →  MetaTrader 5/MQL5/Experts/
+2. Copy folder Include/SNIPER_ULTRA/  →  MetaTrader 5/MQL5/Include/SNIPER_ULTRA/
+3. Open SNIPER_AI_OK93.mq5 in MetaEditor
+4. Compile (F7)
+5. Journal must show: BUILD_ID=SA_ULTRA_93
+6. Trade comment: SNIPER AI
+7. MaxOpenTrades=3
+
+Without the Include/SNIPER_ULTRA folder, compile will fail.

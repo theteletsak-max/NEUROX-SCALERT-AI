@@ -1,3 +1,4 @@
-SNIPER_AI.mq5      = live mirror of OK92
-SNIPER_AI_OK92.mq5 = CURRENT ULTRA EA
-SNIPER_AI.zip      = deliver package
+SNIPER_AI_OK93.mq5              = thin modular main
+SNIPER_AI.mq5                   = same
+Include/SNIPER_ULTRA/*.mqh      = modules 00-10 + Shell A/B
+SNIPER_AI.zip                   = EA + Include folder
