@@ -14,6 +14,7 @@ enum ENUM_ULTRA_REGIME
    UREG_RANGE,
    UREG_COMPRESSION,
    UREG_EXPANSION,
+   UREG_BREAKOUT,
    UREG_REVERSAL,
    UREG_ACCUMULATION,
    UREG_DISTRIBUTION,
@@ -49,6 +50,8 @@ struct UltraStructure
 struct UltraBOS
 {
    bool buy, sell;
+   bool strong, weak;
+   bool confirmed, failed;
    int  strength, quality, confirmation, reliability, score;
 };
 
@@ -64,6 +67,7 @@ struct UltraLiquidity
 {
    bool buySideLiq, sellSideLiq;
    bool poolBuy, poolSell;
+   bool equalLows, equalHighs;   // Master Blueprint aliases
    bool grabBuy, grabSell;
    bool stopHuntBuy, stopHuntSell;
    bool sweepBuy, sweepSell;
@@ -101,6 +105,7 @@ struct UltraTrend
 {
    bool bull, bear;
    int  strength, quality, persistence;
+   bool continuation, exhaustion;
    bool htfBull, htfBear, macroBull, macroBear;
    bool weekBull, weekBear, monthBull, monthBear;
    int  mtfVotesBuy, mtfVotesSell;
@@ -111,6 +116,7 @@ struct UltraMomentum
    int  direction; // +1/-1/0
    int  strength, acceleration, quality, confirmation;
    bool momBuy, momSell;
+   bool weakness, impulse;
 };
 
 struct UltraVolatility
@@ -198,6 +204,7 @@ struct UltraSignal
    int  score;
    string tag;
    string reason;
+   string explanation; // Master Blueprint explainable decision text
 };
 
 UltraCoreState g_UltraCore;

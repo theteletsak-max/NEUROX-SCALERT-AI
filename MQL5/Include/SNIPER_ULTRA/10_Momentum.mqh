@@ -22,6 +22,9 @@ void UltraEngMomentum(const string s, UltraSnap &u)
    u.mom.acceleration = (avgPrev > 0 && prevBody > avgPrev * 1.25) ? 80 : ((avgPrev > 0 && prevBody < avgPrev * 0.75) ? 30 : 55);
    u.mom.quality = (u.mom.strength + u.mom.acceleration) / 2;
    u.mom.confirmation = (u.mom.momBuy && u.ict.dispBuy) || (u.mom.momSell && u.ict.dispSell) ? 80 : 45;
+   u.mom.weakness = (u.mom.acceleration <= 35 || u.mom.strength <= 40);
+   u.mom.impulse  = (u.mom.acceleration >= 70 && u.mom.strength >= 60) ||
+                    ((u.mom.momBuy && u.ict.dispBuy) || (u.mom.momSell && u.ict.dispSell));
 }
 void UltraEngIndicators(const string s, UltraSnap &u)
 {

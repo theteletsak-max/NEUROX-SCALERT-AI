@@ -19,6 +19,8 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
    }
    u.liq.poolBuy = (nL >= 2);  // equal lows = sell-side pool / buy grab target
    u.liq.poolSell = (nH >= 2);
+   u.liq.equalLows = u.liq.poolBuy;
+   u.liq.equalHighs = u.liq.poolSell;
    u.liq.sellSideLiq = u.liq.poolBuy || (u.st.swingLow > 0);
    u.liq.buySideLiq  = u.liq.poolSell || (u.st.swingHigh > 0);
    u.liq.poolLow = u.liq.poolBuy ? lo : u.st.swingLow;

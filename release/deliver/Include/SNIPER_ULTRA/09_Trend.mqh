@@ -57,6 +57,9 @@ void UltraEngTrend(const string s, UltraSnap &u)
    if(u.trend.strength > 100) u.trend.strength = 100;
    u.trend.quality = u.trend.strength;
    u.trend.persistence = MathMin(100, 20 + MathAbs(u.trend.mtfVotesBuy - u.trend.mtfVotesSell) * 12);
+   u.trend.continuation = u.st.continuation ||
+                          ((u.trend.bull && u.trend.htfBull) || (u.trend.bear && u.trend.htfBear));
+   u.trend.exhaustion = false; // filled after momentum in UltraEngRegime
 }
 
 #endif // SNIPER_ULTRA_09_TREND_MQH

@@ -13,7 +13,7 @@ string UltraDashboardText(const string s)
    string dir = sig.buy ? "BUY" : (sig.sell ? "SELL" : "-");
    return
       "======= SNIPER AI ULTRA =======\n" +
-      "BUILD: SA_ULTRA_93 v1 | Comment: SNIPER AI\n" +
+      "BUILD: SA_ULTRA_93 MASTER | Comment: SNIPER AI\n" +
       "Symbol: " + s + " | TF: " + EnumToString(UltraETF()) + "\n" +
       "Open: " + IntegerToString(CountOpenTrades()) + " / " + IntegerToString(MaxOpenTrades) + "\n" +
       "AI Conf: " + IntegerToString(u.score.confidence) +
@@ -28,6 +28,8 @@ string UltraDashboardText(const string s)
       "Trend B/S votes: " + IntegerToString(u.trend.mtfVotesBuy) + "/" + IntegerToString(u.trend.mtfVotesSell) +
       " | Str: " + IntegerToString(u.trend.strength) + "\n" +
       "BOS: " + (u.bos.buy ? "BUY" : (u.bos.sell ? "SELL" : "-")) +
+      (u.bos.strong ? " STRONG" : (u.bos.weak ? " WEAK" : "")) +
+      (u.bos.failed ? " FAILED" : "") +
       " CHoCH: " + (u.choch.buy ? "BUY" : (u.choch.sell ? "SELL" : "-")) +
       " Sweep: " + (u.liq.sweepBuy ? "BUY" : (u.liq.sweepSell ? "SELL" : "-")) + "\n" +
       "Fib zone B/S: " + (u.fib.atBuyZone ? "Y" : "N") + "/" + (u.fib.atSellZone ? "Y" : "N") +
@@ -44,6 +46,8 @@ string UltraDashboardText(const string s)
       " PF: " + DoubleToString(g_UltraMem.profitFactor, 2) +
       " RR: " + DoubleToString(g_UltraMem.avgRR, 2) + "\n" +
       "Signal: " + dir + " [" + sig.tag + "] " + sig.reason + "\n" +
+      "---- EXPLAIN ----\n" +
+      (sig.explanation != "" ? sig.explanation : UltraBuildExplanation(u, (dir!="SELL"), (dir!="-"), sig.tag)) + "\n" +
       "===============================";
 }
 

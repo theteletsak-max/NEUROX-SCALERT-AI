@@ -1,8 +1,8 @@
 #ifndef SNIPER_ULTRA_EXT_MQH
 #define SNIPER_ULTRA_EXT_MQH
 //+------------------------------------------------------------------+
-//| OPTIONAL extension pack (32-40) — not required for v1 blueprint  |
-//| Include only if you want broker/order/debug extras.              |
+//| 32-40 are now part of MASTER BLUEPRINT (loaded by SNIPER_ULTRA)  |
+//| This file remains for backward-compatible explicit includes.     |
 //+------------------------------------------------------------------+
 #include "32_BrokerCompatibility.mqh"
 #include "36_BrokerHealth.mqh"

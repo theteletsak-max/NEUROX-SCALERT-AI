@@ -1,7 +1,7 @@
 #ifndef SNIPER_ULTRA_MASTER_MQH
 #define SNIPER_ULTRA_MASTER_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA v1 BLUEPRINT — Master Include (00-31)            |
+//| SNIPER AI ULTRA — MASTER BLUEPRINT — modules 00-40               |
 //+------------------------------------------------------------------+
 
 #include "00_Types.mqh"
@@ -17,8 +17,8 @@
 #include "04_BOS.mqh"
 #include "05_CHoCH.mqh"
 #include "06_Liquidity.mqh"
-#include "08_Institutional.mqh"
 #include "07_Fibonacci.mqh"
+#include "08_Institutional.mqh"
 #include "09_Trend.mqh"
 #include "10_Momentum.mqh"
 #include "12_MarketRegime.mqh"
@@ -39,6 +39,15 @@
 #include "25_Statistics.mqh"
 #include "24_Dashboard.mqh"
 
-// Optional: #include "SNIPER_ULTRA_EXT.mqh"  // modules 32-40
+// Master Blueprint extension pack (32-40)
+#include "32_BrokerCompatibility.mqh"
+#include "36_BrokerHealth.mqh"
+#include "33_OrderManagement.mqh"
+#include "34_PositionManagement.mqh"
+#include "35_SignalEngine.mqh"
+#include "37_Optimization.mqh"
+#include "38_Backtesting.mqh"
+#include "39_EventEngine.mqh"
+#include "40_DebugTools.mqh"
 
 #endif // SNIPER_ULTRA_MASTER_MQH

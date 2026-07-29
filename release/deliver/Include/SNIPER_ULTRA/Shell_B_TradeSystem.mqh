@@ -70,7 +70,7 @@ int OnInit()
             " (EntryTF input=", EnumToString(EntryTF),
             ") — change the chart timeframe to change trading TF, or set EntryTF input");
    }
-   Print("OK93 v1 BLUEPRINT: modules 00-31 active | Shell A/B | ULTRA-only live path");
+   Print("OK93 MASTER BLUEPRINT: modules 00-40 active | Shell A/B | ULTRA-only live path");
    if(EnableAPEXStrategy || EnableContFallback || EnableLCSStrategy)
       Print("OK93 WARNING: old APEX/ContFallback/LCS input ON — evaluators STUBBED; ULTRA only fires");
    Print("INSTANT OPEN + QUALITY PREFER MODE=", InstantQualityMode);

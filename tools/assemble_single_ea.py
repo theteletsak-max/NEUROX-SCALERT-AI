@@ -5,24 +5,28 @@ order = [
     "Shell_A_InputsGlobals.mqh","00_Types.mqh","31_Inputs.mqh","28_Utilities.mqh",
     "27_Logger.mqh","30_Recovery.mqh","01_Core.mqh","02_Data.mqh","11_Volatility.mqh",
     "03_MarketStructure.mqh","04_BOS.mqh","05_CHoCH.mqh","06_Liquidity.mqh",
-    "08_Institutional.mqh","07_Fibonacci.mqh","09_Trend.mqh","10_Momentum.mqh",
+    "07_Fibonacci.mqh","08_Institutional.mqh","09_Trend.mqh","10_Momentum.mqh",
     "12_MarketRegime.mqh","18_NewsIntelligence.mqh","17_SessionIntelligence.mqh",
     "13_Precision.mqh","14_Probability.mqh","15_Confluence.mqh","26_Diagnostics.mqh",
     "29_MarketMemory.mqh","20_CapitalProtection.mqh","19_Execution.mqh","16_AI_Core.mqh",
     "21_TradeManagement.mqh","22_MultiSymbol.mqh","23_MultiTimeframe.mqh",
-    "25_Statistics.mqh","24_Dashboard.mqh","Shell_B_TradeSystem.mqh",
+    "25_Statistics.mqh","24_Dashboard.mqh",
+    "32_BrokerCompatibility.mqh","36_BrokerHealth.mqh","33_OrderManagement.mqh",
+    "34_PositionManagement.mqh","35_SignalEngine.mqh","37_Optimization.mqh",
+    "38_Backtesting.mqh","39_EventEngine.mqh","40_DebugTools.mqh",
+    "Shell_B_TradeSystem.mqh",
 ]
 header = '''//+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
 //| BUILD_ID: SA_ULTRA_93                                             |
-//| SNIPER AI ULTRA v1 BLUEPRINT — SINGLE-FILE EA                     |
-//| Comment: SNIPER AI | MaxOpen=3                                    |
-//| Auto-assembled from Include/SNIPER_ULTRA modules 00-31 + Shells   |
+//| SNIPER AI ULTRA — MASTER BLUEPRINT — SINGLE-FILE EA (00-40)       |
+//| Comment: SNIPER AI | MaxOpen=3 | EntryTF follows chart            |
+//| Auto-assembled from Include/SNIPER_ULTRA modules 00-40 + Shells   |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version   "1.00"
-#property description "SNIPER AI ULTRA v1 BLUEPRINT single-file EA"
+#property description "SNIPER AI ULTRA MASTER BLUEPRINT single-file EA 00-40"
 #property description "BUILD=SA_ULTRA_93 Comment=SNIPER AI MaxOpen=3"
 
 #include <Trade/Trade.mqh>
@@ -31,7 +35,7 @@ header = '''//+-----------------------------------------------------------------
 
 CTrade trade;
 
-//==================== SINGLE-FILE v1 BLUEPRINT =====================//
+//==================== SINGLE-FILE MASTER BLUEPRINT =================//
 '''
 parts = [header]
 for name in order:

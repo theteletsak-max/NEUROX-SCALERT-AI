@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
 //| BUILD_ID: SA_ULTRA_93                                             |
-//| SNIPER AI ULTRA v1 BLUEPRINT — SINGLE-FILE EA                     |
-//| Comment: SNIPER AI | MaxOpen=3                                    |
-//| Auto-assembled from Include/SNIPER_ULTRA modules 00-31 + Shells   |
+//| SNIPER AI ULTRA — MASTER BLUEPRINT — SINGLE-FILE EA (00-40)       |
+//| Comment: SNIPER AI | MaxOpen=3 | EntryTF follows chart            |
+//| Auto-assembled from Include/SNIPER_ULTRA modules 00-40 + Shells   |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version   "1.00"
-#property description "SNIPER AI ULTRA v1 BLUEPRINT single-file EA"
+#property description "SNIPER AI ULTRA MASTER BLUEPRINT single-file EA 00-40"
 #property description "BUILD=SA_ULTRA_93 Comment=SNIPER AI MaxOpen=3"
 
 #include <Trade/Trade.mqh>
@@ -17,7 +17,7 @@
 
 CTrade trade;
 
-//==================== SINGLE-FILE v1 BLUEPRINT =====================//
+//==================== SINGLE-FILE MASTER BLUEPRINT =================//
 
 //===== BEGIN Shell_A_InputsGlobals.mqh =====
 #ifndef SNIPER_ULTRA_SHELL_A_MQH
@@ -621,6 +621,7 @@ enum ENUM_ULTRA_REGIME
    UREG_RANGE,
    UREG_COMPRESSION,
    UREG_EXPANSION,
+   UREG_BREAKOUT,
    UREG_REVERSAL,
    UREG_ACCUMULATION,
    UREG_DISTRIBUTION,
@@ -656,6 +657,8 @@ struct UltraStructure
 struct UltraBOS
 {
    bool buy, sell;
+   bool strong, weak;
+   bool confirmed, failed;
    int  strength, quality, confirmation, reliability, score;
 };
 
@@ -671,6 +674,7 @@ struct UltraLiquidity
 {
    bool buySideLiq, sellSideLiq;
    bool poolBuy, poolSell;
+   bool equalLows, equalHighs;   // Master Blueprint aliases
    bool grabBuy, grabSell;
    bool stopHuntBuy, stopHuntSell;
    bool sweepBuy, sweepSell;
@@ -708,6 +712,7 @@ struct UltraTrend
 {
    bool bull, bear;
    int  strength, quality, persistence;
+   bool continuation, exhaustion;
    bool htfBull, htfBear, macroBull, macroBear;
    bool weekBull, weekBear, monthBull, monthBear;
    int  mtfVotesBuy, mtfVotesSell;
@@ -718,6 +723,7 @@ struct UltraMomentum
    int  direction; // +1/-1/0
    int  strength, acceleration, quality, confirmation;
    bool momBuy, momSell;
+   bool weakness, impulse;
 };
 
 struct UltraVolatility
@@ -805,6 +811,7 @@ struct UltraSignal
    int  score;
    string tag;
    string reason;
+   string explanation; // Master Blueprint explainable decision text
 };
 
 UltraCoreState g_UltraCore;
@@ -1229,12 +1236,12 @@ void UltraEngStructure(const string s, UltraSnap &u)
 #ifndef SNIPER_ULTRA_04_BOS_MQH
 #define SNIPER_ULTRA_04_BOS_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 04_BOS — Proprietary Break Of Structure
+//| SNIPER AI ULTRA — 04_BOS                                          |
+//| Proprietary · Strong/Weak · Confirmed/Failed · Quality/Strength   |
 //+------------------------------------------------------------------+
 void UltraEngBOS(const string s, UltraSnap &u)
 {
    ENUM_TIMEFRAMES tf = UltraETF();
-   // Prefer PRIOR swing (iH2/iL2) as break level — most-recent tip rarely stays "broken"
    int iH1, iH2, iL1, iL2;
    double breakHi = u.st.swingHigh;
    double breakLo = u.st.swingLow;
@@ -1246,21 +1253,40 @@ void UltraEngBOS(const string s, UltraSnap &u)
 
    u.bos.buy = false;
    u.bos.sell = false;
+   u.bos.strong = u.bos.weak = false;
+   u.bos.confirmed = u.bos.failed = false;
+
    int lb = MathMax(UltraBOS_ConfirmBars, 5);
+   bool brokeHi = false, brokeLo = false;
+   bool closedBeyondHi = false, closedBeyondLo = false;
    for(int i = 1; i <= lb; i++)
    {
       double c = iClose(s, tf, i);
       double h = iHigh(s, tf, i);
       double l = iLow(s, tf, i);
-      if(breakHi > 0 && (c > breakHi || h > breakHi)) u.bos.buy = true;
-      if(breakLo > 0 && (c < breakLo || l < breakLo)) u.bos.sell = true;
+      if(breakHi > 0 && h > breakHi) brokeHi = true;
+      if(breakLo > 0 && l < breakLo) brokeLo = true;
+      if(breakHi > 0 && c > breakHi) { u.bos.buy = true; closedBeyondHi = true; }
+      if(breakLo > 0 && c < breakLo) { u.bos.sell = true; closedBeyondLo = true; }
    }
 
-   // Soft structure BOS: HH/HL continuation counts as bullish structure break bias
+   // Soft structure BOS bias
    if(!u.bos.buy && u.st.hh && u.st.hl && (u.st.externalBull || u.st.internalBull))
       u.bos.buy = true;
    if(!u.bos.sell && u.st.lh && u.st.ll && (u.st.externalBear || u.st.internalBear))
       u.bos.sell = true;
+
+   // Failed BOS: wicked beyond level but closed back inside
+   if(brokeHi && !closedBeyondHi && breakHi > 0)
+   {
+      double c1 = iClose(s, tf, 1);
+      if(c1 < breakHi) u.bos.failed = true;
+   }
+   if(brokeLo && !closedBeyondLo && breakLo > 0)
+   {
+      double c1 = iClose(s, tf, 1);
+      if(c1 > breakLo) u.bos.failed = true;
+   }
 
    u.bos.confirmation = 0;
    if(u.bos.buy || u.bos.sell)
@@ -1268,12 +1294,20 @@ void UltraEngBOS(const string s, UltraSnap &u)
       double body = MathAbs(iClose(s, tf, 1) - iOpen(s, tf, 1));
       double rng = iHigh(s, tf, 1) - iLow(s, tf, 1);
       u.bos.confirmation = (rng > 0 && body / rng >= UltraDispBodyMin * 0.85) ? 80 : 55;
+      u.bos.confirmed = (u.bos.confirmation >= 70 && !u.bos.failed);
    }
+
    u.bos.strength = u.bos.confirmation;
    if((u.bos.buy && u.st.externalBull) || (u.bos.sell && u.st.externalBear)) u.bos.strength += 15;
+   if(u.vol.expansion) u.bos.strength += 8;
+   if(u.bos.failed) u.bos.strength = MathMax(u.bos.strength - 25, 0);
    if(u.bos.strength > 100) u.bos.strength = 100;
+
+   u.bos.strong = (u.bos.buy || u.bos.sell) && u.bos.strength >= 70 && u.bos.confirmed;
+   u.bos.weak   = (u.bos.buy || u.bos.sell) && !u.bos.strong && !u.bos.failed;
+
    u.bos.quality = u.bos.strength;
-   u.bos.reliability = (u.bos.confirmation >= 70 && u.st.quality >= 50) ? 75 : 45;
+   u.bos.reliability = (u.bos.confirmed && u.st.quality >= 50) ? 75 : (u.bos.failed ? 20 : 45);
    u.bos.score = (u.bos.strength + u.bos.quality + u.bos.reliability) / 3;
 }
 
@@ -1325,6 +1359,8 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
    }
    u.liq.poolBuy = (nL >= 2);  // equal lows = sell-side pool / buy grab target
    u.liq.poolSell = (nH >= 2);
+   u.liq.equalLows = u.liq.poolBuy;
+   u.liq.equalHighs = u.liq.poolSell;
    u.liq.sellSideLiq = u.liq.poolBuy || (u.st.swingLow > 0);
    u.liq.buySideLiq  = u.liq.poolSell || (u.st.swingHigh > 0);
    u.liq.poolLow = u.liq.poolBuy ? lo : u.st.swingLow;
@@ -1378,6 +1414,53 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
 
 #endif // SNIPER_ULTRA_06_LIQUIDITY_MQH
 //===== END 06_Liquidity.mqh =====
+
+//===== BEGIN 07_Fibonacci.mqh =====
+#ifndef SNIPER_ULTRA_07_FIBONACCI_MQH
+#define SNIPER_ULTRA_07_FIBONACCI_MQH
+//+------------------------------------------------------------------+
+//| SNIPER AI ULTRA — 07_FIBONACCI — Proprietary Fib Intelligence (UFIE)
+//+------------------------------------------------------------------+
+void UltraEngFib(const string s, UltraSnap &u)
+{
+   // Proprietary swing selection = structure swings; impulse = external structure move
+   u.fib.f100 = u.st.swingHigh; u.fib.f0 = u.st.swingLow;
+   double rng = u.fib.f100 - u.fib.f0;
+   if(rng <= 0) return;
+   u.fib.impulseOK = (u.vol.atr > 0 && rng >= u.vol.atr * 1.2);
+   u.fib.f382 = u.fib.f0 + rng * 0.382;
+   u.fib.f500 = u.fib.f0 + rng * 0.500;
+   u.fib.f618 = u.fib.f0 + rng * 0.618;
+   u.fib.f786 = u.fib.f0 + rng * 0.786;
+   u.fib.ext127 = u.fib.f100 + rng * (UltraFibExt127 - 1.0);
+   u.fib.ext161 = u.fib.f100 + rng * (UltraFibExt161 - 1.0);
+   // For bear impulse, extensions below f0
+   if(u.st.externalBear)
+   {
+      u.fib.ext127 = u.fib.f0 - rng * (UltraFibExt127 - 1.0);
+      u.fib.ext161 = u.fib.f0 - rng * (UltraFibExt161 - 1.0);
+   }
+   double px = SymbolInfoDouble(s, SYMBOL_BID);
+   u.fib.retracePos = (px - u.fib.f0) / rng;
+   u.fib.atBuyZone  = (u.fib.retracePos >= UltraFibBuyLow && u.fib.retracePos <= UltraFibBuyHigh);
+   u.fib.atSellZone = (u.fib.retracePos >= UltraFibSellLow && u.fib.retracePos <= UltraFibSellHigh);
+   // Zone ranking: 0.618 best, then 0.5, 0.786, 0.382
+   u.fib.zoneRank = 0;
+   if(MathAbs(u.fib.retracePos - 0.618) < 0.05) u.fib.zoneRank = 100;
+   else if(MathAbs(u.fib.retracePos - 0.500) < 0.05) u.fib.zoneRank = 85;
+   else if(MathAbs(u.fib.retracePos - 0.786) < 0.05) u.fib.zoneRank = 75;
+   else if(MathAbs(u.fib.retracePos - 0.382) < 0.05) u.fib.zoneRank = 65;
+   else if(u.fib.atBuyZone || u.fib.atSellZone) u.fib.zoneRank = 55;
+   u.fib.confluence = u.fib.zoneRank;
+   if(u.fib.impulseOK) u.fib.confluence += 10;
+   if((u.fib.atBuyZone && u.liq.sweepBuy) || (u.fib.atSellZone && u.liq.sweepSell)) u.fib.confluence += 15;
+   if(u.fib.confluence > 100) u.fib.confluence = 100;
+   u.fib.quality = u.fib.confluence;
+   u.fib.confidence = u.fib.quality;
+}
+
+#endif // SNIPER_ULTRA_07_FIBONACCI_MQH
+//===== END 07_Fibonacci.mqh =====
 
 //===== BEGIN 08_Institutional.mqh =====
 #ifndef SNIPER_ULTRA_08_INSTITUTIONAL_MQH
@@ -1453,53 +1536,6 @@ void UltraEngInstitutional(const string s, UltraSnap &u)
 #endif // SNIPER_ULTRA_08_INSTITUTIONAL_MQH
 //===== END 08_Institutional.mqh =====
 
-//===== BEGIN 07_Fibonacci.mqh =====
-#ifndef SNIPER_ULTRA_07_FIBONACCI_MQH
-#define SNIPER_ULTRA_07_FIBONACCI_MQH
-//+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 07_FIBONACCI — Proprietary Fib Intelligence (UFIE)
-//+------------------------------------------------------------------+
-void UltraEngFib(const string s, UltraSnap &u)
-{
-   // Proprietary swing selection = structure swings; impulse = external structure move
-   u.fib.f100 = u.st.swingHigh; u.fib.f0 = u.st.swingLow;
-   double rng = u.fib.f100 - u.fib.f0;
-   if(rng <= 0) return;
-   u.fib.impulseOK = (u.vol.atr > 0 && rng >= u.vol.atr * 1.2);
-   u.fib.f382 = u.fib.f0 + rng * 0.382;
-   u.fib.f500 = u.fib.f0 + rng * 0.500;
-   u.fib.f618 = u.fib.f0 + rng * 0.618;
-   u.fib.f786 = u.fib.f0 + rng * 0.786;
-   u.fib.ext127 = u.fib.f100 + rng * (UltraFibExt127 - 1.0);
-   u.fib.ext161 = u.fib.f100 + rng * (UltraFibExt161 - 1.0);
-   // For bear impulse, extensions below f0
-   if(u.st.externalBear)
-   {
-      u.fib.ext127 = u.fib.f0 - rng * (UltraFibExt127 - 1.0);
-      u.fib.ext161 = u.fib.f0 - rng * (UltraFibExt161 - 1.0);
-   }
-   double px = SymbolInfoDouble(s, SYMBOL_BID);
-   u.fib.retracePos = (px - u.fib.f0) / rng;
-   u.fib.atBuyZone  = (u.fib.retracePos >= UltraFibBuyLow && u.fib.retracePos <= UltraFibBuyHigh);
-   u.fib.atSellZone = (u.fib.retracePos >= UltraFibSellLow && u.fib.retracePos <= UltraFibSellHigh);
-   // Zone ranking: 0.618 best, then 0.5, 0.786, 0.382
-   u.fib.zoneRank = 0;
-   if(MathAbs(u.fib.retracePos - 0.618) < 0.05) u.fib.zoneRank = 100;
-   else if(MathAbs(u.fib.retracePos - 0.500) < 0.05) u.fib.zoneRank = 85;
-   else if(MathAbs(u.fib.retracePos - 0.786) < 0.05) u.fib.zoneRank = 75;
-   else if(MathAbs(u.fib.retracePos - 0.382) < 0.05) u.fib.zoneRank = 65;
-   else if(u.fib.atBuyZone || u.fib.atSellZone) u.fib.zoneRank = 55;
-   u.fib.confluence = u.fib.zoneRank;
-   if(u.fib.impulseOK) u.fib.confluence += 10;
-   if((u.fib.atBuyZone && u.liq.sweepBuy) || (u.fib.atSellZone && u.liq.sweepSell)) u.fib.confluence += 15;
-   if(u.fib.confluence > 100) u.fib.confluence = 100;
-   u.fib.quality = u.fib.confluence;
-   u.fib.confidence = u.fib.quality;
-}
-
-#endif // SNIPER_ULTRA_07_FIBONACCI_MQH
-//===== END 07_Fibonacci.mqh =====
-
 //===== BEGIN 09_Trend.mqh =====
 #ifndef SNIPER_ULTRA_09_TREND_MQH
 #define SNIPER_ULTRA_09_TREND_MQH
@@ -1560,6 +1596,9 @@ void UltraEngTrend(const string s, UltraSnap &u)
    if(u.trend.strength > 100) u.trend.strength = 100;
    u.trend.quality = u.trend.strength;
    u.trend.persistence = MathMin(100, 20 + MathAbs(u.trend.mtfVotesBuy - u.trend.mtfVotesSell) * 12);
+   u.trend.continuation = u.st.continuation ||
+                          ((u.trend.bull && u.trend.htfBull) || (u.trend.bear && u.trend.htfBear));
+   u.trend.exhaustion = false; // filled after momentum in UltraEngRegime
 }
 
 #endif // SNIPER_ULTRA_09_TREND_MQH
@@ -1590,6 +1629,9 @@ void UltraEngMomentum(const string s, UltraSnap &u)
    u.mom.acceleration = (avgPrev > 0 && prevBody > avgPrev * 1.25) ? 80 : ((avgPrev > 0 && prevBody < avgPrev * 0.75) ? 30 : 55);
    u.mom.quality = (u.mom.strength + u.mom.acceleration) / 2;
    u.mom.confirmation = (u.mom.momBuy && u.ict.dispBuy) || (u.mom.momSell && u.ict.dispSell) ? 80 : 45;
+   u.mom.weakness = (u.mom.acceleration <= 35 || u.mom.strength <= 40);
+   u.mom.impulse  = (u.mom.acceleration >= 70 && u.mom.strength >= 60) ||
+                    ((u.mom.momBuy && u.ict.dispBuy) || (u.mom.momSell && u.ict.dispSell));
 }
 void UltraEngIndicators(const string s, UltraSnap &u)
 {
@@ -1621,15 +1663,21 @@ void UltraEngIndicators(const string s, UltraSnap &u)
 #ifndef SNIPER_ULTRA_12_MARKETREGIME_MQH
 #define SNIPER_ULTRA_12_MARKETREGIME_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 12_MARKET_REGIME — Trend/Range/Compression/Expansion/...
+//| SNIPER AI ULTRA — 12_MARKET_REGIME                                |
+//| Strong/Weak Trend · Range · Breakout · Reversal · Acc/Dist        |
 //+------------------------------------------------------------------+
 void UltraEngRegime(UltraSnap &u)
 {
+   u.trend.exhaustion = (u.mom.acceleration <= 30 && u.vol.expansion && u.trend.strength >= 55);
+
    if(u.vol.compression && !(u.trend.bull || u.trend.bear)) u.regime = UREG_COMPRESSION;
+   else if(u.vol.expansion && (u.bos.buy || u.bos.sell) && u.bos.strong)
+      u.regime = UREG_BREAKOUT;
    else if(u.vol.expansion && (u.choch.buy || u.choch.sell)) u.regime = UREG_REVERSAL;
    else if(u.vol.expansion && u.trend.strength >= 70) u.regime = UREG_EXPANSION;
-   else if(u.trend.strength >= 75 && u.st.continuation) u.regime = UREG_STRONG_TREND;
-   else if(u.trend.strength >= 55 && u.st.continuation) u.regime = UREG_HEALTHY_TREND;
+   else if(u.trend.exhaustion) u.regime = UREG_EXHAUSTION;
+   else if(u.trend.strength >= 75 && u.trend.continuation) u.regime = UREG_STRONG_TREND;
+   else if(u.trend.strength >= 55 && u.trend.continuation) u.regime = UREG_HEALTHY_TREND;
    else if(u.trend.strength >= 40 && (u.trend.bull || u.trend.bear)) u.regime = UREG_WEAK_TREND;
    else if(u.liq.sweepBuy && u.ict.inDiscount && !u.trend.htfBear) u.regime = UREG_ACCUMULATION;
    else if(u.liq.sweepSell && u.ict.inPremium && !u.trend.htfBull) u.regime = UREG_DISTRIBUTION;
@@ -1646,6 +1694,7 @@ string UltraRegimeName(const ENUM_ULTRA_REGIME r)
       case UREG_RANGE: return "RANGE";
       case UREG_COMPRESSION: return "COMPRESSION";
       case UREG_EXPANSION: return "EXPANSION";
+      case UREG_BREAKOUT: return "BREAKOUT";
       case UREG_REVERSAL: return "REVERSAL";
       case UREG_ACCUMULATION: return "ACCUMULATION";
       case UREG_DISTRIBUTION: return "DISTRIBUTION";
@@ -2238,7 +2287,8 @@ int UltraSymDir(const string s)
 
 UltraSignal UltraPickBest(const UltraSnap &u)
 {
-   UltraSignal best; best.buy = best.sell = false; best.score = -1; best.tag = "NONE"; best.reason = "no setup";
+   UltraSignal best; best.buy = best.sell = false; best.score = -1; best.tag = "NONE";
+   best.reason = "no setup"; best.explanation = "";
    UltraSignal arr[6];
    int n = 0;
    if(UltraEnable_FlashSweep)   arr[n++] = UltraStrat_FlashSweep(u);
@@ -2258,6 +2308,39 @@ UltraSignal UltraPickBest(const UltraSnap &u)
       best.reason = StringFormat("below confluence (%d<%d)", best.score, UltraFireFloor());
    }
    return best;
+}
+
+// Master Blueprint explainable decision (BUY/SELL/WAIT + checklist)
+string UltraBuildExplanation(const UltraSnap &u, const bool buySide, const bool approved, const string tag)
+{
+   bool structure = buySide
+      ? (u.st.hh || u.st.hl || u.st.externalBull || u.st.internalBull || u.st.continuation)
+      : (u.st.lh || u.st.ll || u.st.externalBear || u.st.internalBear || u.st.continuation);
+   bool bosCh = buySide ? (u.bos.buy || u.choch.buy) : (u.bos.sell || u.choch.sell);
+   bool liq   = buySide ? (u.liq.sweepBuy || u.liq.stopHuntBuy || u.liq.equalLows)
+                        : (u.liq.sweepSell || u.liq.stopHuntSell || u.liq.equalHighs);
+   bool trend = buySide ? (u.trend.bull || u.trend.htfBull || u.trend.macroBull)
+                        : (u.trend.bear || u.trend.htfBear || u.trend.macroBear);
+   bool mom   = buySide ? (u.mom.momBuy || u.mom.impulse || u.ict.dispBuy)
+                        : (u.mom.momSell || u.mom.impulse || u.ict.dispSell);
+   bool fib   = buySide ? u.fib.atBuyZone : u.fib.atSellZone;
+   int passed = (structure?1:0)+(bosCh?1:0)+(liq?1:0)+(trend?1:0)+(mom?1:0)+(fib?1:0);
+
+   string t = (approved ? tag : "NO TRADE") + "\n";
+   t += (structure ? "[OK] " : "[X]  ") + "Structure\n";
+   t += (bosCh     ? "[OK] " : "[X]  ") + "BOS/CHoCH\n";
+   t += (liq       ? "[OK] " : "[X]  ") + "Liquidity\n";
+   t += (fib       ? "[OK] " : "[-]  ") + "Fibonacci\n";
+   t += (trend     ? "[OK] " : "[X]  ") + "Trend\n";
+   t += (mom       ? "[OK] " : "[X]  ") + "Momentum\n";
+   t += "Confidence = " + IntegerToString(u.score.confidence) + "%\n";
+   t += "Precision  = " + IntegerToString(u.score.precision) + "%\n";
+   t += "Probability= " + IntegerToString(u.score.probability) + "%\n";
+   if(approved)
+      t += "Decision = " + (buySide ? "BUY" : "SELL");
+   else
+      t += "Decision = WAIT | Reason = Insufficient Confluence (" + IntegerToString(passed) + "/6)";
+   return t;
 }
 
 void UltraClearSnap(UltraSnap &u)
@@ -2376,8 +2459,9 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    if(!UltraAIDecide(BrokerSymbol, snap, best, why))
    {
       g_UltraLastSnap = snap;
+      bool leanBuy = (UltraConfluenceBuy(snap) >= UltraConfluenceSell(snap));
+      best.explanation = UltraBuildExplanation(snap, leanBuy, false, "NO TRADE");
       g_UltraLastSignal = best;
-      // Throttle wait spam to once per bar per symbol
       datetime bar = iTime(BrokerSymbol, UltraETF(), 0);
       bool logIt = (EnableVerboseLogging || ContStruct_LogDetail) &&
                    (bar != g_UltraLastWaitBar || BrokerSymbol != g_UltraLastWaitSym);
@@ -2399,6 +2483,7 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    buySignal = best.buy;
    sellSignal = best.sell;
    strategyTag = best.tag;
+   best.explanation = UltraBuildExplanation(snap, best.buy, true, best.tag);
    g_UltraLastSnap = snap;
    g_UltraLastSignal = best;
    Print("ULTRA FIRE ", (best.buy ? "BUY" : "SELL"), " [", best.tag, "] conf=", snap.score.confidence,
@@ -2617,7 +2702,7 @@ string UltraDashboardText(const string s)
    string dir = sig.buy ? "BUY" : (sig.sell ? "SELL" : "-");
    return
       "======= SNIPER AI ULTRA =======\n" +
-      "BUILD: SA_ULTRA_93 v1 | Comment: SNIPER AI\n" +
+      "BUILD: SA_ULTRA_93 MASTER | Comment: SNIPER AI\n" +
       "Symbol: " + s + " | TF: " + EnumToString(UltraETF()) + "\n" +
       "Open: " + IntegerToString(CountOpenTrades()) + " / " + IntegerToString(MaxOpenTrades) + "\n" +
       "AI Conf: " + IntegerToString(u.score.confidence) +
@@ -2632,6 +2717,8 @@ string UltraDashboardText(const string s)
       "Trend B/S votes: " + IntegerToString(u.trend.mtfVotesBuy) + "/" + IntegerToString(u.trend.mtfVotesSell) +
       " | Str: " + IntegerToString(u.trend.strength) + "\n" +
       "BOS: " + (u.bos.buy ? "BUY" : (u.bos.sell ? "SELL" : "-")) +
+      (u.bos.strong ? " STRONG" : (u.bos.weak ? " WEAK" : "")) +
+      (u.bos.failed ? " FAILED" : "") +
       " CHoCH: " + (u.choch.buy ? "BUY" : (u.choch.sell ? "SELL" : "-")) +
       " Sweep: " + (u.liq.sweepBuy ? "BUY" : (u.liq.sweepSell ? "SELL" : "-")) + "\n" +
       "Fib zone B/S: " + (u.fib.atBuyZone ? "Y" : "N") + "/" + (u.fib.atSellZone ? "Y" : "N") +
@@ -2648,6 +2735,8 @@ string UltraDashboardText(const string s)
       " PF: " + DoubleToString(g_UltraMem.profitFactor, 2) +
       " RR: " + DoubleToString(g_UltraMem.avgRR, 2) + "\n" +
       "Signal: " + dir + " [" + sig.tag + "] " + sig.reason + "\n" +
+      "---- EXPLAIN ----\n" +
+      (sig.explanation != "" ? sig.explanation : UltraBuildExplanation(u, (dir!="SELL"), (dir!="-"), sig.tag)) + "\n" +
       "===============================";
 }
 
@@ -2665,6 +2754,673 @@ void CreateDashboard()
 
 #endif // SNIPER_ULTRA_24_DASHBOARD_MQH
 //===== END 24_Dashboard.mqh =====
+
+//===== BEGIN 32_BrokerCompatibility.mqh =====
+#ifndef SNIPER_ULTRA_32_BROKERCOMPAT_MQH
+#define SNIPER_ULTRA_32_BROKERCOMPAT_MQH
+//+------------------------------------------------------------------+
+//| 32_BrokerCompatibility — fill/exec modes · stops · freeze · caps |
+//+------------------------------------------------------------------+
+
+struct UltraBrokerCaps
+{
+   string company;
+   long   login;
+   int    stopsLevel;
+   int    freezeLevel;
+   int    fillingMode;
+   bool   fillFOK;
+   bool   fillIOC;
+   bool   fillRETURN;
+   bool   tradeAllowed;
+   bool   valid;
+};
+
+UltraBrokerCaps g_UltraBrokerCaps;
+
+void UltraBroker_ClearCaps(UltraBrokerCaps &c)
+{
+   c.company = "";
+   c.login = 0;
+   c.stopsLevel = 0;
+   c.freezeLevel = 0;
+   c.fillingMode = 0;
+   c.fillFOK = c.fillIOC = c.fillRETURN = false;
+   c.tradeAllowed = false;
+   c.valid = false;
+}
+
+bool UltraBroker_Detect(const string s, UltraBrokerCaps &c)
+{
+   UltraBroker_ClearCaps(c);
+   c.company = AccountInfoString(ACCOUNT_COMPANY);
+   c.login   = AccountInfoInteger(ACCOUNT_LOGIN);
+   c.stopsLevel  = (int)SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL);
+   c.freezeLevel = (int)SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL);
+   c.fillingMode = (int)SymbolInfoInteger(s, SYMBOL_FILLING_MODE);
+   c.fillFOK    = ((c.fillingMode & SYMBOL_FILLING_FOK) == SYMBOL_FILLING_FOK);
+   c.fillIOC    = ((c.fillingMode & SYMBOL_FILLING_IOC) == SYMBOL_FILLING_IOC);
+   c.fillRETURN = true;
+   c.tradeAllowed = (SymbolInfoInteger(s, SYMBOL_TRADE_MODE) != SYMBOL_TRADE_MODE_DISABLED);
+   c.valid = (SymbolInfoDouble(s, SYMBOL_BID) > 0.0);
+   g_UltraBrokerCaps = c;
+   return c.valid;
+}
+
+ENUM_ORDER_TYPE_FILLING UltraBroker_PickFilling(const string s)
+{
+   UltraBrokerCaps c;
+   UltraBroker_Detect(s, c);
+   if(c.fillFOK) return ORDER_FILLING_FOK;
+   if(c.fillIOC) return ORDER_FILLING_IOC;
+   return ORDER_FILLING_RETURN;
+}
+
+bool UltraBroker_StopsOK(const string s, const double price, const double sl, const double tp, string &why)
+{
+   why = "";
+   int stops = (int)SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL);
+   double point = SymbolInfoDouble(s, SYMBOL_POINT);
+   if(point <= 0){ why = "bad point"; return false; }
+   double minDist = stops * point;
+   if(sl > 0 && MathAbs(price - sl) < minDist){ why = "SL inside stops level"; return false; }
+   if(tp > 0 && MathAbs(price - tp) < minDist){ why = "TP inside stops level"; return false; }
+   return true;
+}
+
+bool UltraBroker_FreezeOK(const string s, const double price, const double sl, const double tp, string &why)
+{
+   why = "";
+   int freeze = (int)SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL);
+   double point = SymbolInfoDouble(s, SYMBOL_POINT);
+   if(freeze <= 0 || point <= 0) return true;
+   double minDist = freeze * point;
+   if(sl > 0 && MathAbs(price - sl) < minDist){ why = "SL inside freeze level"; return false; }
+   if(tp > 0 && MathAbs(price - tp) < minDist){ why = "TP inside freeze level"; return false; }
+   return true;
+}
+
+string UltraBroker_Summary(const string s)
+{
+   UltraBrokerCaps c; UltraBroker_Detect(s, c);
+   return c.company + " stops=" + IntegerToString(c.stopsLevel) +
+          " freeze=" + IntegerToString(c.freezeLevel) +
+          " FOK=" + (c.fillFOK ? "Y" : "N") +
+          " IOC=" + (c.fillIOC ? "Y" : "N");
+}
+
+#endif
+//===== END 32_BrokerCompatibility.mqh =====
+
+//===== BEGIN 36_BrokerHealth.mqh =====
+#ifndef SNIPER_ULTRA_36_BROKERHEALTH_MQH
+#define SNIPER_ULTRA_36_BROKERHEALTH_MQH
+//+------------------------------------------------------------------+
+//| 36_BrokerHealth — connection · permissions · market · symbols    |
+//+------------------------------------------------------------------+
+
+struct UltraBrokerHealth
+{
+   bool connected;
+   bool tradeAllowed;
+   bool terminalTrade;
+   bool marketOpen;      // soft: has quotes
+   bool symbolOK;
+   long pingMs;          // TerminalInfoInteger TERMINAL_PING approx if available
+   string status;
+};
+
+UltraBrokerHealth g_UltraBrokerHealth;
+
+void UltraHealth_Update(const string s)
+{
+   g_UltraBrokerHealth.connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
+   g_UltraBrokerHealth.terminalTrade = (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED);
+   g_UltraBrokerHealth.tradeAllowed = (AccountInfoInteger(ACCOUNT_TRADE_ALLOWED) != 0);
+   g_UltraBrokerHealth.symbolOK = (SymbolInfoInteger(s, SYMBOL_SELECT) != 0);
+   double bid = SymbolInfoDouble(s, SYMBOL_BID);
+   g_UltraBrokerHealth.marketOpen = (bid > 0.0);
+   g_UltraBrokerHealth.pingMs = 0; // broker RTT probe reserved
+   if(!g_UltraBrokerHealth.connected) g_UltraBrokerHealth.status = "DISCONNECTED";
+   else if(!g_UltraBrokerHealth.terminalTrade || !g_UltraBrokerHealth.tradeAllowed) g_UltraBrokerHealth.status = "TRADE_BLOCKED";
+   else if(!g_UltraBrokerHealth.symbolOK) g_UltraBrokerHealth.status = "SYMBOL_BAD";
+   else if(!g_UltraBrokerHealth.marketOpen) g_UltraBrokerHealth.status = "NO_QUOTES";
+   else g_UltraBrokerHealth.status = "OK";
+}
+
+bool UltraHealth_OK(const string s)
+{
+   UltraHealth_Update(s);
+   return (g_UltraBrokerHealth.status == "OK");
+}
+
+string UltraHealth_Summary(const string s)
+{
+   UltraHealth_Update(s);
+   return g_UltraBrokerHealth.status + " pingMs=" + IntegerToString((int)g_UltraBrokerHealth.pingMs);
+}
+
+#endif
+//===== END 36_BrokerHealth.mqh =====
+
+//===== BEGIN 33_OrderManagement.mqh =====
+#ifndef SNIPER_ULTRA_33_ORDERMGMT_MQH
+#define SNIPER_ULTRA_33_ORDERMGMT_MQH
+//+------------------------------------------------------------------+
+//| 33_OrderManagement — market/pending · modify · cancel · partial  |
+//| Deep market open path remains ExecuteBuy/Sell in Shell_B.        |
+//+------------------------------------------------------------------+
+
+bool UltraOrder_IsOurs(const ulong ticket)
+{
+   if(!OrderSelect(ticket)) return false;
+   return (OrderGetInteger(ORDER_MAGIC) == MagicNumber);
+}
+
+int UltraOrder_CountPendingOurs()
+{
+   int n = 0;
+   for(int i = OrdersTotal() - 1; i >= 0; i--)
+   {
+      ulong t = OrderGetTicket(i);
+      if(t == 0) continue;
+      if(!OrderSelect(t)) continue;
+      if(OrderGetInteger(ORDER_MAGIC) != MagicNumber) continue;
+      n++;
+   }
+   return n;
+}
+
+bool UltraOrder_Cancel(const ulong ticket, string &why)
+{
+   why = "";
+   if(!UltraOrder_IsOurs(ticket)){ why = "not our order"; return false; }
+   MqlTradeRequest req; MqlTradeResult res;
+   ZeroMemory(req); ZeroMemory(res);
+   req.action = TRADE_ACTION_REMOVE;
+   req.order  = ticket;
+   if(!OrderSend(req, res))
+   {
+      why = "OrderSend remove failed " + IntegerToString((int)res.retcode);
+      return false;
+   }
+   return (res.retcode == TRADE_RETCODE_DONE || res.retcode == TRADE_RETCODE_PLACED);
+}
+
+bool UltraOrder_DuplicateProtect(const string s, const bool buy)
+{
+   // Block same-direction pending spam on symbol
+   for(int i = OrdersTotal() - 1; i >= 0; i--)
+   {
+      ulong t = OrderGetTicket(i);
+      if(t == 0 || !OrderSelect(t)) continue;
+      if(OrderGetInteger(ORDER_MAGIC) != MagicNumber) continue;
+      if(OrderGetString(ORDER_SYMBOL) != s) continue;
+      long typ = OrderGetInteger(ORDER_TYPE);
+      bool isBuy = (typ == ORDER_TYPE_BUY_LIMIT || typ == ORDER_TYPE_BUY_STOP || typ == ORDER_TYPE_BUY_STOP_LIMIT);
+      bool isSell= (typ == ORDER_TYPE_SELL_LIMIT || typ == ORDER_TYPE_SELL_STOP || typ == ORDER_TYPE_SELL_STOP_LIMIT);
+      if(buy && isBuy) return true;
+      if(!buy && isSell) return true;
+   }
+   return UltraExec_DuplicateBarGuard(s);
+}
+
+string UltraOrder_ModuleStatus()
+{
+   return "pendingOurs=" + IntegerToString(UltraOrder_CountPendingOurs()) +
+          " | market opens via Shell_B ExecuteBuy/Sell";
+}
+
+#endif
+//===== END 33_OrderManagement.mqh =====
+
+//===== BEGIN 34_PositionManagement.mqh =====
+#ifndef SNIPER_ULTRA_34_POSMGMT_MQH
+#define SNIPER_ULTRA_34_POSMGMT_MQH
+//+------------------------------------------------------------------+
+//| 34_PositionManagement — track · sync · monitor · stats           |
+//+------------------------------------------------------------------+
+
+struct UltraPosInfo
+{
+   ulong  ticket;
+   string symbol;
+   long   type;
+   double volume;
+   double profit;
+   double sl;
+   double tp;
+   string comment;
+};
+
+int UltraPos_CountMagic()
+{
+   int n = 0;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong t = PositionGetTicket(i);
+      if(t == 0 || !PositionSelectByTicket(t)) continue;
+      if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+      n++;
+   }
+   return n;
+}
+
+int UltraPos_CountSymbol(const string s)
+{
+   int n = 0;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong t = PositionGetTicket(i);
+      if(t == 0 || !PositionSelectByTicket(t)) continue;
+      if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+      if(PositionGetString(POSITION_SYMBOL) != s) continue;
+      n++;
+   }
+   return n;
+}
+
+bool UltraPos_Get(const ulong ticket, UltraPosInfo &p)
+{
+   p.ticket=0; p.symbol=""; p.type=0; p.volume=0; p.profit=0; p.sl=0; p.tp=0; p.comment="";
+   if(!PositionSelectByTicket(ticket)) return false;
+   if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) return false;
+   p.ticket  = ticket;
+   p.symbol  = PositionGetString(POSITION_SYMBOL);
+   p.type    = PositionGetInteger(POSITION_TYPE);
+   p.volume  = PositionGetDouble(POSITION_VOLUME);
+   p.profit  = PositionGetDouble(POSITION_PROFIT);
+   p.sl      = PositionGetDouble(POSITION_SL);
+   p.tp      = PositionGetDouble(POSITION_TP);
+   p.comment = PositionGetString(POSITION_COMMENT);
+   return true;
+}
+
+double UltraPos_TotalProfitMagic()
+{
+   double sum = 0.0;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong t = PositionGetTicket(i);
+      if(t == 0 || !PositionSelectByTicket(t)) continue;
+      if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+      sum += PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+   }
+   return sum;
+}
+
+string UltraPos_Summary()
+{
+   return "open=" + IntegerToString(UltraPos_CountMagic()) +
+          " pnl=" + DoubleToString(UltraPos_TotalProfitMagic(), 2);
+}
+
+#endif
+//===== END 34_PositionManagement.mqh =====
+
+//===== BEGIN 35_SignalEngine.mqh =====
+#ifndef SNIPER_ULTRA_35_SIGNAL_MQH
+#define SNIPER_ULTRA_35_SIGNAL_MQH
+//+------------------------------------------------------------------+
+//| 35_SignalEngine — Master Blueprint BUY/SELL checklist            |
+//| BUY:  Structure · BOS|CHoCH · Liquidity · Trend · Momentum ·     |
+//|       Precision · Confidence                                     |
+//| SELL: same on bearish side                                       |
+//+------------------------------------------------------------------+
+
+struct UltraRawSignal
+{
+   bool   buy;
+   bool   sell;
+   int    score;
+   string tag;
+   string reason;
+   string explanation;
+   bool   valid;
+};
+
+struct UltraSignalChecklist
+{
+   bool structure;
+   bool bosOrChoch;
+   bool liquidity;
+   bool trend;
+   bool momentum;
+   bool precisionOK;
+   bool confidenceOK;
+   int  passed;
+};
+
+UltraSignalChecklist UltraSignal_EvalSide(const UltraSnap &u, const bool buySide)
+{
+   UltraSignalChecklist c;
+   if(buySide)
+   {
+      c.structure  = (u.st.hh || u.st.hl || u.st.externalBull || u.st.internalBull || u.st.continuation);
+      c.bosOrChoch = (u.bos.buy || u.choch.buy);
+      c.liquidity  = (u.liq.sweepBuy || u.liq.stopHuntBuy || u.liq.grabBuy || u.liq.equalLows);
+      c.trend      = (u.trend.bull || u.trend.htfBull || u.trend.macroBull || u.trend.mtfVotesBuy >= u.trend.mtfVotesSell);
+      c.momentum   = (u.mom.momBuy || u.mom.impulse || u.ict.dispBuy || u.ind.smi > 0);
+   }
+   else
+   {
+      c.structure  = (u.st.lh || u.st.ll || u.st.externalBear || u.st.internalBear || u.st.continuation);
+      c.bosOrChoch = (u.bos.sell || u.choch.sell);
+      c.liquidity  = (u.liq.sweepSell || u.liq.stopHuntSell || u.liq.grabSell || u.liq.equalHighs);
+      c.trend      = (u.trend.bear || u.trend.htfBear || u.trend.macroBear || u.trend.mtfVotesSell > u.trend.mtfVotesBuy);
+      c.momentum   = (u.mom.momSell || u.mom.impulse || u.ict.dispSell || u.ind.smi < 0);
+   }
+   c.precisionOK  = (u.score.precision >= UltraMinPrecision || u.score.confidence >= UltraInstantFireConf);
+   c.confidenceOK = (u.score.confidence >= UltraFireFloor() || u.score.confidence >= UltraInstantFireConf ||
+                     (InstantQualityMode && u.score.confidence >= UltraFireFloor() - 8));
+   c.passed = (c.structure?1:0)+(c.bosOrChoch?1:0)+(c.liquidity?1:0)+(c.trend?1:0)+
+              (c.momentum?1:0)+(c.precisionOK?1:0)+(c.confidenceOK?1:0);
+   return c;
+}
+
+// Soft checklist note: live fire stays UltraAIDecide; this API adds explain + formal gates
+string UltraSignal_Explain(const UltraSnap &u, const bool buySide, const bool approved, const string decision)
+{
+   return UltraBuildExplanation(u, buySide, approved, decision);
+}
+
+bool UltraSignal_ChecklistPass(const UltraSnap &u, const bool buySide)
+{
+   UltraSignalChecklist c = UltraSignal_EvalSide(u, buySide);
+   if(InstantQualityMode)
+      return (c.passed >= 4 && c.confidenceOK);
+   return (c.structure && c.bosOrChoch && c.trend && c.confidenceOK &&
+           (c.liquidity || c.momentum) && c.precisionOK);
+}
+
+UltraRawSignal UltraSignal_Generate(const string s)
+{
+   UltraRawSignal out;
+   out.buy = out.sell = false; out.score = 0; out.tag = "NONE";
+   out.reason = ""; out.explanation = ""; out.valid = false;
+
+   UltraSnap snap;
+   if(!UltraBuildSnapshot(s, snap))
+   {
+      out.reason = "snapshot fail";
+      out.explanation = "Decision = WAIT | Reason = snapshot fail";
+      return out;
+   }
+
+   UltraSignal best;
+   string why = "";
+   if(!UltraAIDecide(s, snap, best, why))
+   {
+      bool leanBuy = (UltraConfluenceBuy(snap) >= UltraConfluenceSell(snap));
+      out.reason = why;
+      out.score = snap.score.confidence;
+      out.explanation = UltraSignal_Explain(snap, leanBuy, false, "NO TRADE");
+      return out;
+   }
+
+   if(!UltraSignal_ChecklistPass(snap, best.buy))
+   {
+      out.reason = "checklist incomplete";
+      out.score = snap.score.confidence;
+      out.explanation = UltraSignal_Explain(snap, best.buy, false, "NO TRADE");
+      return out;
+   }
+
+   out.buy = best.buy; out.sell = best.sell;
+   out.score = best.score; out.tag = best.tag; out.reason = best.reason;
+   out.explanation = UltraSignal_Explain(snap, best.buy, true, best.tag);
+   out.valid = (out.buy || out.sell);
+   return out;
+}
+
+bool UltraSignal_Filter(const UltraRawSignal &sig, const int minScore)
+{
+   if(!sig.valid) return false;
+   if(!(sig.buy || sig.sell)) return false;
+   if(sig.score < minScore) return false;
+   return true;
+}
+
+bool UltraSignal_Validate(const string s, const UltraRawSignal &sig, string &why)
+{
+   why = "";
+   if(!UltraSignal_Filter(sig, UltraFireFloor()) && sig.score < UltraInstantFireConf)
+   { why = "score filter"; return false; }
+   if(UltraBlockOppositeSameSym)
+   {
+      int d = UltraSymDir(s);
+      if(sig.buy && d < 0){ why = "opposite sell open"; return false; }
+      if(sig.sell && d > 0){ why = "opposite buy open"; return false; }
+   }
+   return true;
+}
+
+#endif // SNIPER_ULTRA_35_SIGNAL_MQH
+//===== END 35_SignalEngine.mqh =====
+
+//===== BEGIN 37_Optimization.mqh =====
+#ifndef SNIPER_ULTRA_37_OPT_MQH
+#define SNIPER_ULTRA_37_OPT_MQH
+//+------------------------------------------------------------------+
+//| 37_Optimization — memory/CPU/tick performance helpers            |
+//+------------------------------------------------------------------+
+
+struct UltraPerfOpt
+{
+   long lastTickMs;
+   long lastHeavyMs;
+   ulong cycleCount;
+   bool skipHeavy;
+};
+
+UltraPerfOpt g_UltraPerfOpt;
+
+void UltraOpt_OnTickStart()
+{
+   g_UltraPerfOpt.lastTickMs = (long)GetTickCount();
+   g_UltraPerfOpt.cycleCount++;
+}
+
+bool UltraOpt_ShouldSkipHeavy(const int minIntervalMs=50)
+{
+   long now = (long)GetTickCount();
+   if(g_UltraPerfOpt.lastHeavyMs > 0 && (now - g_UltraPerfOpt.lastHeavyMs) < minIntervalMs)
+   {
+      g_UltraPerfOpt.skipHeavy = true;
+      return true;
+   }
+   g_UltraPerfOpt.skipHeavy = false;
+   g_UltraPerfOpt.lastHeavyMs = now;
+   return false;
+}
+
+void UltraOpt_MarkHeavyDone()
+{
+   g_UltraPerfOpt.lastHeavyMs = (long)GetTickCount();
+}
+
+string UltraOpt_Summary()
+{
+   return "cycles=" + IntegerToString((int)g_UltraPerfOpt.cycleCount) +
+          " skipHeavy=" + (g_UltraPerfOpt.skipHeavy ? "Y" : "N");
+}
+
+#endif
+//===== END 37_Optimization.mqh =====
+
+//===== BEGIN 38_Backtesting.mqh =====
+#ifndef SNIPER_ULTRA_38_BACKTEST_MQH
+#define SNIPER_ULTRA_38_BACKTEST_MQH
+//+------------------------------------------------------------------+
+//| 38_Backtesting — tester detection · stats · walk-forward hooks   |
+//+------------------------------------------------------------------+
+
+bool UltraBT_IsTester()
+{
+   return (bool)MQLInfoInteger(MQL_TESTER);
+}
+
+bool UltraBT_IsOptimization()
+{
+   return (bool)MQLInfoInteger(MQL_OPTIMIZATION);
+}
+
+bool UltraBT_IsVisual()
+{
+   return (bool)MQLInfoInteger(MQL_VISUAL_MODE);
+}
+
+string UltraBT_ModeName()
+{
+   if(UltraBT_IsOptimization()) return "OPTIMIZATION";
+   if(UltraBT_IsTester()) return (UltraBT_IsVisual() ? "TESTER_VISUAL" : "TESTER");
+   return "LIVE";
+}
+
+void UltraBT_LogStats()
+{
+   if(!UltraBT_IsTester()) return;
+   UltraStats_Refresh();
+   UltraLogPerf("BT " + UltraBT_ModeName() + " " + UltraStats_Report());
+}
+
+// Walk-forward placeholder hooks (fill during optimization campaigns)
+datetime g_UltraBT_WF_Start = 0;
+datetime g_UltraBT_WF_End   = 0;
+
+void UltraBT_SetWalkForwardWindow(const datetime from, const datetime to)
+{
+   g_UltraBT_WF_Start = from;
+   g_UltraBT_WF_End = to;
+}
+
+bool UltraBT_InWalkForwardWindow(const datetime t)
+{
+   if(g_UltraBT_WF_Start <= 0 || g_UltraBT_WF_End <= 0) return true;
+   return (t >= g_UltraBT_WF_Start && t <= g_UltraBT_WF_End);
+}
+
+#endif
+//===== END 38_Backtesting.mqh =====
+
+//===== BEGIN 39_EventEngine.mqh =====
+#ifndef SNIPER_ULTRA_39_EVENTS_MQH
+#define SNIPER_ULTRA_39_EVENTS_MQH
+//+------------------------------------------------------------------+
+//| 39_EventEngine — dispatcher helpers around Shell_B handlers      |
+//| Actual OnInit/OnTick/OnTimer/... implementations live in Shell_B |
+//+------------------------------------------------------------------+
+
+enum ENUM_ULTRA_EVENT
+{
+   UEV_INIT = 0,
+   UEV_TICK,
+   UEV_TIMER,
+   UEV_TRADE_TX,
+   UEV_CHART,
+   UEV_DEINIT
+};
+
+struct UltraEventStats
+{
+   ulong initCount;
+   ulong tickCount;
+   ulong timerCount;
+   ulong tradeTxCount;
+   ulong chartCount;
+   ulong deinitCount;
+};
+
+UltraEventStats g_UltraEventStats;
+
+void UltraEvent_Note(const ENUM_ULTRA_EVENT e)
+{
+   switch(e)
+   {
+      case UEV_INIT:     g_UltraEventStats.initCount++; break;
+      case UEV_TICK:     g_UltraEventStats.tickCount++; break;
+      case UEV_TIMER:    g_UltraEventStats.timerCount++; break;
+      case UEV_TRADE_TX: g_UltraEventStats.tradeTxCount++; break;
+      case UEV_CHART:    g_UltraEventStats.chartCount++; break;
+      case UEV_DEINIT:   g_UltraEventStats.deinitCount++; break;
+   }
+}
+
+void UltraEvent_OnBoot()
+{
+   UltraEvent_Note(UEV_INIT);
+   UltraOpt_OnTickStart();
+   UltraSystemController_Boot();
+   UltraLog("EVENT boot mode=" + UltraBT_ModeName());
+}
+
+string UltraEvent_Summary()
+{
+   return "ticks=" + IntegerToString((int)g_UltraEventStats.tickCount) +
+          " timers=" + IntegerToString((int)g_UltraEventStats.timerCount) +
+          " tx=" + IntegerToString((int)g_UltraEventStats.tradeTxCount);
+}
+
+#endif
+//===== END 39_EventEngine.mqh =====
+
+//===== BEGIN 40_DebugTools.mqh =====
+#ifndef SNIPER_ULTRA_40_DEBUG_MQH
+#define SNIPER_ULTRA_40_DEBUG_MQH
+//+------------------------------------------------------------------+
+//| 40_DebugTools — asserts · timers · diagnostic helpers           |
+//+------------------------------------------------------------------+
+
+
+long g_UltraDebugTimerStart = 0;
+
+void UltraDebug_Msg(const string msg)
+{
+   if(!UltraDebugEnabled) return;
+   Print("ULTRA-DEBUG| ", msg);
+}
+
+void UltraDebug_Assert(const bool cond, const string msg)
+{
+   if(cond) return;
+   UltraSetError("ASSERT " + msg);
+   if(UltraDebugEnabled) Print("ULTRA-ASSERT FAILED| ", msg);
+}
+
+void UltraDebug_TimerStart()
+{
+   g_UltraDebugTimerStart = (long)GetTickCount();
+}
+
+long UltraDebug_TimerElapsedMs()
+{
+   if(g_UltraDebugTimerStart <= 0) return 0;
+   return (long)GetTickCount() - g_UltraDebugTimerStart;
+}
+
+void UltraDebug_DumpSnapshot(const string s)
+{
+   if(!UltraDebugEnabled) return;
+   UltraSnap u;
+   if(!UltraBuildSnapshot(s, u))
+   {
+      UltraDebug_Msg("snapshot fail " + g_UltraCore.lastError);
+      return;
+   }
+   UltraDebug_Msg("regime=" + UltraRegimeName(u.regime) +
+                  " conf=" + IntegerToString(u.score.confidence) +
+                  " prec=" + IntegerToString(u.score.precision) +
+                  " session=" + u.ctx.session +
+                  " SMI=" + DoubleToString(u.ind.smi, 1));
+}
+
+string UltraDebug_ModuleStatus()
+{
+   return UltraDebugEnabled ? "DEBUG ON" : "DEBUG OFF";
+}
+
+#endif
+//===== END 40_DebugTools.mqh =====
 
 //===== BEGIN Shell_B_TradeSystem.mqh =====
 #ifndef SNIPER_ULTRA_SHELL_B_MQH
@@ -2739,7 +3495,7 @@ int OnInit()
             " (EntryTF input=", EnumToString(EntryTF),
             ") — change the chart timeframe to change trading TF, or set EntryTF input");
    }
-   Print("OK93 v1 BLUEPRINT: modules 00-31 active | Shell A/B | ULTRA-only live path");
+   Print("OK93 MASTER BLUEPRINT: modules 00-40 active | Shell A/B | ULTRA-only live path");
    if(EnableAPEXStrategy || EnableContFallback || EnableLCSStrategy)
       Print("OK93 WARNING: old APEX/ContFallback/LCS input ON — evaluators STUBBED; ULTRA only fires");
    Print("INSTANT OPEN + QUALITY PREFER MODE=", InstantQualityMode);

@@ -1,4 +1,4 @@
-SNIPER AI ULTRA v1 BLUEPRINT
+SNIPER AI ULTRA — MASTER BLUEPRINT
 
 EA: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.mq5
 
@@ -6,4 +6,7 @@ Same: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai
 
 Zip: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/SNIPER_AI.zip
 
-F7 → SA_ULTRA_93 | Comment: SNIPER AI | MaxOpen=3
+Modules: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/tree/cursor/sniper-ai-compile-fix-b12d/MQL5/Include/SNIPER_ULTRA
+
+F7 → SA_ULTRA_93 | Comment: SNIPER AI | MaxOpen=3 | modules 00-40
+EntryTF follows chart timeframe

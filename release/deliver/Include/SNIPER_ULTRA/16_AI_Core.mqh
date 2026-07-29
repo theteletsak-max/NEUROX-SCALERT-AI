@@ -182,7 +182,8 @@ int UltraSymDir(const string s)
 
 UltraSignal UltraPickBest(const UltraSnap &u)
 {
-   UltraSignal best; best.buy = best.sell = false; best.score = -1; best.tag = "NONE"; best.reason = "no setup";
+   UltraSignal best; best.buy = best.sell = false; best.score = -1; best.tag = "NONE";
+   best.reason = "no setup"; best.explanation = "";
    UltraSignal arr[6];
    int n = 0;
    if(UltraEnable_FlashSweep)   arr[n++] = UltraStrat_FlashSweep(u);
@@ -202,6 +203,39 @@ UltraSignal UltraPickBest(const UltraSnap &u)
       best.reason = StringFormat("below confluence (%d<%d)", best.score, UltraFireFloor());
    }
    return best;
+}
+
+// Master Blueprint explainable decision (BUY/SELL/WAIT + checklist)
+string UltraBuildExplanation(const UltraSnap &u, const bool buySide, const bool approved, const string tag)
+{
+   bool structure = buySide
+      ? (u.st.hh || u.st.hl || u.st.externalBull || u.st.internalBull || u.st.continuation)
+      : (u.st.lh || u.st.ll || u.st.externalBear || u.st.internalBear || u.st.continuation);
+   bool bosCh = buySide ? (u.bos.buy || u.choch.buy) : (u.bos.sell || u.choch.sell);
+   bool liq   = buySide ? (u.liq.sweepBuy || u.liq.stopHuntBuy || u.liq.equalLows)
+                        : (u.liq.sweepSell || u.liq.stopHuntSell || u.liq.equalHighs);
+   bool trend = buySide ? (u.trend.bull || u.trend.htfBull || u.trend.macroBull)
+                        : (u.trend.bear || u.trend.htfBear || u.trend.macroBear);
+   bool mom   = buySide ? (u.mom.momBuy || u.mom.impulse || u.ict.dispBuy)
+                        : (u.mom.momSell || u.mom.impulse || u.ict.dispSell);
+   bool fib   = buySide ? u.fib.atBuyZone : u.fib.atSellZone;
+   int passed = (structure?1:0)+(bosCh?1:0)+(liq?1:0)+(trend?1:0)+(mom?1:0)+(fib?1:0);
+
+   string t = (approved ? tag : "NO TRADE") + "\n";
+   t += (structure ? "[OK] " : "[X]  ") + "Structure\n";
+   t += (bosCh     ? "[OK] " : "[X]  ") + "BOS/CHoCH\n";
+   t += (liq       ? "[OK] " : "[X]  ") + "Liquidity\n";
+   t += (fib       ? "[OK] " : "[-]  ") + "Fibonacci\n";
+   t += (trend     ? "[OK] " : "[X]  ") + "Trend\n";
+   t += (mom       ? "[OK] " : "[X]  ") + "Momentum\n";
+   t += "Confidence = " + IntegerToString(u.score.confidence) + "%\n";
+   t += "Precision  = " + IntegerToString(u.score.precision) + "%\n";
+   t += "Probability= " + IntegerToString(u.score.probability) + "%\n";
+   if(approved)
+      t += "Decision = " + (buySide ? "BUY" : "SELL");
+   else
+      t += "Decision = WAIT | Reason = Insufficient Confluence (" + IntegerToString(passed) + "/6)";
+   return t;
 }
 
 void UltraClearSnap(UltraSnap &u)
@@ -320,8 +354,9 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    if(!UltraAIDecide(BrokerSymbol, snap, best, why))
    {
       g_UltraLastSnap = snap;
+      bool leanBuy = (UltraConfluenceBuy(snap) >= UltraConfluenceSell(snap));
+      best.explanation = UltraBuildExplanation(snap, leanBuy, false, "NO TRADE");
       g_UltraLastSignal = best;
-      // Throttle wait spam to once per bar per symbol
       datetime bar = iTime(BrokerSymbol, UltraETF(), 0);
       bool logIt = (EnableVerboseLogging || ContStruct_LogDetail) &&
                    (bar != g_UltraLastWaitBar || BrokerSymbol != g_UltraLastWaitSym);
@@ -343,6 +378,7 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    buySignal = best.buy;
    sellSignal = best.sell;
    strategyTag = best.tag;
+   best.explanation = UltraBuildExplanation(snap, best.buy, true, best.tag);
    g_UltraLastSnap = snap;
    g_UltraLastSignal = best;
    Print("ULTRA FIRE ", (best.buy ? "BUY" : "SELL"), " [", best.tag, "] conf=", snap.score.confidence,
