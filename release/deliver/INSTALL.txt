@@ -1,8 +1,9 @@
-SNIPER AI ULTRA v1 BLUEPRINT INSTALL
+HITMAN AI — INSTALL FROM ZIP
 
-1. Copy SNIPER_AI_OK93.mq5 → MQL5/Experts/
-2. Copy Include/SNIPER_ULTRA/ → MQL5/Include/SNIPER_ULTRA/
-3. F7 → Journal: SA_ULTRA_93
-4. Comment: SNIPER AI | MaxOpen=3
+1. Download HITMAN_AI.zip
+2. Extract HITMAN_AI.mq5
+3. Copy → MetaTrader 5 Data Folder / MQL5 / Experts /
+4. MetaEditor → open HITMAN_AI.mq5 → F7 Compile
+5. Attach HITMAN_AI to chart · enable Algo Trading
 
-v1 master loads modules 00-31 only.
+Single-file EA — no Include folder required.

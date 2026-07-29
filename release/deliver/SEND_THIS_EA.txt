@@ -1,10 +1,16 @@
-HITMAN AI — MASTER + ULTRA FAST SIGNAL ENGINE v1.0
+HITMAN AI — SEND THIS ZIP
 
-EA: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI.mq5
+ZIP:  release/deliver/HITMAN_AI.zip
+Same: /opt/cursor/artifacts/HITMAN_AI.zip
 
-Same: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI_OK93.mq5
+GitHub:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/HITMAN_AI.zip
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/release/deliver/HITMAN_AI.zip
 
-Zip: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/HITMAN_AI.zip
+Inside zip:
+  HITMAN_AI.mq5          ← copy to MQL5/Experts/
+  INSTALL.txt
+  README.txt
+  MQL5/Experts/HITMAN_AI.mq5
 
-F7 → HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen=3
-UFSE: cache · master-trend lock · signal lock · explainable PASS/FAIL
+BUILD_ID: HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen: 3
