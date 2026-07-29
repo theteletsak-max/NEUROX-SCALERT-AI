@@ -40,8 +40,11 @@ void UltraOpt_MarkHeavyDone()
 
 string UltraOpt_Summary()
 {
-   return "cycles=" + IntegerToString((int)g_UltraPerfOpt.cycleCount) +
-          " skipHeavy=" + (g_UltraPerfOpt.skipHeavy ? "Y" : "N");
+   string t = "cycles=";
+   t += IntegerToString((int)g_UltraPerfOpt.cycleCount);
+   t += " skipHeavy=";
+   t += (g_UltraPerfOpt.skipHeavy ? "Y" : "N");
+   return t;
 }
 
 #endif

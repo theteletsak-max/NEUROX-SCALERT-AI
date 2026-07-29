@@ -85,10 +85,12 @@ bool UltraBroker_FreezeOK(const string s, const double price, const double sl, c
 string UltraBroker_Summary(const string s)
 {
    UltraBrokerCaps c; UltraBroker_Detect(s, c);
-   return c.company + " stops=" + IntegerToString(c.stopsLevel) +
-          " freeze=" + IntegerToString(c.freezeLevel) +
-          " FOK=" + (c.fillFOK ? "Y" : "N") +
-          " IOC=" + (c.fillIOC ? "Y" : "N");
+   string t = c.company;
+   t += " stops="; t += IntegerToString(c.stopsLevel);
+   t += " freeze="; t += IntegerToString(c.freezeLevel);
+   t += " FOK="; t += (c.fillFOK ? "Y" : "N");
+   t += " IOC="; t += (c.fillIOC ? "Y" : "N");
+   return t;
 }
 
 #endif
