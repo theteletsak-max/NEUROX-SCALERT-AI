@@ -1,4 +1,3 @@
-LIVE: SNIPER_AI_OK85.mq5 (SA_APEX_PSI_85) — APEX first, PSI fallback
-SIZE: ~49KB lean (OK83 was ~510KB)
-DELIVER: release/deliver/ (OK85 + docs + IDP + zip)
-ARCHIVE: release/archive/ (older OK builds including OK84 PSI-only)
+LIVE: SNIPER_AI_OK86.mq5 (SA_APEX_86)
+ENTRY: APEX only
+PSI: scores/dashboard (not entries)

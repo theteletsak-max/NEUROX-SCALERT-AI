@@ -1,4 +1,4 @@
-[ ] Remove OK84 from chart
-[ ] SNIPER_AI_OK85.mq5 → Experts → F7
-[ ] Journal: SA_APEX_PSI_85 — APEX + PSI LEAN
-[ ] Trade comment = SNIPER AI
+[ ] Remove OK85 from chart
+[ ] SNIPER_AI_OK86.mq5 → Experts → F7
+[ ] Journal: SA_APEX_86 — APEX ONLY ENTRY
+[ ] Leave PSI_AllowEntryFire = false

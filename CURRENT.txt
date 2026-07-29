@@ -1,13 +1,12 @@
 SNIPER AI — CURRENT
 
-EA:       SNIPER_AI_OK85.mq5
-BUILD_ID: SA_APEX_PSI_85
-Size:     ~49 KB (still lean)
+EA:       SNIPER_AI_OK86.mq5
+BUILD_ID: SA_APEX_86
 
-Live order:
-1) APEX liquidity sniper (bias → pool → sweep → reclaim → displacement)
-2) PSI v1.0 fallback
+ONE live entry path: APEX
+PSI = scoreboard / dashboard only (does not open trades)
 
-APEX was restored after the lean cut. Still no oscillator bulk.
+APEX checklist:
+  HTF bias → liquidity pool → sweep → reclaim → displacement → sweep SL
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK85.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK86.mq5

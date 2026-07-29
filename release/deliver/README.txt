@@ -1,1 +1,1 @@
-Use SNIPER_AI_OK85.mq5 — APEX + PSI lean
+APEX only entry. PSI = HUD scores.

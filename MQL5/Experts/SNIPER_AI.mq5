@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_APEX_PSI_85                                              |
-//| SNIPER AI — APEX + PSI LEAN                         |
-//| Comment: SNIPER AI | APEX liquidity sniper + PSI | No oscillators              |
+//| BUILD_ID: SA_APEX_86                                              |
+//| SNIPER AI — APEX ONLY (PSI scoreboard)                         |
+//| Comment: SNIPER AI | APEX entry only | PSI scores dashboard              |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "6.01"
-#property description "SNIPER AI OK85: APEX restored + PSI lean"
-#property description "BUILD SA_APEX_PSI_85 — APEX first, PSI fallback, still lean"
+#property version   "6.02"
+#property description "SNIPER AI OK86: APEX is the only entry path"
+#property description "BUILD SA_APEX_86 — one live path: APEX. PSI = scores only."
 
 #include <Trade/Trade.mqh>
 
@@ -19,8 +19,8 @@ input group "GENERAL"
 input long   MagicNumber   = 40001;
 input string TradeComment  = "SNIPER AI";
 
-input group "APEX — LIQUIDITY SNIPER (LIVE FIRST)"
-// Compact APEX: HTF bias → liquidity pool → sweep → reclaim → displacement → zone prefer
+input group "APEX — ONLY LIVE ENTRY PATH"
+// THE trade engine: HTF bias → pool → sweep → reclaim → displacement
 input bool   EnableAPEXStrategy        = true;
 input ENUM_TIMEFRAMES APEX_BiasTF      = PERIOD_H4;
 input int    APEX_BiasMA_Period        = 200;
@@ -40,18 +40,17 @@ input bool   APEX_RelaxedEntries       = true;  // swing-sweep path if no equal 
 input bool   APEX_UseSweepSL           = true;
 input double APEX_SL_BufferATR         = 0.12;
 input double APEX_MaxSL_ATR            = 4.0;
-input bool   APEX_GateWithPSI          = false; // false = APEX fires on own checklist
+input bool   APEX_GateWithPSI          = false; // keep false — APEX owns entries
 input bool   APEX_LogValidation        = true;
 
-input group "PRISM SIGNAL INDEX (PSI) v1.0"
-input bool   EnablePSI                   = true;
-input int    PSI_MinConfidenceToTrade    = 50;
-input int    PSI_GoodConfidence          = 70;
-input int    PSI_InstantConfidence       = 90;
+input group "PSI SCOREBOARD (NOT an entry path)"
+// OK86: PSI only scores/dashboard. It does NOT open trades unless you force it on.
+input bool   EnablePSI                   = true;   // compute scores for HUD
+input bool   PSI_AllowEntryFire          = false;  // OFF = APEX only entries
+input int    PSI_MinConfidenceToTrade    = 70;     // only if PSI_AllowEntryFire
 input bool   PSI_HardCancelFakes         = true;
-input bool   PSI_SoftLowQuality          = true;   // allow 50-69
-input bool   PSI_LogDecisions            = true;
-input bool   PSI_EnableSelfLearn         = true;
+input bool   PSI_LogDecisions            = false;  // quieter; APEX logs matter
+input bool   PSI_EnableSelfLearn         = false;  // off — less moving parts
 input double PSI_LearnStep               = 0.01;
 input bool   PSI_RejectPremiumBuys       = true;
 input bool   PSI_RejectDiscountSells     = true;
@@ -61,13 +60,10 @@ input double PSI_MinDispBodyRatio        = 0.50;
 input double PSI_MinDispATR              = 0.35;
 input int    PSI_StructureLookback       = 20;
 input int    PSI_SwingBars               = 3;
-input string PSI_SMTReferenceSymbol      = "";     // blank = internal SMT only
 
 input group "TIMEFRAMES"
 input ENUM_TIMEFRAMES EntryTF     = PERIOD_CURRENT;
-input ENUM_TIMEFRAMES BiasTF_H4   = PERIOD_H4;
-input ENUM_TIMEFRAMES BiasTF_D1   = PERIOD_D1;
-input ENUM_TIMEFRAMES BiasTF_H1   = PERIOD_H1;
+// Bias uses APEX_BiasTF (H4). Extra PSI bias TFs removed.
 
 input group "SIZE & RISK"
 input double LotSize           = 0.01;
@@ -80,11 +76,9 @@ input int    SlippagePoints    = 30;
 input group "STOPS & TARGETS"
 input int    ATR_Period        = 14;
 input double SL_ATR_Mult       = 1.5;
-input double TP1_ATR_Mult      = 1.5;
-input double TP2_ATR_Mult      = 2.5;
-input double TP3_ATR_Mult      = 4.0;
+input double TP_ATR_Mult       = 2.5;  // single TP (sweep SL from APEX when available)
 input bool   UseBreakEven      = true;
-input double BE_Trigger_R      = 1.0;   // move SL to BE after 1R
+input double BE_Trigger_R      = 1.0;
 input bool   UseTrailing       = true;
 input double Trail_ATR_Mult    = 1.2;
 input int    TradeCooldownSec   = 15;
@@ -515,20 +509,7 @@ bool SMTInternal(const bool buy)
 
 bool SMTCross(const bool buy)
 {
-   if(PSI_SMTReferenceSymbol=="" || PSI_SMTReferenceSymbol==g_Sym) return false;
-   if(!SymbolSelect(PSI_SMTReferenceSymbol, true)) return false;
-   int lb=10;
-   if(Bars(g_Sym,TF())<lb*2+2 || Bars(PSI_SMTReferenceSymbol,TF())<lb*2+2) return false;
-   double pNow = buy ? iLow(g_Sym,TF(),iLowest(g_Sym,TF(),MODE_LOW,lb,1))
-                     : iHigh(g_Sym,TF(),iHighest(g_Sym,TF(),MODE_HIGH,lb,1));
-   double pPast= buy ? iLow(g_Sym,TF(),iLowest(g_Sym,TF(),MODE_LOW,lb,1+lb))
-                     : iHigh(g_Sym,TF(),iHighest(g_Sym,TF(),MODE_HIGH,lb,1+lb));
-   double rNow = buy ? iLow(PSI_SMTReferenceSymbol,TF(),iLowest(PSI_SMTReferenceSymbol,TF(),MODE_LOW,lb,1))
-                     : iHigh(PSI_SMTReferenceSymbol,TF(),iHighest(PSI_SMTReferenceSymbol,TF(),MODE_HIGH,lb,1));
-   double rPast= buy ? iLow(PSI_SMTReferenceSymbol,TF(),iLowest(PSI_SMTReferenceSymbol,TF(),MODE_LOW,lb,1+lb))
-                     : iHigh(PSI_SMTReferenceSymbol,TF(),iHighest(PSI_SMTReferenceSymbol,TF(),MODE_HIGH,lb,1+lb));
-   if(buy) return (pNow < pPast) && (rNow > rPast);
-   return (pNow > pPast) && (rNow < rPast);
+   return false; // OK86: no cross-asset SMT — APEX-only focus
 }
 
 
@@ -828,9 +809,9 @@ int PSI_ScoreRegime(PSI_Report &r)
 int PSI_ScoreTrend(const bool buy, PSI_Report &r)
 {
    int bull=0, bear=0;
-   if(TF_Bull(BiasTF_D1,20)) bull+=3; if(TF_Bear(BiasTF_D1,20)) bear+=3;
-   if(TF_Bull(BiasTF_H4,50)) bull+=3; if(TF_Bear(BiasTF_H4,50)) bear+=3;
-   if(TF_Bull(BiasTF_H1,50)) bull+=2; if(TF_Bear(BiasTF_H1,50)) bear+=2;
+   if(TF_Bull(APEX_BiasTF,20)) bull+=3; if(TF_Bear(APEX_BiasTF,20)) bear+=3;
+   if(TF_Bull(APEX_BiasTF,50)) bull+=3; if(TF_Bear(APEX_BiasTF,50)) bear+=3;
+   if(TF_Bull(TF(),50)) bull+=2; if(TF_Bear(TF(),50)) bear+=2;
    if(IsBullTrend()) bull+=2; if(IsBearTrend()) bear+=2;
    if(DetectBOS(true)) bull+=2; if(DetectBOS(false)) bear+=2;
    if(buy && InDiscount()) bull+=2;
@@ -901,8 +882,8 @@ int PSI_ScoreSMT(const bool buy, PSI_Report &r)
    if(inn) score+=4; if(cross) score+=4;
    if(inn && (buy?IsBullTrend():IsBearTrend())) score+=2;
    if(inn && DetectCHoCH(buy)) score+=2;
-   if(buy && TF_Bull(BiasTF_H4,50) && TF_Bull(BiasTF_H1,50)) score+=1;
-   if(!buy && TF_Bear(BiasTF_H4,50) && TF_Bear(BiasTF_H1,50)) score+=1;
+   if(buy && TF_Bull(APEX_BiasTF,50) && TF_Bull(TF(),50)) score+=1;
+   if(!buy && TF_Bear(APEX_BiasTF,50) && TF_Bear(TF(),50)) score+=1;
    if(SMTInternal(!buy) && !inn) score=MathMax(0,score-5);
    if(score>10) score=10;
    r.smtScore=score; return score;
@@ -978,15 +959,9 @@ bool PSI_FakeDetector(const bool buy, const PSI_Report &r, string &why)
    if(r.momentumScore>=5 && avg>0 && r1<avg*0.85){ why="Low Volume Expansion"; return true; }
    if(DirectionalSweep(buy) && !QualitySweep(buy,f)){ why="Weak Liquidity Sweep"; return true; }
    if(PSI_RejectPremiumBuys && buy && InPremium() && !InDiscount())
-   {
-      if(!(PSI_SoftLowQuality && r.structureScore>=10 && r.confidence>=PSI_GoodConfidence))
-      { why="Premium Buy"; return true; }
-   }
+   { why="Premium Buy"; return true; }
    if(PSI_RejectDiscountSells && !buy && InDiscount() && !InPremium())
-   {
-      if(!(PSI_SoftLowQuality && r.structureScore>=10 && r.confidence>=PSI_GoodConfidence))
-      { why="Discount Sell"; return true; }
-   }
+   { why="Discount Sell"; return true; }
    if(buy && EqualHighs() && !DirectionalSweep(true) && !StopHunt(true))
    { why="Trade Into Liquidity"; return true; }
    if(!buy && EqualLows() && !DirectionalSweep(false) && !StopHunt(false))
@@ -1047,7 +1022,7 @@ PSI_Report PSI_Evaluate(const bool buy)
       PSI_Publish(r); return r;
    }
 
-   if(r.confidence < PSI_GoodConfidence && !PSI_SoftLowQuality)
+   if(r.confidence < PSI_MinConfidenceToTrade && !false)
    {
       r.signal=PSI_SIG_NONE; r.grade="NO TRADE";
       r.reason="LOW QUALITY blocked Conf="+IntegerToString(r.confidence);
@@ -1135,7 +1110,7 @@ bool OpenMarket(const bool buy, const string tag, const string reason,
    if(atr<=0){ Print("exec: ATR not ready"); return false; }
 
    double slDist=atr*SL_ATR_Mult;
-   double tpDist=atr*TP2_ATR_Mult;
+   double tpDist=atr*TP_ATR_Mult;
    double price = buy ? Ask() : Bid();
    double sl = buy ? price - slDist : price + slDist;
    double tp = buy ? price + tpDist : price - tpDist;
@@ -1229,10 +1204,11 @@ void UpdateDashboard()
    g_LastDashMs=now;
 
    Comment(
-      "======= SNIPER AI APEX+PSI =======\n",
+      "======= SNIPER AI APEX =======\n",
       "Symbol: ", g_Sym, " | TF: ", EnumToString(TF()), "\n",
-      "LastTag: ", (g_LastStrategyTag=="" ? "-" : g_LastStrategyTag),
-      " | APEX: ", (EnableAPEXStrategy ? "ON" : "OFF"), "\n",
+      "Entry: APEX ONLY",
+      " | PSI fire: ", (PSI_AllowEntryFire ? "ON" : "OFF"), "\n",
+      "LastTag: ", (g_LastStrategyTag=="" ? "-" : g_LastStrategyTag), "\n",
       "Signal: ", g_PSI_LastSignal,
       " | Conf: ", IntegerToString(g_PSI_LastConfidence), "%\n",
       "Grade: ", g_PSI_LastGrade, "\n",
@@ -1246,7 +1222,7 @@ void UpdateDashboard()
       "Open: ", IntegerToString(CountOpen()),
       " | Learn W/L: ", IntegerToString(g_PSI_LearnWins), "/", IntegerToString(g_PSI_LearnLosses), "\n",
       "Reason: ", (g_PSI_LastReason=="" ? "-" : StringSubstr(g_PSI_LastReason,0,90)), "\n",
-      "Comment: SNIPER AI | BUILD SA_APEX_PSI_85\n",
+      "Comment: SNIPER AI | BUILD SA_APEX_86\n",
       "=================================="
    );
 }
@@ -1255,47 +1231,35 @@ void EvaluateAndTrade()
 {
    if(Bars(g_Sym, TF()) < PSI_StructureLookback + 30) return;
 
-   // 1) APEX first — liquidity sniper
-   if(EnableAPEXStrategy)
+   // PSI scoreboard only (updates HUD) — does not trade unless forced on
+   if(EnablePSI)
    {
-      string adB="", adS="";
-      double invB=0, invS=0;
-      bool aBuy=APEX_SetupOK(true, adB, invB);
-      bool aSell=APEX_SetupOK(false, adS, invS);
-      if(aBuy && aSell)
-      {
-         // conflict → HTF bias
-         if(TF_Bull(APEX_BiasTF, 50) && !TF_Bear(APEX_BiasTF, 50)) aSell=false;
-         else if(TF_Bear(APEX_BiasTF, 50) && !TF_Bull(APEX_BiasTF, 50)) aBuy=false;
-         else { aBuy=false; aSell=false; } // both → skip to PSI
-      }
-      if(aBuy || aSell)
-      {
-         bool sideBuy=aBuy;
-         string detail = sideBuy ? adB : adS;
-         double inv = sideBuy ? invB : invS;
-         if(APEX_GateWithPSI && EnablePSI)
-         {
-            PSI_Report pr=PSI_Evaluate(sideBuy);
-            if(pr.cancelled || pr.confidence < PSI_MinConfidenceToTrade)
-            {
-               if(APEX_LogValidation)
-                  Print("APEX held by PSI: ", pr.reason);
-            }
-            else
-            {
-               OpenMarket(sideBuy, "APEX", detail, inv, pr.confidence, pr.grade);
-               return;
-            }
-         }
-         else
-         {
-            if(APEX_LogValidation) Print("APEX DECISION ", detail);
-            OpenMarket(sideBuy, "APEX", detail, inv);
-            return;
-         }
-      }
-      else if(APEX_LogValidation)
+      PSI_Report b = PSI_Evaluate(true);
+      PSI_Report s = PSI_Evaluate(false);
+      // keep best side on dashboard
+      if(s.confidence > b.confidence) g_LastPSI = s;
+      else g_LastPSI = b;
+   }
+
+   // ===== ONLY LIVE ENTRY: APEX =====
+   if(!EnableAPEXStrategy)
+      return;
+
+   string adB="", adS="";
+   double invB=0, invS=0;
+   bool aBuy=APEX_SetupOK(true, adB, invB);
+   bool aSell=APEX_SetupOK(false, adS, invS);
+
+   if(aBuy && aSell)
+   {
+      if(TF_Bull(APEX_BiasTF, 50) && !TF_Bear(APEX_BiasTF, 50)) aSell=false;
+      else if(TF_Bear(APEX_BiasTF, 50) && !TF_Bull(APEX_BiasTF, 50)) aBuy=false;
+      else { aBuy=false; aSell=false; }
+   }
+
+   if(!(aBuy || aSell))
+   {
+      if(APEX_LogValidation)
       {
          static datetime lastApexBar=0;
          datetime bt=iTime(g_Sym,TF(),0);
@@ -1305,56 +1269,39 @@ void EvaluateAndTrade()
             Print("APEX wait BUY[", adB, "] SELL[", adS, "]");
          }
       }
-   }
-
-   // 2) PSI fallback / standalone
-   if(!EnablePSI) return;
-
-   PSI_Report b = PSI_Evaluate(true);
-   PSI_Report s = PSI_Evaluate(false);
-
-   bool bFire = (!b.cancelled && b.signal==PSI_SIG_BUY && b.confidence>=PSI_GoodConfidence);
-   bool sFire = (!s.cancelled && s.signal==PSI_SIG_SELL && s.confidence>=PSI_GoodConfidence);
-
-   if(bFire && sFire)
-   {
-      if(b.confidence >= s.confidence) sFire=false;
-      else bFire=false;
-   }
-
-   if(!bFire && !sFire && PSI_SoftLowQuality)
-   {
-      if(!b.cancelled && b.signal==PSI_SIG_BUY && b.confidence>=PSI_MinConfidenceToTrade) bFire=true;
-      else if(!s.cancelled && s.signal==PSI_SIG_SELL && s.confidence>=PSI_MinConfidenceToTrade) sFire=true;
-      if(bFire && sFire)
+      // Optional: PSI entry only if user explicitly enables it
+      if(PSI_AllowEntryFire && EnablePSI)
       {
-         if(b.confidence>=s.confidence) sFire=false; else bFire=false;
+         PSI_Report b = PSI_Evaluate(true);
+         PSI_Report s = PSI_Evaluate(false);
+         bool bFire = (!b.cancelled && b.signal==PSI_SIG_BUY && b.confidence>=PSI_MinConfidenceToTrade);
+         bool sFire = (!s.cancelled && s.signal==PSI_SIG_SELL && s.confidence>=PSI_MinConfidenceToTrade);
+         if(bFire && sFire){ if(b.confidence>=s.confidence) sFire=false; else bFire=false; }
+         if(bFire){ OpenMarket(true, "PSI", b.reason, 0.0, b.confidence, b.grade); return; }
+         if(sFire){ OpenMarket(false, "PSI", s.reason, 0.0, s.confidence, s.grade); return; }
       }
-   }
-
-   if(bFire)
-   {
-      if(PSI_LogDecisions) Print("PSI DECISION BUY ", b.reason);
-      OpenMarket(true, "PSI", b.reason, 0.0, b.confidence, b.grade);
-      return;
-   }
-   if(sFire)
-   {
-      if(PSI_LogDecisions) Print("PSI DECISION SELL ", s.reason);
-      OpenMarket(false, "PSI", s.reason, 0.0, s.confidence, s.grade);
       return;
    }
 
-   if(PSI_LogDecisions)
+   bool sideBuy=aBuy;
+   string detail = sideBuy ? adB : adS;
+   double inv = sideBuy ? invB : invS;
+
+   if(APEX_GateWithPSI && EnablePSI)
    {
-      static datetime lastBar=0;
-      datetime bt=iTime(g_Sym,TF(),0);
-      if(bt!=lastBar)
+      PSI_Report pr=PSI_Evaluate(sideBuy);
+      if(pr.cancelled || pr.confidence < PSI_MinConfidenceToTrade)
       {
-         lastBar=bt;
-         Print("PSI wait BUY[", b.reason, "] SELL[", s.reason, "]");
+         if(APEX_LogValidation) Print("APEX held by PSI scoreboard: ", pr.reason);
+         return;
       }
+      if(APEX_LogValidation) Print("APEX DECISION ", detail, " | PSI Conf=", pr.confidence);
+      OpenMarket(sideBuy, "APEX", detail, inv, pr.confidence, pr.grade);
+      return;
    }
+
+   if(APEX_LogValidation) Print("APEX DECISION ", detail);
+   OpenMarket(sideBuy, "APEX", detail, inv);
 }
 
 //======================== EVENTS ===================================//
@@ -1365,14 +1312,11 @@ int OnInit()
    trade.SetDeviationInPoints(SlippagePoints);
    trade.SetTypeFillingBySymbol(g_Sym);
 
-   Print("SNIPER AI Loaded BUILD_ID=SA_APEX_PSI_85 — APEX + PSI LEAN");
-   Print("APEX=", EnableAPEXStrategy, " BiasTF=", EnumToString(APEX_BiasTF),
-         " GatePSI=", APEX_GateWithPSI);
-   Print("PSI Min=", PSI_MinConfidenceToTrade,
-         " Good=", PSI_GoodConfidence,
-         " Instant=", PSI_InstantConfidence,
-         " SoftLow=", PSI_SoftLowQuality);
-   Print("CRITICAL: SOURCE SNIPER_AI_OK85 BUILD SA_APEX_PSI_85 | Comment=", TradeComment);
+   Print("SNIPER AI Loaded BUILD_ID=SA_APEX_86 — APEX ONLY ENTRY");
+   Print("LIVE ENTRY = APEX | BiasTF=", EnumToString(APEX_BiasTF),
+         " | PSI scoreboard=", EnablePSI,
+         " | PSI_AllowEntryFire=", PSI_AllowEntryFire, " (keep false)");
+   Print("CRITICAL: SOURCE SNIPER_AI_OK86 BUILD SA_APEX_86 | Comment=", TradeComment);
    UpdateDashboard();
    return INIT_SUCCEEDED;
 }

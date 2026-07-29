@@ -1,6 +1,6 @@
-SNIPER AI OK85 — APEX + PSI LEAN
+SNIPER AI OK86 — APEX ONLY
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK85.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK86.mq5
 
-APEX is back (first path). PSI is fallback.
-BUILD SA_APEX_PSI_85 | Comment: SNIPER AI
+APEX opens trades. PSI only scores the HUD.
+BUILD SA_APEX_86 | Comment: SNIPER AI

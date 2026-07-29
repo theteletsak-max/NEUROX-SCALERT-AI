@@ -1,10 +1,9 @@
-# SNIPER AI OK85 — APEX + PSI LEAN
+# SNIPER AI OK86 — APEX only
 
-**APEX is restored.** Still lean (~49 KB).
+**One live entry path: APEX.**
 
-1. **APEX** — HTF bias → liquidity pool → sweep → reclaim → displacement  
-2. **PSI** — price-only institutional index fallback  
+PSI stays as a scoreboard on the chart. It does **not** open trades (`PSI_AllowEntryFire=false`).
 
-No RSI/MACD/Stoch/CCI/BB. Comment: `SNIPER AI`. BUILD: `SA_APEX_PSI_85`.
+Removed from the live product noise: dual PSI entries, soft 50–69 fires, cross-SMT, extra bias TFs, TP ladder clutter, self-learn on by default.
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK85.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK86.mq5
