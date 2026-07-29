@@ -79,10 +79,6 @@ input bool   UltraDiagnosticsEnabled     = true;
 input bool   UltraMarketMemoryEnabled    = true;
 input bool   UltraDashboardEnabled       = true;
 
-//--------------------------------------------------------------------//
-// ULTRA TYPES
-//--------------------------------------------------------------------//
-
 input group "ULTRA DEBUG"
 input bool UltraDebugEnabled = false;
 
