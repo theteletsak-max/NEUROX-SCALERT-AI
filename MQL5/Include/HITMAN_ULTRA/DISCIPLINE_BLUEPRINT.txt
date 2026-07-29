@@ -1,0 +1,25 @@
+HITMAN AI — TRADE ENTRY DISCIPLINE ENGINE v1.0
+Irregular Trade Prevention System
+=================================
+
+Mission
+- Never open random / emotional / duplicate / low-quality trades
+- Open only when the complete trade thesis is valid
+
+Rules
+#1  Zero irregular entries — multi-confirmation (not one candle/indicator/BOS)
+#2  Trade thesis validation — trend/structure/BOS/CHoCH/liq/fib/mom/prec/prob/conf
+#3  Signal stability — reject flicker and one-tick signals
+#4  Confirmation lock — ordered Structure→Trend→Liq→Mom→Conf→Prec→Prob
+#5  Master trend lock — BUY master ⇒ BUY only; SELL master ⇒ SELL only
+#6  Timeframe agreement — H4→H1→M30→M15→M5
+#7  Duplicate protection — same signal/candle/tick/direction
+#8  Entry quality check — location, R:R, liquidity, structure, trend
+#9  Broker validation — market/connection/margin/price/volume
+#10 Supreme AI approval — all required rules must pass
+#11 Trade cool-down — unlock on trade done (optional new structure)
+#12 Explainable thesis — "why open" must be complete
+
+Module: TradeEntryDiscipline.mqh
+Hook: UltraAIDecide (before FIRE) + OnFill after ExecuteBuy/Sell
+Defaults: Enabled=true, Strict=false (soft InstantQuality-compatible)

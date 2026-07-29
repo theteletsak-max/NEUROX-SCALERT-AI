@@ -557,6 +557,24 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       if(sig.buy && d < 0){ why = "opposite SELL open"; return false; }
       if(sig.sell && d > 0){ why = "opposite BUY open"; return false; }
    }
+
+   // TRADE ENTRY DISCIPLINE ENGINE v1.0 — Rules #1-#12 (irregular trade prevention)
+   if(UltraDisciplineEnabled)
+   {
+      string discWhy = "";
+      if(!UltraDiscipline_AllowEntry(s, u, sig, discWhy))
+      {
+         why = discWhy;
+         return false;
+      }
+      // attach explainable thesis onto signal reason trail
+      int didx = UltraDisc_Find(s);
+      if(didx >= 0 && StringLen(g_UltraDisc[didx].lastThesis) > 0)
+      {
+         if(StringLen(sig.reason) > 0) sig.reason = sig.reason + " | ";
+         sig.reason = sig.reason + g_UltraDisc[didx].lastThesis;
+      }
+   }
    return true;
 }
 

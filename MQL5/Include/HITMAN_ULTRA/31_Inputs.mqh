@@ -94,6 +94,14 @@ input bool   UltraDefensePosition        = true;  // Line 8 open-position protec
 input bool   UltraDefenseCloseOnFlip     = false; // L8 hard-close on adverse flip (else BE only)
 input bool   UltraDefenseEmergency       = true;  // Line 9 auto-recover
 
+input group "31 · TRADE ENTRY DISCIPLINE v1.0"
+input bool   UltraDisciplineEnabled      = true;  // irregular trade prevention master
+input bool   UltraDisciplineStrict       = false; // true = hard 12-rule gates
+input bool   UltraDisciplineLog          = true;  // journal discipline PASS/WAIT
+input int    UltraDisciplineStableEvals  = 2;     // Rule #3: consecutive same-dir evals
+input int    UltraDisciplineMTFMinAgree  = 3;     // Rule #6: H4..M5 agreement (of 5)
+input bool   UltraDisciplineNeedNewStruct= false; // Rule #11: require new structure after fill
+
 input group "31 · DASHBOARD INPUTS"
 input bool   UltraDashboardEnabled       = true;
 input bool   UltraDiagnosticsEnabled     = true;

@@ -82,6 +82,11 @@ int OnInit()
          " GateExec=", UltraYN(UltraDefenseGateExec),
          " Position=", UltraYN(UltraDefensePosition),
          " Emergency=", UltraYN(UltraDefenseEmergency));
+   Print("TRADE ENTRY DISCIPLINE: Enabled=", UltraYN(UltraDisciplineEnabled),
+         " Strict=", UltraYN(UltraDisciplineStrict),
+         " StableEvals=", UltraDisciplineStableEvals,
+         " MTFMinAgree=", UltraDisciplineMTFMinAgree,
+         " NeedNewStruct=", UltraYN(UltraDisciplineNeedNewStruct));
    if(EnableAPEXStrategy || EnableContFallback || EnableLCSStrategy)
       Print("OK93 WARNING: old APEX/ContFallback/LCS input ON — evaluators STUBBED; ULTRA only fires");
    Print("INSTANT OPEN + QUALITY PREFER MODE=", UltraYN(InstantQualityMode));
@@ -11782,6 +11787,7 @@ void InstantExecution()
       g_PendingStrategyTag = strategyTag;
       if(ExecuteBuy())
       {
+         UltraDiscipline_OnFill(BrokerSymbol, true, strategyTag, g_UltraLastSnap);
          if(EnableBeastMode && BeastDuplicateBarGuard)
             MarkSignalApproved(true);
       }
@@ -11809,6 +11815,7 @@ void InstantExecution()
       g_PendingStrategyTag = strategyTag;
       if(ExecuteSell())
       {
+         UltraDiscipline_OnFill(BrokerSymbol, false, strategyTag, g_UltraLastSnap);
          if(EnableBeastMode && BeastDuplicateBarGuard)
             MarkSignalApproved(false);
       }

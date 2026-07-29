@@ -1,12 +1,11 @@
-HITMAN AI — MASTER + UFSE v1.0 + DEFENSE LINE ENGINE v1.0
+HITMAN AI — MASTER + UFSE + DEFENSE + ENTRY DISCIPLINE v1.0
 
 EA:       HITMAN_AI.mq5 / HITMAN_AI_OK93.mq5
 BUILD_ID: HA_ULTRA_93
 Comment:  HITMAN AI
 MaxOpen:  3
 
-Defense Lines 1-10: structure · trend · liquidity · BOS/CHoCH · precision ·
-probability · execution · position · emergency · AI final
-Levels: GREEN / YELLOW / RED
+Defense Lines 1-10 + Trade Entry Discipline Rules #1-#12
+Irregular trade prevention · master trend lock · TF agreement · explainable thesis
 
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI.mq5

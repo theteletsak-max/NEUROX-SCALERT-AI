@@ -76,6 +76,7 @@ string UltraDashboardText(const string s)
    t += " RR: "; t += DoubleToString(g_UltraMem.avgRR, 2);
    t += "\nSignal: "; t += dir; t += " ["; t += sig.tag; t += "] "; t += sig.reason;
    t += "\n"; t += UltraDefense_DashboardLine();
+   t += " | "; t += UltraDiscipline_DashboardLine();
    t += "\nUFSE: "; t += UltraUFSE_Stats(s);
    t += "\n---- EXPLAIN ----\n"; t += explain;
    t += "\n===============================";
