@@ -1,12 +1,9 @@
-HITMAN EA / HITMAN AI — MASTER BLUEPRINT
+HITMAN AI — MASTER BLUEPRINT
 
 EA: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI.mq5
 
-Same (EA name): https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_EA.mq5
-
-OK93: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI_OK93.mq5
+Same: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI_OK93.mq5
 
 Zip: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/HITMAN_AI.zip
 
 F7 → HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen=3 | modules 00-40
-EntryTF follows chart timeframe

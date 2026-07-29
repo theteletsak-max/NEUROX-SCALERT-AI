@@ -1,13 +1,13 @@
 //+------------------------------------------------------------------+
-//| HITMAN_AI.mq5                                                     |
+//| HITMAN_AI.mq5 (modular loader)                                    |
 //| BUILD_ID: HA_ULTRA_93                                             |
-//| HITMAN EA / HITMAN AI — MASTER BLUEPRINT modules 00-40            |
+//| HITMAN AI — MASTER BLUEPRINT modules 00-40                        |
 //| Comment: HITMAN AI | MaxOpen=3                                    |
 //+------------------------------------------------------------------+
 #property copyright "HITMAN AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version   "1.00"
-#property description "HITMAN EA / HITMAN AI MASTER BLUEPRINT Include/HITMAN_ULTRA 00-40"
+#property description "HITMAN AI MASTER BLUEPRINT Include/HITMAN_ULTRA 00-40"
 #property description "BUILD=HA_ULTRA_93"
 
 #include <Trade/Trade.mqh>

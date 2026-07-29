@@ -61,7 +61,7 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("HITMAN EA / HITMAN AI Loaded BUILD_ID=HA_ULTRA_93 MaxOpen=", MaxOpenTrades);
+   Print("HITMAN AI Loaded BUILD_ID=HA_ULTRA_93 MaxOpen=", MaxOpenTrades);
    UltraCoreInit();
    UltraSystemController_Boot();
    {
@@ -82,7 +82,7 @@ int OnInit()
          " TickDetect=", EnableTickLevelSignalDetection,
          " NeverBlock=", NeverBlockValidSniperEntry,
          " UltraAggro=", UltraAggressiveFire);
-   Print("CRITICAL: SOURCE must be HITMAN_AI / HITMAN_EA");
+   Print("CRITICAL: SOURCE must be HITMAN_AI");
    Print("INSTANT QUALITY81: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
          " HardBlock=", APEX_SessionHardBlock, " (must be false)",
          " NewsAware=", EnableNewsAwareness,

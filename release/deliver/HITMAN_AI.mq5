@@ -1,13 +1,13 @@
 //+------------------------------------------------------------------+
-//| HITMAN_AI.mq5 / HITMAN_EA.mq5                                     |
+//| HITMAN_AI.mq5                                                     |
 //| BUILD_ID: HA_ULTRA_93                                             |
-//| HITMAN EA / HITMAN AI — MASTER BLUEPRINT — SINGLE-FILE (00-40)    |
+//| HITMAN AI — MASTER BLUEPRINT — SINGLE-FILE (00-40)                |
 //| Comment: HITMAN AI | MaxOpen=3 | EntryTF follows chart            |
 //+------------------------------------------------------------------+
 #property copyright "HITMAN AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version   "1.00"
-#property description "HITMAN EA / HITMAN AI MASTER BLUEPRINT single-file 00-40"
+#property description "HITMAN AI MASTER BLUEPRINT single-file EA 00-40"
 #property description "BUILD=HA_ULTRA_93 Comment=HITMAN AI MaxOpen=3"
 
 #include <Trade/Trade.mqh>
@@ -3485,7 +3485,7 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("HITMAN EA / HITMAN AI Loaded BUILD_ID=HA_ULTRA_93 MaxOpen=", MaxOpenTrades);
+   Print("HITMAN AI Loaded BUILD_ID=HA_ULTRA_93 MaxOpen=", MaxOpenTrades);
    UltraCoreInit();
    UltraSystemController_Boot();
    {
@@ -3506,7 +3506,7 @@ int OnInit()
          " TickDetect=", EnableTickLevelSignalDetection,
          " NeverBlock=", NeverBlockValidSniperEntry,
          " UltraAggro=", UltraAggressiveFire);
-   Print("CRITICAL: SOURCE must be HITMAN_AI / HITMAN_EA");
+   Print("CRITICAL: SOURCE must be HITMAN_AI");
    Print("INSTANT QUALITY81: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
          " HardBlock=", APEX_SessionHardBlock, " (must be false)",
          " NewsAware=", EnableNewsAwareness,

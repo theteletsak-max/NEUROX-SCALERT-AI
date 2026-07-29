@@ -17,15 +17,15 @@ order = [
     "Shell_B_TradeSystem.mqh",
 ]
 header = '''//+------------------------------------------------------------------+
-//| HITMAN_AI.mq5 / HITMAN_EA.mq5                                     |
+//| HITMAN_AI.mq5                                                     |
 //| BUILD_ID: HA_ULTRA_93                                             |
-//| HITMAN EA / HITMAN AI — MASTER BLUEPRINT — SINGLE-FILE (00-40)    |
+//| HITMAN AI — MASTER BLUEPRINT — SINGLE-FILE (00-40)                |
 //| Comment: HITMAN AI | MaxOpen=3 | EntryTF follows chart            |
 //+------------------------------------------------------------------+
 #property copyright "HITMAN AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version   "1.00"
-#property description "HITMAN EA / HITMAN AI MASTER BLUEPRINT single-file 00-40"
+#property description "HITMAN AI MASTER BLUEPRINT single-file EA 00-40"
 #property description "BUILD=HA_ULTRA_93 Comment=HITMAN AI MaxOpen=3"
 
 #include <Trade/Trade.mqh>
@@ -53,20 +53,8 @@ for name in order:
         parts.append("\n")
     parts.append(f"//===== END {name} =====\n")
 out = "".join(parts)
-dests = [
-    Path("HITMAN_AI.mq5"),
-    Path("HITMAN_EA.mq5"),
-    Path("HITMAN_AI_OK93.mq5"),
-    Path("release/deliver/HITMAN_AI.mq5"),
-    Path("release/deliver/HITMAN_EA.mq5"),
-    Path("release/deliver/HITMAN_AI_OK93.mq5"),
-    # legacy aliases for previous downloaders
-    Path("SNIPER_AI.mq5"),
-    Path("SNIPER_AI_OK93.mq5"),
-    Path("release/deliver/SNIPER_AI.mq5"),
-    Path("release/deliver/SNIPER_AI_OK93.mq5"),
-]
-for dest in dests:
+for dest in [Path("HITMAN_AI.mq5"), Path("HITMAN_AI_OK93.mq5"),
+             Path("release/deliver/HITMAN_AI.mq5"), Path("release/deliver/HITMAN_AI_OK93.mq5")]:
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(out, encoding="utf-8")
     print(dest, dest.stat().st_size)
