@@ -1,4 +1,4 @@
-SNIPER_AI_OK87.mq5
-BUILD SA_APEX_87 (~500 lines)
+SNIPER_AI_OK88.mq5
+BUILD SA_APEX_88
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK87.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK88.mq5

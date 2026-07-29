@@ -1,2 +1,1 @@
-LIVE: SNIPER_AI_OK87.mq5 (~500 lines, APEX only)
-ARCHIVE: older OK builds in release/archive/
+LIVE: SNIPER_AI_OK88.mq5 (SA_APEX_88) — audited APEX-only

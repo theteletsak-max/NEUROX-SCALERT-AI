@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_APEX_87                                              |
-//| SNIPER AI — APEX ONLY (minimal)                                   |
+//| BUILD_ID: SA_APEX_88                                              |
+//| SNIPER AI — APEX ONLY (minimal, audited)                          |
 //| Comment: SNIPER AI                                                |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "6.10"
-#property description "SNIPER AI OK87: APEX-only minimal EA"
-#property description "Removed PSI/SMT/multi-path bulk — APEX entry + risk only"
+#property version   "6.11"
+#property description "SNIPER AI OK88: APEX-only minimal EA (line-audited fixes)"
+#property description "BUILD SA_APEX_88 — stop normalize, swing bounds, fail throttle"
 
 #include <Trade/Trade.mqh>
 CTrade trade;
@@ -33,7 +33,7 @@ input double APEX_MinSweepDepthATR   = 0.06;
 input double APEX_DispMinBodyRatio   = 0.48;
 input double APEX_DispMinATR         = 0.40;
 input bool   APEX_BiasNeedStructOrMA = true;
-input bool   APEX_RequireZone        = false;  // FVG/OB prefer only if true
+input bool   APEX_RequireZone        = false;
 input bool   APEX_RelaxedEntries     = true;
 input bool   APEX_UseSweepSL         = true;
 input double APEX_SL_BufferATR       = 0.12;
@@ -63,6 +63,7 @@ input int  DashboardRefreshMillis = 1000;
 //---------------- state --------------------------------------------//
 string   g_Sym = "";
 datetime g_LastTradeTime = 0;
+datetime g_LastFailTime  = 0;
 long     g_LastDashMs = 0;
 string   g_LastDetail = "-";
 string   g_LastSide = "-";
@@ -72,144 +73,224 @@ ENUM_TIMEFRAMES TF()
 {
    return (EntryTF == PERIOD_CURRENT) ? (ENUM_TIMEFRAMES)Period() : EntryTF;
 }
+
 double BidP(){ return SymbolInfoDouble(g_Sym, SYMBOL_BID); }
 double AskP(){ return SymbolInfoDouble(g_Sym, SYMBOL_ASK); }
-int Digs(){ return (int)SymbolInfoInteger(g_Sym, SYMBOL_DIGITS); }
+int    Digs(){ return (int)SymbolInfoInteger(g_Sym, SYMBOL_DIGITS); }
+double PointP(){ return SymbolInfoDouble(g_Sym, SYMBOL_POINT); }
 
-double PriceATR(const int period=14)
+double PriceATR(const int period = 14)
 {
-   int p=MathMax(period,5);
-   if(Bars(g_Sym,TF()) < p+3) return 0.0;
-   double sum=0.0;
-   for(int i=1;i<=p;i++)
+   int p = MathMax(period, 5);
+   if(Bars(g_Sym, TF()) < p + 3)
+      return 0.0;
+   double sum = 0.0;
+   for(int i = 1; i <= p; i++)
    {
-      double h=iHigh(g_Sym,TF(),i), l=iLow(g_Sym,TF(),i), pc=iClose(g_Sym,TF(),i+1);
-      double tr=MathMax(h-l, MathMax(MathAbs(h-pc), MathAbs(l-pc)));
+      double h  = iHigh(g_Sym, TF(), i);
+      double l  = iLow(g_Sym, TF(), i);
+      double pc = iClose(g_Sym, TF(), i + 1);
+      double tr = MathMax(h - l, MathMax(MathAbs(h - pc), MathAbs(l - pc)));
       sum += tr;
    }
-   return sum/p;
+   return sum / p;
 }
 
 bool IsSwingHigh(const ENUM_TIMEFRAMES tf, const int bar, const int strength)
 {
-   double h=iHigh(g_Sym,tf,bar);
-   for(int i=1;i<=strength;i++)
-      if(iHigh(g_Sym,tf,bar-i)>=h || iHigh(g_Sym,tf,bar+i)>=h) return false;
+   int bars = Bars(g_Sym, tf);
+   if(bar - strength < 0 || bar + strength >= bars)
+      return false;
+   double h = iHigh(g_Sym, tf, bar);
+   for(int i = 1; i <= strength; i++)
+      if(iHigh(g_Sym, tf, bar - i) >= h || iHigh(g_Sym, tf, bar + i) >= h)
+         return false;
    return true;
 }
+
 bool IsSwingLow(const ENUM_TIMEFRAMES tf, const int bar, const int strength)
 {
-   double l=iLow(g_Sym,tf,bar);
-   for(int i=1;i<=strength;i++)
-      if(iLow(g_Sym,tf,bar-i)<=l || iLow(g_Sym,tf,bar+i)<=l) return false;
+   int bars = Bars(g_Sym, tf);
+   if(bar - strength < 0 || bar + strength >= bars)
+      return false;
+   double l = iLow(g_Sym, tf, bar);
+   for(int i = 1; i <= strength; i++)
+      if(iLow(g_Sym, tf, bar - i) <= l || iLow(g_Sym, tf, bar + i) <= l)
+         return false;
    return true;
 }
 
 double BiasSMA()
 {
-   int p=MathMax(APEX_BiasMA_Period,10);
-   if(Bars(g_Sym,APEX_BiasTF) < p+5) return 0.0;
-   double s=0.0;
-   for(int i=1;i<=p;i++) s += iClose(g_Sym,APEX_BiasTF,i);
-   return s/p;
+   int p = MathMax(APEX_BiasMA_Period, 10);
+   if(Bars(g_Sym, APEX_BiasTF) < p + 5)
+      return 0.0;
+   double s = 0.0;
+   for(int i = 1; i <= p; i++)
+      s += iClose(g_Sym, APEX_BiasTF, i);
+   return s / p;
 }
 
 bool StructBull(string &d)
 {
-   ENUM_TIMEFRAMES tf=APEX_BiasTF;
-   int lb=MathMax(APEX_SwingLookback,20), s=MathMax(APEX_SwingStrength,1);
-   int sh1=0,sh2=0,sl1=0,sl2=0;
-   for(int i=s+1;i<=lb;i++)
+   ENUM_TIMEFRAMES tf = APEX_BiasTF;
+   int lb = MathMax(APEX_SwingLookback, 20);
+   int s  = MathMax(APEX_SwingStrength, 1);
+   int sh1 = 0, sh2 = 0, sl1 = 0, sl2 = 0;
+   for(int i = s + 1; i <= lb; i++)
    {
-      if(sh1==0 && IsSwingHigh(tf,i,s)) sh1=i;
-      else if(sh1>0 && sh2==0 && IsSwingHigh(tf,i,s)) sh2=i;
-      if(sl1==0 && IsSwingLow(tf,i,s)) sl1=i;
-      else if(sl1>0 && sl2==0 && IsSwingLow(tf,i,s)) sl2=i;
-      if(sh1&&sh2&&sl1&&sl2) break;
+      if(sh1 == 0 && IsSwingHigh(tf, i, s)) sh1 = i;
+      else if(sh1 > 0 && sh2 == 0 && IsSwingHigh(tf, i, s)) sh2 = i;
+      if(sl1 == 0 && IsSwingLow(tf, i, s)) sl1 = i;
+      else if(sl1 > 0 && sl2 == 0 && IsSwingLow(tf, i, s)) sl2 = i;
+      if(sh1 > 0 && sh2 > 0 && sl1 > 0 && sl2 > 0)
+         break;
    }
-   if(!(sh1&&sh2&&sl1&&sl2)){ d="need BiasTF swings"; return false; }
-   bool ok=(iHigh(g_Sym,tf,sh1)>iHigh(g_Sym,tf,sh2)) && (iLow(g_Sym,tf,sl1)>iLow(g_Sym,tf,sl2));
-   d = ok ? "BULL HH+HL" : "no HH+HL"; return ok;
+   if(sh1 == 0 || sh2 == 0 || sl1 == 0 || sl2 == 0)
+   {
+      d = "need BiasTF swings";
+      return false;
+   }
+   bool ok = (iHigh(g_Sym, tf, sh1) > iHigh(g_Sym, tf, sh2)) &&
+             (iLow(g_Sym, tf, sl1)  > iLow(g_Sym, tf, sl2));
+   d = ok ? "BULL HH+HL" : "no HH+HL";
+   return ok;
 }
+
 bool StructBear(string &d)
 {
-   ENUM_TIMEFRAMES tf=APEX_BiasTF;
-   int lb=MathMax(APEX_SwingLookback,20), s=MathMax(APEX_SwingStrength,1);
-   int sh1=0,sh2=0,sl1=0,sl2=0;
-   for(int i=s+1;i<=lb;i++)
+   ENUM_TIMEFRAMES tf = APEX_BiasTF;
+   int lb = MathMax(APEX_SwingLookback, 20);
+   int s  = MathMax(APEX_SwingStrength, 1);
+   int sh1 = 0, sh2 = 0, sl1 = 0, sl2 = 0;
+   for(int i = s + 1; i <= lb; i++)
    {
-      if(sh1==0 && IsSwingHigh(tf,i,s)) sh1=i;
-      else if(sh1>0 && sh2==0 && IsSwingHigh(tf,i,s)) sh2=i;
-      if(sl1==0 && IsSwingLow(tf,i,s)) sl1=i;
-      else if(sl1>0 && sl2==0 && IsSwingLow(tf,i,s)) sl2=i;
-      if(sh1&&sh2&&sl1&&sl2) break;
+      if(sh1 == 0 && IsSwingHigh(tf, i, s)) sh1 = i;
+      else if(sh1 > 0 && sh2 == 0 && IsSwingHigh(tf, i, s)) sh2 = i;
+      if(sl1 == 0 && IsSwingLow(tf, i, s)) sl1 = i;
+      else if(sl1 > 0 && sl2 == 0 && IsSwingLow(tf, i, s)) sl2 = i;
+      if(sh1 > 0 && sh2 > 0 && sl1 > 0 && sl2 > 0)
+         break;
    }
-   if(!(sh1&&sh2&&sl1&&sl2)){ d="need BiasTF swings"; return false; }
-   bool ok=(iHigh(g_Sym,tf,sh1)<iHigh(g_Sym,tf,sh2)) && (iLow(g_Sym,tf,sl1)<iLow(g_Sym,tf,sl2));
-   d = ok ? "BEAR LH+LL" : "no LH+LL"; return ok;
+   if(sh1 == 0 || sh2 == 0 || sl1 == 0 || sl2 == 0)
+   {
+      d = "need BiasTF swings";
+      return false;
+   }
+   bool ok = (iHigh(g_Sym, tf, sh1) < iHigh(g_Sym, tf, sh2)) &&
+             (iLow(g_Sym, tf, sl1)  < iLow(g_Sym, tf, sl2));
+   d = ok ? "BEAR LH+LL" : "no LH+LL";
+   return ok;
 }
 
 bool BiasOK(const bool buy, string &d)
 {
-   string sd="";
+   string sd = "";
    bool st = buy ? StructBull(sd) : StructBear(sd);
-   double sma=BiasSMA();
-   double c1=iClose(g_Sym,APEX_BiasTF,1);
-   bool ma = (sma>0.0 && ((buy && c1>sma) || (!buy && c1<sma)));
+   double sma = BiasSMA();
+   double c1  = iClose(g_Sym, APEX_BiasTF, 1);
+   bool ma = (sma > 0.0 && ((buy && c1 > sma) || (!buy && c1 < sma)));
    if(APEX_BiasNeedStructOrMA)
    {
-      if(st || ma){ d = st ? sd : "MA bias"; return true; }
-      d="need structure or MA"; return false;
+      if(st || ma)
+      {
+         d = st ? sd : "MA bias";
+         return true;
+      }
+      d = "need structure or MA";
+      return false;
    }
-   if(!st){ d=sd; return false; }
-   d=sd; return true;
+   if(!st)
+   {
+      d = sd;
+      return false;
+   }
+   d = sd;
+   return true;
 }
 
 bool FindPool(const bool buy, double &pool)
 {
-   pool=0.0;
-   double atr=PriceATR(ATR_Period); if(atr<=0) return false;
-   double tol=atr*APEX_EqualTolATR;
-   int lb=MathMax(APEX_PoolLookback,10);
-   ENUM_TIMEFRAMES tf=TF();
+   pool = 0.0;
+   double atr = PriceATR(ATR_Period);
+   if(atr <= 0.0)
+      return false;
+   double tol = atr * APEX_EqualTolATR;
+   int lb = MathMax(APEX_PoolLookback, 10);
+   ENUM_TIMEFRAMES tf = TF();
+   if(Bars(g_Sym, tf) < lb + 2)
+      return false;
+
    if(buy)
    {
-      double lo=iLow(g_Sym,tf,iLowest(g_Sym,tf,MODE_LOW,lb,1));
-      int n=0; for(int i=1;i<=lb;i++) if(MathAbs(iLow(g_Sym,tf,i)-lo)<=tol) n++;
-      if(n>=2){ pool=lo; return true; }
+      double lo = iLow(g_Sym, tf, iLowest(g_Sym, tf, MODE_LOW, lb, 1));
+      int n = 0;
+      for(int i = 1; i <= lb; i++)
+         if(MathAbs(iLow(g_Sym, tf, i) - lo) <= tol)
+            n++;
+      if(n >= 2)
+      {
+         pool = lo;
+         return true;
+      }
    }
    else
    {
-      double hi=iHigh(g_Sym,tf,iHighest(g_Sym,tf,MODE_HIGH,lb,1));
-      int n=0; for(int i=1;i<=lb;i++) if(MathAbs(iHigh(g_Sym,tf,i)-hi)<=tol) n++;
-      if(n>=2){ pool=hi; return true; }
+      double hi = iHigh(g_Sym, tf, iHighest(g_Sym, tf, MODE_HIGH, lb, 1));
+      int n = 0;
+      for(int i = 1; i <= lb; i++)
+         if(MathAbs(iHigh(g_Sym, tf, i) - hi) <= tol)
+            n++;
+      if(n >= 2)
+      {
+         pool = hi;
+         return true;
+      }
    }
    return false;
 }
 
 bool SweepPool(const bool buy, const double pool, int &bar, double &ext)
 {
-   bar=0; ext=0.0;
-   ENUM_TIMEFRAMES tf=TF();
-   double atr=PriceATR(ATR_Period);
-   double minD=(atr>0)?atr*APEX_MinSweepDepthATR:0.0;
-   int lb=MathMax(APEX_SweepLookback,3);
-   for(int i=1;i<=lb;i++)
+   bar = 0;
+   ext = 0.0;
+   ENUM_TIMEFRAMES tf = TF();
+   double atr = PriceATR(ATR_Period);
+   double minD = (atr > 0.0) ? atr * APEX_MinSweepDepthATR : 0.0;
+   int lb = MathMax(APEX_SweepLookback, 3);
+   if(Bars(g_Sym, tf) < lb + 2)
+      return false;
+
+   for(int i = 1; i <= lb; i++)
    {
-      double h=iHigh(g_Sym,tf,i), l=iLow(g_Sym,tf,i), c=iClose(g_Sym,tf,i);
-      double rng=h-l; if(rng<=0) continue;
+      double h = iHigh(g_Sym, tf, i);
+      double l = iLow(g_Sym, tf, i);
+      double c = iClose(g_Sym, tf, i);
+      double rng = h - l;
+      if(rng <= 0.0)
+         continue;
       if(buy)
       {
-         if(l<pool-minD && c>pool)
+         if(l < pool - minD && c > pool)
          {
-            double wick=MathMin(c,pool)-l;
-            if(wick/rng>=APEX_MinSweepWickRatio){ bar=i; ext=l; return true; }
+            double wick = MathMin(c, pool) - l;
+            if(wick / rng >= APEX_MinSweepWickRatio)
+            {
+               bar = i;
+               ext = l;
+               return true;
+            }
          }
       }
-      else if(h>pool+minD && c<pool)
+      else if(h > pool + minD && c < pool)
       {
-         double wick=h-MathMax(c,pool);
-         if(wick/rng>=APEX_MinSweepWickRatio){ bar=i; ext=h; return true; }
+         double wick = h - MathMax(c, pool);
+         if(wick / rng >= APEX_MinSweepWickRatio)
+         {
+            bar = i;
+            ext = h;
+            return true;
+         }
       }
    }
    return false;
@@ -217,32 +298,67 @@ bool SweepPool(const bool buy, const double pool, int &bar, double &ext)
 
 bool SwingSweep(const bool buy, double &pool, int &bar, double &ext)
 {
-   ENUM_TIMEFRAMES tf=TF();
-   double atr=PriceATR(ATR_Period);
-   double minD=(atr>0)?atr*APEX_MinSweepDepthATR:0.0;
-   int lb=MathMax(APEX_SweepLookback,3);
-   for(int i=1;i<=lb;i++)
+   ENUM_TIMEFRAMES tf = TF();
+   double atr = PriceATR(ATR_Period);
+   double minD = (atr > 0.0) ? atr * APEX_MinSweepDepthATR : 0.0;
+   int lb = MathMax(APEX_SweepLookback, 3);
+   int bars = Bars(g_Sym, tf);
+   if(bars < lb + 8)
+      return false;
+
+   for(int i = 1; i <= lb; i++)
    {
-      double h=iHigh(g_Sym,tf,i), l=iLow(g_Sym,tf,i), c=iClose(g_Sym,tf,i);
-      double rng=h-l; if(rng<=0) continue;
+      double h = iHigh(g_Sym, tf, i);
+      double l = iLow(g_Sym, tf, i);
+      double c = iClose(g_Sym, tf, i);
+      double rng = h - l;
+      if(rng <= 0.0)
+         continue;
+
       if(buy)
       {
-         double prior=iLow(g_Sym,tf,i+1);
-         for(int j=i+2;j<=i+6;j++){ double x=iLow(g_Sym,tf,j); if(x>0&&x<prior) prior=x; }
-         if(l<prior-minD && c>prior)
+         double prior = iLow(g_Sym, tf, i + 1);
+         for(int j = i + 2; j <= i + 6; j++)
          {
-            double wick=MathMin(c,prior)-l;
-            if(wick/rng>=APEX_MinSweepWickRatio){ bar=i; ext=l; pool=prior; return true; }
+            if(j >= bars)
+               break;
+            double x = iLow(g_Sym, tf, j);
+            if(x > 0.0 && x < prior)
+               prior = x;
+         }
+         if(l < prior - minD && c > prior)
+         {
+            double wick = MathMin(c, prior) - l;
+            if(wick / rng >= APEX_MinSweepWickRatio)
+            {
+               bar = i;
+               ext = l;
+               pool = prior;
+               return true;
+            }
          }
       }
       else
       {
-         double prior=iHigh(g_Sym,tf,i+1);
-         for(int j=i+2;j<=i+6;j++){ double x=iHigh(g_Sym,tf,j); if(x>prior) prior=x; }
-         if(h>prior+minD && c<prior)
+         double prior = iHigh(g_Sym, tf, i + 1);
+         for(int j = i + 2; j <= i + 6; j++)
          {
-            double wick=h-MathMax(c,prior);
-            if(wick/rng>=APEX_MinSweepWickRatio){ bar=i; ext=h; pool=prior; return true; }
+            if(j >= bars)
+               break;
+            double x = iHigh(g_Sym, tf, j);
+            if(x > prior)
+               prior = x;
+         }
+         if(h > prior + minD && c < prior)
+         {
+            double wick = h - MathMax(c, prior);
+            if(wick / rng >= APEX_MinSweepWickRatio)
+            {
+               bar = i;
+               ext = h;
+               pool = prior;
+               return true;
+            }
          }
       }
    }
@@ -251,179 +367,339 @@ bool SwingSweep(const bool buy, double &pool, int &bar, double &ext)
 
 bool HasDisplacement(const bool buy)
 {
-   double o=iOpen(g_Sym,TF(),1), c=iClose(g_Sym,TF(),1);
-   double h=iHigh(g_Sym,TF(),1), l=iLow(g_Sym,TF(),1);
-   double rng=h-l; if(rng<=0) return false;
-   if(MathAbs(c-o)/rng < APEX_DispMinBodyRatio) return false;
-   if(buy && c<=o) return false;
-   if(!buy && c>=o) return false;
-   double atr=PriceATR(ATR_Period);
-   if(atr>0 && rng < atr*APEX_DispMinATR) return false;
+   double o = iOpen(g_Sym, TF(), 1);
+   double c = iClose(g_Sym, TF(), 1);
+   double h = iHigh(g_Sym, TF(), 1);
+   double l = iLow(g_Sym, TF(), 1);
+   double rng = h - l;
+   if(rng <= 0.0)
+      return false;
+   if(MathAbs(c - o) / rng < APEX_DispMinBodyRatio)
+      return false;
+   if(buy && c <= o)
+      return false;
+   if(!buy && c >= o)
+      return false;
+   double atr = PriceATR(ATR_Period);
+   if(atr > 0.0 && rng < atr * APEX_DispMinATR)
+      return false;
    return true;
 }
 
 bool HasZone(const bool buy)
 {
-   // tiny FVG or last opposite candle OB
+   // Bullish FVG: low[1] > high[3]. Bearish FVG: high[1] < low[3].
+   // OB proxy: opposite candle at [2] before displacement at [1].
    if(buy)
    {
-      if(iLow(g_Sym,TF(),1) > iHigh(g_Sym,TF(),3)) return true;
-      double o2=iOpen(g_Sym,TF(),2), c2=iClose(g_Sym,TF(),2);
-      return (c2<o2 && HasDisplacement(true));
+      if(iLow(g_Sym, TF(), 1) > iHigh(g_Sym, TF(), 3))
+         return true;
+      double o2 = iOpen(g_Sym, TF(), 2);
+      double c2 = iClose(g_Sym, TF(), 2);
+      return (c2 < o2 && HasDisplacement(true));
    }
-   if(iHigh(g_Sym,TF(),1) < iLow(g_Sym,TF(),3)) return true;
-   double o2=iOpen(g_Sym,TF(),2), c2=iClose(g_Sym,TF(),2);
-   return (c2>o2 && HasDisplacement(false));
+   if(iHigh(g_Sym, TF(), 1) < iLow(g_Sym, TF(), 3))
+      return true;
+   double o2 = iOpen(g_Sym, TF(), 2);
+   double c2 = iClose(g_Sym, TF(), 2);
+   return (c2 > o2 && HasDisplacement(false));
 }
 
 bool APEX_SetupOK(const bool buy, string &detail, double &inv)
 {
-   detail=""; inv=0.0;
-   if(!EnableAPEX){ detail="disabled"; return false; }
-   if(Bars(g_Sym,APEX_BiasTF)<APEX_BiasMA_Period+10){ detail="BiasTF history"; return false; }
-   if(Bars(g_Sym,TF())<APEX_PoolLookback+10){ detail="EntryTF history"; return false; }
+   detail = "";
+   inv = 0.0;
+   if(!EnableAPEX)
+   {
+      detail = "disabled";
+      return false;
+   }
+   if(Bars(g_Sym, APEX_BiasTF) < APEX_BiasMA_Period + 10)
+   {
+      detail = "BiasTF history";
+      return false;
+   }
+   if(Bars(g_Sym, TF()) < APEX_PoolLookback + 10)
+   {
+      detail = "EntryTF history";
+      return false;
+   }
 
-   string bd="";
-   if(!BiasOK(buy,bd)){ detail=bd; return false; }
+   string bd = "";
+   if(!BiasOK(buy, bd))
+   {
+      detail = bd;
+      return false;
+   }
 
-   double pool=0.0; int sbar=0; double sext=0.0;
-   bool swept=false;
-   if(FindPool(buy,pool)) swept=SweepPool(buy,pool,sbar,sext);
-   if(!swept && APEX_RelaxedEntries) swept=SwingSweep(buy,pool,sbar,sext);
-   if(!swept){ detail=buy?"wait sell-side sweep":"wait buy-side sweep"; return false; }
+   double pool = 0.0;
+   int sbar = 0;
+   double sext = 0.0;
+   bool swept = false;
+   if(FindPool(buy, pool))
+      swept = SweepPool(buy, pool, sbar, sext);
+   if(!swept && APEX_RelaxedEntries)
+      swept = SwingSweep(buy, pool, sbar, sext);
+   if(!swept)
+   {
+      detail = buy ? "wait sell-side sweep" : "wait buy-side sweep";
+      return false;
+   }
 
-   double c1=iClose(g_Sym,TF(),1);
-   if(buy && c1<=pool){ detail="need reclaim"; return false; }
-   if(!buy && c1>=pool){ detail="need reclaim"; return false; }
-   if(!HasDisplacement(buy)){ detail="need displacement"; return false; }
-   bool zone=HasZone(buy);
-   if(APEX_RequireZone && !zone){ detail="need FVG/OB"; return false; }
+   double c1 = iClose(g_Sym, TF(), 1);
+   if(buy && c1 <= pool)
+   {
+      detail = "need reclaim";
+      return false;
+   }
+   if(!buy && c1 >= pool)
+   {
+      detail = "need reclaim";
+      return false;
+   }
+   if(!HasDisplacement(buy))
+   {
+      detail = "need displacement";
+      return false;
+   }
 
-   double atr=PriceATR(ATR_Period);
-   double buf=(atr>0)?atr*APEX_SL_BufferATR:0.0;
-   inv = buy ? (sext-buf) : (sext+buf);
+   bool zone = HasZone(buy);
+   if(APEX_RequireZone && !zone)
+   {
+      detail = "need FVG/OB";
+      return false;
+   }
+
+   double atr = PriceATR(ATR_Period);
+   double buf = (atr > 0.0) ? atr * APEX_SL_BufferATR : 0.0;
+   inv = buy ? (sext - buf) : (sext + buf);
    double px = buy ? AskP() : BidP();
-   if(px>0 && atr>0 && MathAbs(px-inv) > atr*APEX_MaxSL_ATR)
-   { detail="SL too wide"; return false; }
+   if(px > 0.0 && atr > 0.0 && MathAbs(px - inv) > atr * APEX_MaxSL_ATR)
+   {
+      detail = "SL too wide";
+      return false;
+   }
 
-   detail=StringFormat("APEX %s %s pool=%s sweep@%d zone=%s",
-                       buy?"BUY":"SELL", bd,
-                       DoubleToString(pool,Digs()), sbar, zone?"Y":"N");
+   detail = StringFormat("APEX %s %s pool=%s sweep@%d zone=%s",
+                         buy ? "BUY" : "SELL", bd,
+                         DoubleToString(pool, Digs()), sbar, zone ? "Y" : "N");
    return true;
 }
 
 //---------------- risk / exec --------------------------------------//
 int CountOpen()
 {
-   int n=0;
-   for(int i=PositionsTotal()-1;i>=0;i--)
+   int n = 0;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
-      if(!PositionSelectByTicket(PositionGetTicket(i))) continue;
-      if(PositionGetString(POSITION_SYMBOL)!=g_Sym) continue;
-      if(PositionGetInteger(POSITION_MAGIC)!=MagicNumber) continue;
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0 || !PositionSelectByTicket(ticket))
+         continue;
+      if(PositionGetString(POSITION_SYMBOL) != g_Sym)
+         continue;
+      if(PositionGetInteger(POSITION_MAGIC) != MagicNumber)
+         continue;
       n++;
    }
    return n;
 }
 
+double NormalizeVolume(double lots)
+{
+   double step = SymbolInfoDouble(g_Sym, SYMBOL_VOLUME_STEP);
+   double amin = SymbolInfoDouble(g_Sym, SYMBOL_VOLUME_MIN);
+   double amax = SymbolInfoDouble(g_Sym, SYMBOL_VOLUME_MAX);
+   if(step <= 0.0)
+      step = 0.01;
+   lots = MathFloor(lots / step + 1e-12) * step;
+   if(lots < amin)
+      lots = amin;
+   if(lots > amax)
+      lots = amax;
+   if(lots > MaxLotSizeHardCap)
+      lots = MaxLotSizeHardCap;
+   int vdigits = 0;
+   double s = step;
+   while(vdigits < 8 && MathAbs(s - MathRound(s)) > 1e-8)
+   {
+      s *= 10.0;
+      vdigits++;
+   }
+   return NormalizeDouble(lots, vdigits);
+}
+
 double CalcLot(const double slDist)
 {
-   if(UseFixedLot) return MathMin(LotSize, MaxLotSizeHardCap);
-   if(slDist<=0) return LotSize;
-   double tickVal=SymbolInfoDouble(g_Sym,SYMBOL_TRADE_TICK_VALUE);
-   double tickSize=SymbolInfoDouble(g_Sym,SYMBOL_TRADE_TICK_SIZE);
-   if(tickVal<=0||tickSize<=0) return LotSize;
-   double risk = AccountInfoDouble(ACCOUNT_EQUITY)*RiskPercent/100.0;
-   double perLot=(slDist/tickSize)*tickVal;
-   if(perLot<=0) return LotSize;
-   double lots=risk/perLot;
-   double step=SymbolInfoDouble(g_Sym,SYMBOL_VOLUME_STEP);
-   double amin=SymbolInfoDouble(g_Sym,SYMBOL_VOLUME_MIN);
-   double amax=SymbolInfoDouble(g_Sym,SYMBOL_VOLUME_MAX);
-   if(step<=0) step=0.01;
-   lots=MathFloor(lots/step)*step;
-   if(lots<amin) lots=amin;
-   if(lots>amax) lots=amax;
-   if(lots>MaxLotSizeHardCap) lots=MaxLotSizeHardCap;
-   return lots;
+   if(UseFixedLot)
+      return NormalizeVolume(LotSize);
+   if(slDist <= 0.0)
+      return NormalizeVolume(LotSize);
+
+   double tickVal  = SymbolInfoDouble(g_Sym, SYMBOL_TRADE_TICK_VALUE);
+   double tickSize = SymbolInfoDouble(g_Sym, SYMBOL_TRADE_TICK_SIZE);
+   if(tickVal <= 0.0 || tickSize <= 0.0)
+      return NormalizeVolume(LotSize);
+
+   double risk   = AccountInfoDouble(ACCOUNT_EQUITY) * RiskPercent / 100.0;
+   double perLot = (slDist / tickSize) * tickVal;
+   if(perLot <= 0.0)
+      return NormalizeVolume(LotSize);
+   return NormalizeVolume(risk / perLot);
+}
+
+bool AdjustStops(const bool buy, const double price, double &sl, double &tp)
+{
+   int stops = (int)SymbolInfoInteger(g_Sym, SYMBOL_TRADE_STOPS_LEVEL);
+   int freeze = (int)SymbolInfoInteger(g_Sym, SYMBOL_TRADE_FREEZE_LEVEL);
+   int need = MathMax(stops, freeze);
+   double minDist = need * PointP();
+   if(minDist <= 0.0)
+      minDist = PointP();
+
+   if(buy)
+   {
+      if(sl > 0.0 && (price - sl) < minDist)
+         sl = price - minDist;
+      if(tp > 0.0 && (tp - price) < minDist)
+         tp = price + minDist;
+   }
+   else
+   {
+      if(sl > 0.0 && (sl - price) < minDist)
+         sl = price + minDist;
+      if(tp > 0.0 && (price - tp) < minDist)
+         tp = price - minDist;
+   }
+
+   sl = NormalizeDouble(sl, Digs());
+   tp = NormalizeDouble(tp, Digs());
+
+   if(buy && !(sl < price && tp > price))
+      return false;
+   if(!buy && !(sl > price && tp < price))
+      return false;
+   return true;
 }
 
 bool OpenTrade(const bool buy, const string detail, const double inv)
 {
-   if(CountOpen()>=MaxOpenTrades) return false;
-   if(TimeCurrent()-g_LastTradeTime < TradeCooldownSec) return false;
-   double atr=PriceATR(ATR_Period);
-   if(atr<=0) return false;
+   if(CountOpen() >= MaxOpenTrades)
+      return false;
+   if(TimeCurrent() - g_LastTradeTime < TradeCooldownSec)
+      return false;
+   // Prevent tick-spam retries after broker rejects
+   if(TimeCurrent() - g_LastFailTime < TradeCooldownSec)
+      return false;
 
-   double price=buy?AskP():BidP();
-   double slDist=atr*SL_ATR_Mult;
-   double sl=buy?price-slDist:price+slDist;
-   double tp=buy?price+atr*TP_ATR_Mult:price-atr*TP_ATR_Mult;
-   if(APEX_UseSweepSL && inv>0.0)
+   double atr = PriceATR(ATR_Period);
+   if(atr <= 0.0)
+      return false;
+
+   double price = buy ? AskP() : BidP();
+   if(price <= 0.0)
+      return false;
+
+   double slDist = atr * SL_ATR_Mult;
+   double sl = buy ? (price - slDist) : (price + slDist);
+   double tp = buy ? (price + atr * TP_ATR_Mult) : (price - atr * TP_ATR_Mult);
+
+   // Sweep invalidation: use if on correct side and farther than ATR floor (safer)
+   if(APEX_UseSweepSL && inv > 0.0)
    {
-      if(buy && inv<price && inv<sl) sl=inv;
-      if(!buy && inv>price && (sl==0||inv>sl)) sl=inv;
-      slDist=MathAbs(price-sl);
+      if(buy && inv < price && inv < sl)
+         sl = inv;
+      if(!buy && inv > price && inv > sl)
+         sl = inv;
+      slDist = MathAbs(price - sl);
    }
-   double lots=CalcLot(slDist);
+
+   if(!AdjustStops(buy, price, sl, tp))
+   {
+      Print("APEX stops invalid after broker min-distance adjust");
+      g_LastFailTime = TimeCurrent();
+      return false;
+   }
+
+   double lots = CalcLot(slDist);
+   if(lots <= 0.0)
+   {
+      g_LastFailTime = TimeCurrent();
+      return false;
+   }
 
    trade.SetExpertMagicNumber(MagicNumber);
    trade.SetDeviationInPoints(SlippagePoints);
    trade.SetTypeFillingBySymbol(g_Sym);
 
-   bool ok=false;
-   for(int a=0;a<3 && !ok;a++)
-      ok = buy ? trade.Buy(lots,g_Sym,0,sl,tp,TradeComment)
-               : trade.Sell(lots,g_Sym,0,sl,tp,TradeComment);
+   bool ok = false;
+   for(int a = 0; a < 3 && !ok; a++)
+   {
+      ok = buy ? trade.Buy(lots, g_Sym, 0, sl, tp, TradeComment)
+               : trade.Sell(lots, g_Sym, 0, sl, tp, TradeComment);
+   }
+
    if(ok)
    {
-      g_LastTradeTime=TimeCurrent();
-      g_LastDetail=detail;
-      g_LastSide=buy?"BUY":"SELL";
-      Print("APEX FIRE ", g_LastSide, " lots=", lots, " — ", detail);
+      g_LastTradeTime = TimeCurrent();
+      g_LastDetail = detail;
+      g_LastSide = buy ? "BUY" : "SELL";
+      Print("APEX FIRE ", g_LastSide, " lots=", lots,
+            " sl=", DoubleToString(sl, Digs()),
+            " tp=", DoubleToString(tp, Digs()),
+            " — ", detail);
    }
    else
+   {
+      g_LastFailTime = TimeCurrent();
       Print("APEX order fail ", trade.ResultRetcode(), " ", trade.ResultRetcodeDescription());
+   }
    return ok;
 }
 
 void ManageOpen()
 {
-   double atr=PriceATR(ATR_Period);
-   for(int i=PositionsTotal()-1;i>=0;i--)
+   double atr = PriceATR(ATR_Period);
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
    {
-      ulong ticket=PositionGetTicket(i);
-      if(!PositionSelectByTicket(ticket)) continue;
-      if(PositionGetString(POSITION_SYMBOL)!=g_Sym) continue;
-      if(PositionGetInteger(POSITION_MAGIC)!=MagicNumber) continue;
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0 || !PositionSelectByTicket(ticket))
+         continue;
+      if(PositionGetString(POSITION_SYMBOL) != g_Sym)
+         continue;
+      if(PositionGetInteger(POSITION_MAGIC) != MagicNumber)
+         continue;
 
-      double open=PositionGetDouble(POSITION_PRICE_OPEN);
-      double sl=PositionGetDouble(POSITION_SL);
-      double tp=PositionGetDouble(POSITION_TP);
-      long type=PositionGetInteger(POSITION_TYPE);
-      double price=(type==POSITION_TYPE_BUY)?BidP():AskP();
-      double risk=MathAbs(open-sl);
-      if(risk<=0 && atr>0) risk=atr*SL_ATR_Mult;
+      double open = PositionGetDouble(POSITION_PRICE_OPEN);
+      double sl   = PositionGetDouble(POSITION_SL);
+      double tp   = PositionGetDouble(POSITION_TP);
+      long   type = PositionGetInteger(POSITION_TYPE);
+      double price = (type == POSITION_TYPE_BUY) ? BidP() : AskP();
+      double risk = MathAbs(open - sl);
+      if(risk <= 0.0 && atr > 0.0)
+         risk = atr * SL_ATR_Mult;
 
-      if(UseBreakEven && risk>0)
+      if(UseBreakEven && risk > 0.0)
       {
-         if(type==POSITION_TYPE_BUY && price>=open+risk*BE_Trigger_R && (sl<open||sl==0))
-            trade.PositionModify(ticket, open, tp);
-         if(type==POSITION_TYPE_SELL && price<=open-risk*BE_Trigger_R && (sl>open||sl==0))
-            trade.PositionModify(ticket, open, tp);
+         if(type == POSITION_TYPE_BUY && price >= open + risk * BE_Trigger_R && (sl < open || sl == 0.0))
+            trade.PositionModify(ticket, NormalizeDouble(open, Digs()), tp);
+         if(type == POSITION_TYPE_SELL && price <= open - risk * BE_Trigger_R && (sl > open || sl == 0.0))
+            trade.PositionModify(ticket, NormalizeDouble(open, Digs()), tp);
       }
-      if(UseTrailing && atr>0)
+
+      if(UseTrailing && atr > 0.0)
       {
-         double trail=atr*Trail_ATR_Mult;
-         if(type==POSITION_TYPE_BUY)
+         double trail = atr * Trail_ATR_Mult;
+         if(type == POSITION_TYPE_BUY)
          {
-            double nsl=price-trail;
-            if(nsl>sl && nsl<price) trade.PositionModify(ticket,nsl,tp);
+            double nsl = NormalizeDouble(price - trail, Digs());
+            if(nsl > sl && nsl < price)
+               trade.PositionModify(ticket, nsl, tp);
          }
          else
          {
-            double nsl=price+trail;
-            if((sl==0||nsl<sl) && nsl>price) trade.PositionModify(ticket,nsl,tp);
+            double nsl = NormalizeDouble(price + trail, Digs());
+            if((sl == 0.0 || nsl < sl) && nsl > price)
+               trade.PositionModify(ticket, nsl, tp);
          }
       }
    }
@@ -431,50 +707,69 @@ void ManageOpen()
 
 void Dash()
 {
-   if(!EnableDashboard) return;
-   long now=(long)GetTickCount();
-   if(now-g_LastDashMs < DashboardRefreshMillis) return;
-   g_LastDashMs=now;
+   if(!EnableDashboard)
+      return;
+   long now = (long)GetTickCount();
+   if(now - g_LastDashMs < DashboardRefreshMillis)
+      return;
+   g_LastDashMs = now;
    Comment(
       "===== SNIPER AI APEX =====\n",
       g_Sym, " | ", EnumToString(TF()), " | Bias ", EnumToString(APEX_BiasTF), "\n",
       "Last: ", g_LastSide, "\n",
-      StringSubstr(g_LastDetail,0,100), "\n",
+      StringSubstr(g_LastDetail, 0, 100), "\n",
       "Open: ", IntegerToString(CountOpen()), "\n",
-      "BUILD SA_APEX_87 | Comment SNIPER AI\n",
+      "BUILD SA_APEX_88 | Comment SNIPER AI\n",
       "=========================="
    );
 }
 
 void Evaluate()
 {
-   if(!EnableAPEX) return;
-   if(Bars(g_Sym,TF()) < APEX_PoolLookback+20) return;
+   if(!EnableAPEX)
+      return;
+   if(Bars(g_Sym, TF()) < APEX_PoolLookback + 20)
+      return;
 
-   string db="", ds=""; double ib=0, is_=0;
-   bool buy=APEX_SetupOK(true,db,ib);
-   bool sell=APEX_SetupOK(false,ds,is_);
+   string db = "", ds = "";
+   double ib = 0.0, isell = 0.0;
+   bool buy  = APEX_SetupOK(true, db, ib);
+   bool sell = APEX_SetupOK(false, ds, isell);
 
    if(buy && sell)
    {
-      double sma=BiasSMA();
-      double c1=iClose(g_Sym,APEX_BiasTF,1);
-      if(sma>0 && c1>sma) sell=false;
-      else if(sma>0 && c1<sma) buy=false;
-      else { buy=false; sell=false; }
+      double sma = BiasSMA();
+      double c1  = iClose(g_Sym, APEX_BiasTF, 1);
+      if(sma > 0.0 && c1 > sma)
+         sell = false;
+      else if(sma > 0.0 && c1 < sma)
+         buy = false;
+      else
+      {
+         buy = false;
+         sell = false;
+      }
    }
 
-   if(buy){ OpenTrade(true, db, ib); return; }
-   if(sell){ OpenTrade(false, ds, is_); return; }
+   if(buy)
+   {
+      OpenTrade(true, db, ib);
+      return;
+   }
+   if(sell)
+   {
+      OpenTrade(false, ds, isell);
+      return;
+   }
 
    if(APEX_Log)
    {
-      static datetime lastBar=0;
-      datetime bt=iTime(g_Sym,TF(),0);
-      if(bt!=lastBar)
+      static datetime lastBar = 0;
+      datetime bt = iTime(g_Sym, TF(), 0);
+      if(bt != lastBar)
       {
-         lastBar=bt;
-         g_LastDetail = "wait BUY["+db+"] SELL["+ds+"]";
+         lastBar = bt;
+         g_LastDetail = "wait BUY[" + db + "] SELL[" + ds + "]";
          Print("APEX ", g_LastDetail);
       }
    }
@@ -482,17 +777,19 @@ void Evaluate()
 
 int OnInit()
 {
-   g_Sym=_Symbol;
+   g_Sym = _Symbol;
    trade.SetExpertMagicNumber(MagicNumber);
    trade.SetDeviationInPoints(SlippagePoints);
    trade.SetTypeFillingBySymbol(g_Sym);
-   Print("SNIPER AI Loaded BUILD_ID=SA_APEX_87 — APEX ONLY MINIMAL");
-   Print("Removed: PSI, SMT, Cont/Rev, multi-path. Entry=APEX only.");
-   Print("CRITICAL: SOURCE SNIPER_AI_OK87 | Comment=", TradeComment);
+   Print("SNIPER AI Loaded BUILD_ID=SA_APEX_88 — APEX ONLY (AUDITED)");
+   Print("Fixes: swing bounds, stop normalize, volume step, fail throttle");
+   Print("CRITICAL: SOURCE SNIPER_AI_OK88 | Comment=", TradeComment);
    Dash();
    return INIT_SUCCEEDED;
 }
+
 void OnDeinit(const int reason){ Comment(""); }
+
 void OnTick()
 {
    ManageOpen();

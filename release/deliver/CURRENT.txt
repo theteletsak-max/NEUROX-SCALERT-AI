@@ -1,15 +1,9 @@
-SNIPER AI — CURRENT (MINIMAL)
+SNIPER AI — CURRENT
 
-EA:       SNIPER_AI_OK87.mq5
-BUILD_ID: SA_APEX_87
-Size:     ~17 KB / ~500 lines (was ~47KB OK86, ~510KB OK83)
+EA:       SNIPER_AI_OK88.mq5
+BUILD_ID: SA_APEX_88
 
-LIVE ENTRY = APEX only
-  bias → pool → sweep → reclaim → displacement → sweep SL
-  + BE / trail / lot / dashboard
+Line-audited APEX-only EA.
+Fixes vs OK87: swing bounds, stop normalize/stops-level, volume step, fail throttle.
 
-REMOVED from code:
-  PSI engine, SMT, Cont/Rev, multi-path, fake-signal stack,
-  premium/discount scoreboard, self-learn
-
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK87.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK88.mq5

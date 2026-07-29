@@ -1,1 +1,1 @@
-Minimal APEX-only EA. Use SNIPER_AI_OK87.mq5
+Audited APEX-only. Use SNIPER_AI_OK88.mq5

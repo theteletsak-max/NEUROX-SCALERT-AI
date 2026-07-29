@@ -1,5 +1,5 @@
-SNIPER AI OK87 — APEX MINIMAL (~500 lines)
+SNIPER AI OK88 — audited APEX minimal
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK87.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK88.mq5
 
-F7 → SA_APEX_87 | Comment: SNIPER AI
+BUILD SA_APEX_88 | Comment: SNIPER AI
