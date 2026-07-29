@@ -1,6 +1,9 @@
-# SNIPER AI ULTRA — Ultimate Professional (00–40)
+# SNIPER AI ULTRA v1 Blueprint
 
-Root: `SNIPER_AI.mq5`, `SNIPER_AI_OK93.mq5`  
-Modules: `Include/SNIPER_ULTRA/` (00–40 + Shell)
+```
+SNIPER_AI.mq5
+SNIPER_AI_OK93.mq5
+Include/SNIPER_ULTRA/   (00–31 + Shell A/B + master)
+```
 
-BUILD_ID: `SA_ULTRA_93` · Comment: `SNIPER AI` · MaxOpen: 3
+**BUILD_ID:** `SA_ULTRA_93` · **Comment:** `SNIPER AI` · **MaxOpen:** 3

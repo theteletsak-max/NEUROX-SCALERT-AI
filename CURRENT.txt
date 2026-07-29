@@ -1,10 +1,15 @@
-SNIPER AI ULTRA — ULTIMATE PROFESSIONAL (OK93)
+SNIPER AI ULTRA v1 BLUEPRINT (OK93)
 
 EA:       SNIPER_AI.mq5 / SNIPER_AI_OK93.mq5
 BUILD_ID: SA_ULTRA_93
 Comment:  SNIPER AI
 MaxOpen:  3
 
-Include/SNIPER_ULTRA/ modules 00-40 + Shell A/B + master
+Include/SNIPER_ULTRA/  modules 00-31 + Shell A/B + SNIPER_ULTRA.mqh
+Optional: SNIPER_ULTRA_EXT.mqh (32-40)
+
+Flow: Data→Structure→BOS→CHoCH→Liq→Fib→Inst→Trend→Mom→Vol→Regime→
+      Session→News→Confluence→Prob→Prec→AI→Capital→Exec→Manage→
+      Dashboard→Stats→Logger→Recovery
 
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/SNIPER_AI.zip

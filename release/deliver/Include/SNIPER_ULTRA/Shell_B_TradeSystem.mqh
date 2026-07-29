@@ -61,11 +61,10 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI ULTRA ULTIMATE Loaded BUILD_ID=SA_ULTRA_93 MaxOpen=", MaxOpenTrades);
+   Print("SNIPER AI ULTRA v1 BLUEPRINT Loaded BUILD_ID=SA_ULTRA_93 MaxOpen=", MaxOpenTrades);
    UltraCoreInit();
-   UltraEvent_OnBoot();
-   UltraBroker_Detect(_Symbol, g_UltraBrokerCaps);
-   UltraHealth_Update(_Symbol);
+   UltraSystemController_Boot();
+   Print("OK93 v1 BLUEPRINT: modules 00-31 active | Shell A/B | ULTRA-only live path");
    Print("OK93 ULTIMATE STRUCTURE: modules 00-40 | broker=", UltraBroker_Summary(_Symbol),
          " | health=", UltraHealth_Summary(_Symbol),
          " | mode=", UltraBT_ModeName());

@@ -1,4 +1,5 @@
 SNIPER_AI.mq5
 SNIPER_AI_OK93.mq5
-Include/SNIPER_ULTRA/00_Types.mqh … 40_DebugTools.mqh
+Include/SNIPER_ULTRA/00_Types … 31_Inputs
 Include/SNIPER_ULTRA/Shell_A + Shell_B + SNIPER_ULTRA.mqh
+Optional: 32-40 + SNIPER_ULTRA_EXT.mqh

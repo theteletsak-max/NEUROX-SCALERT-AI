@@ -13,7 +13,7 @@ string UltraDashboardText(const string s)
    string dir = sig.buy ? "BUY" : (sig.sell ? "SELL" : "-");
    return
       "======= SNIPER AI ULTRA =======\n" +
-      "BUILD: SA_ULTRA_93 | Comment: SNIPER AI\n" +
+      "BUILD: SA_ULTRA_93 v1 | Comment: SNIPER AI\n" +
       "Symbol: " + s + " | TF: " + EnumToString(UltraETF()) + "\n" +
       "Open: " + IntegerToString(CountOpenTrades()) + " / " + IntegerToString(MaxOpenTrades) + "\n" +
       "AI Conf: " + IntegerToString(u.score.confidence) +
