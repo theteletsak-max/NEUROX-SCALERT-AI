@@ -1,15 +1,17 @@
 SNIPER AI — CURRENT
 
-EA:       SNIPER_AI_OK81.mq5
-BUILD_ID: SA_QUALITY_81
-Mode:     INSTANT OPEN + QUALITY PREFER
+EA:       SNIPER_AI_OK82.mq5
+BUILD_ID: SA_PRISM_82
+Mode:     PRISM COMPLETE LIVE + INSTANT QUALITY
 
-Removes your blockers:
-- ContFallbackCooldown = OFF
-- OncePerBar block = OFF
-- AntiScalp wait gates = OFF
-- IDP hard block = OFF (prefer/log only)
-- No "strong bear blocks buy"
-- No "no fresh OB" hard fail — opens on BOS or zone or displacement
+Live fire order:
+1) APEX (liquidity sniper)
+2) PRISM Spec — ContSniper / RevSniper / InstantTrend (+ classic paths)
+3) ContFallback (structure BOS/zone/disp)
+4) LCS (optional)
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK81.mq5
+InstantQualityMode = soft quality prefer (no endless ICE/IMCE/ADX waits)
+Trade comment = SNIPER AI
+Dashboard = ON (PRISM COMPLETE HUD)
+
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK82.mq5

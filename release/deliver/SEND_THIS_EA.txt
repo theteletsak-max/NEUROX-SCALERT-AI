@@ -1,7 +1,10 @@
-SNIPER AI OK81 — INSTANT OPEN
+SNIPER AI OK82 — PRISM COMPLETE LIVE
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK81.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK82.mq5
 
-No ContCooldown / no opposite-trend hard block / IDP soft.
-Opens when any of BOS / zone / displacement is present.
-F7 → attach → SA_QUALITY_81
+Full PRISM stack restored:
+APEX → ContSniper / RevSniper / InstantTrend → ContFallback
+
+Instant open + quality prefer (soft gates).
+F7 → compile → attach → confirm BUILD_ID=SA_PRISM_82
+Trade comment: SNIPER AI

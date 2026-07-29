@@ -1,1 +1,6 @@
-CURRENT: SNIPER_AI_OK81.mq5 (SA_QUALITY_81)
+CURRENT: SNIPER_AI_OK82.mq5 (SA_PRISM_82)
+LIVE: APEX → ContSniper/RevSniper/InstantTrend → ContFallback → LCS(opt)
+MIRRORS: SNIPER_AI.mq5 | MQL5/Experts/SNIPER_AI.mq5 | release/deliver/
+ARCHIVE: release/archive/ (OK11–OK81)
+ZIP: release/deliver/SNIPER_AI.zip
+OPTIONAL CHART: SNIPER_IDP.mq5 (visual; pulse is built into EA)

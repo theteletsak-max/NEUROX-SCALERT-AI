@@ -1,3 +1,4 @@
-[ ] Remove old OK80 from chart
-[ ] SNIPER_AI_OK81.mq5 → Experts → F7
-[ ] Attach → Journal SA_QUALITY_81 + INSTANT OPEN
+[ ] Remove old OK81 (or earlier) from chart
+[ ] SNIPER_AI_OK82.mq5 → Experts → F7
+[ ] Attach → Journal SA_PRISM_82 + PRISM COMPLETE LIVE
+[ ] Trade comment must be SNIPER AI

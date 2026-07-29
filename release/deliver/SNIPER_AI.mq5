@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_QUALITY_81                                      |
-//| SNIPER AI - INSTANT OPEN + QUALITY PREFER                   |
-//| Comment: SNIPER AI | Instant open, quality prefer | No RSI/MACD/Stoch   |
+//| BUILD_ID: SA_PRISM_82                                      |
+//| SNIPER AI - PRISM COMPLETE LIVE STACK                   |
+//| Comment: SNIPER AI | PRISM Complete | Instant + Quality Prefer | No RSI/MACD/Stoch   |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.49"
-#property description "SNIPER AI OK81: instant open + quality prefer"
-#property description "Remove PRISM. Source SNIPER_AI_OK81 BUILD=SA_QUALITY_81"
+#property version   "5.50"
+#property description "SNIPER AI OK82: PRISM COMPLETE live stack + instant quality"
+#property description "Source SNIPER_AI_OK82 BUILD=SA_PRISM_82"
 
 #include <Trade/Trade.mqh>
 
@@ -26,9 +26,11 @@ input long MagicNumber = 40001;
 input string TradeComment = "SNIPER AI";
 
 input group "INSTANT OPEN + QUALITY PREFER"
-// BEST QUALITY selects the trade (structure + IDP + ADX).
-// AGGRESSIVE INSTANT executes immediately once selected (tick path, no idle cooldown).
-input bool   InstantQualityMode          = true;   // profile banner / intent lock
+// PRISM COMPLETE: full Cont/Rev/Instant/ContFallback/APEX live.
+// BEST QUALITY ranks paths; InstantQuality softens ICE/IMCE hard waits.
+// AGGRESSIVE INSTANT executes immediately once selected (tick path).
+input bool   InstantQualityMode          = true;   // soft quality prefer (no endless hard waits)
+input bool   EnablePrismLiveStack        = true;   // OK82: ContSniper/RevSniper/Instant live
 
 input group "SNIPER IDP - BUILT INTO EA (signal core)"
 // Institutional Displacement Pulse computed INSIDE the EA (same math as SNIPER_IDP).
@@ -50,8 +52,8 @@ input bool   IDP_ApplyToAPEX         = true;   // gate APEX through IDP
 input bool   IDP_ApplyToContFallback = true;   // gate ContFallback through IDP
 input bool   IDP_LogGate             = true;   // print IDP pass/fail
 
-input group "PRISM BEAST MODE ENGINE (support only — not a live entry path)"
-// OK67: live entries are APEX/ContFallback only. Beast/Ultra still finalize those tags.
+input group "PRISM BEAST MODE ENGINE"
+// OK82: Beast/Ultra finalize ContSniper/RevSniper/Instant/ContFallback/APEX.
 
 input bool   EnableBeastMode                 = true;  // unified PRISM beast pipeline
 input bool   EnableSniperMode                = true;  // aggressive fire when beast gates pass
@@ -64,7 +66,7 @@ input bool   BeastDuplicateBarGuard          = false; // OFF: never suppress Con
 input bool   BeastCaptureSignalSnapshot      = true;  // record MPI/ICE at decision time
 input bool   EnableBeastDashboard            = true;  // rich HUD when EnableDashboard=true
 
-input group "MARKET REVERSAL SNIPER (RETIRED live — RevSniper offline OK67)"
+input group "MARKET REVERSAL SNIPER (LIVE — RevSniper on PRISM stack)"
 
 input bool   EnableEarlyMarketReversal       = true;  // catch flips before full trend ADX
 input bool   ReversalRequireTrendADX         = false; // false = don't wait for new trend+ADX
@@ -98,13 +100,13 @@ input bool   EnableUltraDashboard            = true;  // Ultra HUD (latency, sco
 input bool   UltraHighProbability            = true;  // prefer Cont/Rev; Instant only as fallback
 input int    UltraHP_MinConfirmations        = 4;     // Cont/Rev HARD min confirms when BestQualitySetups
 
-// RETIRED ContSniper/Instant live switches (OK67) — kept for old .set compatibility only
-input bool   BestQualitySetups           = true;  // used by ContFallback structure quality helpers only
-input bool   BestPathsOnly               = true;  // RETIRED live
-input bool   AggressiveInstantQuality    = true;  // RETIRED live
-input bool   PreferQualityPaths          = true;  // RETIRED live
-input bool   TryNextPathIfEnginesFail    = false; // RETIRED — no Instant fallback
-input bool   EnableAdaptivePathRanking   = false; // RETIRED live
+// OK82 PRISM LIVE path ranking (Cont/Rev preferred; Instant structured fallback)
+input bool   BestQualitySetups           = true;  // Cont/Rev need structure quality
+input bool   BestPathsOnly               = false; // OK82: allow InstantTrend + classic PRISM names
+input bool   AggressiveInstantQuality    = true;  // MPI informational only — never wait
+input bool   PreferQualityPaths          = true;  // Cont/Rev rank above Instant
+input bool   TryNextPathIfEnginesFail    = true;  // OK82: try next ranked path if engines soft-fail
+input bool   EnableAdaptivePathRanking   = true;  // OK82: path win-rate can boost rank
 input int    AdaptivePathMinTrades       = 10;
 input bool   PrintPathStatsOnInit        = true;
 
@@ -115,9 +117,9 @@ input group "APEX - WORLD-CLASS LIQUIDITY SNIPER (LIVE)"
 // ONE decision. NO post-FIRE veto (tag APEX bypasses ICE/IMCE/Ultra re-check).
 
 input bool   EnableAPEXStrategy          = true;
-// OK67 PURE: live path is ONLY APEX → ContFallback (BOS+zone). No PRISM/LCS/ContSniper live.
-input bool   EnableAntiScalpMode         = false;  // OK81: off — was enabling wait gates
-input bool   EnableContFallback          = true;   // second live path — structure Cont only
+// OK82 LIVE: APEX → PRISM Spec (Cont/Rev/Instant) → ContFallback → LCS(opt)
+input bool   EnableAntiScalpMode         = false;  // off — no wait gates
+input bool   EnableContFallback          = true;   // structure Cont after Spec stack
 input bool   ContFallbackBypassEngines   = true;   // ContFallback skips ICE/IMCE after structure pass
 input bool   ContFallbackOncePerBar      = false;  // OK81: never OncePerBar-block
 input int    ContFallbackCooldownMinutes = 0;      // OK81: NEVER ContFallbackCooldown block
@@ -126,10 +128,9 @@ input double ContFallbackSL_ATR_Boost    = 1.5;    // wider SL — not a scalp s
 input int    ContFallbackMaxOpen         = 1;      // max open ContFallback positions on this symbol
 input bool   ContFallbackDisableAdaptiveHold = true; // do not shorten hold in ranging for ContFallback/APEX
 
-input group "CONT STRUCTURE - INSTANT OPEN (OK81)"
+input group "CONT STRUCTURE - INSTANT OPEN (OK82)"
 // Anytime: sessions never hard-block.
-// Instant quality ContFallback: trend + BOS + zone + (near OR disp) + score.
-// ADX not hard-required (still scores). IDP still hard-gates direction.
+// Instant quality Cont: BOS/zone/disp edges; ADX soft; IDP soft prefer.
 input int    ContStruct_BOS_MaxBars          = 18;    // OK80 wider BOS window
 input bool   ContStruct_RequireTwoBarBOS     = false; // OK80: fresh single BOS OK
 input bool   ContStruct_FreshOBOnly          = false; // OK80: allow active OB/FVG
@@ -192,8 +193,8 @@ input int    APEX_AsiaStartHourGMT       = 0;      // inclusive
 input int    APEX_AsiaEndHourGMT         = 7;      // exclusive (until London)
 input bool   APEX_SessionFilterCryptoToo = false;  // crypto: always anytime unless hard+this true
 
-input group "LCS - RETIRED (not on live path OK67)"
-input bool   EnableLCSStrategy           = false;  // RETIRED — ignored by EvaluateStrategySignals
+input group "LCS - OPTIONAL LIVE PATH"
+input bool   EnableLCSStrategy           = false;  // optional 4th path after ContFallback
 input bool   LCSOnlyLivePath             = false;
 input ENUM_TIMEFRAMES LCS_BiasTF         = PERIOD_H4;
 input ENUM_TIMEFRAMES LCS_EntryTF        = PERIOD_H1;
@@ -216,8 +217,8 @@ input bool   QualityRequireTrendAndADX   = true;  // OK72: strong setups prefer 
 input bool   QualityDisableWeakPaths     = true;  // BEST: suppress weak VolBreakout unless stacked
 input int    QualityMPIScore             = 0;
 
-input bool   EnableInstantSniperMode     = false; // RETIRED live — InstantTrend offline
-input bool   AllowTrendOnlyInstantEntry  = false; // RETIRED — no trend-only scalp fallback
+input bool   EnableInstantSniperMode     = true;  // OK82: InstantTrend structured fallback live
+input bool   AllowTrendOnlyInstantEntry  = false; // never trend-only scalp — needs structure edge
 input bool   AggressiveSniperEntries     = true;
 input bool   NeverBlockValidSniperEntry  = true;  // don't veto approved Cont/Rev
 input bool   ResolveConflictByTrend      = true;
@@ -624,8 +625,12 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded BUILD_ID=SA_QUALITY_81");
+   Print("SNIPER AI Loaded BUILD_ID=SA_PRISM_82 — PRISM COMPLETE LIVE");
    Print("INSTANT OPEN + QUALITY PREFER MODE=", InstantQualityMode);
+   Print("PRISM LIVE STACK=", EnablePrismLiveStack,
+         " | BestPathsOnly=", BestPathsOnly,
+         " | InstantSniper=", EnableInstantSniperMode,
+         " | TryNextPath=", TryNextPathIfEnginesFail);
    Print("QUALITY SELECT: IDP_Hard=", IDP_HardGate, " MinPulse=", IDP_MinAbsPulse,
          " ContScore=", ContStruct_MinScore, " ADX=", ContStruct_RequireTrendADX,
          " SkipRange=", ContStruct_SkipRanging);
@@ -634,7 +639,7 @@ int OnInit()
          " TickDetect=", EnableTickLevelSignalDetection,
          " NeverBlock=", NeverBlockValidSniperEntry,
          " UltraAggro=", UltraAggressiveFire);
-   Print("CRITICAL: SOURCE must be SNIPER_AI_OK81 — remove PRISM STRATEGY if present");
+   Print("CRITICAL: SOURCE must be SNIPER_AI_OK82 — BUILD SA_PRISM_82 (PRISM COMPLETE LIVE)");
    Print("INSTANT QUALITY81: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
          " HardBlock=", APEX_SessionHardBlock, " (must be false)",
          " NewsAware=", EnableNewsAwareness,
@@ -1020,6 +1025,17 @@ bool ContStruct_GetFreshZone(const bool buy, double &zTop, double &zBot, string 
 bool ContStruct_PriceNearZone(const bool buy, const double zTop, const double zBot);
 bool ContStruct_HasDisplacement(const bool buy);
 bool ContFallbackBestStructureOK(const bool buy, string &detail);
+bool StructureDirectionalBOS(const bool buy);
+bool ActiveOrderBlock(const bool buy);
+bool ActiveFVG(const bool buy);
+bool RecentDirectionalBOS(const bool buy, const int lookbackBars);
+bool RecentDirectionalCHoCH(const bool buy, const int lookbackBars);
+bool RecentDirectionalSweep(const bool buy, const int lookbackBars);
+bool DetectDirectionalBOS(ENUM_TIMEFRAMES tf, bool buy);
+int  EffectiveStructureRecency();
+bool IsOrderBlockMitigated(const bool buy);
+bool DetectStopHunt(const bool buySide);
+
 string ContStruct_Grade(const bool buy);
 bool NewsAwarenessInWindow(string &detail);
 bool APEX_InKillZone(string &detail);
@@ -1296,8 +1312,8 @@ void PrintStrategyPerformanceReport()
    Print("==== PER-STRATEGY PERFORMANCE (FULL UPGRADE) ====");
 
    // Focus on live PRISM tags first
-   string liveTags[3] = {"APEX", "ContFallback", "LCS"};
-   for(int t = 0; t < 3; t++)
+   string liveTags[6] = {"APEX", "ContSniper", "RevSniper", "InstantTrend", "ContFallback", "LCS"};
+   for(int t = 0; t < 6; t++)
    {
       int i = FindStrategyTagIndex(liveTags[t]);
       if(i < 0) continue;
@@ -3467,7 +3483,7 @@ bool ExecuteBuy()
 
    // Sanity: direction still agrees — skip abort in UltraAggressiveFire
    // (path+engines already approved; price can wick without flipping EMA).
-   // Live gate is EvaluateStrategySignals (APEX → ContFallback only).
+   // Live gate is EvaluateStrategySignals (APEX → Spec → ContFallback → LCS).
    if(!IsBullTrend() && !(UltraAggressiveFire || NeverBlockValidSniperEntry))
    {
       if(EnableVerboseLogging)
@@ -6452,6 +6468,124 @@ bool DetectCHoCH()
    return result;
 }
 
+//================ PRISM STRUCTURE / ICT ALIASES (OK82 checklist) ======//
+// Named wrappers so the complete PRISM condition list is addressable in
+// code, dashboard, and logs. Logic maps onto existing detectors.
+
+bool DetectHigherHigh()
+{
+   double h1 = GetRecentHigh();
+   double h2 = GetSecondRecentHigh();
+   if(h1 == EMPTY_VALUE || h2 == EMPTY_VALUE)
+      return false;
+   return (h1 > h2);
+}
+
+bool DetectHigherLow()
+{
+   double l1 = GetRecentLow();
+   double l2 = GetSecondRecentLow();
+   if(l1 == EMPTY_VALUE || l2 == EMPTY_VALUE)
+      return false;
+   return (l1 > l2);
+}
+
+bool DetectLowerHigh()
+{
+   double h1 = GetRecentHigh();
+   double h2 = GetSecondRecentHigh();
+   if(h1 == EMPTY_VALUE || h2 == EMPTY_VALUE)
+      return false;
+   return (h1 < h2);
+}
+
+bool DetectLowerLow()
+{
+   double l1 = GetRecentLow();
+   double l2 = GetSecondRecentLow();
+   if(l1 == EMPTY_VALUE || l2 == EMPTY_VALUE)
+      return false;
+   return (l1 < l2);
+}
+
+bool DetectMSS() // Market Structure Shift ≈ confirmed CHoCH + directional reclaim
+{
+   if(!DetectCHoCH())
+      return false;
+   int idx = GetSymbolIndex(BrokerSymbol);
+   if(idx < 0 || idx >= ArraySize(LastCHoCHWasBullArr))
+      return DetectBOS();
+   bool bull = LastCHoCHWasBullArr[idx];
+   return StructureDirectionalBOS(bull) || ActiveOrderBlock(bull) || ActiveFVG(bull);
+}
+
+bool DetectInternalStructure(const bool buy)
+{
+   // Internal: EntryTF micro BOS / CHoCH / sweep
+   return StructureDirectionalBOS(buy) || RecentDirectionalCHoCH(buy, EffectiveStructureRecency()) ||
+          RecentDirectionalSweep(buy, EffectiveStructureRecency());
+}
+
+bool DetectExternalStructure(const bool buy)
+{
+   // External: HTF BOS / bias
+   return DetectDirectionalBOS(HigherTimeframe, buy) || DetectDirectionalBOS(APEX_BiasTF, buy);
+}
+
+bool DetectIFVG(const bool buy) // Inverse FVG ≈ opposing FVG still active after displacement
+{
+   if(buy)
+      return ActiveFVG(false) && ContStruct_HasDisplacement(true);
+   return ActiveFVG(true) && ContStruct_HasDisplacement(false);
+}
+
+bool IsBreakerBlock(const bool buy)
+{
+   // Breaker = mitigated OB that flipped role (still tracked as mitigated)
+   return IsOrderBlockMitigated(buy);
+}
+
+bool IsMitigationBlock(const bool buy)
+{
+   return IsOrderBlockMitigated(buy);
+}
+
+bool DetectBPR(const bool buy) // Balanced Price Range ≈ overlapping bull+bear FVG / EQ area
+{
+   bool bothFVG = ActiveFVG(true) && ActiveFVG(false);
+   double eq = GetEquilibrium();
+   double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
+   double atr = GetFilterATR();
+   bool nearEq = (eq > 0.0 && atr > 0.0 && MathAbs(price - eq) <= atr * 0.35);
+   return bothFVG || nearEq;
+}
+
+bool DetectMicroBOS(const bool buy)
+{
+   return RecentDirectionalBOS(buy, MathMax(DirectionalBOS_LookbackBars, 3));
+}
+
+bool DetectMicroCHoCH(const bool buy)
+{
+   return RecentDirectionalCHoCH(buy, MathMax(EffectiveStructureRecency(), 5));
+}
+
+bool DetectFalseBreak(const bool buy)
+{
+   // Stop-hunt reclaim after liquidity poke = false break / grab
+   return DetectStopHunt(buy ? false : true) && (StructureDirectionalBOS(buy) || RecentDirectionalCHoCH(buy, EffectiveStructureRecency()));
+}
+
+bool DetectLiquidityGrab(const bool buy)
+{
+   return RecentDirectionalSweep(buy, EffectiveStructureRecency()) && DetectFalseBreak(buy);
+}
+
+bool HasRestingLiquidity(const bool buy)
+{
+   return buy ? (IsEqualLow() || ActiveOrderBlock(true)) : (IsEqualHigh() || ActiveOrderBlock(false));
+}
+
 //======================================================================//
 //   ORDER BLOCK FRESH / MITIGATED / INVALIDATED TRACKING (NEW)         //
 //======================================================================//
@@ -7419,33 +7553,42 @@ bool QualityNeedsTrendAndADX()
 bool InstantTrendSniperBuySetup()
 {
    if(BestPathsOnly)
-      return false; // BEST-NEXT48: Cont/Rev only
-   if(!EnableInstantSniperMode || !AllowTrendOnlyInstantEntry)
+      return false; // Cont/Rev only when BestPathsOnly
+   if(!EnableInstantSniperMode)
       return false;
-   // Aggressive institutional execution: InstantTrend stays alive.
-   // Only suppress when user explicitly disables weak paths AND not in aggressive mode.
-   if(QualityWeakPathsDisabled() && !AggressiveInstitutionalExecution)
+   if(QualityWeakPathsDisabled() && !AggressiveInstitutionalExecution && !InstantQualityMode)
       return false;
    if(!IsBullTrend())
       return false;
    if(!TrendStrong())
       return false;
-   return true;
+   // OK82: never trend-only scalp — need BOS/zone/disp edge (or explicit AllowTrendOnly)
+   if(AllowTrendOnlyInstantEntry && !InstantQualityMode)
+      return true;
+   bool bos = StructureDirectionalBOS(true);
+   bool zone = ActiveOrderBlock(true) || ActiveFVG(true);
+   bool disp = ContStruct_HasDisplacement(true);
+   return (bos || zone || disp);
 }
 
 bool InstantTrendSniperSellSetup()
 {
    if(BestPathsOnly)
-      return false; // BEST-NEXT48: Cont/Rev only
-   if(!EnableInstantSniperMode || !AllowTrendOnlyInstantEntry)
       return false;
-   if(QualityWeakPathsDisabled() && !AggressiveInstitutionalExecution)
+   if(!EnableInstantSniperMode)
+      return false;
+   if(QualityWeakPathsDisabled() && !AggressiveInstitutionalExecution && !InstantQualityMode)
       return false;
    if(!IsBearTrend())
       return false;
    if(!TrendStrong())
       return false;
-   return true;
+   if(AllowTrendOnlyInstantEntry && !InstantQualityMode)
+      return true;
+   bool bos = StructureDirectionalBOS(false);
+   bool zone = ActiveOrderBlock(false) || ActiveFVG(false);
+   bool disp = ContStruct_HasDisplacement(false);
+   return (bos || zone || disp);
 }
 
 bool RecentBOS(int lookbackBars)
@@ -7532,30 +7675,41 @@ bool AggressiveContinuationBuySetup()
 {
    if(!AggressiveSniperEntries)
       return false;
-   if(!IsBullTrend())
-      return false;
 
    double ema = GetEMA();
    double atr = GetFilterATR();
    double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
    bool pulled = (ema != EMPTY_VALUE && atr > 0.0 &&
                   MathAbs(price - ema) <= atr * EffectivePullbackATRMultiple());
-   // SIGNAL OK45: Cont BUY needs bullish BOS — not any-direction DetectBOS/RecentBOS
    bool bos = StructureDirectionalBOS(true);
    bool zone = ActiveOrderBlock(true) || ActiveFVG(true);
+   bool disp = ContStruct_HasDisplacement(true);
+
+   // OK82 InstantQuality: open on structural edges without ADX / hard trend wait
+   if(InstantQualityMode)
+   {
+      int edges = (bos ? 1 : 0) + (zone ? 1 : 0) + (disp ? 1 : 0);
+      if(edges == 0)
+         return false;
+      // Prefer bull trend; allow 2+ edges even if soft/ranging
+      if(IsBullTrend())
+         return true;
+      return (edges >= 2);
+   }
+
+   if(!IsBullTrend())
+      return false;
 
    if(QualityGatesActive())
    {
       if(QualityNeedsTrendAndADX() && !TrendStrong())
          return false;
-      // BEST/SAFE: Cont needs real structure (BOS or OB/FVG) — pullback alone is not enough
       if(BestQualitySetups || QualityNeedsStructureZone())
       {
          if(!(zone || bos))
             return false;
          return true;
       }
-      // Legacy aggressive: trend+ADX enough
       if(AggressiveInstitutionalExecution)
          return true;
       if(QualityNeedsStructureZone() && !(zone || bos))
@@ -7570,17 +7724,28 @@ bool AggressiveContinuationSellSetup()
 {
    if(!AggressiveSniperEntries)
       return false;
-   if(!IsBearTrend())
-      return false;
 
    double ema = GetEMA();
    double atr = GetFilterATR();
    double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
    bool pulled = (ema != EMPTY_VALUE && atr > 0.0 &&
                   MathAbs(price - ema) <= atr * EffectivePullbackATRMultiple());
-   // SIGNAL OK45: Cont SELL needs bearish BOS — not any-direction DetectBOS/RecentBOS
    bool bos = StructureDirectionalBOS(false);
    bool zone = ActiveOrderBlock(false) || ActiveFVG(false);
+   bool disp = ContStruct_HasDisplacement(false);
+
+   if(InstantQualityMode)
+   {
+      int edges = (bos ? 1 : 0) + (zone ? 1 : 0) + (disp ? 1 : 0);
+      if(edges == 0)
+         return false;
+      if(IsBearTrend())
+         return true;
+      return (edges >= 2);
+   }
+
+   if(!IsBearTrend())
+      return false;
 
    if(QualityGatesActive())
    {
@@ -8978,8 +9143,9 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
       }
    }
 
-   // Live APEX/ContFallback/LCS already passed their own checklist — skip PRISM score spam
-   bool liveSwing = (strategyTag == "APEX" || strategyTag == "ContFallback" || strategyTag == "LCS");
+   // Live swing tags + InstantQuality ContSniper skip re-spam (engines already ran)
+   bool liveSwing = (strategyTag == "APEX" || strategyTag == "ContFallback" || strategyTag == "LCS" ||
+                     (InstantQualityMode && (strategyTag == "ContSniper" || strategyTag == "InstantTrend")));
    if(liveSwing)
    {
       UltraSetApprove(strategyTag, "A", 100, 100);
@@ -9016,28 +9182,56 @@ bool PrismInstitutionalEnginesOK(bool buy, const string strategyTag)
 
    if(EnableBeastMode && PRISM_IsReversalTag(strategyTag) && !PRISMReversalQualityOK(buy))
    {
+      // InstantQuality: Rev still needs stack, but don't endless-block Cont
       UltraSetReject("reversal stack insufficient for " + strategyTag);
       if(EnableVerboseLogging || EnableSetupLogging)
          Print("BEAST: reversal stack insufficient for ", strategyTag, " on ", BrokerSymbol);
       return false;
    }
 
-   // ICE + IMCE hard for all paths.
-   // SMT hard only on reversal tags (see SMTOK) — not duplicated on InstantTrend.
+   bool softCont = InstantQualityMode &&
+                   (strategyTag == "ContSniper" || strategyTag == "InstantTrend" ||
+                    strategyTag == "TrendPullback" || strategyTag == "FVG+OB");
+
    if(!InstitutionalConfidenceOK(buy))
    {
-      UltraSetReject("ICE below floor for " + strategyTag);
-      return false;
+      if(softCont)
+      {
+         if(EnableVerboseLogging || EnableSetupLogging)
+            Print("ICE soft prefer (not block) for ", strategyTag, " on ", BrokerSymbol,
+                  " ICE=", GetInstitutionalConfidenceScore(buy));
+      }
+      else
+      {
+         UltraSetReject("ICE below floor for " + strategyTag);
+         return false;
+      }
    }
    if(!IMCEAllows(buy, strategyTag))
    {
-      UltraSetReject("IMCE blocked " + strategyTag);
-      return false;
+      if(softCont)
+      {
+         if(EnableVerboseLogging || EnableSetupLogging)
+            Print("IMCE soft prefer (not block) for ", strategyTag, " on ", BrokerSymbol);
+      }
+      else
+      {
+         UltraSetReject("IMCE blocked " + strategyTag);
+         return false;
+      }
    }
    if(!SMTOK(buy, strategyTag))
    {
-      UltraSetReject("SMT blocked " + strategyTag);
-      return false;
+      if(softCont)
+      {
+         if(EnableVerboseLogging || EnableSetupLogging)
+            Print("SMT soft prefer (not block) for ", strategyTag, " on ", BrokerSymbol);
+      }
+      else
+      {
+         UltraSetReject("SMT blocked " + strategyTag);
+         return false;
+      }
    }
 
    if(EnableVerboseLogging)
@@ -9134,10 +9328,174 @@ int PathQualityRankScore(const string tag, const bool buy)
 // condition count.
 void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &strategyTag)
 {
-   // OK67 RETIRED — ContSniper/Rev/Instant/PRISM multi-path is not live
    buySignal = false;
    sellSignal = false;
    strategyTag = "";
+
+   string buyCandidates[];
+   string sellCandidates[];
+   int buyCount = 0, sellCount = 0;
+
+   ArrayResize(buyCandidates, 8);
+   ArrayResize(sellCandidates, 8);
+
+   // Aggressive sniper paths first, then classic PRISM names.
+   // BestPathsOnly → ContSniper + RevSniper only (Instant off).
+   if(AggressiveContinuationBuySetup()) buyCandidates[buyCount++] = "ContSniper";
+   if(AggressiveReversalBuySetup())     buyCandidates[buyCount++] = "RevSniper";
+   if(!BestPathsOnly)
+   {
+      if(InstantTrendSniperBuySetup())     buyCandidates[buyCount++] = "InstantTrend";
+      if(TrendPullbackBuySetup())          buyCandidates[buyCount++] = "TrendPullback";
+      if(LiquiditySweepBuySetup())         buyCandidates[buyCount++] = "LiquiditySweep";
+      if(FVGOrderBlockBuySetup())          buyCandidates[buyCount++] = "FVG+OB";
+      if(SpecVolatilityBreakoutBuySetup()) buyCandidates[buyCount++] = "VolBreakout(Spec)";
+   }
+
+   if(AggressiveContinuationSellSetup()) sellCandidates[sellCount++] = "ContSniper";
+   if(AggressiveReversalSellSetup())     sellCandidates[sellCount++] = "RevSniper";
+   if(!BestPathsOnly)
+   {
+      if(InstantTrendSniperSellSetup())     sellCandidates[sellCount++] = "InstantTrend";
+      if(TrendPullbackSellSetup())          sellCandidates[sellCount++] = "TrendPullback";
+      if(LiquiditySweepSellSetup())         sellCandidates[sellCount++] = "LiquiditySweep";
+      if(FVGOrderBlockSellSetup())          sellCandidates[sellCount++] = "FVG+OB";
+      if(SpecVolatilityBreakoutSellSetup()) sellCandidates[sellCount++] = "VolBreakout(Spec)";
+   }
+
+   if(buyCount > 0 && sellCount > 0)
+   {
+      if(ResolveConflictByTrend || NeverBlockValidSniperEntry || InstantQualityMode)
+      {
+         if(IsBullTrend() && !IsBearTrend())
+            sellCount = 0;
+         else if(IsBearTrend() && !IsBullTrend())
+            buyCount = 0;
+         else
+         {
+            int buyScore = CalculatePRISMScore(true);
+            int sellScore = CalculatePRISMScore(false);
+            if(buyScore >= sellScore) sellCount = 0;
+            else buyCount = 0;
+         }
+         if(EnableVerboseLogging)
+            Print("Spec engine: conflict resolved by trend/score on ", BrokerSymbol,
+                  " -> ", (buyCount > 0 ? "BUY" : "SELL"));
+      }
+      else
+      {
+         if(EnableVerboseLogging)
+            Print("Spec engine: conflicting valid setups on ", BrokerSymbol, " (", buyCount, " buy vs ", sellCount, " sell) - rejecting.");
+         return;
+      }
+   }
+
+   if(buyCount == 0 && sellCount == 0)
+      return;
+
+   bool isBuy = (buyCount > 0);
+
+   int mpiScore = CalculatePRISMScore(isBuy);
+   int mpiFloor = EffectiveMinimumMPIScore();
+
+   if(AggressiveInstantQuality || InstantQualityMode)
+   {
+      if(EnableVerboseLogging)
+         Print("PRISM INSTANT QUALITY: MPI=", mpiScore, " (informational) on ", BrokerSymbol);
+   }
+   else if(QualityGatesActive() && mpiFloor > 0 && mpiScore < mpiFloor)
+   {
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("QUALITY SNIPER: MPI ", mpiScore, " < ", mpiFloor, " on ", BrokerSymbol, " - waiting.");
+      return;
+   }
+   else if(!NeverBlockValidSniperEntry && mpiFloor > 0 && mpiScore < mpiFloor)
+   {
+      if(EnableVerboseLogging)
+         Print("PRISM: MPI score ", mpiScore, " below MinimumMPIScore (", mpiFloor, ") on ", BrokerSymbol);
+      return;
+   }
+
+   if(EnablePremiumDiscountFilter && !NeverBlockValidSniperEntry && !InstantQualityMode)
+   {
+      if(isBuy && !InDiscountZone())
+      {
+         if(EnableVerboseLogging)
+            Print("PRISM: buy valid but premium zone — rejecting (PremiumDiscountFilter).");
+         return;
+      }
+      if(!isBuy && !InPremiumZone())
+      {
+         if(EnableVerboseLogging)
+            Print("PRISM: sell valid but discount zone — rejecting (PremiumDiscountFilter).");
+         return;
+      }
+   }
+
+   string candidates[];
+   int candidateCount;
+   if(isBuy) { ArrayCopy(candidates, buyCandidates); candidateCount = buyCount; }
+   else      { ArrayCopy(candidates, sellCandidates); candidateCount = sellCount; }
+
+   string ordered[];
+   int    orderedScores[];
+   ArrayResize(ordered, candidateCount);
+   ArrayResize(orderedScores, candidateCount);
+
+   for(int c = 0; c < candidateCount; c++)
+   {
+      ordered[c] = candidates[c];
+      orderedScores[c] = PathQualityRankScore(candidates[c], isBuy);
+      if(EnableBeastMode)
+         orderedScores[c] += CountConfirmingConditions(isBuy);
+   }
+
+   for(int i = 0; i < candidateCount - 1; i++)
+   {
+      for(int j = i + 1; j < candidateCount; j++)
+      {
+         if(orderedScores[j] > orderedScores[i])
+         {
+            int ts = orderedScores[i]; orderedScores[i] = orderedScores[j]; orderedScores[j] = ts;
+            string tt = ordered[i]; ordered[i] = ordered[j]; ordered[j] = tt;
+         }
+      }
+   }
+
+   string bestTag = "";
+   int tried = 0;
+   for(int c = 0; c < candidateCount; c++)
+   {
+      tried++;
+      if(PrismInstitutionalEnginesOK(isBuy, ordered[c]))
+      {
+         bestTag = ordered[c];
+         break;
+      }
+      if(!TryNextPathIfEnginesFail && !InstantQualityMode)
+         break;
+   }
+
+   if(bestTag == "")
+   {
+      if(EnableVerboseLogging || EnableSetupLogging)
+         Print("ULTRA CORE: ", candidateCount, " path(s) valid but engines rejected all on ",
+               BrokerSymbol, " (", (isBuy ? "BUY" : "SELL"), ")");
+      return;
+   }
+
+   if(isBuy) { buySignal = true;  strategyTag = bestTag; }
+   else      { sellSignal = true; strategyTag = bestTag; }
+
+   PRISMBeastScore fireBeast = UltraGetBeastScore(isBuy, bestTag);
+   Print("ULTRA CORE FIRE ", (isBuy ? "BUY" : "SELL"),
+         " [", bestTag, "] grade=", PRISMGetTradeGrade(isBuy, bestTag),
+         " Beast=", fireBeast.overall, " Conf=", fireBeast.confidencePct, "%",
+         " rank=", PathQualityRankScore(bestTag, isBuy),
+         " ICE=", GetInstitutionalConfidenceScore(isBuy),
+         " IMCE=", IMCEContextToString(GetIMCEContext()),
+         " tried=", tried, "/", candidateCount,
+         " on ", BrokerSymbol);
 }
 
 bool TrendPullbackBuySetup()
@@ -11616,8 +11974,11 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    sellSignal = false;
    strategyTag = "";
 
-   // OK76 LIVE: APEX → ContFallback, both gated by built-in IDP pulse
-   // 1) APEX
+   // OK82 PRISM COMPLETE LIVE:
+   // 1) APEX liquidity sniper
+   // 2) SpecCompliant ContSniper / RevSniper / InstantTrend / classic PRISM
+   // 3) ContFallback structure instant quality
+   // 4) LCS optional
    if(EnableAPEXStrategy)
    {
       EvaluateAPEXStrategies(buySignal, sellSignal, strategyTag);
@@ -11625,11 +11986,22 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
          return;
    }
 
-   // 2) ContFallback BEST structure (BOS + fresh zone + disp + discount/premium)
-   if(EnableContFallback)
-      EvaluateContFallback(buySignal, sellSignal, strategyTag);
+   if(EnablePrismLiveStack)
+   {
+      EvaluateSpecCompliantStrategies(buySignal, sellSignal, strategyTag);
+      if(buySignal || sellSignal)
+         return;
+   }
 
-   // LCS / ContSniper / RevSniper / InstantTrend / SpecCompliant — RETIRED (not called)
+   if(EnableContFallback)
+   {
+      EvaluateContFallback(buySignal, sellSignal, strategyTag);
+      if(buySignal || sellSignal)
+         return;
+   }
+
+   if(EnableLCSStrategy)
+      EvaluateLCSStrategies(buySignal, sellSignal, strategyTag);
 }
 
 //+------------------------------------------------------------------+
@@ -12277,7 +12649,7 @@ bool StrongSellSetup()
 
 input group "DASHBOARD"
 
-input bool EnableDashboard = false;
+input bool EnableDashboard = true;  // OK82: PRISM HUD on by default
 
 // FIX/SIMPLIFY: the previous dashboard displayed a "win rate"/AI-score
 // style accuracy figure that had no reliable, verifiable basis (a handful
@@ -12301,33 +12673,41 @@ void CreateDashboard()
       PRISMBeastScore beast = UltraGetBeastScore(true, "ContSniper");
       long spread = SymbolInfoInteger(BrokerSymbol, SYMBOL_SPREAD);
       Comment(
-         "======= SNIPER AI PRISM ULTRA CORE v11 =======\n",
+         "======= SNIPER AI PRISM COMPLETE =======\n",
          "Chart: ", BrokerSymbol, " | EntryTF: ", EnumToString(EntryTF), "\n",
          "Open: ", IntegerToString(CountOpenTrades()),
          " / ", IntegerToString(MaxOpenTrades),
          " | Spread: ", IntegerToString((int)spread), "\n",
-         "Regime: ", EnumToString(intel.regime),
+         "H4/Daily: ", (intel.dailyBullBias ? "BULL" : "BEAR"),
+         " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"),
+         " | Regime: ", EnumToString(intel.regime), "\n",
+         "Trend: ", (IsBullTrend() ? "BULL" : (IsBearTrend() ? "BEAR" : "FLAT")),
+         " | Strong: ", (TrendStrong() ? "Y" : "N"),
          " | IMCE: ", IMCEContextToString(intel.imce), "\n",
          "BOS: ", (s.bos ? "Y" : "N"),
          " CHoCH: ", (s.choch ? "Y" : "N"),
-         " Sweep: ", (s.sweep ? "Y" : "N"),
-         " OB: ", (s.ob ? "Y" : "N"),
-         " FVG: ", (s.fvg ? "Y" : "N"), "\n",
+         " MSS: ", (DetectMSS() ? "Y" : "N"),
+         " Sweep: ", (s.sweep ? "Y" : "N"), "\n",
+         "OB: ", (s.ob ? "Y" : "N"),
+         " FVG: ", (s.fvg ? "Y" : "N"),
+         " IFVG: ", ((DetectIFVG(true)||DetectIFVG(false)) ? "Y" : "N"),
+         " BPR: ", ((DetectBPR(true)||DetectBPR(false)) ? "Y" : "N"), "\n",
+         "Liq EQH/EQL: ", (IsEqualHigh() ? "H" : "-"), "/", (IsEqualLow() ? "L" : "-"),
+         " | Prem/Disc: ", (InPremiumZone() ? "PREM" : (InDiscountZone() ? "DISC" : "EQ")), "\n",
+         "SMT: ", ((SMTInternalBullish()||SMTInternalBearish()) ? "ACTIVE" : "soft"),
+         " | ICE: ", IntegerToString(GetInstitutionalConfidenceScore(true)),
+         " | MPI: ", IntegerToString(CalculatePRISMScore(true)), "\n",
          "Beast: ", IntegerToString(beast.overall),
          " | Conf: ", IntegerToString(beast.confidencePct), "%",
          " | Grade: ", g_UltraLastGrade, "\n",
-         "MPI: ", IntegerToString(CalculatePRISMScore(true)),
-         " | ICE: ", IntegerToString(GetInstitutionalConfidenceScore(true)), "\n",
-         "Daily: ", (intel.dailyBullBias ? "BULL" : "BEAR"),
-         " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"),
-         " | Event: ", (intel.eventWindow ? "ON" : "OFF"), "\n",
-         "Last: ", g_UltraLastDecision,
+         "Signal: ", g_UltraLastDecision,
          " | Latency: ", IntegerToString((int)g_UltraLastDecisionMs), "ms\n",
          "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_APEX_EXEC_63\n",
-         "=============================================="
+         "Live: APEX→Cont/Rev/Instant→ContFallback | Comment: SNIPER AI\n",
+         "BUILD: SA_PRISM_82\n",
+         "========================================"
       );
       return;
    }
@@ -12348,7 +12728,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_APEX_EXEC_63\n",
+         "BUILD: SA_PRISM_82\n",
          "=========================================="
       );
       return;
@@ -12584,7 +12964,7 @@ string LiveMarketSummary()
 void PrintLiveMarketAnalysis()
 {
    AnalyzeLiveMarket(true);
-   Print("---- MARKET ANALYSIS BUILD=SA_QUALITY_81 (", BrokerSymbol, ") ----");
+   Print("---- MARKET ANALYSIS BUILD=SA_PRISM_82 (", BrokerSymbol, ") ----");
    Print("SESSION=", g_LiveMkt.sessionName,
          " hour=", g_LiveMkt.sessionHour,
          (APEX_UseGMT ? " GMT" : " SERVER"),
@@ -12727,7 +13107,7 @@ void InstantExecution()
       return;
    }
 
-   // EvaluateStrategySignals() = APEX → ContFallback only (OK67 PURE).
+   // EvaluateStrategySignals() = APEX → Spec → ContFallback → LCS (OK82 PRISM).
    bool buySignal, sellSignal;
    string strategyTag;
    EvaluateStrategySignals(buySignal, sellSignal, strategyTag);
