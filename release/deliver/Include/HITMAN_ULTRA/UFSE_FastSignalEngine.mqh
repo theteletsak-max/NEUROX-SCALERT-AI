@@ -519,6 +519,19 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
    if(u.score.probability < UltraMinProbability && u.score.confidence < UltraInstantFireConf)
    { why = "probability low"; return false; }
 
+   // DEFENSE LINE ENGINE v1.0 — Lines 1-7 + 10 (GREEN / YELLOW / RED)
+   if(UltraDefenseEnabled && UltraDefenseGateEntry)
+   {
+      UltraDefenseReport defR;
+      string defWhy = "";
+      if(!UltraDefense_EvaluateEntry(s, u, sig.buy, defR, defWhy))
+      {
+         why = defWhy;
+         UltraDefense_MaybeLog(s, defR);
+         return false;
+      }
+   }
+
    if(UltraFastSignalEnabled)
    {
       int idx = UltraUFSE_Ensure(s);

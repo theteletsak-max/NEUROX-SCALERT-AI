@@ -8,7 +8,8 @@ order = [
     "07_Fibonacci.mqh","08_Institutional.mqh","09_Trend.mqh","10_Momentum.mqh",
     "12_MarketRegime.mqh","18_NewsIntelligence.mqh","17_SessionIntelligence.mqh",
     "13_Precision.mqh","14_Probability.mqh","15_Confluence.mqh","26_Diagnostics.mqh",
-    "29_MarketMemory.mqh","20_CapitalProtection.mqh","19_Execution.mqh","16_AI_Core.mqh",
+    "29_MarketMemory.mqh",    "20_CapitalProtection.mqh","19_Execution.mqh","16_AI_Core.mqh",
+    "DefenseLineEngine.mqh",
     "UFSE_FastSignalEngine.mqh",
     "21_TradeManagement.mqh","22_MultiSymbol.mqh","23_MultiTimeframe.mqh",
     "25_Statistics.mqh","24_Dashboard.mqh",
@@ -26,7 +27,7 @@ header = '''//+-----------------------------------------------------------------
 #property copyright "HITMAN AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version   "1.00"
-#property description "HITMAN AI + Ultra Fast Signal Engine v1.0"
+#property description "HITMAN AI + UFSE v1.0 + Defense Line Engine v1.0"
 #property description "BUILD=HA_ULTRA_93 Comment=HITMAN AI MaxOpen=3"
 
 #include <Trade/Trade.mqh>

@@ -84,6 +84,16 @@ input bool   UltraSignalLockEnabled      = true;  // block duplicates until unlo
 input bool   UltraUFSE_ExplainLog        = true;  // PASS/FAIL explain on fire/wait
 input bool   UltraUFSE_EntryTriggerGate  = true;  // formal entry trigger checklist
 
+input group "31 · DEFENSE LINE ENGINE v1.0"
+input bool   UltraDefenseEnabled         = true;  // master switch — 10 defense lines
+input bool   UltraDefenseStrict          = false; // true = hard gates; false = InstantQuality soft
+input bool   UltraDefenseLog             = true;  // journal GREEN/YELLOW/RED explain
+input bool   UltraDefenseGateEntry       = true;  // Lines 1-6 + 10 on UltraAIDecide
+input bool   UltraDefenseGateExec        = true;  // Line 7 before fire
+input bool   UltraDefensePosition        = true;  // Line 8 open-position protect
+input bool   UltraDefenseCloseOnFlip     = false; // L8 hard-close on adverse flip (else BE only)
+input bool   UltraDefenseEmergency       = true;  // Line 9 auto-recover
+
 input group "31 · DASHBOARD INPUTS"
 input bool   UltraDashboardEnabled       = true;
 input bool   UltraDiagnosticsEnabled     = true;

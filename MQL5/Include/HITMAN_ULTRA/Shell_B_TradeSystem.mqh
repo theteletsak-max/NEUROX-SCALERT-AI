@@ -70,12 +70,18 @@ int OnInit()
             " (EntryTF input=", EnumToString(EntryTF),
             ") — change the chart timeframe to change trading TF, or set EntryTF input");
    }
-   Print("HITMAN MASTER BLUEPRINT: modules 00-40 + UFSE v1.0 | HITMAN AI live path");
+   Print("HITMAN MASTER BLUEPRINT: modules 00-40 + UFSE v1.0 + DEFENSE LINE v1.0 | HITMAN AI live path");
    Print("UFSE: FastSignal=", UltraYN(UltraFastSignalEnabled),
          " MasterTrendLock=", UltraYN(UltraMasterTrendLock),
          " SignalLock=", UltraYN(UltraSignalLockEnabled),
          " EntryTrigger=", UltraYN(UltraUFSE_EntryTriggerGate),
          " ExplainLog=", UltraYN(UltraUFSE_ExplainLog));
+   Print("DEFENSE LINE ENGINE: Enabled=", UltraYN(UltraDefenseEnabled),
+         " Strict=", UltraYN(UltraDefenseStrict),
+         " GateEntry=", UltraYN(UltraDefenseGateEntry),
+         " GateExec=", UltraYN(UltraDefenseGateExec),
+         " Position=", UltraYN(UltraDefensePosition),
+         " Emergency=", UltraYN(UltraDefenseEmergency));
    if(EnableAPEXStrategy || EnableContFallback || EnableLCSStrategy)
       Print("OK93 WARNING: old APEX/ContFallback/LCS input ON — evaluators STUBBED; ULTRA only fires");
    Print("INSTANT OPEN + QUALITY PREFER MODE=", UltraYN(InstantQualityMode));
@@ -876,6 +882,9 @@ void RunTradingCycle(string symbol)
       return;
 
    BrokerSymbol = symbol;
+
+   // DEFENSE LINE 9 — EMERGENCY (connection / data / symbol recover)
+   UltraDefense_Line9_Emergency(symbol);
 
    ManageOpenTrades();
 
@@ -3835,6 +3844,17 @@ void ManageOpenTrades()
          if(MarketDefendOpenPosition(ticket, type, openPrice, price, currentSL, currentTP, defendState))
             continue; // position closed by defense
          // refresh after possible SL modify
+         if(!PositionSelectByTicket(ticket))
+            continue;
+         currentSL = PositionGetDouble(POSITION_SL);
+         currentTP = PositionGetDouble(POSITION_TP);
+      }
+
+      //================ DEFENSE LINE 8 — POSITION =================//
+      if(UltraDefenseEnabled && UltraDefensePosition)
+      {
+         if(UltraDefense_Line8_Position(ticket, type, openPrice, price, currentSL, currentTP, defendState))
+            continue;
          if(!PositionSelectByTicket(ticket))
             continue;
          currentSL = PositionGetDouble(POSITION_SL);

@@ -7,7 +7,7 @@
 #property copyright "HITMAN AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version   "1.00"
-#property description "HITMAN AI + Ultra Fast Signal Engine v1.0"
+#property description "HITMAN AI + UFSE v1.0 + Defense Line Engine v1.0"
 #property description "BUILD=HA_ULTRA_93 Comment=HITMAN AI MaxOpen=3"
 
 #include <Trade/Trade.mqh>
@@ -820,6 +820,47 @@ UltraSignal    g_UltraLastSignal;
 datetime       g_UltraLastFireBar = 0;
 
 //--------------------------------------------------------------------//
+// DEFENSE LINE ENGINE v1.0 — shared enums / report
+//--------------------------------------------------------------------//
+enum ENUM_DEFENSE_LEVEL
+{
+   DEF_GREEN  = 0, // Trade Allowed
+   DEF_YELLOW = 1, // Wait for Confirmation
+   DEF_RED    = 2  // Block Trade
+};
+
+enum ENUM_DEFENSE_ACTION
+{
+   DEF_ACT_EXECUTE = 0,
+   DEF_ACT_WAIT,
+   DEF_ACT_NO_TRADE,
+   DEF_ACT_DO_NOT_EXECUTE
+};
+
+struct UltraDefenseLine
+{
+   int                id;       // 1..10
+   string             name;
+   bool               pass;
+   ENUM_DEFENSE_LEVEL level;
+   string             reason;
+};
+
+struct UltraDefenseReport
+{
+   bool               valid;
+   bool               buySide;
+   ENUM_DEFENSE_LEVEL overall;
+   ENUM_DEFENSE_ACTION action;
+   bool               allowEntry;
+   bool               allowExecute;
+   UltraDefenseLine   line[11]; // 1..10 used
+   string             summary;
+};
+
+UltraDefenseReport g_UltraDefenseLast;
+
+//--------------------------------------------------------------------//
 // 1. ULTRA CORE / DATA / CONFIG / VALIDATION / RECOVERY / LOG / PERF
 //--------------------------------------------------------------------//
 
@@ -912,6 +953,16 @@ input bool   UltraMasterTrendLock        = true;  // LTF cannot reverse HTF mast
 input bool   UltraSignalLockEnabled      = true;  // block duplicates until unlock event
 input bool   UltraUFSE_ExplainLog        = true;  // PASS/FAIL explain on fire/wait
 input bool   UltraUFSE_EntryTriggerGate  = true;  // formal entry trigger checklist
+
+input group "31 · DEFENSE LINE ENGINE v1.0"
+input bool   UltraDefenseEnabled         = true;  // master switch — 10 defense lines
+input bool   UltraDefenseStrict          = false; // true = hard gates; false = InstantQuality soft
+input bool   UltraDefenseLog             = true;  // journal GREEN/YELLOW/RED explain
+input bool   UltraDefenseGateEntry       = true;  // Lines 1-6 + 10 on UltraAIDecide
+input bool   UltraDefenseGateExec        = true;  // Line 7 before fire
+input bool   UltraDefensePosition        = true;  // Line 8 open-position protect
+input bool   UltraDefenseCloseOnFlip     = false; // L8 hard-close on adverse flip (else BE only)
+input bool   UltraDefenseEmergency       = true;  // Line 9 auto-recover
 
 input group "31 · DASHBOARD INPUTS"
 input bool   UltraDashboardEnabled       = true;
@@ -2432,6 +2483,562 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
 #endif // HITMAN_ULTRA_16_AI_CORE_MQH
 //===== END 16_AI_Core.mqh =====
 
+//===== BEGIN DefenseLineEngine.mqh =====
+#ifndef HITMAN_ULTRA_DEFENSE_LINE_ENGINE_MQH
+#define HITMAN_ULTRA_DEFENSE_LINE_ENGINE_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — DEFENSE LINE ENGINE v1.0                             |
+//| Protect entries · block invalid trades · protect positions       |
+//| Detect abnormal markets · preserve capital                       |
+//+------------------------------------------------------------------+
+
+datetime g_UltraDefenseLastEmergBar = 0;
+datetime g_UltraDefenseLastLogBar   = 0;
+string   g_UltraDefenseLastLogSym   = "";
+bool     g_UltraDefenseWasConnected = true;
+
+string UltraDefense_LevelName(const ENUM_DEFENSE_LEVEL lv)
+{
+   if(lv == DEF_GREEN)  return "GREEN";
+   if(lv == DEF_YELLOW) return "YELLOW";
+   return "RED";
+}
+
+string UltraDefense_ActionName(const ENUM_DEFENSE_ACTION a)
+{
+   if(a == DEF_ACT_EXECUTE)        return "EXECUTE";
+   if(a == DEF_ACT_WAIT)           return "WAIT";
+   if(a == DEF_ACT_DO_NOT_EXECUTE) return "DO NOT EXECUTE";
+   return "NO TRADE";
+}
+
+void UltraDefense_ClearReport(UltraDefenseReport &r)
+{
+   r.valid = false;
+   r.buySide = true;
+   r.overall = DEF_GREEN;
+   r.action = DEF_ACT_EXECUTE;
+   r.allowEntry = true;
+   r.allowExecute = true;
+   r.summary = "";
+   for(int i = 0; i <= 10; i++)
+   {
+      r.line[i].id = i;
+      r.line[i].name = "";
+      r.line[i].pass = true;
+      r.line[i].level = DEF_GREEN;
+      r.line[i].reason = "";
+   }
+}
+
+void UltraDefense_SetLine(UltraDefenseReport &r, const int id, const string name,
+                          const bool pass, const ENUM_DEFENSE_LEVEL failLevel,
+                          const string reason)
+{
+   if(id < 1 || id > 10) return;
+   r.line[id].id = id;
+   r.line[id].name = name;
+   r.line[id].pass = pass;
+   if(pass)
+   {
+      r.line[id].level = DEF_GREEN;
+      r.line[id].reason = "PASS";
+   }
+   else
+   {
+      r.line[id].level = failLevel;
+      r.line[id].reason = reason;
+   }
+}
+
+void UltraDefense_RaiseOverall(UltraDefenseReport &r, const ENUM_DEFENSE_LEVEL lv)
+{
+   if((int)lv > (int)r.overall)
+      r.overall = lv;
+}
+
+bool UltraDefense_SoftMode()
+{
+   if(!UltraDefenseStrict && InstantQualityMode) return true;
+   return (!UltraDefenseStrict);
+}
+
+//--------------------------------------------------------------------//
+// LINE 1 — MARKET STRUCTURE DEFENSE  → fail = NO TRADE (RED)
+//--------------------------------------------------------------------//
+bool UltraDefense_Line1_Structure(const UltraSnap &u, const bool buySide, string &why)
+{
+   why = "";
+   bool valid = buySide
+      ? (u.st.hh || u.st.hl || u.st.externalBull || u.st.internalBull || u.st.continuation)
+      : (u.st.lh || u.st.ll || u.st.externalBear || u.st.internalBear || u.st.continuation);
+   bool broken = u.bos.failed;
+   bool cleanSwing = (u.st.swingHighOK || u.st.swingLowOK || u.st.quality >= 30 || u.st.strength >= 30);
+   bool fakeBreak = (u.bos.failed && ((buySide && u.bos.sell) || (!buySide && u.bos.buy)));
+
+   if(UltraDefense_SoftMode())
+   {
+      int n = (valid?1:0) + ((!broken)?1:0) + (cleanSwing?1:0) + ((!fakeBreak)?1:0);
+      if(n >= 2) return true;
+      why = "structure soft " + IntegerToString(n) + "/4";
+      return false;
+   }
+   if(!valid){ why = "invalid structure"; return false; }
+   if(broken && fakeBreak){ why = "broken / fake break"; return false; }
+   if(!cleanSwing && u.st.quality < 20){ why = "dirty swing"; return false; }
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// LINE 2 — TREND DEFENSE  → fail = NO TRADE (RED)
+//--------------------------------------------------------------------//
+bool UltraDefense_Line2_Trend(const UltraSnap &u, const bool buySide, string &why)
+{
+   why = "";
+   bool master = buySide
+      ? (u.trend.bull || u.trend.htfBull || u.trend.macroBull || u.trend.mtfVotesBuy > u.trend.mtfVotesSell)
+      : (u.trend.bear || u.trend.htfBear || u.trend.macroBear || u.trend.mtfVotesSell > u.trend.mtfVotesBuy);
+   bool strength = (u.trend.strength >= 25 || u.trend.quality >= 25 || UltraDefense_SoftMode());
+   bool stable   = (u.trend.persistence >= 20 || u.trend.continuation || !u.trend.exhaustion || UltraDefense_SoftMode());
+
+   if(UltraDefense_SoftMode())
+   {
+      int n = (master?1:0)+(strength?1:0)+(stable?1:0);
+      if(n >= 1) return true;
+      why = "trend soft 0/3";
+      return false;
+   }
+   if(!master){ why = "master trend mismatch"; return false; }
+   if(!strength){ why = "trend strength weak"; return false; }
+   if(!stable){ why = "trend unstable"; return false; }
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// LINE 3 — LIQUIDITY DEFENSE  → fail = WAIT (YELLOW)
+//--------------------------------------------------------------------//
+bool UltraDefense_Line3_Liquidity(const UltraSnap &u, const bool buySide, string &why)
+{
+   why = "";
+   bool sweep = buySide ? (u.liq.sweepBuy || u.liq.equalLows) : (u.liq.sweepSell || u.liq.equalHighs);
+   bool hunt  = buySide ? u.liq.stopHuntBuy : u.liq.stopHuntSell;
+   bool grab  = buySide ? (u.liq.grabBuy || u.liq.poolBuy || u.liq.confirmedBuy)
+                        : (u.liq.grabSell || u.liq.poolSell || u.liq.confirmedSell);
+   if(sweep || hunt || grab) return true;
+   if(UltraDefense_SoftMode() && (u.liq.quality >= 20 || u.ict.dispBuy || u.ict.dispSell))
+      return true;
+   why = "liquidity not confirmed";
+   return false;
+}
+
+//--------------------------------------------------------------------//
+// LINE 4 — BOS / CHoCH DEFENSE  → fail = NO TRADE (RED)
+//--------------------------------------------------------------------//
+bool UltraDefense_Line4_BosChoch(const UltraSnap &u, const bool buySide, string &why)
+{
+   why = "";
+   bool bos = buySide ? u.bos.buy : u.bos.sell;
+   bool choch = buySide ? u.choch.buy : u.choch.sell;
+   bool confirmed = (bos && (u.bos.confirmed || u.bos.strong || u.bos.score >= 30)) ||
+                    (choch && (u.choch.majorC || u.choch.confidence >= 30 || u.choch.strength >= 30));
+   bool strong = (u.bos.strong || u.bos.score >= 40 || u.choch.majorC || u.ict.dispBuy || u.ict.dispSell);
+
+   if(UltraDefense_SoftMode())
+   {
+      if(bos || choch || u.st.continuation) return true;
+      why = "no BOS/CHoCH";
+      return false;
+   }
+   if(!(bos || choch)){ why = "no BOS/CHoCH"; return false; }
+   if(!confirmed && !strong){ why = "break not confirmed"; return false; }
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// LINE 5 — PRECISION DEFENSE  → fail = WAIT (YELLOW)
+//--------------------------------------------------------------------//
+bool UltraDefense_Line5_Precision(const UltraSnap &u, const bool buySide, string &why)
+{
+   why = "";
+   bool zone = buySide
+      ? (u.fib.atBuyZone || u.ict.obBuy || u.ict.fvgBuy || u.ict.instZoneBuy || u.ict.inDiscount)
+      : (u.fib.atSellZone || u.ict.obSell || u.ict.fvgSell || u.ict.instZoneSell || u.ict.inPremium);
+   bool rrOk = (u.score.precision >= UltraMinPrecision ||
+                u.score.confidence >= UltraInstantFireConf ||
+                (InstantQualityMode && u.score.precision >= UltraMinPrecision - 8));
+   bool lowErr = (u.score.precision >= 30 || u.fib.quality >= 30 || zone);
+
+   if(rrOk && (zone || lowErr || UltraDefense_SoftMode())) return true;
+   if(UltraDefense_SoftMode() && u.score.confidence >= UltraFireFloor() - 5) return true;
+   why = "precision / zone wait";
+   return false;
+}
+
+//--------------------------------------------------------------------//
+// LINE 6 — PROBABILITY DEFENSE  → fail = NO TRADE (RED)
+//--------------------------------------------------------------------//
+bool UltraDefense_Line6_Probability(const UltraSnap &u, string &why)
+{
+   why = "";
+   if(u.score.probability >= UltraMinProbability) return true;
+   if(u.score.confidence >= UltraInstantFireConf) return true;
+   if(InstantQualityMode && u.score.probability >= UltraMinProbability - 8) return true;
+   why = "probability below threshold";
+   return false;
+}
+
+//--------------------------------------------------------------------//
+// LINE 7 — EXECUTION DEFENSE  → fail = DO NOT EXECUTE (RED)
+//--------------------------------------------------------------------//
+bool UltraDefense_Line7_Execution(const string s, string &why)
+{
+   why = "";
+   if(!TerminalInfoInteger(TERMINAL_CONNECTED)){ why = "connection loss"; return false; }
+   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)){ why = "terminal trade blocked"; return false; }
+   if(!MQLInfoInteger(MQL_TRADE_ALLOWED)){ why = "EA trade disabled"; return false; }
+   long tm = SymbolInfoInteger(s, SYMBOL_TRADE_MODE);
+   if(tm == SYMBOL_TRADE_MODE_DISABLED){ why = "symbol trade disabled"; return false; }
+
+   double bid = SymbolInfoDouble(s, SYMBOL_BID);
+   double ask = SymbolInfoDouble(s, SYMBOL_ASK);
+   if(bid <= 0.0 || ask <= 0.0){ why = "price not fresh"; return false; }
+   datetime qt = (datetime)SymbolInfoInteger(s, SYMBOL_TIME);
+   if(qt > 0 && (TimeCurrent() - qt) > 120){ why = "stale quotes"; return false; }
+
+   double volMin = SymbolInfoDouble(s, SYMBOL_VOLUME_MIN);
+   double volMax = SymbolInfoDouble(s, SYMBOL_VOLUME_MAX);
+   if(volMin <= 0.0 || (volMax > 0.0 && volMax < volMin)){ why = "invalid volume limits"; return false; }
+
+   int stops = (int)SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL);
+   if(stops < 0){ why = "invalid stops level"; return false; }
+
+   double eq = AccountInfoDouble(ACCOUNT_EQUITY);
+   double fm = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+   if(eq <= 0.0){ why = "invalid equity"; return false; }
+   if(fm <= 0.0){ why = "no free margin"; return false; }
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// LINE 10 — AI DEFENSE (final confluence of required checks)
+//--------------------------------------------------------------------//
+bool UltraDefense_Line10_AI(const UltraDefenseReport &r, string &why)
+{
+   why = "";
+   // Required hard lines: 1,2,4,6 + exec 7 when gated. Soft waits: 3,5.
+   if(!r.line[1].pass){ why = "AI: structure"; return false; }
+   if(!r.line[2].pass){ why = "AI: trend"; return false; }
+   if(!r.line[4].pass){ why = "AI: BOS/CHoCH"; return false; }
+   if(!r.line[6].pass){ why = "AI: probability"; return false; }
+   if(UltraDefenseGateExec && !r.line[7].pass){ why = "AI: execution"; return false; }
+   // Liquidity + Precision are WAIT lines — block entry until confirmed
+   if(!r.line[3].pass){ why = "AI: liquidity wait"; return false; }
+   if(!r.line[5].pass){ why = "AI: precision wait"; return false; }
+   return true;
+}
+
+string UltraDefense_BuildSummary(const UltraDefenseReport &r)
+{
+   string t = "DEFENSE ";
+   t += UltraDefense_LevelName(r.overall);
+   t += " → ";
+   t += UltraDefense_ActionName(r.action);
+   t += " |";
+   for(int i = 1; i <= 10; i++)
+   {
+      if(i == 8 || i == 9) continue; // position/emergency reported separately
+      t += " L";
+      t += IntegerToString(i);
+      t += "=";
+      if(r.line[i].pass) t += "OK";
+      else
+      {
+         t += UltraDefense_LevelName(r.line[i].level);
+         t += ":";
+         t += r.line[i].reason;
+      }
+   }
+   return t;
+}
+
+//--------------------------------------------------------------------//
+// ENTRY + EXEC EVALUATION (Lines 1-7 + 10)
+//--------------------------------------------------------------------//
+bool UltraDefense_EvaluateEntry(const string s, const UltraSnap &u, const bool buySide,
+                                UltraDefenseReport &r, string &why)
+{
+   UltraDefense_ClearReport(r);
+   r.buySide = buySide;
+   r.valid = true;
+   why = "";
+
+   if(!UltraDefenseEnabled || !UltraDefenseGateEntry)
+   {
+      r.overall = DEF_GREEN;
+      r.action = DEF_ACT_EXECUTE;
+      r.allowEntry = true;
+      r.allowExecute = true;
+      r.summary = "DEFENSE OFF";
+      g_UltraDefenseLast = r;
+      return true;
+   }
+
+   string w = "";
+   bool p1 = UltraDefense_Line1_Structure(u, buySide, w);
+   UltraDefense_SetLine(r, 1, "STRUCTURE", p1, DEF_RED, w);
+   if(!p1) UltraDefense_RaiseOverall(r, DEF_RED);
+
+   w = "";
+   bool p2 = UltraDefense_Line2_Trend(u, buySide, w);
+   UltraDefense_SetLine(r, 2, "TREND", p2, DEF_RED, w);
+   if(!p2) UltraDefense_RaiseOverall(r, DEF_RED);
+
+   w = "";
+   bool p3 = UltraDefense_Line3_Liquidity(u, buySide, w);
+   UltraDefense_SetLine(r, 3, "LIQUIDITY", p3, DEF_YELLOW, w);
+   if(!p3) UltraDefense_RaiseOverall(r, DEF_YELLOW);
+
+   w = "";
+   bool p4 = UltraDefense_Line4_BosChoch(u, buySide, w);
+   UltraDefense_SetLine(r, 4, "BOS_CHOCH", p4, DEF_RED, w);
+   if(!p4) UltraDefense_RaiseOverall(r, DEF_RED);
+
+   w = "";
+   bool p5 = UltraDefense_Line5_Precision(u, buySide, w);
+   UltraDefense_SetLine(r, 5, "PRECISION", p5, DEF_YELLOW, w);
+   if(!p5) UltraDefense_RaiseOverall(r, DEF_YELLOW);
+
+   w = "";
+   bool p6 = UltraDefense_Line6_Probability(u, w);
+   UltraDefense_SetLine(r, 6, "PROBABILITY", p6, DEF_RED, w);
+   if(!p6) UltraDefense_RaiseOverall(r, DEF_RED);
+
+   w = "";
+   bool p7 = true;
+   if(UltraDefenseGateExec)
+      p7 = UltraDefense_Line7_Execution(s, w);
+   UltraDefense_SetLine(r, 7, "EXECUTION", p7, DEF_RED, w);
+   if(!p7) UltraDefense_RaiseOverall(r, DEF_RED);
+
+   // Position + Emergency are runtime — mark GREEN here
+   UltraDefense_SetLine(r, 8, "POSITION", true, DEF_GREEN, "runtime");
+   UltraDefense_SetLine(r, 9, "EMERGENCY", true, DEF_GREEN, "runtime");
+
+   w = "";
+   bool p10 = UltraDefense_Line10_AI(r, w);
+   UltraDefense_SetLine(r, 10, "AI", p10, DEF_RED, w);
+   if(!p10) UltraDefense_RaiseOverall(r, DEF_RED);
+
+   // Map overall → action
+   r.allowEntry = false;
+   r.allowExecute = false;
+   if(!p7)
+   {
+      r.action = DEF_ACT_DO_NOT_EXECUTE;
+      r.allowEntry = false;
+      r.allowExecute = false;
+   }
+   else if(!p1 || !p2 || !p4 || !p6 || !p10)
+   {
+      // distinguish WAIT (yellow-only fails on 3/5) vs NO TRADE
+      if(p1 && p2 && p4 && p6 && (!p3 || !p5))
+      {
+         r.action = DEF_ACT_WAIT;
+         r.overall = DEF_YELLOW;
+      }
+      else
+      {
+         r.action = DEF_ACT_NO_TRADE;
+         if(r.overall < DEF_RED) r.overall = DEF_RED;
+      }
+   }
+   else if(!p3 || !p5)
+   {
+      r.action = DEF_ACT_WAIT;
+      r.overall = DEF_YELLOW;
+   }
+   else
+   {
+      r.action = DEF_ACT_EXECUTE;
+      r.overall = DEF_GREEN;
+      r.allowEntry = true;
+      r.allowExecute = true;
+   }
+
+   r.summary = UltraDefense_BuildSummary(r);
+   g_UltraDefenseLast = r;
+
+   if(r.allowEntry && r.allowExecute)
+   {
+      why = "";
+      return true;
+   }
+
+   why = "DEFENSE ";
+   why += UltraDefense_LevelName(r.overall);
+   why += " ";
+   why += UltraDefense_ActionName(r.action);
+   why += " — ";
+   // pick first failing line reason
+   for(int i = 1; i <= 10; i++)
+   {
+      if(i == 8 || i == 9) continue;
+      if(!r.line[i].pass)
+      {
+         why += "L";
+         why += IntegerToString(i);
+         why += " ";
+         why += r.line[i].name;
+         why += ": ";
+         why += r.line[i].reason;
+         break;
+      }
+   }
+   return false;
+}
+
+//--------------------------------------------------------------------//
+// LINE 8 — POSITION DEFENSE (open trades)
+// Protect profit · BE · trail handoff · trend-change monitor
+// Returns true if position was CLOSED by defense.
+//--------------------------------------------------------------------//
+bool UltraDefense_Line8_Position(const ulong ticket, const long type,
+                                 const double openPrice, const double price,
+                                 double &currentSL, double &currentTP,
+                                 const int stateIndex)
+{
+   if(!UltraDefenseEnabled || !UltraDefensePosition) return false;
+   if(!PositionSelectByTicket(ticket)) return false;
+
+   const bool isBuy = (type == POSITION_TYPE_BUY);
+   UltraSnap u = g_UltraLastSnap;
+
+   // Trend change against open position → move to break-even (capital preserve)
+   bool trendFlip = isBuy
+      ? (u.trend.bear && (u.trend.htfBear || u.trend.macroBear) && !u.trend.bull)
+      : (u.trend.bull && (u.trend.htfBull || u.trend.macroBull) && !u.trend.bear);
+
+   bool bosAgainst = isBuy ? (u.bos.sell && (u.bos.confirmed || u.bos.strong))
+                           : (u.bos.buy  && (u.bos.confirmed || u.bos.strong));
+
+   if(trendFlip || bosAgainst)
+   {
+      bool needsBE = isBuy ? (currentSL < openPrice) : (currentSL > openPrice || currentSL <= 0.0);
+      // only BE if price is at/through open (avoid impossible modify)
+      bool atProfit = isBuy ? (price >= openPrice) : (price <= openPrice);
+      if(needsBE && atProfit)
+      {
+         if(trade.PositionModify(ticket, openPrice, currentTP))
+         {
+            currentSL = openPrice;
+            if(UltraDefenseLog)
+               Print("DEFENSE L8 POSITION: BE on trend/BOS flip ticket=", ticket);
+         }
+      }
+   }
+
+   // Optional hard close on adverse exhaustion flip
+   if(UltraDefenseCloseOnFlip && trendFlip && bosAgainst && u.trend.exhaustion)
+   {
+      if(UltraDefenseLog)
+         Print("DEFENSE L8 POSITION: CLOSE adverse flip ticket=", ticket);
+      trade.PositionClose(ticket);
+      return true;
+   }
+
+   g_UltraDefenseLast.line[8].id = 8;
+   g_UltraDefenseLast.line[8].name = "POSITION";
+   g_UltraDefenseLast.line[8].pass = true;
+   g_UltraDefenseLast.line[8].level = DEF_GREEN;
+   g_UltraDefenseLast.line[8].reason = "monitoring";
+   return false;
+}
+
+//--------------------------------------------------------------------//
+// LINE 9 — EMERGENCY DEFENSE (recover automatically)
+//--------------------------------------------------------------------//
+void UltraDefense_Line9_Emergency(const string s)
+{
+   if(!UltraDefenseEnabled || !UltraDefenseEmergency) return;
+
+   datetime bar = iTime(s, UltraETF(), 0);
+   bool connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
+   bool tradeCtxBusy = !((bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED));
+   bool badEquity = (AccountInfoDouble(ACCOUNT_EQUITY) <= 0.0);
+   long tm = SymbolInfoInteger(s, SYMBOL_TRADE_MODE);
+   bool symbolErr = (tm == SYMBOL_TRADE_MODE_DISABLED) || (SymbolInfoDouble(s, SYMBOL_BID) <= 0.0);
+   bool invalidData = (Bars(s, UltraETF()) < 50);
+
+   string why = "";
+   bool needRecover = false;
+
+   if(!connected)
+   {
+      why = "connection loss";
+      needRecover = true;
+      g_UltraDefenseWasConnected = false;
+   }
+   else if(!g_UltraDefenseWasConnected && connected)
+   {
+      why = "VPS/terminal reconnect";
+      needRecover = true;
+      g_UltraDefenseWasConnected = true;
+   }
+   else
+      g_UltraDefenseWasConnected = connected;
+
+   if(tradeCtxBusy){ why = "trade context busy/blocked"; needRecover = true; }
+   if(badEquity){ why = "invalid account data"; needRecover = true; }
+   if(symbolErr){ why = "symbol error"; needRecover = true; }
+   if(invalidData){ why = "invalid market data"; needRecover = true; }
+
+   g_UltraDefenseLast.line[9].id = 9;
+   g_UltraDefenseLast.line[9].name = "EMERGENCY";
+   if(needRecover)
+   {
+      g_UltraDefenseLast.line[9].pass = false;
+      g_UltraDefenseLast.line[9].level = DEF_RED;
+      g_UltraDefenseLast.line[9].reason = why;
+      UltraRecover(why);
+      if(UltraDefenseLog && bar != g_UltraDefenseLastEmergBar)
+      {
+         g_UltraDefenseLastEmergBar = bar;
+         Print("DEFENSE L9 EMERGENCY recover: ", why, " on ", s);
+      }
+   }
+   else
+   {
+      g_UltraDefenseLast.line[9].pass = true;
+      g_UltraDefenseLast.line[9].level = DEF_GREEN;
+      g_UltraDefenseLast.line[9].reason = "OK";
+   }
+}
+
+void UltraDefense_MaybeLog(const string s, const UltraDefenseReport &r)
+{
+   if(!UltraDefenseLog) return;
+   datetime bar = iTime(s, UltraETF(), 0);
+   if(bar == g_UltraDefenseLastLogBar && s == g_UltraDefenseLastLogSym) return;
+   if(r.overall == DEF_GREEN && r.allowEntry) return; // keep journal clean; fire path logs
+   g_UltraDefenseLastLogBar = bar;
+   g_UltraDefenseLastLogSym = s;
+   Print(r.summary, " on ", s);
+}
+
+string UltraDefense_DashboardLine()
+{
+   if(!UltraDefenseEnabled) return "DEFENSE: OFF";
+   UltraDefenseReport r = g_UltraDefenseLast;
+   string t = "DEFENSE: ";
+   t += UltraDefense_LevelName(r.overall);
+   t += " ";
+   t += UltraDefense_ActionName(r.action);
+   return t;
+}
+
+#endif // HITMAN_ULTRA_DEFENSE_LINE_ENGINE_MQH
+//===== END DefenseLineEngine.mqh =====
+
 //===== BEGIN UFSE_FastSignalEngine.mqh =====
 #ifndef HITMAN_ULTRA_UFSE_MQH
 #define HITMAN_ULTRA_UFSE_MQH
@@ -2954,6 +3561,19 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
    if(u.score.probability < UltraMinProbability && u.score.confidence < UltraInstantFireConf)
    { why = "probability low"; return false; }
 
+   // DEFENSE LINE ENGINE v1.0 — Lines 1-7 + 10 (GREEN / YELLOW / RED)
+   if(UltraDefenseEnabled && UltraDefenseGateEntry)
+   {
+      UltraDefenseReport defR;
+      string defWhy = "";
+      if(!UltraDefense_EvaluateEntry(s, u, sig.buy, defR, defWhy))
+      {
+         why = defWhy;
+         UltraDefense_MaybeLog(s, defR);
+         return false;
+      }
+   }
+
    if(UltraFastSignalEnabled)
    {
       int idx = UltraUFSE_Ensure(s);
@@ -3334,6 +3954,7 @@ string UltraDashboardText(const string s)
    t += " PF: "; t += DoubleToString(g_UltraMem.profitFactor, 2);
    t += " RR: "; t += DoubleToString(g_UltraMem.avgRR, 2);
    t += "\nSignal: "; t += dir; t += " ["; t += sig.tag; t += "] "; t += sig.reason;
+   t += "\n"; t += UltraDefense_DashboardLine();
    t += "\nUFSE: "; t += UltraUFSE_Stats(s);
    t += "\n---- EXPLAIN ----\n"; t += explain;
    t += "\n===============================";
@@ -4102,12 +4723,18 @@ int OnInit()
             " (EntryTF input=", EnumToString(EntryTF),
             ") — change the chart timeframe to change trading TF, or set EntryTF input");
    }
-   Print("HITMAN MASTER BLUEPRINT: modules 00-40 + UFSE v1.0 | HITMAN AI live path");
+   Print("HITMAN MASTER BLUEPRINT: modules 00-40 + UFSE v1.0 + DEFENSE LINE v1.0 | HITMAN AI live path");
    Print("UFSE: FastSignal=", UltraYN(UltraFastSignalEnabled),
          " MasterTrendLock=", UltraYN(UltraMasterTrendLock),
          " SignalLock=", UltraYN(UltraSignalLockEnabled),
          " EntryTrigger=", UltraYN(UltraUFSE_EntryTriggerGate),
          " ExplainLog=", UltraYN(UltraUFSE_ExplainLog));
+   Print("DEFENSE LINE ENGINE: Enabled=", UltraYN(UltraDefenseEnabled),
+         " Strict=", UltraYN(UltraDefenseStrict),
+         " GateEntry=", UltraYN(UltraDefenseGateEntry),
+         " GateExec=", UltraYN(UltraDefenseGateExec),
+         " Position=", UltraYN(UltraDefensePosition),
+         " Emergency=", UltraYN(UltraDefenseEmergency));
    if(EnableAPEXStrategy || EnableContFallback || EnableLCSStrategy)
       Print("OK93 WARNING: old APEX/ContFallback/LCS input ON — evaluators STUBBED; ULTRA only fires");
    Print("INSTANT OPEN + QUALITY PREFER MODE=", UltraYN(InstantQualityMode));
@@ -4908,6 +5535,9 @@ void RunTradingCycle(string symbol)
       return;
 
    BrokerSymbol = symbol;
+
+   // DEFENSE LINE 9 — EMERGENCY (connection / data / symbol recover)
+   UltraDefense_Line9_Emergency(symbol);
 
    ManageOpenTrades();
 
@@ -7867,6 +8497,17 @@ void ManageOpenTrades()
          if(MarketDefendOpenPosition(ticket, type, openPrice, price, currentSL, currentTP, defendState))
             continue; // position closed by defense
          // refresh after possible SL modify
+         if(!PositionSelectByTicket(ticket))
+            continue;
+         currentSL = PositionGetDouble(POSITION_SL);
+         currentTP = PositionGetDouble(POSITION_TP);
+      }
+
+      //================ DEFENSE LINE 8 — POSITION =================//
+      if(UltraDefenseEnabled && UltraDefensePosition)
+      {
+         if(UltraDefense_Line8_Position(ticket, type, openPrice, price, currentSL, currentTP, defendState))
+            continue;
          if(!PositionSelectByTicket(ticket))
             continue;
          currentSL = PositionGetDouble(POSITION_SL);

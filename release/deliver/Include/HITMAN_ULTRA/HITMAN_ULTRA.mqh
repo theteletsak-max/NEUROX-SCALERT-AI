@@ -33,6 +33,7 @@
 #include "20_CapitalProtection.mqh"
 #include "19_Execution.mqh"
 #include "16_AI_Core.mqh"
+#include "DefenseLineEngine.mqh"
 #include "UFSE_FastSignalEngine.mqh"
 #include "21_TradeManagement.mqh"
 #include "22_MultiSymbol.mqh"

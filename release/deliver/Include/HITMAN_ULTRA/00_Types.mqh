@@ -214,6 +214,47 @@ UltraSignal    g_UltraLastSignal;
 datetime       g_UltraLastFireBar = 0;
 
 //--------------------------------------------------------------------//
+// DEFENSE LINE ENGINE v1.0 — shared enums / report
+//--------------------------------------------------------------------//
+enum ENUM_DEFENSE_LEVEL
+{
+   DEF_GREEN  = 0, // Trade Allowed
+   DEF_YELLOW = 1, // Wait for Confirmation
+   DEF_RED    = 2  // Block Trade
+};
+
+enum ENUM_DEFENSE_ACTION
+{
+   DEF_ACT_EXECUTE = 0,
+   DEF_ACT_WAIT,
+   DEF_ACT_NO_TRADE,
+   DEF_ACT_DO_NOT_EXECUTE
+};
+
+struct UltraDefenseLine
+{
+   int                id;       // 1..10
+   string             name;
+   bool               pass;
+   ENUM_DEFENSE_LEVEL level;
+   string             reason;
+};
+
+struct UltraDefenseReport
+{
+   bool               valid;
+   bool               buySide;
+   ENUM_DEFENSE_LEVEL overall;
+   ENUM_DEFENSE_ACTION action;
+   bool               allowEntry;
+   bool               allowExecute;
+   UltraDefenseLine   line[11]; // 1..10 used
+   string             summary;
+};
+
+UltraDefenseReport g_UltraDefenseLast;
+
+//--------------------------------------------------------------------//
 // 1. ULTRA CORE / DATA / CONFIG / VALIDATION / RECOVERY / LOG / PERF
 //--------------------------------------------------------------------//
 
