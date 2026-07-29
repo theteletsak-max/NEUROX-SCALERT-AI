@@ -1,6 +1,7 @@
-SNIPER AI OK80
+SNIPER AI OK81 — INSTANT OPEN
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK80.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK81.mq5
 
-Fixes ContFallback waits: chart TF, no ranging hard-block, soft trend.
-F7 → attach → SA_QUALITY_80
+No ContCooldown / no opposite-trend hard block / IDP soft.
+Opens when any of BOS / zone / displacement is present.
+F7 → attach → SA_QUALITY_81

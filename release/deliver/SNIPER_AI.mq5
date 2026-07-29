@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_QUALITY_80                                      |
-//| SNIPER AI - AGGRESSIVE INSTANT QUALITY (chart TF)                   |
-//| Comment: SNIPER AI | Aggressive Instant Quality | No RSI/MACD/Stoch   |
+//| BUILD_ID: SA_QUALITY_81                                      |
+//| SNIPER AI - INSTANT OPEN + QUALITY PREFER                   |
+//| Comment: SNIPER AI | Instant open, quality prefer | No RSI/MACD/Stoch   |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.48"
-#property description "SNIPER AI OK80: aggressive instant quality chart TF"
-#property description "Remove PRISM. Source SNIPER_AI_OK80 BUILD=SA_QUALITY_80"
+#property version   "5.49"
+#property description "SNIPER AI OK81: instant open + quality prefer"
+#property description "Remove PRISM. Source SNIPER_AI_OK81 BUILD=SA_QUALITY_81"
 
 #include <Trade/Trade.mqh>
 
@@ -25,7 +25,7 @@ input group "GENERAL"
 input long MagicNumber = 40001;
 input string TradeComment = "SNIPER AI";
 
-input group "AGGRESSIVE INSTANT QUALITY (chart TF)"
+input group "INSTANT OPEN + QUALITY PREFER"
 // BEST QUALITY selects the trade (structure + IDP + ADX).
 // AGGRESSIVE INSTANT executes immediately once selected (tick path, no idle cooldown).
 input bool   InstantQualityMode          = true;   // profile banner / intent lock
@@ -34,9 +34,9 @@ input group "SNIPER IDP - BUILT INTO EA (signal core)"
 // Institutional Displacement Pulse computed INSIDE the EA (same math as SNIPER_IDP).
 // No separate indicator required for trading. Chart SNIPER_IDP is optional visual only.
 input bool   EnableIDPConfluence     = true;   // master: IDP pulse gates live FIRE
-input bool   IDP_HardGate            = true;   // OK79 BEST QUALITY: IDP must agree
+input bool   IDP_HardGate            = false;  // OK81: IDP prefer/log only — NEVER hard-block
 input bool   IDP_RequireStrong       = false;  // false=QUALITY |pulse|; true=STRONG only
-input double IDP_MinAbsPulse         = 38.0;   // OK80 quality floor
+input double IDP_MinAbsPulse         = 30.0;   // OK81 quality prefer threshold (soft)
 input double IDP_StrongAbsPulse      = 70.0;   // STRONG floor
 input int    IDP_PulseShift          = 1;      // OK79: closed bar = stable quality pulse
 input int    IDP_ATR_Period          = 14;
@@ -116,17 +116,17 @@ input group "APEX - WORLD-CLASS LIQUIDITY SNIPER (LIVE)"
 
 input bool   EnableAPEXStrategy          = true;
 // OK67 PURE: live path is ONLY APEX → ContFallback (BOS+zone). No PRISM/LCS/ContSniper live.
-input bool   EnableAntiScalpMode         = true;   // ALWAYS on for ContFallback (structure hold/cooldown)
+input bool   EnableAntiScalpMode         = false;  // OK81: off — was enabling wait gates
 input bool   EnableContFallback          = true;   // second live path — structure Cont only
 input bool   ContFallbackBypassEngines   = true;   // ContFallback skips ICE/IMCE after structure pass
-input bool   ContFallbackOncePerBar      = true;   // OK79: max 1 Cont signal per bar (quality)
-input int    ContFallbackCooldownMinutes = 8;      // OK79: short anti-spam after quality fill
+input bool   ContFallbackOncePerBar      = false;  // OK81: never OncePerBar-block
+input int    ContFallbackCooldownMinutes = 0;      // OK81: NEVER ContFallbackCooldown block
 input int    ContFallbackMinimumHoldBars = 8;      // OK79: quality hold (not scalp)
 input double ContFallbackSL_ATR_Boost    = 1.5;    // wider SL — not a scalp stop
 input int    ContFallbackMaxOpen         = 1;      // max open ContFallback positions on this symbol
 input bool   ContFallbackDisableAdaptiveHold = true; // do not shorten hold in ranging for ContFallback/APEX
 
-input group "CONT STRUCTURE - AGGRESSIVE INSTANT QUALITY (OK80)"
+input group "CONT STRUCTURE - INSTANT OPEN (OK81)"
 // Anytime: sessions never hard-block.
 // Instant quality ContFallback: trend + BOS + zone + (near OR disp) + score.
 // ADX not hard-required (still scores). IDP still hard-gates direction.
@@ -144,7 +144,7 @@ input bool   ContStruct_RequireHTF_BOS       = false; // optional HTF BOS
 input bool   ContStruct_PreferDiscountPrem   = false; // soft only (scores bonus; not hard gate)
 input bool   ContStruct_RequireTrendADX      = false; // OK80: ADX soft (fixes ADX waits)
 input bool   ContStruct_SkipRanging          = false; // OK80: FIX ranging-regime hard wait
-input int    ContStruct_MinScore             = 42;    // OK80 quality floor (can still fill)
+input int    ContStruct_MinScore             = 20;    // OK81 low floor — quality via components
 input bool   ContStruct_LogDetail            = true;
 
 input ENUM_TIMEFRAMES APEX_BiasTF        = PERIOD_H4;
@@ -624,8 +624,8 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded BUILD_ID=SA_QUALITY_80");
-   Print("AGGRESSIVE INSTANT QUALITY (chart TF) MODE=", InstantQualityMode);
+   Print("SNIPER AI Loaded BUILD_ID=SA_QUALITY_81");
+   Print("INSTANT OPEN + QUALITY PREFER MODE=", InstantQualityMode);
    Print("QUALITY SELECT: IDP_Hard=", IDP_HardGate, " MinPulse=", IDP_MinAbsPulse,
          " ContScore=", ContStruct_MinScore, " ADX=", ContStruct_RequireTrendADX,
          " SkipRange=", ContStruct_SkipRanging);
@@ -634,8 +634,8 @@ int OnInit()
          " TickDetect=", EnableTickLevelSignalDetection,
          " NeverBlock=", NeverBlockValidSniperEntry,
          " UltraAggro=", UltraAggressiveFire);
-   Print("CRITICAL: SOURCE must be SNIPER_AI_OK80 — remove PRISM STRATEGY if present");
-   Print("INSTANT QUALITY80: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
+   Print("CRITICAL: SOURCE must be SNIPER_AI_OK81 — remove PRISM STRATEGY if present");
+   Print("INSTANT QUALITY81: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
          " HardBlock=", APEX_SessionHardBlock, " (must be false)",
          " NewsAware=", EnableNewsAwareness,
          " IDP=", EnableIDPConfluence,
@@ -7303,7 +7303,7 @@ bool QualityGatesActive();
 
 int EffectiveMinimumMPIScore()
 {
-   // Aggressive Instant Quality: MPI never gates entries (floor = 0).
+   // Instant open, quality prefer: MPI never gates entries (floor = 0).
    if(AggressiveInstantQuality || AggressiveInstitutionalExecution)
       return 0;
 
@@ -11121,6 +11121,16 @@ int CountOpenContFallbackPositions()
 bool ContFallbackAntiScalpGatesPass(string &failReason)
 {
    failReason = "";
+   // OK81: InstantQualityMode never ContFallbackCooldown / OncePerBar blocks
+   if(InstantQualityMode)
+   {
+      if(ContFallbackMaxOpen > 0 && CountOpenContFallbackPositions() >= ContFallbackMaxOpen)
+      {
+         failReason = "ContFallbackMaxOpen";
+         return false;
+      }
+      return true;
+   }
    if(ContFallbackMaxOpen > 0 && CountOpenContFallbackPositions() >= ContFallbackMaxOpen)
    {
       failReason = "ContFallbackMaxOpen";
@@ -11387,26 +11397,58 @@ string ContStruct_Grade(const bool buy)
 bool ContFallbackBestStructureOK(const bool buy, string &detail)
 {
    detail = "";
-   // OK80: InstantQuality soft trend — only block CLEAR opposite strong trend.
-   // Fixes endless "no bull trend" / ranging waits while still rejecting counter-trend spam.
+   double zTop = 0.0, zBot = 0.0;
+   string kind = "";
+   bool bos = false;
+   bool hasZone = false;
+   bool near = false;
+   bool disp = false;
+   int score = 0;
+
+   // OK81 INSTANT OPEN: no trend / ranging / opposite-trend HARD blocks when InstantQualityMode.
+   // Quality = prefer BOS + zone + displacement stack; open if ANY structural edge exists.
    if(InstantQualityMode)
    {
-      if(buy && IsBearTrend() && TrendStrong())
+      bos = ContStruct_HasQualityBOS(buy);
+      hasZone = ContStruct_GetFreshZone(buy, zTop, zBot, kind);
+      near = hasZone && ContStruct_PriceNearZone(buy, zTop, zBot);
+      disp = ContStruct_HasDisplacement(buy);
+      score = ContStruct_Score(buy);
+
+      // Must have at least one real edge (not random)
+      if(!bos && !hasZone && !disp)
       {
-         detail = "strong bear blocks buy";
+         detail = "no bos/zone/disp edge yet";
          return false;
       }
-      if(!buy && IsBullTrend() && TrendStrong())
+
+      // Soft score: if two+ edges, allow even below MinScore
+      int edges = (bos ? 1 : 0) + (hasZone ? 1 : 0) + (disp ? 1 : 0);
+      if(ContStruct_MinScore > 0 && score < ContStruct_MinScore && edges < 2)
       {
-         detail = "strong bull blocks sell";
+         detail = StringFormat("score %d < %d and edges=%d", score, ContStruct_MinScore, edges);
          return false;
       }
+
+      if(!ContStruct_HTF_OK(buy))
+      {
+         // soft: do not block in InstantQualityMode
+      }
+
+      detail = StringFormat("%s INSTANT edges=%d bos=%s zone=%s near=%s disp=%s score=%d",
+                            ContStruct_Grade(buy),
+                            edges,
+                            bos ? "Y" : "N",
+                            hasZone ? kind : "N",
+                            near ? "Y" : "N",
+                            disp ? "Y" : "N",
+                            score);
+      return true;
    }
-   else
-   {
-      if(buy && !IsBullTrend()) { detail = "no bull trend"; return false; }
-      if(!buy && !IsBearTrend()) { detail = "no bear trend"; return false; }
-   }
+
+   // Strict mode (InstantQualityMode=false)
+   if(buy && !IsBullTrend()) { detail = "no bull trend"; return false; }
+   if(!buy && !IsBearTrend()) { detail = "no bear trend"; return false; }
 
    if(ContStruct_RequireTrendADX && !TrendStrong())
    {
@@ -11426,16 +11468,14 @@ bool ContFallbackBestStructureOK(const bool buy, string &detail)
       return false;
    }
 
-   double zTop = 0.0, zBot = 0.0;
-   string kind = "";
    if(!ContStruct_GetFreshZone(buy, zTop, zBot, kind))
    {
       detail = "no fresh OB / quality FVG";
       return false;
    }
 
-   bool near = ContStruct_PriceNearZone(buy, zTop, zBot);
-   bool disp = ContStruct_HasDisplacement(buy);
+   near = ContStruct_PriceNearZone(buy, zTop, zBot);
+   disp = ContStruct_HasDisplacement(buy);
 
    if(ContStruct_ZoneOrDisplacement)
    {
@@ -11465,7 +11505,7 @@ bool ContFallbackBestStructureOK(const bool buy, string &detail)
       return false;
    }
 
-   int score = ContStruct_Score(buy);
+   score = ContStruct_Score(buy);
    if(ContStruct_MinScore > 0 && score < ContStruct_MinScore)
    {
       detail = StringFormat("score %d < min %d (need stronger setup)", score, ContStruct_MinScore);
@@ -12544,7 +12584,7 @@ string LiveMarketSummary()
 void PrintLiveMarketAnalysis()
 {
    AnalyzeLiveMarket(true);
-   Print("---- MARKET ANALYSIS BUILD=SA_QUALITY_80 (", BrokerSymbol, ") ----");
+   Print("---- MARKET ANALYSIS BUILD=SA_QUALITY_81 (", BrokerSymbol, ") ----");
    Print("SESSION=", g_LiveMkt.sessionName,
          " hour=", g_LiveMkt.sessionHour,
          (APEX_UseGMT ? " GMT" : " SERVER"),

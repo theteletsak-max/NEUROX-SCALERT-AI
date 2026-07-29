@@ -1,2 +1,2 @@
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK80.mq5
-BUILD_ID: SA_QUALITY_80
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK81.mq5
+BUILD_ID: SA_QUALITY_81

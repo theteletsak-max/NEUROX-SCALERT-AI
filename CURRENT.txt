@@ -1,14 +1,15 @@
 SNIPER AI — CURRENT
 
-EA:       SNIPER_AI_OK80.mq5
-BUILD_ID: SA_QUALITY_80
+EA:       SNIPER_AI_OK81.mq5
+BUILD_ID: SA_QUALITY_81
+Mode:     INSTANT OPEN + QUALITY PREFER
 
-Fixes your journal waits:
-- EntryTF = chart TF (H4 chart uses H4, was stuck on H1)
-- Skip ranging OFF (no more "ranging regime" hard wait)
-- Soft trend (no more endless "no bull trend" unless strong opposite)
-- Fresher BOS / zone rules so Cont can qualify
+Removes your blockers:
+- ContFallbackCooldown = OFF
+- OncePerBar block = OFF
+- AntiScalp wait gates = OFF
+- IDP hard block = OFF (prefer/log only)
+- No "strong bear blocks buy"
+- No "no fresh OB" hard fail — opens on BOS or zone or displacement
 
-Still: structure + IDP. Aggressive instant execute when ready.
-
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK80.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK81.mq5

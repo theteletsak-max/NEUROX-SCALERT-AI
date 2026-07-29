@@ -1,3 +1,3 @@
-[ ] SNIPER_AI_OK80.mq5 → Experts → F7
-[ ] Attach on your chart (H4 uses H4 now)
-[ ] Journal: SA_QUALITY_80
+[ ] Remove old OK80 from chart
+[ ] SNIPER_AI_OK81.mq5 → Experts → F7
+[ ] Attach → Journal SA_QUALITY_81 + INSTANT OPEN
