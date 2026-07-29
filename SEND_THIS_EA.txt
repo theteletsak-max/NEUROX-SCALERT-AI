@@ -1,6 +1,6 @@
-SNIPER AI OK84 LEAN — send this file
+SNIPER AI OK85 — APEX + PSI LEAN
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK84.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK85.mq5
 
-~37KB | BUILD SA_LEAN_84 | Comment: SNIPER AI
-F7 → attach → Journal must show SA_LEAN_84
+APEX is back (first path). PSI is fallback.
+BUILD SA_APEX_PSI_85 | Comment: SNIPER AI

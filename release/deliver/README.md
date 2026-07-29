@@ -1,17 +1,10 @@
-# SNIPER AI OK84 LEAN
+# SNIPER AI OK85 — APEX + PSI LEAN
 
-**~37 KB** institutional EA (down from ~510 KB).
+**APEX is restored.** Still lean (~49 KB).
 
-Price-only **PRISM Signal Index (PSI) v1.0** + aggressive market execution.  
-No RSI / MACD / Stochastic / CCI / Bollinger.
+1. **APEX** — HTF bias → liquidity pool → sweep → reclaim → displacement  
+2. **PSI** — price-only institutional index fallback  
 
-| Conf | Action |
-|------|--------|
-| &lt;50 | NO TRADE |
-| 50–69 | LOW (soft allow) |
-| 70–89 | GOOD / HIGH — fire |
-| ≥90 | Instant institutional fire |
+No RSI/MACD/Stoch/CCI/BB. Comment: `SNIPER AI`. BUILD: `SA_APEX_PSI_85`.
 
-Trade comment: `SNIPER AI` · BUILD: `SA_LEAN_84`
-
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK84.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK85.mq5

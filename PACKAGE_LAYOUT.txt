@@ -1,9 +1,4 @@
-LIVE ONLY (release/deliver/)
-  SNIPER_AI_OK84.mq5   ← use this
-  SNIPER_AI.mq5        ← same lean build
-  SNIPER_IDP.mq5       ← optional chart visual
-  CURRENT.txt INSTALL.txt SEND_THIS_EA.txt README.md
-  SNIPER_AI.zip
-
-ARCHIVE (release/archive/) — old OK builds, not for live attach
-ROOT mirrors: SNIPER_AI.mq5 + SNIPER_AI_OK84.mq5 + MQL5/Experts/SNIPER_AI.mq5
+LIVE: SNIPER_AI_OK85.mq5 (SA_APEX_PSI_85) — APEX first, PSI fallback
+SIZE: ~49KB lean (OK83 was ~510KB)
+DELIVER: release/deliver/ (OK85 + docs + IDP + zip)
+ARCHIVE: release/archive/ (older OK builds including OK84 PSI-only)

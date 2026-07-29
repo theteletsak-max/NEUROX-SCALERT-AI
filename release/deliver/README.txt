@@ -1,1 +1,1 @@
-SNIPER AI LEAN — PSI core only. Use SNIPER_AI_OK84.mq5
+Use SNIPER_AI_OK85.mq5 — APEX + PSI lean

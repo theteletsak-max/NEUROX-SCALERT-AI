@@ -1,13 +1,13 @@
-SNIPER AI — CURRENT (LEAN)
+SNIPER AI — CURRENT
 
-EA:       SNIPER_AI_OK84.mq5
-BUILD_ID: SA_LEAN_84
-Size:     ~37 KB (was ~510 KB OK83)
+EA:       SNIPER_AI_OK85.mq5
+BUILD_ID: SA_APEX_PSI_85
+Size:     ~49 KB (still lean)
 
-PSI v1.0 price-only institutional detector + market execution.
-Stripped: APEX/LCS/Beast/Ultra/multi-path bulk.
-Kept: PSI engines, fake filter, grades, self-learn, BE/trail, dashboard.
+Live order:
+1) APEX liquidity sniper (bias → pool → sweep → reclaim → displacement)
+2) PSI v1.0 fallback
 
-Trade comment: SNIPER AI
+APEX was restored after the lean cut. Still no oscillator bulk.
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK84.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK85.mq5
