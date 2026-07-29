@@ -38,7 +38,10 @@ UltraHoldScore UltraHold_Evaluate(const UltraSnap &u, const bool isBuy, const bo
    h.risk = UltraUSM2_ComponentRisk(u);
    h.thesis = thesisValid ? 80 : 20;
    if(corr.state == CORR_REVERSAL) h.thesis = 10;
-   if(corr.state == CORR_PULLBACK || corr.state == CORR_LIQ_GRAB || corr.state == CORR_RETEST) h.thesis = MathMax(h.thesis, 60);
+   if(corr.state == CORR_PULLBACK || corr.state == CORR_LIQ_GRAB || corr.state == CORR_RETEST)
+   {
+      if(h.thesis < 60) h.thesis = 60;
+   }
 
    h.total = (h.trend + h.structure + h.momentum + h.liquidity + h.risk + h.thesis) / 6;
 

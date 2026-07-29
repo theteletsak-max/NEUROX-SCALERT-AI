@@ -4097,7 +4097,9 @@ string UltraEvo_Name(const ENUM_SIGNAL_EVOLUTION e)
    return "UNKNOWN";
 }
 
-UltraSignalEvo UltraEvo_Evaluate(const UltraSnap &u, const bool buySide)
+string g_Evo_PrevSym = "";
+
+UltraSignalEvo UltraEvo_Evaluate(const string s, const UltraSnap &u, const bool buySide)
 {
    UltraSignalEvo e;
    e.state = SEVO_UNKNOWN;
@@ -4108,7 +4110,8 @@ UltraSignalEvo UltraEvo_Evaluate(const UltraSnap &u, const bool buySide)
 
    int dir = buySide ? 1 : -1;
    int conf = u.score.confidence;
-   datetime bar = iTime(_Symbol, UltraETF(), 0);
+   datetime bar = iTime(s, UltraETF(), 0);
+   if(bar <= 0) bar = TimeCurrent();
    e.deltaConf = conf - g_Evo_PrevConf;
 
    bool against = buySide
@@ -4134,11 +4137,12 @@ UltraSignalEvo UltraEvo_Evaluate(const UltraSnap &u, const bool buySide)
    if(e.state == SEVO_CORRECTION) e.stability = 45;
    e.label = UltraEvo_Name(e.state);
 
-   if(bar != g_Evo_PrevBar)
+   if(bar != g_Evo_PrevBar || s != g_Evo_PrevSym)
    {
       g_Evo_PrevConf = conf;
       g_Evo_PrevDir = dir;
       g_Evo_PrevBar = bar;
+      g_Evo_PrevSym = s;
    }
    return e;
 }
@@ -4437,7 +4441,10 @@ UltraHoldScore UltraHold_Evaluate(const UltraSnap &u, const bool isBuy, const bo
    h.risk = UltraUSM2_ComponentRisk(u);
    h.thesis = thesisValid ? 80 : 20;
    if(corr.state == CORR_REVERSAL) h.thesis = 10;
-   if(corr.state == CORR_PULLBACK || corr.state == CORR_LIQ_GRAB || corr.state == CORR_RETEST) h.thesis = MathMax(h.thesis, 60);
+   if(corr.state == CORR_PULLBACK || corr.state == CORR_LIQ_GRAB || corr.state == CORR_RETEST)
+   {
+      if(h.thesis < 60) h.thesis = 60;
+   }
 
    h.total = (h.trend + h.structure + h.momentum + h.liquidity + h.risk + h.thesis) / 6;
 
@@ -4557,7 +4564,7 @@ struct UltraSystemHealth
 
 UltraSystemHealth g_UltraSysHealth;
 
-void UltraHealth_Clear()
+void UltraSysHealth_Reset()
 {
    g_UltraSysHealth.connected = true;
    g_UltraSysHealth.tradeAllowed = true;
@@ -4572,7 +4579,7 @@ void UltraHealth_Clear()
 
 bool UltraSystemHealth_Update(const string s)
 {
-   UltraHealth_Clear();
+   UltraSysHealth_Reset();
    if(!UltraUpgradeEnabled || !UltraSystemHealthEnabled) return true;
 
    g_UltraSysHealth.connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
@@ -4587,7 +4594,8 @@ bool UltraSystemHealth_Update(const string s)
 
    string why = "";
    g_UltraSysHealth.execOK = UltraDefense_Line7_Execution(s, why);
-   g_UltraSysHealth.memoryOK = !(UltraMarketMemoryEnabled && g_UltraMem.trades > 100000);
+   // Same overflow gate as UltraEngDiagnostics (UltraMemoryEngineEnabled)
+   g_UltraSysHealth.memoryOK = !(UltraMemoryEngineEnabled && g_UltraMem.trades > 100000);
    g_UltraSysHealth.latencyMs = g_UltraCore.lastLatencyMs;
 
    bool hardFail = (!g_UltraSysHealth.connected || !g_UltraSysHealth.tradeAllowed ||
@@ -4727,7 +4735,7 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
    }
 
    // Signal evolution (Level 3)
-   UltraSignalEvo evo = UltraEvo_Evaluate(u, buySide);
+   UltraSignalEvo evo = UltraEvo_Evaluate(s, u, buySide);
    d.evo = evo.label;
    if(evo.state == SEVO_REVERSAL)
    {
@@ -4762,11 +4770,9 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
    }
 
    // Build / attach thesis text (Level 11 entry side)
+   // Memory note is recorded once on fill via UltraThesis_Store (avoid duplicate notes).
    string thesis = UltraDisc_BuildThesis(u, buySide, sig.tag);
    d.thesis = thesis;
-
-   // Memory note (Level 2)
-   UltraMemory_NoteDecision(sig.tag, d.confidence);
 
    d.decision = buySide ? SUP_BUY : SUP_SELL;
    d.approved = true;
@@ -7387,7 +7393,7 @@ void RunTradingCycle(string symbol)
    // DEFENSE LINE 9 — EMERGENCY (connection / data / symbol recover)
    UltraDefense_Line9_Emergency(symbol);
 
-   // ULTRA UPGRADE — System Health (L15-17); RED blocks cycle entry path only
+   // ULTRA UPGRADE — System Health (L15-17); RED blocks entry path only
    if(UltraUpgradeEnabled && UltraSystemHealthEnabled)
    {
       if(!UltraSystemHealth_Update(symbol))
@@ -7397,20 +7403,10 @@ void RunTradingCycle(string symbol)
       }
    }
 
-   // Performance throttle (L16) — skip heavy entry eval if too frequent
-   if(UltraUpgradeEnabled && UltraOpt_ShouldSkipHeavy(30))
-   {
-      ManageOpenTrades();
-      return;
-   }
-
    ManageOpenTrades();
 
    if(TradingAllowed)
       InstantExecution();
-
-   if(UltraUpgradeEnabled)
-      UltraOpt_MarkHeavyDone();
 }
 
 void OnTimer()
@@ -10387,7 +10383,18 @@ void ManageOpenTrades()
       {
          bool isBuyPos = (type == POSITION_TYPE_BUY);
          string sxWhy = "";
-         ENUM_SMART_EXIT sx = UltraSupreme_ManagePosition(ticket, BrokerSymbol, isBuyPos, g_UltraLastSnap, sxWhy);
+         // Prefer fresh/cached snap for THIS symbol (g_UltraLastSnap can be stale)
+         UltraSnap sxSnap = g_UltraLastSnap;
+         bool sxCached = false;
+         if(UltraFastSignalEnabled)
+         {
+            if(!UltraUFSE_BuildSnapshot(BrokerSymbol, sxSnap, sxCached))
+               sxSnap = g_UltraLastSnap;
+         }
+         else if(!UltraBuildSnapshot(BrokerSymbol, sxSnap))
+            sxSnap = g_UltraLastSnap;
+
+         ENUM_SMART_EXIT sx = UltraSupreme_ManagePosition(ticket, BrokerSymbol, isBuyPos, sxSnap, sxWhy);
          if(sx == SX_CLOSE)
          {
             if(UltraUpgradeLog)
@@ -10396,7 +10403,8 @@ void ManageOpenTrades()
             trade.PositionClose(ticket);
             continue;
          }
-         if(sx == SX_BE)
+         // SX_BE and SX_TIGHTEN: protect at BE when in profit (TIGHTEN has no separate SL ladder here)
+         if(sx == SX_BE || sx == SX_TIGHTEN)
          {
             bool needsBE = isBuyPos ? (currentSL < openPrice) : (currentSL > openPrice || currentSL <= 0.0);
             bool atProfit = isBuyPos ? (price >= openPrice) : (price <= openPrice);

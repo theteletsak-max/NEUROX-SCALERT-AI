@@ -37,7 +37,9 @@ string UltraEvo_Name(const ENUM_SIGNAL_EVOLUTION e)
    return "UNKNOWN";
 }
 
-UltraSignalEvo UltraEvo_Evaluate(const UltraSnap &u, const bool buySide)
+string g_Evo_PrevSym = "";
+
+UltraSignalEvo UltraEvo_Evaluate(const string s, const UltraSnap &u, const bool buySide)
 {
    UltraSignalEvo e;
    e.state = SEVO_UNKNOWN;
@@ -48,7 +50,8 @@ UltraSignalEvo UltraEvo_Evaluate(const UltraSnap &u, const bool buySide)
 
    int dir = buySide ? 1 : -1;
    int conf = u.score.confidence;
-   datetime bar = iTime(_Symbol, UltraETF(), 0);
+   datetime bar = iTime(s, UltraETF(), 0);
+   if(bar <= 0) bar = TimeCurrent();
    e.deltaConf = conf - g_Evo_PrevConf;
 
    bool against = buySide
@@ -74,11 +77,12 @@ UltraSignalEvo UltraEvo_Evaluate(const UltraSnap &u, const bool buySide)
    if(e.state == SEVO_CORRECTION) e.stability = 45;
    e.label = UltraEvo_Name(e.state);
 
-   if(bar != g_Evo_PrevBar)
+   if(bar != g_Evo_PrevBar || s != g_Evo_PrevSym)
    {
       g_Evo_PrevConf = conf;
       g_Evo_PrevDir = dir;
       g_Evo_PrevBar = bar;
+      g_Evo_PrevSym = s;
    }
    return e;
 }

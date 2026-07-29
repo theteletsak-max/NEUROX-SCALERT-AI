@@ -898,7 +898,7 @@ void RunTradingCycle(string symbol)
    // DEFENSE LINE 9 — EMERGENCY (connection / data / symbol recover)
    UltraDefense_Line9_Emergency(symbol);
 
-   // ULTRA UPGRADE — System Health (L15-17); RED blocks cycle entry path only
+   // ULTRA UPGRADE — System Health (L15-17); RED blocks entry path only
    if(UltraUpgradeEnabled && UltraSystemHealthEnabled)
    {
       if(!UltraSystemHealth_Update(symbol))
@@ -908,20 +908,10 @@ void RunTradingCycle(string symbol)
       }
    }
 
-   // Performance throttle (L16) — skip heavy entry eval if too frequent
-   if(UltraUpgradeEnabled && UltraOpt_ShouldSkipHeavy(30))
-   {
-      ManageOpenTrades();
-      return;
-   }
-
    ManageOpenTrades();
 
    if(TradingAllowed)
       InstantExecution();
-
-   if(UltraUpgradeEnabled)
-      UltraOpt_MarkHeavyDone();
 }
 
 void OnTimer()
@@ -3898,7 +3888,18 @@ void ManageOpenTrades()
       {
          bool isBuyPos = (type == POSITION_TYPE_BUY);
          string sxWhy = "";
-         ENUM_SMART_EXIT sx = UltraSupreme_ManagePosition(ticket, BrokerSymbol, isBuyPos, g_UltraLastSnap, sxWhy);
+         // Prefer fresh/cached snap for THIS symbol (g_UltraLastSnap can be stale)
+         UltraSnap sxSnap = g_UltraLastSnap;
+         bool sxCached = false;
+         if(UltraFastSignalEnabled)
+         {
+            if(!UltraUFSE_BuildSnapshot(BrokerSymbol, sxSnap, sxCached))
+               sxSnap = g_UltraLastSnap;
+         }
+         else if(!UltraBuildSnapshot(BrokerSymbol, sxSnap))
+            sxSnap = g_UltraLastSnap;
+
+         ENUM_SMART_EXIT sx = UltraSupreme_ManagePosition(ticket, BrokerSymbol, isBuyPos, sxSnap, sxWhy);
          if(sx == SX_CLOSE)
          {
             if(UltraUpgradeLog)
@@ -3907,7 +3908,8 @@ void ManageOpenTrades()
             trade.PositionClose(ticket);
             continue;
          }
-         if(sx == SX_BE)
+         // SX_BE and SX_TIGHTEN: protect at BE when in profit (TIGHTEN has no separate SL ladder here)
+         if(sx == SX_BE || sx == SX_TIGHTEN)
          {
             bool needsBE = isBuyPos ? (currentSL < openPrice) : (currentSL > openPrice || currentSL <= 0.0);
             bool atProfit = isBuyPos ? (price >= openPrice) : (price <= openPrice);

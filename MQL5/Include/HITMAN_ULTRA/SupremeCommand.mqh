@@ -95,7 +95,7 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
    }
 
    // Signal evolution (Level 3)
-   UltraSignalEvo evo = UltraEvo_Evaluate(u, buySide);
+   UltraSignalEvo evo = UltraEvo_Evaluate(s, u, buySide);
    d.evo = evo.label;
    if(evo.state == SEVO_REVERSAL)
    {
@@ -130,11 +130,9 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
    }
 
    // Build / attach thesis text (Level 11 entry side)
+   // Memory note is recorded once on fill via UltraThesis_Store (avoid duplicate notes).
    string thesis = UltraDisc_BuildThesis(u, buySide, sig.tag);
    d.thesis = thesis;
-
-   // Memory note (Level 2)
-   UltraMemory_NoteDecision(sig.tag, d.confidence);
 
    d.decision = buySide ? SUP_BUY : SUP_SELL;
    d.approved = true;

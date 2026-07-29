@@ -19,7 +19,7 @@ struct UltraSystemHealth
 
 UltraSystemHealth g_UltraSysHealth;
 
-void UltraHealth_Clear()
+void UltraSysHealth_Reset()
 {
    g_UltraSysHealth.connected = true;
    g_UltraSysHealth.tradeAllowed = true;
@@ -34,7 +34,7 @@ void UltraHealth_Clear()
 
 bool UltraSystemHealth_Update(const string s)
 {
-   UltraHealth_Clear();
+   UltraSysHealth_Reset();
    if(!UltraUpgradeEnabled || !UltraSystemHealthEnabled) return true;
 
    g_UltraSysHealth.connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
@@ -49,7 +49,8 @@ bool UltraSystemHealth_Update(const string s)
 
    string why = "";
    g_UltraSysHealth.execOK = UltraDefense_Line7_Execution(s, why);
-   g_UltraSysHealth.memoryOK = !(UltraMarketMemoryEnabled && g_UltraMem.trades > 100000);
+   // Same overflow gate as UltraEngDiagnostics (UltraMemoryEngineEnabled)
+   g_UltraSysHealth.memoryOK = !(UltraMemoryEngineEnabled && g_UltraMem.trades > 100000);
    g_UltraSysHealth.latencyMs = g_UltraCore.lastLatencyMs;
 
    bool hardFail = (!g_UltraSysHealth.connected || !g_UltraSysHealth.tradeAllowed ||
