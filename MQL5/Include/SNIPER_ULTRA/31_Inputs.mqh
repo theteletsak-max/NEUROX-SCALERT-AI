@@ -41,10 +41,10 @@ input double UltraFibSellHigh            = 0.50;
 input bool   UltraSoftPreferFib          = true;
 input double UltraFibExt127              = 1.272;
 input double UltraFibExt161              = 1.618;
-input int    UltraMinConfluence          = 62;   // Final AI confidence floor
-input int    UltraInstantFireConf        = 78;
-input int    UltraMinPrecision           = 55;
-input int    UltraMinProbability         = 55;
+input int    UltraMinConfluence          = 45;   // Live floor (InstantQuality softens further)
+input int    UltraInstantFireConf        = 58;
+input int    UltraMinPrecision           = 38;
+input int    UltraMinProbability         = 38;
 input bool   UltraBlockOppositeSameSym   = true;
 
 input group "31 · RISK INPUTS"

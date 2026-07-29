@@ -23,10 +23,13 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
    u.liq.buySideLiq  = u.liq.poolSell || (u.st.swingHigh > 0);
    u.liq.poolLow = u.liq.poolBuy ? lo : u.st.swingLow;
    u.liq.poolHigh = u.liq.poolSell ? hi : u.st.swingHigh;
+   if(u.liq.poolLow <= 0) u.liq.poolLow = lo;
+   if(u.liq.poolHigh <= 0) u.liq.poolHigh = hi;
 
-   double minD = u.vol.atr * UltraSweepDepthATR;
-   int swlb = MathMax(UltraSweepLookback, 5);
+   double minD = u.vol.atr * UltraSweepDepthATR * 0.85;
+   int swlb = MathMax(UltraSweepLookback, 8);
    double bestDepth = 0;
+   double wickMin = UltraSweepWickMin * 0.85;
    for(int i = 1; i <= swlb; i++)
    {
       double h = iHigh(s, tf, i), l = iLow(s, tf, i), c = iClose(s, tf, i), o = iOpen(s, tf, i);
@@ -34,7 +37,7 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
       if(!u.liq.sweepBuy && u.liq.poolLow > 0 && l < u.liq.poolLow - minD && c > u.liq.poolLow)
       {
          double wick = (MathMin(c, u.liq.poolLow) - l) / rng;
-         if(wick >= UltraSweepWickMin)
+         if(wick >= wickMin)
          {
             u.liq.sweepBuy = true; u.liq.grabBuy = true; u.liq.sweepExtBuy = l;
             bestDepth = MathMax(bestDepth, (u.liq.poolLow - l) / u.vol.atr);
@@ -44,7 +47,7 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
       if(!u.liq.sweepSell && u.liq.poolHigh > 0 && h > u.liq.poolHigh + minD && c < u.liq.poolHigh)
       {
          double wick = (h - MathMax(c, u.liq.poolHigh)) / rng;
-         if(wick >= UltraSweepWickMin)
+         if(wick >= wickMin)
          {
             u.liq.sweepSell = true; u.liq.grabSell = true; u.liq.sweepExtSell = h;
             bestDepth = MathMax(bestDepth, (h - u.liq.poolHigh) / u.vol.atr);
@@ -53,8 +56,8 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
       }
       double upper = h - MathMax(c, o);
       double lower = MathMin(c, o) - l;
-      if(lower / rng >= 0.45 && c > o) u.liq.stopHuntBuy = true;
-      if(upper / rng >= 0.45 && c < o) u.liq.stopHuntSell = true;
+      if(lower / rng >= 0.40 && c > o) u.liq.stopHuntBuy = true;
+      if(upper / rng >= 0.40 && c < o) u.liq.stopHuntSell = true;
    }
    u.liq.depthATR = bestDepth;
    u.liq.speed = (u.liq.sweepBuy || u.liq.sweepSell) ? MathMin(100.0, 40.0 + bestDepth * 40.0) : 0;

@@ -149,7 +149,7 @@ input bool   ContStruct_PreferDiscountPrem   = false; // soft only (scores bonus
 input bool   ContStruct_RequireTrendADX      = false; // OK80: ADX soft (fixes ADX waits)
 input bool   ContStruct_SkipRanging          = false; // OK80: FIX ranging-regime hard wait
 input int    ContStruct_MinScore             = 20;    // OK81 low floor — quality via components
-input bool   ContStruct_LogDetail            = true;
+input bool   ContStruct_LogDetail            = false; // wait logs once/bar via Ultra throttle
 
 input ENUM_TIMEFRAMES APEX_BiasTF        = PERIOD_H4;
 input ENUM_TIMEFRAMES APEX_EntryTF       = PERIOD_CURRENT; // OK80 chart TF

@@ -171,7 +171,7 @@ input bool   ContStruct_PreferDiscountPrem   = false; // soft only (scores bonus
 input bool   ContStruct_RequireTrendADX      = false; // OK80: ADX soft (fixes ADX waits)
 input bool   ContStruct_SkipRanging          = false; // OK80: FIX ranging-regime hard wait
 input int    ContStruct_MinScore             = 20;    // OK81 low floor — quality via components
-input bool   ContStruct_LogDetail            = true;
+input bool   ContStruct_LogDetail            = false; // wait logs once/bar via Ultra throttle
 
 input ENUM_TIMEFRAMES APEX_BiasTF        = PERIOD_H4;
 input ENUM_TIMEFRAMES APEX_EntryTF       = PERIOD_CURRENT; // OK80 chart TF
@@ -864,10 +864,10 @@ input double UltraFibSellHigh            = 0.50;
 input bool   UltraSoftPreferFib          = true;
 input double UltraFibExt127              = 1.272;
 input double UltraFibExt161              = 1.618;
-input int    UltraMinConfluence          = 62;   // Final AI confidence floor
-input int    UltraInstantFireConf        = 78;
-input int    UltraMinPrecision           = 55;
-input int    UltraMinProbability         = 55;
+input int    UltraMinConfluence          = 45;   // Live floor (InstantQuality softens further)
+input int    UltraInstantFireConf        = 58;
+input int    UltraMinPrecision           = 38;
+input int    UltraMinProbability         = 38;
 input bool   UltraBlockOppositeSameSym   = true;
 
 input group "31 · RISK INPUTS"
@@ -1234,21 +1234,40 @@ void UltraEngStructure(const string s, UltraSnap &u)
 void UltraEngBOS(const string s, UltraSnap &u)
 {
    ENUM_TIMEFRAMES tf = UltraETF();
-   double c1 = iClose(s, tf, 1);
-   u.bos.buy = (u.st.swingHigh > 0 && c1 > u.st.swingHigh);
-   u.bos.sell = (u.st.swingLow > 0 && c1 < u.st.swingLow);
-   for(int i = 1; i <= UltraBOS_ConfirmBars; i++)
+   // Prefer PRIOR swing (iH2/iL2) as break level — most-recent tip rarely stays "broken"
+   int iH1, iH2, iL1, iL2;
+   double breakHi = u.st.swingHigh;
+   double breakLo = u.st.swingLow;
+   if(UltraFindSwings(s, tf, UltraStructLookback, UltraSwingStrength, iH1, iH2, iL1, iL2))
+   {
+      if(iH2 > 0) breakHi = iHigh(s, tf, iH2);
+      if(iL2 > 0) breakLo = iLow(s, tf, iL2);
+   }
+
+   u.bos.buy = false;
+   u.bos.sell = false;
+   int lb = MathMax(UltraBOS_ConfirmBars, 5);
+   for(int i = 1; i <= lb; i++)
    {
       double c = iClose(s, tf, i);
-      if(c > u.st.swingHigh) u.bos.buy = true;
-      if(c < u.st.swingLow)  u.bos.sell = true;
+      double h = iHigh(s, tf, i);
+      double l = iLow(s, tf, i);
+      if(breakHi > 0 && (c > breakHi || h > breakHi)) u.bos.buy = true;
+      if(breakLo > 0 && (c < breakLo || l < breakLo)) u.bos.sell = true;
    }
+
+   // Soft structure BOS: HH/HL continuation counts as bullish structure break bias
+   if(!u.bos.buy && u.st.hh && u.st.hl && (u.st.externalBull || u.st.internalBull))
+      u.bos.buy = true;
+   if(!u.bos.sell && u.st.lh && u.st.ll && (u.st.externalBear || u.st.internalBear))
+      u.bos.sell = true;
+
    u.bos.confirmation = 0;
    if(u.bos.buy || u.bos.sell)
    {
       double body = MathAbs(iClose(s, tf, 1) - iOpen(s, tf, 1));
       double rng = iHigh(s, tf, 1) - iLow(s, tf, 1);
-      u.bos.confirmation = (rng > 0 && body / rng >= UltraDispBodyMin) ? 80 : 55;
+      u.bos.confirmation = (rng > 0 && body / rng >= UltraDispBodyMin * 0.85) ? 80 : 55;
    }
    u.bos.strength = u.bos.confirmation;
    if((u.bos.buy && u.st.externalBull) || (u.bos.sell && u.st.externalBear)) u.bos.strength += 15;
@@ -1310,10 +1329,13 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
    u.liq.buySideLiq  = u.liq.poolSell || (u.st.swingHigh > 0);
    u.liq.poolLow = u.liq.poolBuy ? lo : u.st.swingLow;
    u.liq.poolHigh = u.liq.poolSell ? hi : u.st.swingHigh;
+   if(u.liq.poolLow <= 0) u.liq.poolLow = lo;
+   if(u.liq.poolHigh <= 0) u.liq.poolHigh = hi;
 
-   double minD = u.vol.atr * UltraSweepDepthATR;
-   int swlb = MathMax(UltraSweepLookback, 5);
+   double minD = u.vol.atr * UltraSweepDepthATR * 0.85;
+   int swlb = MathMax(UltraSweepLookback, 8);
    double bestDepth = 0;
+   double wickMin = UltraSweepWickMin * 0.85;
    for(int i = 1; i <= swlb; i++)
    {
       double h = iHigh(s, tf, i), l = iLow(s, tf, i), c = iClose(s, tf, i), o = iOpen(s, tf, i);
@@ -1321,7 +1343,7 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
       if(!u.liq.sweepBuy && u.liq.poolLow > 0 && l < u.liq.poolLow - minD && c > u.liq.poolLow)
       {
          double wick = (MathMin(c, u.liq.poolLow) - l) / rng;
-         if(wick >= UltraSweepWickMin)
+         if(wick >= wickMin)
          {
             u.liq.sweepBuy = true; u.liq.grabBuy = true; u.liq.sweepExtBuy = l;
             bestDepth = MathMax(bestDepth, (u.liq.poolLow - l) / u.vol.atr);
@@ -1331,7 +1353,7 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
       if(!u.liq.sweepSell && u.liq.poolHigh > 0 && h > u.liq.poolHigh + minD && c < u.liq.poolHigh)
       {
          double wick = (h - MathMax(c, u.liq.poolHigh)) / rng;
-         if(wick >= UltraSweepWickMin)
+         if(wick >= wickMin)
          {
             u.liq.sweepSell = true; u.liq.grabSell = true; u.liq.sweepExtSell = h;
             bestDepth = MathMax(bestDepth, (h - u.liq.poolHigh) / u.vol.atr);
@@ -1340,8 +1362,8 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
       }
       double upper = h - MathMax(c, o);
       double lower = MathMin(c, o) - l;
-      if(lower / rng >= 0.45 && c > o) u.liq.stopHuntBuy = true;
-      if(upper / rng >= 0.45 && c < o) u.liq.stopHuntSell = true;
+      if(lower / rng >= 0.40 && c > o) u.liq.stopHuntBuy = true;
+      if(upper / rng >= 0.40 && c < o) u.liq.stopHuntSell = true;
    }
    u.liq.depthATR = bestDepth;
    u.liq.speed = (u.liq.sweepBuy || u.liq.sweepSell) ? MathMin(100.0, 40.0 + bestDepth * 40.0) : 0;
@@ -1366,25 +1388,52 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
 void UltraEngInstitutional(const string s, UltraSnap &u)
 {
    ENUM_TIMEFRAMES tf = UltraETF();
-   double o1 = iOpen(s, tf, 1), c1 = iClose(s, tf, 1), h1 = iHigh(s, tf, 1), l1 = iLow(s, tf, 1);
-   double r1 = h1 - l1;
-   if(r1 > 0)
+
+   // Displacement: any strong body in last 3 closed bars
+   for(int i = 1; i <= 3; i++)
    {
-      double br = MathAbs(c1 - o1) / r1;
-      bool atrOK = (u.vol.atr <= 0) || (r1 >= u.vol.atr * UltraDispATRMin);
-      if(br >= UltraDispBodyMin && atrOK){ u.ict.dispBuy = (c1 > o1); u.ict.dispSell = (c1 < o1); }
+      double o = iOpen(s, tf, i), c = iClose(s, tf, i);
+      double h = iHigh(s, tf, i), l = iLow(s, tf, i);
+      double r = h - l;
+      if(r <= 0) continue;
+      double br = MathAbs(c - o) / r;
+      bool atrOK = (u.vol.atr <= 0) || (r >= u.vol.atr * UltraDispATRMin * 0.85);
+      if(br >= UltraDispBodyMin * 0.90 && atrOK)
+      {
+         if(c > o) u.ict.dispBuy = true;
+         if(c < o) u.ict.dispSell = true;
+      }
    }
-   double gapB = iLow(s, tf, 1) - iHigh(s, tf, 3);
-   double gapS = iLow(s, tf, 3) - iHigh(s, tf, 1);
-   if(gapB > 0 && (u.vol.atr <= 0 || gapB >= u.vol.atr * UltraFVG_MinATR)) u.ict.fvgBuy = true;
-   if(gapS > 0 && (u.vol.atr <= 0 || gapS >= u.vol.atr * UltraFVG_MinATR)) u.ict.fvgSell = true;
+
+   // FVG lookback across recent bars (not only 1 vs 3)
+   for(int g = 1; g <= 5; g++)
+   {
+      double gapB = iLow(s, tf, g) - iHigh(s, tf, g + 2);
+      double gapS = iLow(s, tf, g + 2) - iHigh(s, tf, g);
+      if(gapB > 0 && (u.vol.atr <= 0 || gapB >= u.vol.atr * UltraFVG_MinATR * 0.8))
+         u.ict.fvgBuy = true;
+      if(gapS > 0 && (u.vol.atr <= 0 || gapS >= u.vol.atr * UltraFVG_MinATR * 0.8))
+         u.ict.fvgSell = true;
+   }
+
    double o2 = iOpen(s, tf, 2), c2 = iClose(s, tf, 2);
    if(u.ict.dispBuy && c2 < o2) u.ict.obBuy = true;
    if(u.ict.dispSell && c2 > o2) u.ict.obSell = true;
-   // Breaker: prior OB invalidated then reclaim
+   // Soft OB: opposite candle before displacement in last 4 bars
+   if(!u.ict.obBuy && u.ict.dispBuy)
+   {
+      for(int i = 2; i <= 4; i++)
+         if(iClose(s, tf, i) < iOpen(s, tf, i)) { u.ict.obBuy = true; break; }
+   }
+   if(!u.ict.obSell && u.ict.dispSell)
+   {
+      for(int i = 2; i <= 4; i++)
+         if(iClose(s, tf, i) > iOpen(s, tf, i)) { u.ict.obSell = true; break; }
+   }
+
    if(u.bos.buy && u.ict.obSell) u.ict.breakerBuy = true;
    if(u.bos.sell && u.ict.obBuy) u.ict.breakerSell = true;
-   // Mitigation: price returned into OB/FVG
+
    double px = SymbolInfoDouble(s, SYMBOL_BID);
    if(u.ict.obBuy && px <= MathMax(o2, c2) && px >= MathMin(o2, c2)) u.ict.mitigationBuy = true;
    if(u.ict.obSell && px <= MathMax(o2, c2) && px >= MathMin(o2, c2)) u.ict.mitigationSell = true;
@@ -1393,12 +1442,12 @@ void UltraEngInstitutional(const string s, UltraSnap &u)
       double mid = (u.st.swingHigh + u.st.swingLow) * 0.5;
       u.ict.inDiscount = (px <= mid); u.ict.inPremium = (px >= mid);
    }
-   u.ict.instZoneBuy = (u.ict.obBuy || u.ict.fvgBuy || u.ict.breakerBuy) && u.ict.inDiscount;
-   u.ict.instZoneSell = (u.ict.obSell || u.ict.fvgSell || u.ict.breakerSell) && u.ict.inPremium;
+   u.ict.instZoneBuy = (u.ict.obBuy || u.ict.fvgBuy || u.ict.breakerBuy) && (u.ict.inDiscount || u.fib.atBuyZone);
+   u.ict.instZoneSell = (u.ict.obSell || u.ict.fvgSell || u.ict.breakerSell) && (u.ict.inPremium || u.fib.atSellZone);
    u.ict.rejectZoneBuy = u.liq.stopHuntBuy && u.ict.inDiscount;
    u.ict.rejectZoneSell = u.liq.stopHuntSell && u.ict.inPremium;
-   u.ict.smConfluence = ((u.ict.obBuy || u.ict.fvgBuy) && u.liq.sweepBuy && u.ict.dispBuy) ||
-                        ((u.ict.obSell || u.ict.fvgSell) && u.liq.sweepSell && u.ict.dispSell);
+   u.ict.smConfluence = ((u.ict.obBuy || u.ict.fvgBuy) && (u.liq.sweepBuy || u.ict.dispBuy)) ||
+                        ((u.ict.obSell || u.ict.fvgSell) && (u.liq.sweepSell || u.ict.dispSell));
 }
 
 #endif // SNIPER_ULTRA_08_INSTITUTIONAL_MQH
@@ -1822,7 +1871,11 @@ int UltraRiskProbability(const int successProb)
 //+------------------------------------------------------------------+
 int UltraConfluenceBuy(const UltraSnap &u)
 {
-   int sc = 0;
+   // Base so live charts are never stuck at conf=0 when structure exists
+   int sc = 18;
+   if(u.st.quality >= 40) sc += 6;
+   if(u.st.continuation || u.st.externalBull || u.st.internalBull) sc += 6;
+
    if(u.trend.htfBull) sc += 10; if(u.trend.macroBull) sc += 6; if(u.trend.bull) sc += 8;
    if(u.bos.buy) sc += 10; if(u.choch.buy) sc += 8;
    if(u.liq.sweepBuy) sc += 14; if(u.liq.stopHuntBuy) sc += 5;
@@ -1831,16 +1884,20 @@ int UltraConfluenceBuy(const UltraSnap &u)
    if(u.fib.atBuyZone) sc += 8; if(u.ict.inDiscount) sc += 5;
    if(u.mom.momBuy) sc += 4; if(u.ind.smi > 20) sc += 4; if(u.ind.ifi > 15) sc += 4;
    if(u.ind.meo >= 55) sc += 3;
+   if(u.vol.expansion) sc += 3;
    if(UltraBoostKillZone && u.ctx.killZone) sc += 3;
    if(UltraBoostNewsVol && u.ctx.newsVol && u.ict.dispBuy) sc += 4;
-   if(UltraSoftPreferFib && !u.fib.atBuyZone && !u.ict.inDiscount) sc -= 3;
+   if(UltraSoftPreferFib && !u.fib.atBuyZone && !u.ict.inDiscount) sc -= 2;
    if(u.trend.mtfVotesBuy >= 3) sc += 5;
    if(sc < 0) sc = 0; if(sc > 100) sc = 100;
    return sc;
 }
 int UltraConfluenceSell(const UltraSnap &u)
 {
-   int sc = 0;
+   int sc = 18;
+   if(u.st.quality >= 40) sc += 6;
+   if(u.st.continuation || u.st.externalBear || u.st.internalBear) sc += 6;
+
    if(u.trend.htfBear) sc += 10; if(u.trend.macroBear) sc += 6; if(u.trend.bear) sc += 8;
    if(u.bos.sell) sc += 10; if(u.choch.sell) sc += 8;
    if(u.liq.sweepSell) sc += 14; if(u.liq.stopHuntSell) sc += 5;
@@ -1849,9 +1906,10 @@ int UltraConfluenceSell(const UltraSnap &u)
    if(u.fib.atSellZone) sc += 8; if(u.ict.inPremium) sc += 5;
    if(u.mom.momSell) sc += 4; if(u.ind.smi < -20) sc += 4; if(u.ind.ifi < -15) sc += 4;
    if(u.ind.meo >= 55) sc += 3;
+   if(u.vol.expansion) sc += 3;
    if(UltraBoostKillZone && u.ctx.killZone) sc += 3;
    if(UltraBoostNewsVol && u.ctx.newsVol && u.ict.dispSell) sc += 4;
-   if(UltraSoftPreferFib && !u.fib.atSellZone && !u.ict.inPremium) sc -= 3;
+   if(UltraSoftPreferFib && !u.fib.atSellZone && !u.ict.inPremium) sc -= 2;
    if(u.trend.mtfVotesSell >= 3) sc += 5;
    if(sc < 0) sc = 0; if(sc > 100) sc = 100;
    return sc;
@@ -2002,6 +2060,17 @@ int UltraExec_OpenCountMagic()
 //| SNIPER AI ULTRA — 16_AI_CORE — Decision · Approval/Rejection · Controller · Strategies
 //+------------------------------------------------------------------+
 
+datetime g_UltraLastWaitBar = 0;
+string   g_UltraLastWaitSym = "";
+
+int UltraFireFloor()
+{
+   // InstantQualityMode: softer live floor so charts actually trade
+   if(InstantQualityMode)
+      return MathMin(UltraMinConfluence, 45);
+   return UltraMinConfluence;
+}
+
 void UltraEngScores(UltraSnap &u, const bool buySide)
 {
    int conf = buySide ? UltraConfluenceBuy(u) : UltraConfluenceSell(u);
@@ -2012,6 +2081,14 @@ void UltraEngScores(UltraSnap &u, const bool buySide)
    u.score.riskProb = UltraRiskProbability(u.score.successProb);
    u.score.probability = u.score.successProb;
 }
+
+void UltraEngScoresBest(UltraSnap &u)
+{
+   int sb = UltraConfluenceBuy(u);
+   int ss = UltraConfluenceSell(u);
+   UltraEngScores(u, (sb >= ss));
+}
+
 void UltraResolveSides(UltraSignal &r, const int sb, const int ss)
 {
    if(r.buy && r.sell)
@@ -2021,14 +2098,26 @@ void UltraResolveSides(UltraSignal &r, const int sb, const int ss)
    }
 }
 
+bool UltraPassScore(const int sc)
+{
+   int floor = UltraFireFloor();
+   if(sc >= floor) return true;
+   if(sc >= UltraInstantFireConf) return true;
+   // Soft pass: close to floor in InstantQualityMode
+   if(InstantQualityMode && sc >= floor - 8) return true;
+   return false;
+}
+
 UltraSignal UltraStrat_FlashSweep(const UltraSnap &u)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "FlashSweep"; r.reason = "";
    int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
-   bool b = u.liq.sweepBuy && u.ict.dispBuy && (u.trend.htfBull || u.trend.bull || u.trend.macroBull);
-   bool s = u.liq.sweepSell && u.ict.dispSell && (u.trend.htfBear || u.trend.bear || u.trend.macroBear);
-   if(b && sb >= UltraMinConfluence){ r.buy = true; r.score = sb; r.reason = "ULSE sweep+disp+bias"; }
-   if(s && ss >= UltraMinConfluence){ r.sell = true; r.score = ss; r.reason = "ULSE sweep+disp+bias"; }
+   bool biasB = (u.trend.htfBull || u.trend.bull || u.trend.macroBull || u.trend.mtfVotesBuy >= u.trend.mtfVotesSell);
+   bool biasS = (u.trend.htfBear || u.trend.bear || u.trend.macroBear || u.trend.mtfVotesSell > u.trend.mtfVotesBuy);
+   bool b = (u.liq.sweepBuy || u.liq.stopHuntBuy) && (u.ict.dispBuy || u.mom.momBuy || u.bos.buy) && biasB;
+   bool s = (u.liq.sweepSell || u.liq.stopHuntSell) && (u.ict.dispSell || u.mom.momSell || u.bos.sell) && biasS;
+   if(b && UltraPassScore(sb)){ r.buy = true; r.score = sb; r.reason = "ULSE sweep+impulse+bias"; }
+   if(s && UltraPassScore(ss)){ r.sell = true; r.score = ss; r.reason = "ULSE sweep+impulse+bias"; }
    UltraResolveSides(r, sb, ss);
    return r;
 }
@@ -2037,10 +2126,23 @@ UltraSignal UltraStrat_ContSniper(const UltraSnap &u)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "ContSniper"; r.reason = "";
    int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
-   bool b = (u.trend.htfBull || u.trend.bull) && (u.bos.buy || u.ict.obBuy || u.ict.fvgBuy) && (u.ict.dispBuy || u.mom.momBuy);
-   bool s = (u.trend.htfBear || u.trend.bear) && (u.bos.sell || u.ict.obSell || u.ict.fvgSell) && (u.ict.dispSell || u.mom.momSell);
-   if(b && sb >= UltraMinConfluence){ r.buy = true; r.score = sb; r.reason = "UBOSE cont+zone+impulse"; }
-   if(s && ss >= UltraMinConfluence){ r.sell = true; r.score = ss; r.reason = "UBOSE cont+zone+impulse"; }
+   bool biasB = (u.trend.htfBull || u.trend.bull || u.trend.macroBull || u.st.externalBull || u.st.internalBull);
+   bool biasS = (u.trend.htfBear || u.trend.bear || u.trend.macroBear || u.st.externalBear || u.st.internalBear);
+   bool zoneB = (u.bos.buy || u.ict.obBuy || u.ict.fvgBuy || u.fib.atBuyZone || u.ict.instZoneBuy);
+   bool zoneS = (u.bos.sell || u.ict.obSell || u.ict.fvgSell || u.fib.atSellZone || u.ict.instZoneSell);
+   bool impB  = (u.ict.dispBuy || u.mom.momBuy || u.liq.sweepBuy || u.vol.expansion);
+   bool impS  = (u.ict.dispSell || u.mom.momSell || u.liq.sweepSell || u.vol.expansion);
+   bool b = biasB && zoneB && impB;
+   bool s = biasS && zoneS && impS;
+   // Instant: 2-of-3 stack is enough
+   if(InstantQualityMode)
+   {
+      int eb = (biasB ? 1 : 0) + (zoneB ? 1 : 0) + (impB ? 1 : 0);
+      int es = (biasS ? 1 : 0) + (zoneS ? 1 : 0) + (impS ? 1 : 0);
+      b = (eb >= 2); s = (es >= 2);
+   }
+   if(b && UltraPassScore(sb)){ r.buy = true; r.score = sb; r.reason = "UBOSE cont+zone+impulse"; }
+   if(s && UltraPassScore(ss)){ r.sell = true; r.score = ss; r.reason = "UBOSE cont+zone+impulse"; }
    UltraResolveSides(r, sb, ss);
    return r;
 }
@@ -2049,10 +2151,14 @@ UltraSignal UltraStrat_RevSniper(const UltraSnap &u)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "RevSniper"; r.reason = "";
    int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
-   bool b = u.liq.sweepBuy && (u.choch.buy || u.ict.dispBuy) && (u.ict.obBuy || u.ict.fvgBuy || u.liq.stopHuntBuy) && u.ict.inDiscount;
-   bool s = u.liq.sweepSell && (u.choch.sell || u.ict.dispSell) && (u.ict.obSell || u.ict.fvgSell || u.liq.stopHuntSell) && u.ict.inPremium;
-   if(b && sb >= UltraMinConfluence){ r.buy = true; r.score = sb + 2; r.reason = "UCHOCHE rev stack"; }
-   if(s && ss >= UltraMinConfluence){ r.sell = true; r.score = ss + 2; r.reason = "UCHOCHE rev stack"; }
+   bool b = (u.liq.sweepBuy || u.liq.stopHuntBuy) &&
+            (u.choch.buy || u.ict.dispBuy || u.bos.buy) &&
+            (u.ict.obBuy || u.ict.fvgBuy || u.ict.inDiscount || u.fib.atBuyZone);
+   bool s = (u.liq.sweepSell || u.liq.stopHuntSell) &&
+            (u.choch.sell || u.ict.dispSell || u.bos.sell) &&
+            (u.ict.obSell || u.ict.fvgSell || u.ict.inPremium || u.fib.atSellZone);
+   if(b && UltraPassScore(sb)){ r.buy = true; r.score = sb + 2; r.reason = "UCHOCHE rev stack"; }
+   if(s && UltraPassScore(ss)){ r.sell = true; r.score = ss + 2; r.reason = "UCHOCHE rev stack"; }
    UltraResolveSides(r, sb, ss);
    if(r.score > 100) r.score = 100;
    return r;
@@ -2062,10 +2168,12 @@ UltraSignal UltraStrat_FibSniper(const UltraSnap &u)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "FibSniper"; r.reason = "";
    int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
-   bool b = u.fib.atBuyZone && (u.trend.htfBull || u.trend.bull) && (u.ict.dispBuy || u.mom.momBuy || u.ict.obBuy) && (u.ict.inDiscount || u.liq.sweepBuy);
-   bool s = u.fib.atSellZone && (u.trend.htfBear || u.trend.bear) && (u.ict.dispSell || u.mom.momSell || u.ict.obSell) && (u.ict.inPremium || u.liq.sweepSell);
-   if(b && sb >= UltraMinConfluence){ r.buy = true; r.score = sb; r.reason = "UFIE fib zone"; }
-   if(s && ss >= UltraMinConfluence){ r.sell = true; r.score = ss; r.reason = "UFIE fib zone"; }
+   bool biasB = (u.trend.htfBull || u.trend.bull || u.trend.macroBull || u.mom.momBuy);
+   bool biasS = (u.trend.htfBear || u.trend.bear || u.trend.macroBear || u.mom.momSell);
+   bool b = u.fib.atBuyZone && biasB && (u.ict.dispBuy || u.mom.momBuy || u.ict.obBuy || u.liq.sweepBuy || u.bos.buy);
+   bool s = u.fib.atSellZone && biasS && (u.ict.dispSell || u.mom.momSell || u.ict.obSell || u.liq.sweepSell || u.bos.sell);
+   if(b && UltraPassScore(sb)){ r.buy = true; r.score = sb; r.reason = "UFIE fib zone"; }
+   if(s && UltraPassScore(ss)){ r.sell = true; r.score = ss; r.reason = "UFIE fib zone"; }
    UltraResolveSides(r, sb, ss);
    return r;
 }
@@ -2074,10 +2182,12 @@ UltraSignal UltraStrat_BreakImpulse(const UltraSnap &u)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "BreakImpulse"; r.reason = "";
    int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
-   bool b = u.bos.buy && u.ict.dispBuy && (u.vol.expansion || u.mom.momBuy) && (u.trend.htfBull || u.trend.macroBull || u.trend.bull);
-   bool s = u.bos.sell && u.ict.dispSell && (u.vol.expansion || u.mom.momSell) && (u.trend.htfBear || u.trend.macroBear || u.trend.bear);
-   if(b && sb >= UltraMinConfluence){ r.buy = true; r.score = sb; r.reason = "BOS+impulse+vol"; }
-   if(s && ss >= UltraMinConfluence){ r.sell = true; r.score = ss; r.reason = "BOS+impulse+vol"; }
+   bool b = u.bos.buy && (u.ict.dispBuy || u.mom.momBuy || u.vol.expansion) &&
+            (u.trend.htfBull || u.trend.macroBull || u.trend.bull || u.st.externalBull);
+   bool s = u.bos.sell && (u.ict.dispSell || u.mom.momSell || u.vol.expansion) &&
+            (u.trend.htfBear || u.trend.macroBear || u.trend.bear || u.st.externalBear);
+   if(b && UltraPassScore(sb)){ r.buy = true; r.score = sb; r.reason = "BOS+impulse+vol"; }
+   if(s && UltraPassScore(ss)){ r.sell = true; r.score = ss; r.reason = "BOS+impulse+vol"; }
    UltraResolveSides(r, sb, ss);
    return r;
 }
@@ -2086,10 +2196,12 @@ UltraSignal UltraStrat_InstZone(const UltraSnap &u)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "InstZone"; r.reason = "";
    int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
-   bool b = u.ict.instZoneBuy && u.ict.smConfluence && (u.fib.atBuyZone || u.liq.sweepBuy);
-   bool s = u.ict.instZoneSell && u.ict.smConfluence && (u.fib.atSellZone || u.liq.sweepSell);
-   if(b && sb >= UltraMinConfluence){ r.buy = true; r.score = sb; r.reason = "institutional zone"; }
-   if(s && ss >= UltraMinConfluence){ r.sell = true; r.score = ss; r.reason = "institutional zone"; }
+   bool b = (u.ict.instZoneBuy || ((u.ict.obBuy || u.ict.fvgBuy) && u.ict.inDiscount)) &&
+            (u.ict.smConfluence || u.fib.atBuyZone || u.liq.sweepBuy || u.bos.buy);
+   bool s = (u.ict.instZoneSell || ((u.ict.obSell || u.ict.fvgSell) && u.ict.inPremium)) &&
+            (u.ict.smConfluence || u.fib.atSellZone || u.liq.sweepSell || u.bos.sell);
+   if(b && UltraPassScore(sb)){ r.buy = true; r.score = sb; r.reason = "institutional zone"; }
+   if(s && UltraPassScore(ss)){ r.sell = true; r.score = ss; r.reason = "institutional zone"; }
    UltraResolveSides(r, sb, ss);
    return r;
 }
@@ -2100,7 +2212,6 @@ bool Ultra_IsLiveTag(const string tag)
            tag == "FibSniper" || tag == "BreakImpulse" || tag == "InstZone");
 }
 
-// Compatibility alias used by Ultra/PRISM bypass hooks from OK91
 bool PRIME_IsLiveTag(const string tag)
 {
    return Ultra_IsLiveTag(tag);
@@ -2141,20 +2252,16 @@ UltraSignal UltraPickBest(const UltraSnap &u)
       if(!(arr[i].buy || arr[i].sell)) continue;
       if(arr[i].score > best.score) best = arr[i];
    }
-   if(best.score >= 0 && best.score < UltraMinConfluence && best.score < UltraInstantFireConf)
+   if(best.score >= 0 && !UltraPassScore(best.score))
    {
-      best.buy = best.sell = false; best.tag = "NONE"; best.reason = "below confluence";
+      best.buy = best.sell = false; best.tag = "NONE";
+      best.reason = StringFormat("below confluence (%d<%d)", best.score, UltraFireFloor());
    }
    return best;
 }
 
-//--------------------------------------------------------------------//
-// FULL PIPELINE (architecture decision flow 1..27 condensed)
-//--------------------------------------------------------------------//
-
 void UltraClearSnap(UltraSnap &u)
 {
-   // Manual clear — avoid ZeroMemory on structs with string fields (MQL5-safe)
    UltraStructure st; UltraBOS bos; UltraCHoCH choch; UltraLiquidity liq;
    UltraFib fib; UltraInst ict; UltraTrend trend; UltraMomentum mom; UltraVolatility vol;
    UltraIndicators ind; UltraScores score;
@@ -2190,13 +2297,13 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
    if(!UltraConfigOK()){ UltraSetError("config invalid"); return false; }
    if(UltraDataEngineEnabled && !UltraValidateSymbol(s)){ UltraSetError("data/symbol invalid"); return false; }
 
-   UltraEngVolatility(s, u);          // needed early for ATR
+   UltraEngVolatility(s, u);
    UltraEngStructure(s, u);
    UltraEngBOS(s, u);
    UltraEngCHoCH(s, u);
    UltraEngLiquidity(s, u);
+   UltraEngFib(s, u);              // before institutional (zone uses fib)
    UltraEngInstitutional(s, u);
-   UltraEngFib(s, u);
    UltraEngTrend(s, u);
    UltraEngMomentum(s, u);
    UltraEngRegime(u);
@@ -2204,6 +2311,7 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
    UltraEngIndicators(s, u);
    UltraEngDiagnostics(s, u);
    UltraMemoryUpdateFromStats();
+   UltraEngScoresBest(u);          // always fill conf/prec/prob for dashboard + wait logs
 
    g_UltraCore.lastLatencyMs = (long)GetTickCount() - t0;
    g_UltraCore.lastCycleMs = (long)GetTickCount();
@@ -2230,7 +2338,9 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
    }
 
    UltraEngScores(u, sig.buy);
-   if(u.score.confidence < UltraMinConfluence && u.score.confidence < UltraInstantFireConf)
+   int floor = UltraFireFloor();
+   if(u.score.confidence < floor && u.score.confidence < UltraInstantFireConf &&
+      !(InstantQualityMode && u.score.confidence >= floor - 8))
    { why = "confidence low"; return false; }
    if(u.score.precision < UltraMinPrecision && u.score.confidence < UltraInstantFireConf)
    { why = "precision low"; return false; }
@@ -2243,11 +2353,8 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       if(sig.buy && d < 0){ why = "opposite SELL open"; return false; }
       if(sig.sell && d > 0){ why = "opposite BUY open"; return false; }
    }
-
-   // Session/news NEVER reject here — context only (boosts already in confluence)
    return true;
 }
-
 
 void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategyTag)
 {
@@ -2255,7 +2362,6 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    sellSignal = false;
    strategyTag = "";
 
-   // OK93 LIVE: SNIPER AI ULTRA complete architecture decision flow
    UltraSnap snap;
    if(!UltraBuildSnapshot(BrokerSymbol, snap))
    {
@@ -2271,12 +2377,22 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    {
       g_UltraLastSnap = snap;
       g_UltraLastSignal = best;
-      if(EnableVerboseLogging || ContStruct_LogDetail)
+      // Throttle wait spam to once per bar per symbol
+      datetime bar = iTime(BrokerSymbol, UltraETF(), 0);
+      bool logIt = (EnableVerboseLogging || ContStruct_LogDetail) &&
+                   (bar != g_UltraLastWaitBar || BrokerSymbol != g_UltraLastWaitSym);
+      if(logIt)
+      {
+         g_UltraLastWaitBar = bar;
+         g_UltraLastWaitSym = BrokerSymbol;
          Print("ULTRA wait [", why, "] conf=", snap.score.confidence,
                " prec=", snap.score.precision, " prob=", snap.score.probability,
                " regime=", UltraRegimeName(snap.regime),
+               " bos=", (snap.bos.buy ? "B" : (snap.bos.sell ? "S" : "-")),
+               " sweep=", (snap.liq.sweepBuy ? "B" : (snap.liq.sweepSell ? "S" : "-")),
                " fibB/S=", snap.fib.atBuyZone, "/", snap.fib.atSellZone,
                " on ", BrokerSymbol);
+      }
       return;
    }
 
