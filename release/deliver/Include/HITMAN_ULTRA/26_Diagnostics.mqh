@@ -13,7 +13,7 @@ void UltraEngDiagnostics(const string s, UltraSnap &u)
    if(UltraMemoryEngineEnabled && g_UltraMem.trades > 100000) u.diag.memoryOK = false;
    u.diag.processSpeedMs = g_UltraCore.lastLatencyMs;
    bool ok = u.diag.tickOK && u.diag.brokerOK && u.diag.connectionOK && u.diag.indicatorOK && u.diag.memoryOK;
-   u.diag.health = ok ? "OK" : "DEGRADED";
+   if(ok) u.diag.health = "OK"; else u.diag.health = "DEGRADED";
    g_UltraCore.healthy = ok;
 }
 

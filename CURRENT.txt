@@ -5,6 +5,9 @@ BUILD_ID: HA_ULTRA_93
 Comment:  HITMAN AI
 MaxOpen:  3
 
+Compile audit: input/function name clash fixed (UltraUFSE_ExplainLog vs UltraUFSE_DebugExplain)
+MQL5-safe strings: no bool/ternary string concatenations; OnInit uses UltraYN()
+
 UFSE: event cache · master-trend lock · signal lock · PASS/FAIL explain
 Modules: MQL5/Include/HITMAN_ULTRA/ + UFSE_FastSignalEngine.mqh
 

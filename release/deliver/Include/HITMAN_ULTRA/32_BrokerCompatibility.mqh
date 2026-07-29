@@ -88,8 +88,10 @@ string UltraBroker_Summary(const string s)
    string t = c.company;
    t += " stops="; t += IntegerToString(c.stopsLevel);
    t += " freeze="; t += IntegerToString(c.freezeLevel);
-   t += " FOK="; t += (c.fillFOK ? "Y" : "N");
-   t += " IOC="; t += (c.fillIOC ? "Y" : "N");
+   t += " FOK=";
+   if(c.fillFOK) t += "Y"; else t += "N";
+   t += " IOC=";
+   if(c.fillIOC) t += "Y"; else t += "N";
    return t;
 }
 

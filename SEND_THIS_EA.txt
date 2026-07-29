@@ -8,3 +8,5 @@ Zip: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-
 
 F7 → HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen=3
 UFSE: cache · master-trend lock · signal lock · explainable PASS/FAIL
+
+IMPORTANT: open HITMAN_AI.mq5 (not old SNIPER/PRISM). Re-download after this fix, then F7.

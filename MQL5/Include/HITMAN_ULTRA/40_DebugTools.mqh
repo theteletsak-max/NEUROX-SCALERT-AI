@@ -49,7 +49,8 @@ void UltraDebug_DumpSnapshot(const string s)
 
 string UltraDebug_ModuleStatus()
 {
-   return UltraDebugEnabled ? "DEBUG ON" : "DEBUG OFF";
+   if(UltraDebugEnabled) return "DEBUG ON";
+   return "DEBUG OFF";
 }
 
 #endif

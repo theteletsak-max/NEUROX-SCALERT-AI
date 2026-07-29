@@ -81,7 +81,7 @@ input group "31 · ULTRA FAST SIGNAL ENGINE v1.0"
 input bool   UltraFastSignalEnabled      = true;  // event-driven cache + scanner
 input bool   UltraMasterTrendLock        = true;  // LTF cannot reverse HTF master
 input bool   UltraSignalLockEnabled      = true;  // block duplicates until unlock event
-input bool   UltraUFSE_DebugExplain      = true;  // PASS/FAIL explain on fire/wait
+input bool   UltraUFSE_ExplainLog        = true;  // PASS/FAIL explain on fire/wait
 input bool   UltraUFSE_EntryTriggerGate  = true;  // formal entry trigger checklist
 
 input group "31 · DASHBOARD INPUTS"

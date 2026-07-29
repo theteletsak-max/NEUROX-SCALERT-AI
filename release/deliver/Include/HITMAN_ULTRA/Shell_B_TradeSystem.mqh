@@ -71,43 +71,44 @@ int OnInit()
             ") — change the chart timeframe to change trading TF, or set EntryTF input");
    }
    Print("HITMAN MASTER BLUEPRINT: modules 00-40 + UFSE v1.0 | HITMAN AI live path");
-   Print("UFSE: FastSignal=", UltraFastSignalEnabled,
-         " MasterTrendLock=", UltraMasterTrendLock,
-         " SignalLock=", UltraSignalLockEnabled,
-         " EntryTrigger=", UltraUFSE_EntryTriggerGate);
+   Print("UFSE: FastSignal=", UltraYN(UltraFastSignalEnabled),
+         " MasterTrendLock=", UltraYN(UltraMasterTrendLock),
+         " SignalLock=", UltraYN(UltraSignalLockEnabled),
+         " EntryTrigger=", UltraYN(UltraUFSE_EntryTriggerGate),
+         " ExplainLog=", UltraYN(UltraUFSE_ExplainLog));
    if(EnableAPEXStrategy || EnableContFallback || EnableLCSStrategy)
       Print("OK93 WARNING: old APEX/ContFallback/LCS input ON — evaluators STUBBED; ULTRA only fires");
-   Print("INSTANT OPEN + QUALITY PREFER MODE=", InstantQualityMode);
-   Print("QUALITY SELECT: IDP_Hard=", IDP_HardGate, " MinPulse=", IDP_MinAbsPulse,
-         " ContScore=", ContStruct_MinScore, " ADX=", ContStruct_RequireTrendADX,
-         " SkipRange=", ContStruct_SkipRanging);
+   Print("INSTANT OPEN + QUALITY PREFER MODE=", UltraYN(InstantQualityMode));
+   Print("QUALITY SELECT: IDP_Hard=", UltraYN(IDP_HardGate), " MinPulse=", IDP_MinAbsPulse,
+         " ContScore=", ContStruct_MinScore, " ADX=", UltraYN(ContStruct_RequireTrendADX),
+         " SkipRange=", UltraYN(ContStruct_SkipRanging));
    Print("INSTANT EXEC: TradeCD=", TradeCooldownMinutes, " AttemptCD=", AttemptCooldownSeconds,
          " ContCD=", ContFallbackCooldownMinutes,
-         " TickDetect=", EnableTickLevelSignalDetection,
-         " NeverBlock=", NeverBlockValidSniperEntry,
-         " UltraAggro=", UltraAggressiveFire);
+         " TickDetect=", UltraYN(EnableTickLevelSignalDetection),
+         " NeverBlock=", UltraYN(NeverBlockValidSniperEntry),
+         " UltraAggro=", UltraYN(UltraAggressiveFire));
    Print("CRITICAL: SOURCE must be HITMAN_AI");
-   Print("INSTANT QUALITY81: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
-         " HardBlock=", APEX_SessionHardBlock, " (must be false)",
-         " NewsAware=", EnableNewsAwareness,
-         " IDP=", EnableIDPConfluence,
+   Print("INSTANT QUALITY81: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", UltraYN(EnableAntiScalpMode),
+         " HardBlock=", UltraYN(APEX_SessionHardBlock), " (must be false)",
+         " NewsAware=", UltraYN(EnableNewsAwareness),
+         " IDP=", UltraYN(EnableIDPConfluence),
          " SpreadAlwaysAllow | MaxOpen=", MaxOpenTrades,
          " Lot=", LotSize);
    Print("APEX ", EnumToString(APEX_BiasTF), "/", EnumToString(APEX_EntryTF),
          " | ContFallback cooldown=", ContFallbackCooldownMinutes, "m hold=", ContFallbackMinimumHoldBars,
-         " | DD shield=", EnableDrawdownProtection);
-   Print("STRONG QUALITY Cont: ADX=", ContStruct_RequireTrendADX,
-         " SkipRange=", ContStruct_SkipRanging,
+         " | DD shield=", UltraYN(EnableDrawdownProtection));
+   Print("STRONG QUALITY Cont: ADX=", UltraYN(ContStruct_RequireTrendADX),
+         " SkipRange=", UltraYN(ContStruct_SkipRanging),
          " MinScore=", ContStruct_MinScore,
-         " TwoBarBOS=", ContStruct_RequireTwoBarBOS,
-         " ZoneOrDisp=", ContStruct_ZoneOrDisplacement,
+         " TwoBarBOS=", UltraYN(ContStruct_RequireTwoBarBOS),
+         " ZoneOrDisp=", UltraYN(ContStruct_ZoneOrDisplacement),
          " CF_Cooldown=", ContFallbackCooldownMinutes);
-   Print("ANYTIME: SessionHardBlock=", APEX_SessionHardBlock,
-         " | SessionDetect=", EnableSessionDetect,
-         " | Spread/News never hard-block | ContFallback=", EnableContFallback);
-   Print("IDP BUILT-IN CORE: Enable=", EnableIDPConfluence,
-         " HardGate=", IDP_HardGate,
-         " RequireStrong=", IDP_RequireStrong,
+   Print("ANYTIME: SessionHardBlock=", UltraYN(APEX_SessionHardBlock),
+         " | SessionDetect=", UltraYN(EnableSessionDetect),
+         " | Spread/News never hard-block | ContFallback=", UltraYN(EnableContFallback));
+   Print("IDP BUILT-IN CORE: Enable=", UltraYN(EnableIDPConfluence),
+         " HardGate=", UltraYN(IDP_HardGate),
+         " RequireStrong=", UltraYN(IDP_RequireStrong),
          " MinAbs=", IDP_MinAbsPulse,
          " StrongAbs=", IDP_StrongAbsPulse,
          " Shift=", IDP_PulseShift,
@@ -10646,12 +10647,18 @@ bool ContFallbackBestStructureOK(const bool buy, string &detail)
       if(IDP_GetPulse(p, pd))
          idpNote = StringFormat(" | %s", pd);
    }
+   string bosTag = "BOS";
+   if(ContStruct_RequireTwoBarBOS) bosTag = "BOS2";
+   string nearTag = "";
+   if(near) nearTag = " + near";
+   string dispTag = "";
+   if(disp) dispTag = " + disp";
    detail = StringFormat("%s %s + %s%s%s score=%d%s",
                          grade,
-                         ContStruct_RequireTwoBarBOS ? "BOS2" : "BOS",
+                         bosTag,
                          kind,
-                         near ? " + near" : "",
-                         disp ? " + disp" : "",
+                         nearTag,
+                         dispTag,
                          score,
                          idpNote);
    return true;
@@ -11543,23 +11550,35 @@ void AnalyzeLiveMarket(const bool force)
    else if(m.bull && m.bear) m.bias = "MIXED";
    else m.bias = "FLAT";
 
+   string adxTag = "";
+   if(m.trendStrong) adxTag = "+ADX";
+   string bosBuyS = "N"; if(m.bosBuy) bosBuyS = "Y";
+   string bosSellS = "N"; if(m.bosSell) bosSellS = "Y";
+   string zoneBuyS = "N"; if(m.zoneBuy) zoneBuyS = "Y";
+   string zoneSellS = "N"; if(m.zoneSell) zoneSellS = "Y";
+   string nearBuyS = "N"; if(m.nearBuy) nearBuyS = "Y";
+   string nearSellS = "N"; if(m.nearSell) nearSellS = "Y";
+   string dispBuyS = "N"; if(m.dispBuy) dispBuyS = "Y";
+   string dispSellS = "N"; if(m.dispSell) dispSellS = "Y";
+   string contBuyS = "wait"; if(m.contBuyOK) contBuyS = "READY";
+   string contSellS = "wait"; if(m.contSellOK) contSellS = "READY";
    m.summary = StringFormat(
       "%s | SESSION=%s h%d | %s%s | BOS B/S=%s/%s | Zone B/S=%s/%s | Near=%s/%s | Disp=%s/%s | Cont B/S=%s/%s",
       m.bias,
       m.sessionName,
       m.sessionHour,
       EnumToString(m.regime),
-      m.trendStrong ? "+ADX" : "",
-      m.bosBuy ? "Y" : "N",
-      m.bosSell ? "Y" : "N",
-      m.zoneBuy ? "Y" : "N",
-      m.zoneSell ? "Y" : "N",
-      m.nearBuy ? "Y" : "N",
-      m.nearSell ? "Y" : "N",
-      m.dispBuy ? "Y" : "N",
-      m.dispSell ? "Y" : "N",
-      m.contBuyOK ? "READY" : "wait",
-      m.contSellOK ? "READY" : "wait");
+      adxTag,
+      bosBuyS,
+      bosSellS,
+      zoneBuyS,
+      zoneSellS,
+      nearBuyS,
+      nearSellS,
+      dispBuyS,
+      dispSellS,
+      contBuyS,
+      contSellS);
 
    g_LiveMkt = m;
 }

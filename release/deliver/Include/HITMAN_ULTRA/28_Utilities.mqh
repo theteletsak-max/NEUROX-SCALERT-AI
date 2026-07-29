@@ -62,4 +62,11 @@ bool UltraFindSwings(const string s, const ENUM_TIMEFRAMES tf, const int lb, con
    return (iH1 && iH2 && iL1 && iL2);
 }
 
+// MQL5-safe bool→text (never concatenate bare bool into strings / Print)
+string UltraYN(const bool v)
+{
+   if(v) return "Y";
+   return "N";
+}
+
 #endif // HITMAN_ULTRA_28_UTILITIES_MQH

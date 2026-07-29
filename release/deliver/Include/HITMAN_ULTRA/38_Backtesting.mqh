@@ -22,7 +22,11 @@ bool UltraBT_IsVisual()
 string UltraBT_ModeName()
 {
    if(UltraBT_IsOptimization()) return "OPTIMIZATION";
-   if(UltraBT_IsTester()) return (UltraBT_IsVisual() ? "TESTER_VISUAL" : "TESTER");
+   if(UltraBT_IsTester())
+   {
+      if(UltraBT_IsVisual()) return "TESTER_VISUAL";
+      return "TESTER";
+   }
    return "LIVE";
 }
 

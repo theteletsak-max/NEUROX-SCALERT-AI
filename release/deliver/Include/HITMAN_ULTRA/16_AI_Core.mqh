@@ -222,12 +222,12 @@ string UltraBuildExplanation(const UltraSnap &u, const bool buySide, const bool 
    int passed = (structure?1:0)+(bosCh?1:0)+(liq?1:0)+(trend?1:0)+(mom?1:0)+(fib?1:0);
 
    string t = (approved ? tag : "NO TRADE");
-   t += "\n"; t += (structure ? "[OK] Structure" : "[X]  Structure");
-   t += "\n"; t += (bosCh     ? "[OK] BOS/CHoCH" : "[X]  BOS/CHoCH");
-   t += "\n"; t += (liq       ? "[OK] Liquidity" : "[X]  Liquidity");
-   t += "\n"; t += (fib       ? "[OK] Fibonacci" : "[-]  Fibonacci");
-   t += "\n"; t += (trend     ? "[OK] Trend" : "[X]  Trend");
-   t += "\n"; t += (mom       ? "[OK] Momentum" : "[X]  Momentum");
+   t += "\n"; if(structure) t += "[OK] Structure"; else t += "[X]  Structure";
+   t += "\n"; if(bosCh) t += "[OK] BOS/CHoCH"; else t += "[X]  BOS/CHoCH";
+   t += "\n"; if(liq) t += "[OK] Liquidity"; else t += "[X]  Liquidity";
+   t += "\n"; if(fib) t += "[OK] Fibonacci"; else t += "[-]  Fibonacci";
+   t += "\n"; if(trend) t += "[OK] Trend"; else t += "[X]  Trend";
+   t += "\n"; if(mom) t += "[OK] Momentum"; else t += "[X]  Momentum";
    t += "\nConfidence = "; t += IntegerToString(u.score.confidence); t += "%";
    t += "\nPrecision  = "; t += IntegerToString(u.score.precision); t += "%";
    t += "\nProbability= "; t += IntegerToString(u.score.probability); t += "%";
@@ -235,7 +235,7 @@ string UltraBuildExplanation(const UltraSnap &u, const bool buySide, const bool 
    if(approved)
    {
       t += "Decision = ";
-      t += (buySide ? "BUY" : "SELL");
+      if(buySide) t += "BUY"; else t += "SELL";
    }
    else
    {

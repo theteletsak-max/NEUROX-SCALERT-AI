@@ -910,7 +910,7 @@ input group "31 · ULTRA FAST SIGNAL ENGINE v1.0"
 input bool   UltraFastSignalEnabled      = true;  // event-driven cache + scanner
 input bool   UltraMasterTrendLock        = true;  // LTF cannot reverse HTF master
 input bool   UltraSignalLockEnabled      = true;  // block duplicates until unlock event
-input bool   UltraUFSE_DebugExplain      = true;  // PASS/FAIL explain on fire/wait
+input bool   UltraUFSE_ExplainLog        = true;  // PASS/FAIL explain on fire/wait
 input bool   UltraUFSE_EntryTriggerGate  = true;  // formal entry trigger checklist
 
 input group "31 · DASHBOARD INPUTS"
@@ -985,6 +985,13 @@ bool UltraFindSwings(const string s, const ENUM_TIMEFRAMES tf, const int lb, con
       if(iH1 && iH2 && iL1 && iL2) break;
    }
    return (iH1 && iH2 && iL1 && iL2);
+}
+
+// MQL5-safe bool→text (never concatenate bare bool into strings / Print)
+string UltraYN(const bool v)
+{
+   if(v) return "Y";
+   return "N";
 }
 
 #endif // HITMAN_ULTRA_28_UTILITIES_MQH
@@ -1096,7 +1103,9 @@ void UltraCoreInit()
    g_UltraCore.loaded = true;
    g_UltraCore.configOK = UltraConfigOK();
    g_UltraCore.healthy = g_UltraCore.configOK;
-   UltraLog("CORE loaded configOK=" + (string)g_UltraCore.configOK);
+   string cfg = "N";
+   if(g_UltraCore.configOK) cfg = "Y";
+   UltraLog("CORE loaded configOK=" + cfg);
 }
 
 void UltraSystemController_Boot()
@@ -1989,7 +1998,7 @@ void UltraEngDiagnostics(const string s, UltraSnap &u)
    if(UltraMemoryEngineEnabled && g_UltraMem.trades > 100000) u.diag.memoryOK = false;
    u.diag.processSpeedMs = g_UltraCore.lastLatencyMs;
    bool ok = u.diag.tickOK && u.diag.brokerOK && u.diag.connectionOK && u.diag.indicatorOK && u.diag.memoryOK;
-   u.diag.health = ok ? "OK" : "DEGRADED";
+   if(ok) u.diag.health = "OK"; else u.diag.health = "DEGRADED";
    g_UltraCore.healthy = ok;
 }
 
@@ -2333,12 +2342,12 @@ string UltraBuildExplanation(const UltraSnap &u, const bool buySide, const bool 
    int passed = (structure?1:0)+(bosCh?1:0)+(liq?1:0)+(trend?1:0)+(mom?1:0)+(fib?1:0);
 
    string t = (approved ? tag : "NO TRADE");
-   t += "\n"; t += (structure ? "[OK] Structure" : "[X]  Structure");
-   t += "\n"; t += (bosCh     ? "[OK] BOS/CHoCH" : "[X]  BOS/CHoCH");
-   t += "\n"; t += (liq       ? "[OK] Liquidity" : "[X]  Liquidity");
-   t += "\n"; t += (fib       ? "[OK] Fibonacci" : "[-]  Fibonacci");
-   t += "\n"; t += (trend     ? "[OK] Trend" : "[X]  Trend");
-   t += "\n"; t += (mom       ? "[OK] Momentum" : "[X]  Momentum");
+   t += "\n"; if(structure) t += "[OK] Structure"; else t += "[X]  Structure";
+   t += "\n"; if(bosCh) t += "[OK] BOS/CHoCH"; else t += "[X]  BOS/CHoCH";
+   t += "\n"; if(liq) t += "[OK] Liquidity"; else t += "[X]  Liquidity";
+   t += "\n"; if(fib) t += "[OK] Fibonacci"; else t += "[-]  Fibonacci";
+   t += "\n"; if(trend) t += "[OK] Trend"; else t += "[X]  Trend";
+   t += "\n"; if(mom) t += "[OK] Momentum"; else t += "[X]  Momentum";
    t += "\nConfidence = "; t += IntegerToString(u.score.confidence); t += "%";
    t += "\nPrecision  = "; t += IntegerToString(u.score.precision); t += "%";
    t += "\nProbability= "; t += IntegerToString(u.score.probability); t += "%";
@@ -2346,7 +2355,7 @@ string UltraBuildExplanation(const UltraSnap &u, const bool buySide, const bool 
    if(approved)
    {
       t += "Decision = ";
-      t += (buySide ? "BUY" : "SELL");
+      if(buySide) t += "BUY"; else t += "SELL";
    }
    else
    {
@@ -2480,7 +2489,7 @@ int          g_UFSE_SpeedTickCount = 0;
 // Inputs (also listed in 31_Inputs via shared names below)           //
 //--------------------------------------------------------------------//
 // UltraFastSignalEnabled, UltraMasterTrendLock, UltraSignalLock,
-// UltraUFSE_DebugExplain — declared in 31_Inputs.mqh
+// UltraUFSE_ExplainLog — declared in 31_Inputs.mqh (input bool; function name differs)
 
 int UltraUFSE_Find(const string s)
 {
@@ -2819,20 +2828,24 @@ string UltraUFSE_DebugExplain(const UltraSnap &u, const bool buySide, const bool
                         : (u.trend.bear || u.trend.htfBear || u.trend.macroBear);
 
    string head = "NO TRADE";
-   if(approved) head = (buySide ? "BUY SIGNAL" : "SELL SIGNAL");
+   if(approved)
+   {
+      if(buySide) head = "BUY SIGNAL";
+      else head = "SELL SIGNAL";
+   }
 
    string t = head;
-   t += "\nTrend ........ "; t += (trend ? "PASS" : "FAIL");
-   t += "\nStructure .... "; t += (structure ? "PASS" : "FAIL");
-   t += "\nBOS .......... "; t += (bos ? "PASS" : "FAIL");
-   t += "\nCHoCH ........ "; t += (choch ? "PASS" : "FAIL");
-   t += "\nLiquidity .... "; t += (liq ? "PASS" : "FAIL");
-   t += "\nMomentum ..... "; t += (mom ? "PASS" : "FAIL");
+   t += "\nTrend ........ "; if(trend) t += "PASS"; else t += "FAIL";
+   t += "\nStructure .... "; if(structure) t += "PASS"; else t += "FAIL";
+   t += "\nBOS .......... "; if(bos) t += "PASS"; else t += "FAIL";
+   t += "\nCHoCH ........ "; if(choch) t += "PASS"; else t += "FAIL";
+   t += "\nLiquidity .... "; if(liq) t += "PASS"; else t += "FAIL";
+   t += "\nMomentum ..... "; if(mom) t += "PASS"; else t += "FAIL";
    t += "\n\nConfidence ... "; t += IntegerToString(u.score.confidence); t += "%";
    t += "\nPrecision .... "; t += IntegerToString(u.score.precision); t += "%";
    t += "\nProbability .. "; t += IntegerToString(u.score.probability); t += "%";
    t += "\n\nDecision ..... ";
-   if(approved) t += (buySide ? "BUY" : "SELL");
+   if(approved){ if(buySide) t += "BUY"; else t += "SELL"; }
    else t += "WAIT";
    return t;
 }
@@ -2887,7 +2900,8 @@ string UltraUFSE_Stats(const string s)
    string master = "FLAT";
    if(g_UFSE[idx].masterTrend > 0) master = "BUY";
    else if(g_UFSE[idx].masterTrend < 0) master = "SELL";
-   string lock = (g_UFSE[idx].signalLocked ? "Y" : "N");
+   string lock = "N";
+   if(g_UFSE[idx].signalLocked) lock = "Y";
    string t = "ticks=";
    t += IntegerToString((int)g_UFSE[idx].tickCount);
    t += " hits=";
@@ -2999,19 +3013,21 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       best.explanation = UltraUFSE_DebugExplain(snap, leanBuy, false);
       g_UltraLastSignal = best;
       datetime bar = iTime(BrokerSymbol, UltraETF(), 0);
-      bool logIt = (EnableVerboseLogging || ContStruct_LogDetail || UltraUFSE_DebugExplain) &&
+      bool logIt = (EnableVerboseLogging || ContStruct_LogDetail || UltraUFSE_ExplainLog) &&
                    (bar != g_UltraLastWaitBar || BrokerSymbol != g_UltraLastWaitSym);
       if(logIt)
       {
          g_UltraLastWaitBar = bar;
          g_UltraLastWaitSym = BrokerSymbol;
+         string cacheTag = "REBUILD";
+         if(fromCache) cacheTag = "HIT";
          Print("ULTRA wait [", why, "] conf=", snap.score.confidence,
                " prec=", snap.score.precision, " prob=", snap.score.probability,
                " regime=", UltraRegimeName(snap.regime),
-               " cache=", (fromCache ? "HIT" : "REBUILD"),
+               " cache=", cacheTag,
                " ", UltraUFSE_Stats(BrokerSymbol),
                " on ", BrokerSymbol);
-         if(UltraUFSE_DebugExplain)
+         if(UltraUFSE_ExplainLog)
             Print(best.explanation);
       }
       return;
@@ -3032,14 +3048,18 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    }
    UltraExec_MarkFired(BrokerSymbol);
 
-   Print("ULTRA FIRE ", (best.buy ? "BUY" : "SELL"), " [", best.tag, "] conf=", snap.score.confidence,
+   string sideTag = "SELL";
+   if(best.buy) sideTag = "BUY";
+   string cacheTag2 = "REBUILD";
+   if(fromCache) cacheTag2 = "HIT";
+   Print("ULTRA FIRE ", sideTag, " [", best.tag, "] conf=", snap.score.confidence,
          " prec=", snap.score.precision, " prob=", snap.score.probability,
          " ", best.reason, " SMI=", DoubleToString(snap.ind.smi, 1),
          " session=", snap.ctx.session,
-         " cache=", (fromCache ? "HIT" : "REBUILD"),
+         " cache=", cacheTag2,
          " ", UltraUFSE_Stats(BrokerSymbol),
          " on ", BrokerSymbol);
-   if(UltraUFSE_DebugExplain)
+   if(UltraUFSE_ExplainLog)
       Print(best.explanation);
 }
 
@@ -3288,9 +3308,9 @@ string UltraDashboardText(const string s)
    t += " | Prec: "; t += IntegerToString(u.score.precision);
    t += " | Prob: "; t += IntegerToString(u.score.probability);
    t += "\nSession: "; t += u.ctx.session;
-   t += " | LiqWin: "; t += (u.ctx.sessionLiquidity ? "Y" : "N");
+   t += " | LiqWin: "; if(u.ctx.sessionLiquidity) t += "Y"; else t += "N";
    t += " | News: "; t += u.ctx.newsPhase;
-   t += " | NewsVol: "; t += (u.ctx.newsVol ? "Y" : "N");
+   t += " | NewsVol: "; if(u.ctx.newsVol) t += "Y"; else t += "N";
    t += " | (never blocks)";
    t += "\nRegime: "; t += UltraRegimeName(u.regime);
    t += "\nTrend B/S votes: "; t += IntegerToString(u.trend.mtfVotesBuy);
@@ -3299,15 +3319,15 @@ string UltraDashboardText(const string s)
    t += "\nBOS: "; t += bos;
    t += " CHoCH: "; t += choch;
    t += " Sweep: "; t += sweep;
-   t += "\nFib zone B/S: "; t += (u.fib.atBuyZone ? "Y" : "N");
-   t += "/"; t += (u.fib.atSellZone ? "Y" : "N");
+   t += "\nFib zone B/S: "; if(u.fib.atBuyZone) t += "Y"; else t += "N";
+   t += "/"; if(u.fib.atSellZone) t += "Y"; else t += "N";
    t += " rank="; t += IntegerToString(u.fib.zoneRank);
    t += "\nSMI: "; t += DoubleToString(u.ind.smi, 1);
    t += " | MEO: "; t += DoubleToString(u.ind.meo, 1);
    t += " | IFI: "; t += DoubleToString(u.ind.ifi, 1);
    t += "\nVol: "; t += vol;
    t += " ATR="; t += DoubleToString(u.vol.atr, (int)SymbolInfoInteger(s, SYMBOL_DIGITS));
-   t += "\nCapital: "; t += (g_UltraCore.healthy ? "OK" : "CHECK");
+   t += "\nCapital: "; if(g_UltraCore.healthy) t += "OK"; else t += "CHECK";
    t += " | Health: "; t += u.diag.health;
    t += " | Lat: "; t += IntegerToString((int)g_UltraCore.lastLatencyMs); t += "ms";
    t += "\nWR: "; t += DoubleToString(g_UltraMem.winRate, 1); t += "%";
@@ -3418,10 +3438,14 @@ bool UltraBroker_FreezeOK(const string s, const double price, const double sl, c
 string UltraBroker_Summary(const string s)
 {
    UltraBrokerCaps c; UltraBroker_Detect(s, c);
-   return c.company + " stops=" + IntegerToString(c.stopsLevel) +
-          " freeze=" + IntegerToString(c.freezeLevel) +
-          " FOK=" + (c.fillFOK ? "Y" : "N") +
-          " IOC=" + (c.fillIOC ? "Y" : "N");
+   string t = c.company;
+   t += " stops="; t += IntegerToString(c.stopsLevel);
+   t += " freeze="; t += IntegerToString(c.freezeLevel);
+   t += " FOK=";
+   if(c.fillFOK) t += "Y"; else t += "N";
+   t += " IOC=";
+   if(c.fillIOC) t += "Y"; else t += "N";
+   return t;
 }
 
 #endif
@@ -3819,7 +3843,7 @@ string UltraOpt_Summary()
    string t = "cycles=";
    t += IntegerToString((int)g_UltraPerfOpt.cycleCount);
    t += " skipHeavy=";
-   t += (g_UltraPerfOpt.skipHeavy ? "Y" : "N");
+   if(g_UltraPerfOpt.skipHeavy) t += "Y"; else t += "N";
    return t;
 }
 
@@ -3851,7 +3875,11 @@ bool UltraBT_IsVisual()
 string UltraBT_ModeName()
 {
    if(UltraBT_IsOptimization()) return "OPTIMIZATION";
-   if(UltraBT_IsTester()) return (UltraBT_IsVisual() ? "TESTER_VISUAL" : "TESTER");
+   if(UltraBT_IsTester())
+   {
+      if(UltraBT_IsVisual()) return "TESTER_VISUAL";
+      return "TESTER";
+   }
    return "LIVE";
 }
 
@@ -3994,7 +4022,8 @@ void UltraDebug_DumpSnapshot(const string s)
 
 string UltraDebug_ModuleStatus()
 {
-   return UltraDebugEnabled ? "DEBUG ON" : "DEBUG OFF";
+   if(UltraDebugEnabled) return "DEBUG ON";
+   return "DEBUG OFF";
 }
 
 #endif
@@ -4074,43 +4103,44 @@ int OnInit()
             ") — change the chart timeframe to change trading TF, or set EntryTF input");
    }
    Print("HITMAN MASTER BLUEPRINT: modules 00-40 + UFSE v1.0 | HITMAN AI live path");
-   Print("UFSE: FastSignal=", UltraFastSignalEnabled,
-         " MasterTrendLock=", UltraMasterTrendLock,
-         " SignalLock=", UltraSignalLockEnabled,
-         " EntryTrigger=", UltraUFSE_EntryTriggerGate);
+   Print("UFSE: FastSignal=", UltraYN(UltraFastSignalEnabled),
+         " MasterTrendLock=", UltraYN(UltraMasterTrendLock),
+         " SignalLock=", UltraYN(UltraSignalLockEnabled),
+         " EntryTrigger=", UltraYN(UltraUFSE_EntryTriggerGate),
+         " ExplainLog=", UltraYN(UltraUFSE_ExplainLog));
    if(EnableAPEXStrategy || EnableContFallback || EnableLCSStrategy)
       Print("OK93 WARNING: old APEX/ContFallback/LCS input ON — evaluators STUBBED; ULTRA only fires");
-   Print("INSTANT OPEN + QUALITY PREFER MODE=", InstantQualityMode);
-   Print("QUALITY SELECT: IDP_Hard=", IDP_HardGate, " MinPulse=", IDP_MinAbsPulse,
-         " ContScore=", ContStruct_MinScore, " ADX=", ContStruct_RequireTrendADX,
-         " SkipRange=", ContStruct_SkipRanging);
+   Print("INSTANT OPEN + QUALITY PREFER MODE=", UltraYN(InstantQualityMode));
+   Print("QUALITY SELECT: IDP_Hard=", UltraYN(IDP_HardGate), " MinPulse=", IDP_MinAbsPulse,
+         " ContScore=", ContStruct_MinScore, " ADX=", UltraYN(ContStruct_RequireTrendADX),
+         " SkipRange=", UltraYN(ContStruct_SkipRanging));
    Print("INSTANT EXEC: TradeCD=", TradeCooldownMinutes, " AttemptCD=", AttemptCooldownSeconds,
          " ContCD=", ContFallbackCooldownMinutes,
-         " TickDetect=", EnableTickLevelSignalDetection,
-         " NeverBlock=", NeverBlockValidSniperEntry,
-         " UltraAggro=", UltraAggressiveFire);
+         " TickDetect=", UltraYN(EnableTickLevelSignalDetection),
+         " NeverBlock=", UltraYN(NeverBlockValidSniperEntry),
+         " UltraAggro=", UltraYN(UltraAggressiveFire));
    Print("CRITICAL: SOURCE must be HITMAN_AI");
-   Print("INSTANT QUALITY81: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
-         " HardBlock=", APEX_SessionHardBlock, " (must be false)",
-         " NewsAware=", EnableNewsAwareness,
-         " IDP=", EnableIDPConfluence,
+   Print("INSTANT QUALITY81: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", UltraYN(EnableAntiScalpMode),
+         " HardBlock=", UltraYN(APEX_SessionHardBlock), " (must be false)",
+         " NewsAware=", UltraYN(EnableNewsAwareness),
+         " IDP=", UltraYN(EnableIDPConfluence),
          " SpreadAlwaysAllow | MaxOpen=", MaxOpenTrades,
          " Lot=", LotSize);
    Print("APEX ", EnumToString(APEX_BiasTF), "/", EnumToString(APEX_EntryTF),
          " | ContFallback cooldown=", ContFallbackCooldownMinutes, "m hold=", ContFallbackMinimumHoldBars,
-         " | DD shield=", EnableDrawdownProtection);
-   Print("STRONG QUALITY Cont: ADX=", ContStruct_RequireTrendADX,
-         " SkipRange=", ContStruct_SkipRanging,
+         " | DD shield=", UltraYN(EnableDrawdownProtection));
+   Print("STRONG QUALITY Cont: ADX=", UltraYN(ContStruct_RequireTrendADX),
+         " SkipRange=", UltraYN(ContStruct_SkipRanging),
          " MinScore=", ContStruct_MinScore,
-         " TwoBarBOS=", ContStruct_RequireTwoBarBOS,
-         " ZoneOrDisp=", ContStruct_ZoneOrDisplacement,
+         " TwoBarBOS=", UltraYN(ContStruct_RequireTwoBarBOS),
+         " ZoneOrDisp=", UltraYN(ContStruct_ZoneOrDisplacement),
          " CF_Cooldown=", ContFallbackCooldownMinutes);
-   Print("ANYTIME: SessionHardBlock=", APEX_SessionHardBlock,
-         " | SessionDetect=", EnableSessionDetect,
-         " | Spread/News never hard-block | ContFallback=", EnableContFallback);
-   Print("IDP BUILT-IN CORE: Enable=", EnableIDPConfluence,
-         " HardGate=", IDP_HardGate,
-         " RequireStrong=", IDP_RequireStrong,
+   Print("ANYTIME: SessionHardBlock=", UltraYN(APEX_SessionHardBlock),
+         " | SessionDetect=", UltraYN(EnableSessionDetect),
+         " | Spread/News never hard-block | ContFallback=", UltraYN(EnableContFallback));
+   Print("IDP BUILT-IN CORE: Enable=", UltraYN(EnableIDPConfluence),
+         " HardGate=", UltraYN(IDP_HardGate),
+         " RequireStrong=", UltraYN(IDP_RequireStrong),
          " MinAbs=", IDP_MinAbsPulse,
          " StrongAbs=", IDP_StrongAbsPulse,
          " Shift=", IDP_PulseShift,
@@ -14649,12 +14679,18 @@ bool ContFallbackBestStructureOK(const bool buy, string &detail)
       if(IDP_GetPulse(p, pd))
          idpNote = StringFormat(" | %s", pd);
    }
+   string bosTag = "BOS";
+   if(ContStruct_RequireTwoBarBOS) bosTag = "BOS2";
+   string nearTag = "";
+   if(near) nearTag = " + near";
+   string dispTag = "";
+   if(disp) dispTag = " + disp";
    detail = StringFormat("%s %s + %s%s%s score=%d%s",
                          grade,
-                         ContStruct_RequireTwoBarBOS ? "BOS2" : "BOS",
+                         bosTag,
                          kind,
-                         near ? " + near" : "",
-                         disp ? " + disp" : "",
+                         nearTag,
+                         dispTag,
                          score,
                          idpNote);
    return true;
@@ -15546,23 +15582,35 @@ void AnalyzeLiveMarket(const bool force)
    else if(m.bull && m.bear) m.bias = "MIXED";
    else m.bias = "FLAT";
 
+   string adxTag = "";
+   if(m.trendStrong) adxTag = "+ADX";
+   string bosBuyS = "N"; if(m.bosBuy) bosBuyS = "Y";
+   string bosSellS = "N"; if(m.bosSell) bosSellS = "Y";
+   string zoneBuyS = "N"; if(m.zoneBuy) zoneBuyS = "Y";
+   string zoneSellS = "N"; if(m.zoneSell) zoneSellS = "Y";
+   string nearBuyS = "N"; if(m.nearBuy) nearBuyS = "Y";
+   string nearSellS = "N"; if(m.nearSell) nearSellS = "Y";
+   string dispBuyS = "N"; if(m.dispBuy) dispBuyS = "Y";
+   string dispSellS = "N"; if(m.dispSell) dispSellS = "Y";
+   string contBuyS = "wait"; if(m.contBuyOK) contBuyS = "READY";
+   string contSellS = "wait"; if(m.contSellOK) contSellS = "READY";
    m.summary = StringFormat(
       "%s | SESSION=%s h%d | %s%s | BOS B/S=%s/%s | Zone B/S=%s/%s | Near=%s/%s | Disp=%s/%s | Cont B/S=%s/%s",
       m.bias,
       m.sessionName,
       m.sessionHour,
       EnumToString(m.regime),
-      m.trendStrong ? "+ADX" : "",
-      m.bosBuy ? "Y" : "N",
-      m.bosSell ? "Y" : "N",
-      m.zoneBuy ? "Y" : "N",
-      m.zoneSell ? "Y" : "N",
-      m.nearBuy ? "Y" : "N",
-      m.nearSell ? "Y" : "N",
-      m.dispBuy ? "Y" : "N",
-      m.dispSell ? "Y" : "N",
-      m.contBuyOK ? "READY" : "wait",
-      m.contSellOK ? "READY" : "wait");
+      adxTag,
+      bosBuyS,
+      bosSellS,
+      zoneBuyS,
+      zoneSellS,
+      nearBuyS,
+      nearSellS,
+      dispBuyS,
+      dispSellS,
+      contBuyS,
+      contSellS);
 
    g_LiveMkt = m;
 }

@@ -54,7 +54,7 @@ int          g_UFSE_SpeedTickCount = 0;
 // Inputs (also listed in 31_Inputs via shared names below)           //
 //--------------------------------------------------------------------//
 // UltraFastSignalEnabled, UltraMasterTrendLock, UltraSignalLock,
-// UltraUFSE_DebugExplain — declared in 31_Inputs.mqh
+// UltraUFSE_ExplainLog — declared in 31_Inputs.mqh (input bool; function name differs)
 
 int UltraUFSE_Find(const string s)
 {
@@ -393,20 +393,24 @@ string UltraUFSE_DebugExplain(const UltraSnap &u, const bool buySide, const bool
                         : (u.trend.bear || u.trend.htfBear || u.trend.macroBear);
 
    string head = "NO TRADE";
-   if(approved) head = (buySide ? "BUY SIGNAL" : "SELL SIGNAL");
+   if(approved)
+   {
+      if(buySide) head = "BUY SIGNAL";
+      else head = "SELL SIGNAL";
+   }
 
    string t = head;
-   t += "\nTrend ........ "; t += (trend ? "PASS" : "FAIL");
-   t += "\nStructure .... "; t += (structure ? "PASS" : "FAIL");
-   t += "\nBOS .......... "; t += (bos ? "PASS" : "FAIL");
-   t += "\nCHoCH ........ "; t += (choch ? "PASS" : "FAIL");
-   t += "\nLiquidity .... "; t += (liq ? "PASS" : "FAIL");
-   t += "\nMomentum ..... "; t += (mom ? "PASS" : "FAIL");
+   t += "\nTrend ........ "; if(trend) t += "PASS"; else t += "FAIL";
+   t += "\nStructure .... "; if(structure) t += "PASS"; else t += "FAIL";
+   t += "\nBOS .......... "; if(bos) t += "PASS"; else t += "FAIL";
+   t += "\nCHoCH ........ "; if(choch) t += "PASS"; else t += "FAIL";
+   t += "\nLiquidity .... "; if(liq) t += "PASS"; else t += "FAIL";
+   t += "\nMomentum ..... "; if(mom) t += "PASS"; else t += "FAIL";
    t += "\n\nConfidence ... "; t += IntegerToString(u.score.confidence); t += "%";
    t += "\nPrecision .... "; t += IntegerToString(u.score.precision); t += "%";
    t += "\nProbability .. "; t += IntegerToString(u.score.probability); t += "%";
    t += "\n\nDecision ..... ";
-   if(approved) t += (buySide ? "BUY" : "SELL");
+   if(approved){ if(buySide) t += "BUY"; else t += "SELL"; }
    else t += "WAIT";
    return t;
 }
@@ -461,7 +465,8 @@ string UltraUFSE_Stats(const string s)
    string master = "FLAT";
    if(g_UFSE[idx].masterTrend > 0) master = "BUY";
    else if(g_UFSE[idx].masterTrend < 0) master = "SELL";
-   string lock = (g_UFSE[idx].signalLocked ? "Y" : "N");
+   string lock = "N";
+   if(g_UFSE[idx].signalLocked) lock = "Y";
    string t = "ticks=";
    t += IntegerToString((int)g_UFSE[idx].tickCount);
    t += " hits=";
@@ -573,19 +578,21 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       best.explanation = UltraUFSE_DebugExplain(snap, leanBuy, false);
       g_UltraLastSignal = best;
       datetime bar = iTime(BrokerSymbol, UltraETF(), 0);
-      bool logIt = (EnableVerboseLogging || ContStruct_LogDetail || UltraUFSE_DebugExplain) &&
+      bool logIt = (EnableVerboseLogging || ContStruct_LogDetail || UltraUFSE_ExplainLog) &&
                    (bar != g_UltraLastWaitBar || BrokerSymbol != g_UltraLastWaitSym);
       if(logIt)
       {
          g_UltraLastWaitBar = bar;
          g_UltraLastWaitSym = BrokerSymbol;
+         string cacheTag = "REBUILD";
+         if(fromCache) cacheTag = "HIT";
          Print("ULTRA wait [", why, "] conf=", snap.score.confidence,
                " prec=", snap.score.precision, " prob=", snap.score.probability,
                " regime=", UltraRegimeName(snap.regime),
-               " cache=", (fromCache ? "HIT" : "REBUILD"),
+               " cache=", cacheTag,
                " ", UltraUFSE_Stats(BrokerSymbol),
                " on ", BrokerSymbol);
-         if(UltraUFSE_DebugExplain)
+         if(UltraUFSE_ExplainLog)
             Print(best.explanation);
       }
       return;
@@ -606,14 +613,18 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    }
    UltraExec_MarkFired(BrokerSymbol);
 
-   Print("ULTRA FIRE ", (best.buy ? "BUY" : "SELL"), " [", best.tag, "] conf=", snap.score.confidence,
+   string sideTag = "SELL";
+   if(best.buy) sideTag = "BUY";
+   string cacheTag2 = "REBUILD";
+   if(fromCache) cacheTag2 = "HIT";
+   Print("ULTRA FIRE ", sideTag, " [", best.tag, "] conf=", snap.score.confidence,
          " prec=", snap.score.precision, " prob=", snap.score.probability,
          " ", best.reason, " SMI=", DoubleToString(snap.ind.smi, 1),
          " session=", snap.ctx.session,
-         " cache=", (fromCache ? "HIT" : "REBUILD"),
+         " cache=", cacheTag2,
          " ", UltraUFSE_Stats(BrokerSymbol),
          " on ", BrokerSymbol);
-   if(UltraUFSE_DebugExplain)
+   if(UltraUFSE_ExplainLog)
       Print(best.explanation);
 }
 

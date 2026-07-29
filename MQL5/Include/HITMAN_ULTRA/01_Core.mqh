@@ -42,7 +42,9 @@ void UltraCoreInit()
    g_UltraCore.loaded = true;
    g_UltraCore.configOK = UltraConfigOK();
    g_UltraCore.healthy = g_UltraCore.configOK;
-   UltraLog("CORE loaded configOK=" + (string)g_UltraCore.configOK);
+   string cfg = "N";
+   if(g_UltraCore.configOK) cfg = "Y";
+   UltraLog("CORE loaded configOK=" + cfg);
 }
 
 void UltraSystemController_Boot()

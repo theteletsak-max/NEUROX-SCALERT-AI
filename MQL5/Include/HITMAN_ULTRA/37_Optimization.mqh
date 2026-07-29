@@ -43,7 +43,7 @@ string UltraOpt_Summary()
    string t = "cycles=";
    t += IntegerToString((int)g_UltraPerfOpt.cycleCount);
    t += " skipHeavy=";
-   t += (g_UltraPerfOpt.skipHeavy ? "Y" : "N");
+   if(g_UltraPerfOpt.skipHeavy) t += "Y"; else t += "N";
    return t;
 }
 
