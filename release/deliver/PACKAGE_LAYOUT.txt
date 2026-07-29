@@ -1,2 +1,3 @@
-LIVE: SNIPER_AI_OK90.mq5 (SA_PRIME_90)
-Full from-scratch engines + 5 strategies + TP ladder
+SNIPER_AI.mq5          = live mirror of OK81
+SNIPER_AI_OK81.mq5     = CURRENT full EA (~13k lines)
+SNIPER_AI.zip          = deliver package

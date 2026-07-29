@@ -1,16 +1,10 @@
-SNIPER AI — CURRENT (PRIME FULL STACK)
+SNIPER AI — CURRENT (FULL EA — NOT FROM SCRATCH)
 
-EA:       SNIPER_AI_OK90.mq5
-BUILD_ID: SA_PRIME_90
+EA:       SNIPER_AI_OK81.mq5
+BUILD_ID: SA_QUALITY_81
+Lines:    ~13074
 Comment:  SNIPER AI
-MaxOpen:  3
 
-FROM SCRATCH — engines + strategies rebuilt (not the old OK83 pile):
+This is the full live EA base (~13k lines). Do NOT replace with from-scratch rewrites.
 
-ENGINES: Structure | Trend(MTF) | Liquidity | ICT | Fibonacci | Volume | Momentum
-STRATEGIES: FlashSweep | ContSniper | RevSniper | FibSniper | BreakImpulse
-EXEC: instant market, TP1/TP2/TP3 + BE + trail, account gate
-AWARE: session + news-vol (never hard-block)
-MULTI: optional multi-symbol
-
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK90.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK81.mq5

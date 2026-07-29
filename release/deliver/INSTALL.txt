@@ -1,4 +1,6 @@
-[ ] Remove OK89 from chart
-[ ] SNIPER_AI_OK90.mq5 → Experts → F7
-[ ] Journal: SA_PRIME_90 — FULL FROM-SCRATCH PRIME STACK
-[ ] Comment must be SNIPER AI
+1. Download SNIPER_AI_OK81.mq5 (or SNIPER_AI.mq5 from zip)
+2. Copy to MetaTrader 5 → MQL5/Experts/
+3. Compile in MetaEditor (F7)
+4. Attach to chart
+5. Journal must show: BUILD_ID=SA_QUALITY_81
+6. Trade comment must be: SNIPER AI

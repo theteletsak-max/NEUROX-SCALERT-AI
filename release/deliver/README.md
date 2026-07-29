@@ -1,14 +1,11 @@
-# SNIPER AI OK90 — Prime Full Stack
+# SNIPER AI — Live EA
 
-Rebuilt **from scratch**: own engines and strategies (not stripped single-path, not old OK83 junk).
+**File:** `SNIPER_AI_OK81.mq5`  
+**BUILD_ID:** `SA_QUALITY_81`  
+**Comment:** `SNIPER AI`  
+**Size:** ~13074 lines (full EA — not a from-scratch rewrite)
 
-### Engines
-Structure · Trend (MTF) · Liquidity · ICT · Fibonacci · Volume · Momentum
-
-### Strategies
-FlashSweep · ContSniper · RevSniper · FibSniper · BreakImpulse
-
-### Always on
-Instant execution · TP1/TP2/TP3 · BE/trail · Max 3 · No buy+sell together · Session/news aware (no hard-block) · Account margin check · Comment `SNIPER AI`
-
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK90.mq5
+## Install
+1. Put `SNIPER_AI_OK81.mq5` in `MQL5/Experts/`
+2. Compile (F7)
+3. Attach to chart — Journal must show `SA_QUALITY_81`
