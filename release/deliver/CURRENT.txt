@@ -1,15 +1,16 @@
-SNIPER AI — CURRENT (FROM SCRATCH)
+SNIPER AI — CURRENT (PRIME FULL STACK)
 
-EA:       SNIPER_AI_OK89.mq5
-BUILD_ID: SA_FLASH_89
+EA:       SNIPER_AI_OK90.mq5
+BUILD_ID: SA_PRIME_90
 Comment:  SNIPER AI
+MaxOpen:  3
 
-Own FLASH SNIPER core:
-- Market reader: structure, HTF/macro bias, liquidity sweep, displacement,
-  Fibonacci zones, tick-volume expansion, session/news awareness
-- Instant market execution (no hard session/news blocks)
-- Max 3 trades, never buy+sell same symbol together
-- TP1 / TP2 / TP3 ladder + BE + trail + smart reversal hold
-- Account margin gate, broker stops/volume normalize, multi-symbol optional
+FROM SCRATCH — engines + strategies rebuilt (not the old OK83 pile):
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK89.mq5
+ENGINES: Structure | Trend(MTF) | Liquidity | ICT | Fibonacci | Volume | Momentum
+STRATEGIES: FlashSweep | ContSniper | RevSniper | FibSniper | BreakImpulse
+EXEC: instant market, TP1/TP2/TP3 + BE + trail, account gate
+AWARE: session + news-vol (never hard-block)
+MULTI: optional multi-symbol
+
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK90.mq5

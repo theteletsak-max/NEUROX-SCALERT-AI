@@ -1,4 +1,4 @@
-SNIPER_AI_OK89.mq5
-BUILD SA_FLASH_89
+SNIPER_AI_OK90.mq5
+BUILD SA_PRIME_90
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK89.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK90.mq5

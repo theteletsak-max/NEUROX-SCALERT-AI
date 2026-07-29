@@ -1,14 +1,14 @@
-# SNIPER AI OK89 — Flash Core (from scratch)
+# SNIPER AI OK90 — Prime Full Stack
 
-Custom institutional sniper — **not** a pile of old indicators.
+Rebuilt **from scratch**: own engines and strategies (not stripped single-path, not old OK83 junk).
 
-### Strategy
-1. Read market (structure + HTF bias + fib + volume)
-2. Detect liquidity sweep + displacement reclaim (FLASH)
-3. Score confluence → instant market fire
-4. Manage TP1 → BE → TP2 → TP3 trail
-5. Session/news awareness **never blocks** high-vol execution
+### Engines
+Structure · Trend (MTF) · Liquidity · ICT · Fibonacci · Volume · Momentum
 
-Max open trades: **3**. Comment: **SNIPER AI**.
+### Strategies
+FlashSweep · ContSniper · RevSniper · FibSniper · BreakImpulse
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK89.mq5
+### Always on
+Instant execution · TP1/TP2/TP3 · BE/trail · Max 3 · No buy+sell together · Session/news aware (no hard-block) · Account margin check · Comment `SNIPER AI`
+
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK90.mq5

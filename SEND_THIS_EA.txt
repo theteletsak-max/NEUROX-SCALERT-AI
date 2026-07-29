@@ -1,7 +1,5 @@
-SNIPER AI OK89 — FLASH CORE (from scratch)
+SNIPER AI OK90 — PRIME FULL STACK (from scratch)
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK89.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK90.mq5
 
-F7 → Journal SA_FLASH_89
-Trade comment: SNIPER AI
-MaxOpenTrades=3
+F7 → SA_PRIME_90 | Comment: SNIPER AI | MaxOpen=3

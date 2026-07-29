@@ -1,5 +1,4 @@
-[ ] Remove old OK88/OK87 from chart
-[ ] SNIPER_AI_OK89.mq5 → MQL5/Experts → F7
-[ ] Attach → Journal: SA_FLASH_89 — FROM-SCRATCH FLASH CORE
-[ ] Confirm comment = SNIPER AI
-[ ] MaxOpenTrades = 3
+[ ] Remove OK89 from chart
+[ ] SNIPER_AI_OK90.mq5 → Experts → F7
+[ ] Journal: SA_PRIME_90 — FULL FROM-SCRATCH PRIME STACK
+[ ] Comment must be SNIPER AI

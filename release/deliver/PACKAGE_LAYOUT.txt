@@ -1,2 +1,2 @@
-LIVE: SNIPER_AI_OK89.mq5 (SA_FLASH_89) — from-scratch FLASH SNIPER
-ARCHIVE: older builds in release/archive/
+LIVE: SNIPER_AI_OK90.mq5 (SA_PRIME_90)
+Full from-scratch engines + 5 strategies + TP ladder
