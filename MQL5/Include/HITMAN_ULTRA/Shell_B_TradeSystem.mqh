@@ -70,7 +70,11 @@ int OnInit()
             " (EntryTF input=", EnumToString(EntryTF),
             ") — change the chart timeframe to change trading TF, or set EntryTF input");
    }
-   Print("HITMAN MASTER BLUEPRINT: modules 00-40 | Shell A/B | HITMAN AI live path");
+   Print("HITMAN MASTER BLUEPRINT: modules 00-40 + UFSE v1.0 | HITMAN AI live path");
+   Print("UFSE: FastSignal=", UltraFastSignalEnabled,
+         " MasterTrendLock=", UltraMasterTrendLock,
+         " SignalLock=", UltraSignalLockEnabled,
+         " EntryTrigger=", UltraUFSE_EntryTriggerGate);
    if(EnableAPEXStrategy || EnableContFallback || EnableLCSStrategy)
       Print("OK93 WARNING: old APEX/ContFallback/LCS input ON — evaluators STUBBED; ULTRA only fires");
    Print("INSTANT OPEN + QUALITY PREFER MODE=", InstantQualityMode);

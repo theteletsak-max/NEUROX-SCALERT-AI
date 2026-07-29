@@ -1,13 +1,13 @@
 //+------------------------------------------------------------------+
 //| HITMAN_AI.mq5                                                     |
 //| BUILD_ID: HA_ULTRA_93                                             |
-//| HITMAN AI — MASTER BLUEPRINT — SINGLE-FILE (00-40)                |
+//| HITMAN AI — MASTER + ULTRA FAST SIGNAL ENGINE v1.0                |
 //| Comment: HITMAN AI | MaxOpen=3 | EntryTF follows chart            |
 //+------------------------------------------------------------------+
 #property copyright "HITMAN AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version   "1.00"
-#property description "HITMAN AI MASTER BLUEPRINT single-file EA 00-40"
+#property description "HITMAN AI + Ultra Fast Signal Engine v1.0"
 #property description "BUILD=HA_ULTRA_93 Comment=HITMAN AI MaxOpen=3"
 
 #include <Trade/Trade.mqh>
@@ -905,6 +905,13 @@ input bool   UltraUseM1Optional          = false;
 
 input group "31 · CAPITAL PROTECTION INPUTS"
 input bool   UltraCapitalProtectEnabled  = true;
+
+input group "31 · ULTRA FAST SIGNAL ENGINE v1.0"
+input bool   UltraFastSignalEnabled      = true;  // event-driven cache + scanner
+input bool   UltraMasterTrendLock        = true;  // LTF cannot reverse HTF master
+input bool   UltraSignalLockEnabled      = true;  // block duplicates until unlock event
+input bool   UltraUFSE_DebugExplain      = true;  // PASS/FAIL explain on fire/wait
+input bool   UltraUFSE_EntryTriggerGate  = true;  // formal entry trigger checklist
 
 input group "31 · DASHBOARD INPUTS"
 input bool   UltraDashboardEnabled       = true;
@@ -2402,15 +2409,498 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
    return true;
 }
 
+// UltraAIDecide + EvaluateStrategySignals live in UFSE_FastSignalEngine.mqh
+// (included after this file) so the Ultra Fast Signal Engine can wrap them.
+
+#endif // HITMAN_ULTRA_16_AI_CORE_MQH
+//===== END 16_AI_Core.mqh =====
+
+//===== BEGIN UFSE_FastSignalEngine.mqh =====
+#ifndef HITMAN_ULTRA_UFSE_MQH
+#define HITMAN_ULTRA_UFSE_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — ULTRA FAST SIGNAL ENGINE v1.0                         |
+//| Real-time scanner · Event-driven cache · Priority · Locks · Debug |
+//+------------------------------------------------------------------+
+
+#define UFSE_MAX_SYM 48
+
+struct UltraTickScan
+{
+   double   bid;
+   double   ask;
+   double   last;
+   long     tickVol;
+   double   spread;
+   int      dir;          // +1 up / -1 down / 0 flat
+   double   speed;        // approx ticks/sec
+   datetime t;
+   bool     valid;
+};
+
+struct UltraSymUFSE
+{
+   string        symbol;
+   UltraTickScan tick;
+   UltraSnap     snap;
+   bool          snapValid;
+   datetime      barTime;
+   double        cacheBid;
+   double        cacheAsk;
+   bool          dirtyCritical;   // tick/structure/BOS/CHoCH class
+   bool          dirtyMedium;     // fib/vol/session class
+   int           masterTrend;     // +1 BUY / -1 SELL / 0 none
+   bool          signalLocked;
+   bool          lockedIsBuy;
+   datetime      lockBar;
+   bool          prevBosBuy, prevBosSell;
+   bool          prevChochBuy, prevChochSell;
+   bool          prevSweepBuy, prevSweepSell;
+   datetime      lastEvalBar;
+   string        lastDebug;
+   ulong         tickCount;
+   ulong         cacheHits;
+   ulong         fullRebuilds;
+};
+
+UltraSymUFSE g_UFSE[UFSE_MAX_SYM];
+int          g_UFSE_N = 0;
+datetime     g_UFSE_SpeedWindowStart = 0;
+int          g_UFSE_SpeedTickCount = 0;
+
+//--------------------------------------------------------------------//
+// Inputs (also listed in 31_Inputs via shared names below)           //
+//--------------------------------------------------------------------//
+// UltraFastSignalEnabled, UltraMasterTrendLock, UltraSignalLock,
+// UltraUFSE_DebugExplain — declared in 31_Inputs.mqh
+
+int UltraUFSE_Find(const string s)
+{
+   for(int i = 0; i < g_UFSE_N; i++)
+      if(g_UFSE[i].symbol == s) return i;
+   return -1;
+}
+
+int UltraUFSE_Ensure(const string s)
+{
+   int idx = UltraUFSE_Find(s);
+   if(idx >= 0) return idx;
+   if(g_UFSE_N >= UFSE_MAX_SYM) return 0;
+   idx = g_UFSE_N++;
+   UltraSymUFSE z;
+   z.symbol = s;
+   z.snapValid = false;
+   z.barTime = 0;
+   z.cacheBid = z.cacheAsk = 0;
+   z.dirtyCritical = true;
+   z.dirtyMedium = true;
+   z.masterTrend = 0;
+   z.signalLocked = false;
+   z.lockedIsBuy = false;
+   z.lockBar = 0;
+   z.prevBosBuy = z.prevBosSell = false;
+   z.prevChochBuy = z.prevChochSell = false;
+   z.prevSweepBuy = z.prevSweepSell = false;
+   z.lastEvalBar = 0;
+   z.lastDebug = "";
+   z.tickCount = z.cacheHits = z.fullRebuilds = 0;
+   UltraTickScan blank; blank.bid=blank.ask=blank.last=blank.spread=blank.speed=0; blank.tickVol=0; blank.dir=0; blank.t=0; blank.valid=false;
+   z.tick = blank;
+   // snap left uninitialized until first build (avoid ZeroMemory on string fields)
+   g_UFSE[idx] = z;
+   g_UFSE[idx].symbol = s;
+   return idx;
+}
+
+//--------------------------------------------------------------------//
+// 1. REAL-TIME MARKET SCANNER                                        //
+//--------------------------------------------------------------------//
+void UltraUFSE_ScanTick(const int idx)
+{
+   if(idx < 0 || idx >= g_UFSE_N) return;
+   string s = g_UFSE[idx].symbol;
+   UltraTickScan prev = g_UFSE[idx].tick;
+
+   UltraTickScan t;
+   t.bid = SymbolInfoDouble(s, SYMBOL_BID);
+   t.ask = SymbolInfoDouble(s, SYMBOL_ASK);
+   t.last = SymbolInfoDouble(s, SYMBOL_LAST);
+   if(t.last <= 0.0) t.last = t.bid;
+   t.tickVol = (long)SymbolInfoInteger(s, SYMBOL_SESSION_VOLUME);
+   if(t.tickVol <= 0) t.tickVol = (long)iVolume(s, UltraETF(), 0);
+   t.spread = (double)SymbolInfoInteger(s, SYMBOL_SPREAD);
+   t.t = TimeCurrent();
+   t.dir = 0;
+   if(prev.valid)
+   {
+      if(t.bid > prev.bid) t.dir = 1;
+      else if(t.bid < prev.bid) t.dir = -1;
+   }
+   // tick speed: rolling 1s window
+   if(g_UFSE_SpeedWindowStart <= 0 || t.t != g_UFSE_SpeedWindowStart)
+   {
+      if(g_UFSE_SpeedWindowStart > 0 && t.t > g_UFSE_SpeedWindowStart)
+         t.speed = (double)g_UFSE_SpeedTickCount / MathMax(1.0, (double)(t.t - g_UFSE_SpeedWindowStart));
+      else
+         t.speed = (double)g_UFSE_SpeedTickCount;
+      g_UFSE_SpeedWindowStart = t.t;
+      g_UFSE_SpeedTickCount = 1;
+   }
+   else
+   {
+      g_UFSE_SpeedTickCount++;
+      t.speed = (double)g_UFSE_SpeedTickCount;
+   }
+   t.valid = (t.bid > 0.0 && t.ask > 0.0);
+   g_UFSE[idx].tick = t;
+   g_UFSE[idx].tickCount++;
+
+   // feed shared data cache
+   g_UltraDataCache.symbol = s;
+   g_UltraDataCache.bid = t.bid;
+   g_UltraDataCache.ask = t.ask;
+   g_UltraDataCache.spreadPts = t.spread;
+   g_UltraDataCache.barTime = iTime(s, UltraETF(), 0);
+   g_UltraDataCache.valid = t.valid;
+}
+
+//--------------------------------------------------------------------//
+// 2/4/5. EVENT FLAGS + PRIORITY                                      //
+//--------------------------------------------------------------------//
+void UltraUFSE_UpdateDirty(const int idx)
+{
+   if(idx < 0 || idx >= g_UFSE_N) return;
+   string s = g_UFSE[idx].symbol;
+   datetime bar = iTime(s, UltraETF(), 0);
+   double bid = g_UFSE[idx].tick.bid;
+   double ask = g_UFSE[idx].tick.ask;
+
+   bool newBar = (bar > 0 && bar != g_UFSE[idx].barTime);
+   bool priceChanged = (bid != g_UFSE[idx].cacheBid || ask != g_UFSE[idx].cacheAsk);
+   bool bigMove = false;
+   double pt = SymbolInfoDouble(s, SYMBOL_POINT);
+   if(pt > 0.0 && g_UFSE[idx].cacheBid > 0.0)
+      bigMove = (MathAbs(bid - g_UFSE[idx].cacheBid) >= pt * 8.0);
+
+   // Critical: new bar / structure-class move
+   g_UFSE[idx].dirtyCritical = (!g_UFSE[idx].snapValid) || newBar || bigMove;
+   // Medium: any price change without new bar
+   g_UFSE[idx].dirtyMedium = priceChanged && !newBar;
+}
+
+bool UltraUFSE_CacheFresh(const int idx)
+{
+   if(idx < 0 || idx >= g_UFSE_N) return false;
+   if(!g_UFSE[idx].snapValid) return false;
+   if(g_UFSE[idx].dirtyCritical) return false;
+   // unchanged bid/ask + same bar → cache hit
+   if(!g_UFSE[idx].dirtyMedium &&
+      g_UFSE[idx].tick.bid == g_UFSE[idx].cacheBid &&
+      g_UFSE[idx].tick.ask == g_UFSE[idx].cacheAsk)
+      return true;
+   return false;
+}
+
+//--------------------------------------------------------------------//
+// 7. MULTI-TIMEFRAME CACHE (master trend from HTF)                   //
+//--------------------------------------------------------------------//
+int UltraUFSE_CalcMasterTrend(const UltraSnap &u)
+{
+   int score = 0;
+   if(u.trend.monthBull) score++; if(u.trend.monthBear) score--;
+   if(u.trend.weekBull)  score++; if(u.trend.weekBear)  score--;
+   if(u.trend.macroBull) score++; if(u.trend.macroBear) score--;
+   if(u.trend.htfBull)   score++; if(u.trend.htfBear)   score--;
+   if(score > 0) return 1;
+   if(score < 0) return -1;
+   // fallback to votes
+   if(u.trend.mtfVotesBuy > u.trend.mtfVotesSell) return 1;
+   if(u.trend.mtfVotesSell > u.trend.mtfVotesBuy) return -1;
+   return 0;
+}
+
+//--------------------------------------------------------------------//
+// 8. EARLY SETUP DETECTION (event edges)                             //
+//--------------------------------------------------------------------//
+bool UltraUFSE_DetectEarlyEdge(const int idx, const UltraSnap &u)
+{
+   if(idx < 0 || idx >= g_UFSE_N) return false;
+   if(u.bos.buy && !g_UFSE[idx].prevBosBuy) return true;
+   if(u.bos.sell && !g_UFSE[idx].prevBosSell) return true;
+   if(u.choch.buy && !g_UFSE[idx].prevChochBuy) return true;
+   if(u.choch.sell && !g_UFSE[idx].prevChochSell) return true;
+   if(u.liq.sweepBuy && !g_UFSE[idx].prevSweepBuy) return true;
+   if(u.liq.sweepSell && !g_UFSE[idx].prevSweepSell) return true;
+   return false;
+}
+
+void UltraUFSE_CommitEarlyFlags(const int idx, const UltraSnap &u)
+{
+   if(idx < 0 || idx >= g_UFSE_N) return;
+   g_UFSE[idx].prevBosBuy = u.bos.buy;
+   g_UFSE[idx].prevBosSell = u.bos.sell;
+   g_UFSE[idx].prevChochBuy = u.choch.buy;
+   g_UFSE[idx].prevChochSell = u.choch.sell;
+   g_UFSE[idx].prevSweepBuy = u.liq.sweepBuy;
+   g_UFSE[idx].prevSweepSell = u.liq.sweepSell;
+}
+
+bool UltraUFSE_EarlyEvent(const int idx, const UltraSnap &u)
+{
+   bool edge = UltraUFSE_DetectEarlyEdge(idx, u);
+   UltraUFSE_CommitEarlyFlags(idx, u);
+   return edge;
+}
+
+//--------------------------------------------------------------------//
+// 11. SIGNAL LOCK                                                    //
+//--------------------------------------------------------------------//
+void UltraUFSE_Lock(const int idx, const bool isBuy)
+{
+   if(idx < 0 || idx >= g_UFSE_N) return;
+   g_UFSE[idx].signalLocked = true;
+   g_UFSE[idx].lockedIsBuy = isBuy;
+   g_UFSE[idx].lockBar = iTime(g_UFSE[idx].symbol, UltraETF(), 0);
+}
+
+void UltraUFSE_Unlock(const int idx)
+{
+   if(idx < 0 || idx >= g_UFSE_N) return;
+   g_UFSE[idx].signalLocked = false;
+   g_UFSE[idx].lockBar = 0;
+}
+
+void UltraUFSE_MaybeUnlock(const int idx, const UltraSnap &u)
+{
+   if(idx < 0 || idx >= g_UFSE_N) return;
+   if(!g_UFSE[idx].signalLocked) return;
+
+   if(UltraSymDir(g_UFSE[idx].symbol) == 0)
+   {
+      bool fresh = UltraUFSE_DetectEarlyEdge(idx, u);
+      if(fresh)
+         UltraUFSE_Unlock(idx);
+      int mt = UltraUFSE_CalcMasterTrend(u);
+      if(mt != 0 && ((g_UFSE[idx].lockedIsBuy && mt < 0) || (!g_UFSE[idx].lockedIsBuy && mt > 0)))
+         UltraUFSE_Unlock(idx);
+   }
+}
+
+bool UltraUFSE_LockBlocks(const int idx, const bool wantBuy)
+{
+   if(idx < 0 || idx >= g_UFSE_N) return false;
+   if(!UltraSignalLockEnabled) return false;
+   if(!g_UFSE[idx].signalLocked) return false;
+   // block duplicate same-direction while locked; allow opposite only after unlock
+   if(g_UFSE[idx].lockedIsBuy == wantBuy) return true;
+   return true; // while locked, block all new entries until unlock rules fire
+}
+
+//--------------------------------------------------------------------//
+// 12. MASTER TREND LOCK                                              //
+//--------------------------------------------------------------------//
+bool UltraUFSE_MasterAllows(const int idx, const bool wantBuy, string &why)
+{
+   why = "";
+   if(!UltraMasterTrendLock) return true;
+   if(idx < 0 || idx >= g_UFSE_N) return true;
+   int mt = g_UFSE[idx].masterTrend;
+   if(mt == 0) return true; // no clear master — allow (InstantQuality)
+   if(wantBuy && mt < 0){ why = "master trend SELL lock"; return false; }
+   if(!wantBuy && mt > 0){ why = "master trend BUY lock"; return false; }
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// 10. EXECUTION READINESS                                            //
+//--------------------------------------------------------------------//
+bool UltraUFSE_ExecReady(const string s, string &why)
+{
+   why = "";
+   if(!TerminalInfoInteger(TERMINAL_CONNECTED)){ why = "terminal disconnected"; return false; }
+   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)){ why = "trading not allowed"; return false; }
+   if(!MQLInfoInteger(MQL_TRADE_ALLOWED)){ why = "EA trading disabled"; return false; }
+   long tm = SymbolInfoInteger(s, SYMBOL_TRADE_MODE);
+   if(tm == SYMBOL_TRADE_MODE_DISABLED){ why = "symbol trade disabled"; return false; }
+   double bid = SymbolInfoDouble(s, SYMBOL_BID);
+   double ask = SymbolInfoDouble(s, SYMBOL_ASK);
+   if(bid <= 0.0 || ask <= 0.0){ why = "price not fresh"; return false; }
+   datetime t = (datetime)SymbolInfoInteger(s, SYMBOL_TIME);
+   if(t > 0 && (TimeCurrent() - t) > 120){ why = "stale symbol quotes"; return false; }
+   double eq = AccountInfoDouble(ACCOUNT_EQUITY);
+   double fm = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+   if(eq <= 0.0){ why = "bad equity"; return false; }
+   if(fm <= 0.0){ why = "no free margin"; return false; }
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// 13. ENTRY TRIGGER                                                  //
+//--------------------------------------------------------------------//
+bool UltraUFSE_EntryTrigger(const UltraSnap &u, const bool buySide, string &why)
+{
+   why = "";
+   bool structure = buySide
+      ? (u.st.hh || u.st.hl || u.st.externalBull || u.st.internalBull || u.st.continuation)
+      : (u.st.lh || u.st.ll || u.st.externalBear || u.st.internalBear || u.st.continuation);
+   bool bosCh = buySide ? (u.bos.buy || u.choch.buy) : (u.bos.sell || u.choch.sell);
+   bool liq   = buySide ? (u.liq.sweepBuy || u.liq.stopHuntBuy || u.liq.grabBuy || u.liq.equalLows)
+                        : (u.liq.sweepSell || u.liq.stopHuntSell || u.liq.grabSell || u.liq.equalHighs);
+   bool mom   = buySide ? (u.mom.momBuy || u.mom.impulse || u.ict.dispBuy || u.ind.smi > 0)
+                        : (u.mom.momSell || u.mom.impulse || u.ict.dispSell || u.ind.smi < 0);
+   bool trend = buySide ? (u.trend.bull || u.trend.htfBull || u.trend.macroBull)
+                        : (u.trend.bear || u.trend.htfBear || u.trend.macroBear);
+
+   if(InstantQualityMode)
+   {
+      int n = (structure?1:0)+(bosCh?1:0)+(liq?1:0)+(mom?1:0)+(trend?1:0);
+      if(n < 3){ why = "entry trigger soft fail "+IntegerToString(n)+"/5"; return false; }
+   }
+   else
+   {
+      if(!trend){ why = "master/trend fail"; return false; }
+      if(!structure){ why = "structure fail"; return false; }
+      if(!bosCh){ why = "BOS/CHoCH fail"; return false; }
+      if(!liq){ why = "liquidity fail"; return false; }
+      if(!mom){ why = "momentum fail"; return false; }
+   }
+   if(u.score.precision < UltraMinPrecision && u.score.confidence < UltraInstantFireConf)
+   { why = "precision threshold"; return false; }
+   if(u.score.probability < UltraMinProbability && u.score.confidence < UltraInstantFireConf)
+   { why = "probability threshold"; return false; }
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// 9. SMART SIGNAL FILTER                                             //
+//--------------------------------------------------------------------//
+bool UltraUFSE_SmartFilter(const int idx, const bool buySide, const UltraSnap &u, string &why)
+{
+   why = "";
+   if(idx < 0 || idx >= g_UFSE_N) return true;
+   datetime bar = iTime(g_UFSE[idx].symbol, UltraETF(), 0);
+   // same-candle duplicate
+   if(bar > 0 && bar == g_UFSE[idx].lastEvalBar && g_UFSE[idx].signalLocked)
+   { why = "same-candle duplicate"; return false; }
+   // weak structure
+   if(u.st.quality < 25 && !InstantQualityMode)
+   { why = "weak structure"; return false; }
+   // low confidence
+   if(!UltraPassScore(u.score.confidence) && u.score.confidence < UltraInstantFireConf)
+   { why = "low-confidence setup"; return false; }
+   if(UltraUFSE_LockBlocks(idx, buySide))
+   { why = "signal lock"; return false; }
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// 15. DEBUG OUTPUT                                                   //
+//--------------------------------------------------------------------//
+string UltraUFSE_DebugExplain(const UltraSnap &u, const bool buySide, const bool approved)
+{
+   bool structure = buySide
+      ? (u.st.hh || u.st.hl || u.st.externalBull || u.st.internalBull || u.st.continuation)
+      : (u.st.lh || u.st.ll || u.st.externalBear || u.st.internalBear || u.st.continuation);
+   bool bos   = buySide ? u.bos.buy : u.bos.sell;
+   bool choch = buySide ? u.choch.buy : u.choch.sell;
+   bool liq   = buySide ? (u.liq.sweepBuy || u.liq.stopHuntBuy || u.liq.equalLows)
+                        : (u.liq.sweepSell || u.liq.stopHuntSell || u.liq.equalHighs);
+   bool mom   = buySide ? (u.mom.momBuy || u.mom.impulse || u.ict.dispBuy)
+                        : (u.mom.momSell || u.mom.impulse || u.ict.dispSell);
+   bool trend = buySide ? (u.trend.bull || u.trend.htfBull || u.trend.macroBull)
+                        : (u.trend.bear || u.trend.htfBear || u.trend.macroBear);
+
+   string head = approved ? (buySide ? "BUY SIGNAL" : "SELL SIGNAL") : "NO TRADE";
+   string t = head + "\n";
+   t += "Trend ........ " + (trend ? "PASS" : "FAIL") + "\n";
+   t += "Structure .... " + (structure ? "PASS" : "FAIL") + "\n";
+   t += "BOS .......... " + (bos ? "PASS" : "FAIL") + "\n";
+   t += "CHoCH ........ " + (choch ? "PASS" : "FAIL") + "\n";
+   t += "Liquidity .... " + (liq ? "PASS" : "FAIL") + "\n";
+   t += "Momentum ..... " + (mom ? "PASS" : "FAIL") + "\n";
+   t += "\n";
+   t += "Confidence ... " + IntegerToString(u.score.confidence) + "%\n";
+   t += "Precision .... " + IntegerToString(u.score.precision) + "%\n";
+   t += "Probability .. " + IntegerToString(u.score.probability) + "%\n";
+   t += "\n";
+   t += "Decision ..... " + (approved ? (buySide ? "BUY" : "SELL") : "WAIT");
+   return t;
+}
+
+//--------------------------------------------------------------------//
+// PIPELINE: Tick → Data → (cached) engines → Decision helpers        //
+//--------------------------------------------------------------------//
+bool UltraUFSE_BuildSnapshot(const string s, UltraSnap &u, bool &fromCache)
+{
+   fromCache = false;
+   int idx = UltraUFSE_Ensure(s);
+   UltraUFSE_ScanTick(idx);
+   UltraUFSE_UpdateDirty(idx);
+
+   if(!UltraFastSignalEnabled)
+      return UltraBuildSnapshot(s, u);
+
+   if(UltraUFSE_CacheFresh(idx))
+   {
+      u = g_UFSE[idx].snap;
+      fromCache = true;
+      g_UFSE[idx].cacheHits++;
+      UltraUFSE_MaybeUnlock(idx, u);
+      return true;
+   }
+
+   // Full rebuild (critical or medium price change)
+   if(!UltraBuildSnapshot(s, u))
+   {
+      g_UFSE[idx].snapValid = false;
+      return false;
+   }
+
+   g_UFSE[idx].snap = u;
+   g_UFSE[idx].snapValid = true;
+   g_UFSE[idx].barTime = iTime(s, UltraETF(), 0);
+   g_UFSE[idx].cacheBid = g_UFSE[idx].tick.bid;
+   g_UFSE[idx].cacheAsk = g_UFSE[idx].tick.ask;
+   g_UFSE[idx].dirtyCritical = false;
+   g_UFSE[idx].dirtyMedium = false;
+   g_UFSE[idx].masterTrend = UltraUFSE_CalcMasterTrend(u);
+   g_UFSE[idx].fullRebuilds++;
+   UltraUFSE_EarlyEvent(idx, u);
+   UltraUFSE_MaybeUnlock(idx, u);
+   return true;
+}
+
+string UltraUFSE_Stats(const string s)
+{
+   int idx = UltraUFSE_Find(s);
+   if(idx < 0) return "UFSE n/a";
+   return "ticks=" + IntegerToString((int)g_UFSE[idx].tickCount) +
+          " hits=" + IntegerToString((int)g_UFSE[idx].cacheHits) +
+          " rebuilds=" + IntegerToString((int)g_UFSE[idx].fullRebuilds) +
+          " master=" + (g_UFSE[idx].masterTrend > 0 ? "BUY" : (g_UFSE[idx].masterTrend < 0 ? "SELL" : "FLAT")) +
+          " lock=" + (g_UFSE[idx].signalLocked ? "Y" : "N") +
+          " spd=" + DoubleToString(g_UFSE[idx].tick.speed, 1);
+}
+
+//--------------------------------------------------------------------//
+// LIVE DECISION + EVALUATE (wired to Ultra Fast Signal Engine)       //
+//--------------------------------------------------------------------//
 bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
 {
    why = "";
-   sig.buy = sig.sell = false; sig.tag = "NONE"; sig.reason = ""; sig.score = 0;
+   sig.buy = sig.sell = false; sig.tag = "NONE"; sig.reason = ""; sig.score = 0; sig.explanation = "";
 
    string capWhy = "";
    if(!UltraCapitalOK(capWhy)){ why = "capital: " + capWhy; return false; }
    string exWhy = "";
-   if(!UltraExecReady(s, exWhy)){ why = "exec: " + exWhy; return false; }
+   if(UltraFastSignalEnabled)
+   {
+      if(!UltraUFSE_ExecReady(s, exWhy)){ why = "exec: " + exWhy; return false; }
+   }
+   else
+   {
+      if(!UltraExecReady(s, exWhy)){ why = "exec: " + exWhy; return false; }
+   }
 
    sig = UltraPickBest(u);
    if(!(sig.buy || sig.sell) || sig.tag == "NONE")
@@ -2429,6 +2919,25 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
    if(u.score.probability < UltraMinProbability && u.score.confidence < UltraInstantFireConf)
    { why = "probability low"; return false; }
 
+   if(UltraFastSignalEnabled)
+   {
+      int idx = UltraUFSE_Ensure(s);
+      string mtWhy = "";
+      if(!UltraUFSE_MasterAllows(idx, sig.buy, mtWhy))
+      { why = mtWhy; return false; }
+
+      if(UltraUFSE_EntryTriggerGate)
+      {
+         string trWhy = "";
+         if(!UltraUFSE_EntryTrigger(u, sig.buy, trWhy))
+         { why = trWhy; return false; }
+      }
+
+      string fWhy = "";
+      if(!UltraUFSE_SmartFilter(idx, sig.buy, u, fWhy))
+      { why = fWhy; return false; }
+   }
+
    if(UltraBlockOppositeSameSym)
    {
       int d = UltraSymDir(s);
@@ -2445,7 +2954,14 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    strategyTag = "";
 
    UltraSnap snap;
-   if(!UltraBuildSnapshot(BrokerSymbol, snap))
+   bool fromCache = false;
+   bool built = false;
+   if(UltraFastSignalEnabled)
+      built = UltraUFSE_BuildSnapshot(BrokerSymbol, snap, fromCache);
+   else
+      built = UltraBuildSnapshot(BrokerSymbol, snap);
+
+   if(!built)
    {
       if(EnableVerboseLogging)
          Print("ULTRA snapshot failed: ", g_UltraCore.lastError, " on ", BrokerSymbol);
@@ -2459,10 +2975,10 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    {
       g_UltraLastSnap = snap;
       bool leanBuy = (UltraConfluenceBuy(snap) >= UltraConfluenceSell(snap));
-      best.explanation = UltraBuildExplanation(snap, leanBuy, false, "NO TRADE");
+      best.explanation = UltraUFSE_DebugExplain(snap, leanBuy, false);
       g_UltraLastSignal = best;
       datetime bar = iTime(BrokerSymbol, UltraETF(), 0);
-      bool logIt = (EnableVerboseLogging || ContStruct_LogDetail) &&
+      bool logIt = (EnableVerboseLogging || ContStruct_LogDetail || UltraUFSE_DebugExplain) &&
                    (bar != g_UltraLastWaitBar || BrokerSymbol != g_UltraLastWaitSym);
       if(logIt)
       {
@@ -2471,10 +2987,11 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
          Print("ULTRA wait [", why, "] conf=", snap.score.confidence,
                " prec=", snap.score.precision, " prob=", snap.score.probability,
                " regime=", UltraRegimeName(snap.regime),
-               " bos=", (snap.bos.buy ? "B" : (snap.bos.sell ? "S" : "-")),
-               " sweep=", (snap.liq.sweepBuy ? "B" : (snap.liq.sweepSell ? "S" : "-")),
-               " fibB/S=", snap.fib.atBuyZone, "/", snap.fib.atSellZone,
+               " cache=", (fromCache ? "HIT" : "REBUILD"),
+               " ", UltraUFSE_Stats(BrokerSymbol),
                " on ", BrokerSymbol);
+         if(UltraUFSE_DebugExplain)
+            Print(best.explanation);
       }
       return;
    }
@@ -2482,17 +2999,31 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    buySignal = best.buy;
    sellSignal = best.sell;
    strategyTag = best.tag;
-   best.explanation = UltraBuildExplanation(snap, best.buy, true, best.tag);
+   best.explanation = UltraUFSE_DebugExplain(snap, best.buy, true);
    g_UltraLastSnap = snap;
    g_UltraLastSignal = best;
+
+   if(UltraFastSignalEnabled)
+   {
+      int idx = UltraUFSE_Ensure(BrokerSymbol);
+      UltraUFSE_Lock(idx, best.buy);
+      g_UFSE[idx].lastEvalBar = iTime(BrokerSymbol, UltraETF(), 0);
+   }
+   UltraExec_MarkFired(BrokerSymbol);
+
    Print("ULTRA FIRE ", (best.buy ? "BUY" : "SELL"), " [", best.tag, "] conf=", snap.score.confidence,
          " prec=", snap.score.precision, " prob=", snap.score.probability,
          " ", best.reason, " SMI=", DoubleToString(snap.ind.smi, 1),
-         " session=", snap.ctx.session, " on ", BrokerSymbol);
+         " session=", snap.ctx.session,
+         " cache=", (fromCache ? "HIT" : "REBUILD"),
+         " ", UltraUFSE_Stats(BrokerSymbol),
+         " on ", BrokerSymbol);
+   if(UltraUFSE_DebugExplain)
+      Print(best.explanation);
 }
 
-#endif // HITMAN_ULTRA_16_AI_CORE_MQH
-//===== END 16_AI_Core.mqh =====
+#endif // HITMAN_ULTRA_UFSE_MQH
+//===== END UFSE_FastSignalEngine.mqh =====
 
 //===== BEGIN 21_TradeManagement.mqh =====
 #ifndef HITMAN_ULTRA_21_TRADEMANAGEMENT_MQH
@@ -2734,8 +3265,9 @@ string UltraDashboardText(const string s)
       " PF: " + DoubleToString(g_UltraMem.profitFactor, 2) +
       " RR: " + DoubleToString(g_UltraMem.avgRR, 2) + "\n" +
       "Signal: " + dir + " [" + sig.tag + "] " + sig.reason + "\n" +
+      "UFSE: " + UltraUFSE_Stats(s) + "\n" +
       "---- EXPLAIN ----\n" +
-      (sig.explanation != "" ? sig.explanation : UltraBuildExplanation(u, (dir!="SELL"), (dir!="-"), sig.tag)) + "\n" +
+      (sig.explanation != "" ? sig.explanation : UltraUFSE_DebugExplain(u, (dir!="SELL"), (dir!="-"))) + "\n" +
       "===============================";
 }
 
@@ -3494,7 +4026,11 @@ int OnInit()
             " (EntryTF input=", EnumToString(EntryTF),
             ") — change the chart timeframe to change trading TF, or set EntryTF input");
    }
-   Print("HITMAN MASTER BLUEPRINT: modules 00-40 | Shell A/B | HITMAN AI live path");
+   Print("HITMAN MASTER BLUEPRINT: modules 00-40 + UFSE v1.0 | HITMAN AI live path");
+   Print("UFSE: FastSignal=", UltraFastSignalEnabled,
+         " MasterTrendLock=", UltraMasterTrendLock,
+         " SignalLock=", UltraSignalLockEnabled,
+         " EntryTrigger=", UltraUFSE_EntryTriggerGate);
    if(EnableAPEXStrategy || EnableContFallback || EnableLCSStrategy)
       Print("OK93 WARNING: old APEX/ContFallback/LCS input ON — evaluators STUBBED; ULTRA only fires");
    Print("INSTANT OPEN + QUALITY PREFER MODE=", InstantQualityMode);

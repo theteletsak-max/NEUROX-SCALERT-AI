@@ -46,8 +46,9 @@ string UltraDashboardText(const string s)
       " PF: " + DoubleToString(g_UltraMem.profitFactor, 2) +
       " RR: " + DoubleToString(g_UltraMem.avgRR, 2) + "\n" +
       "Signal: " + dir + " [" + sig.tag + "] " + sig.reason + "\n" +
+      "UFSE: " + UltraUFSE_Stats(s) + "\n" +
       "---- EXPLAIN ----\n" +
-      (sig.explanation != "" ? sig.explanation : UltraBuildExplanation(u, (dir!="SELL"), (dir!="-"), sig.tag)) + "\n" +
+      (sig.explanation != "" ? sig.explanation : UltraUFSE_DebugExplain(u, (dir!="SELL"), (dir!="-"))) + "\n" +
       "===============================";
 }
 

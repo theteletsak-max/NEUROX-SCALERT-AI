@@ -9,6 +9,7 @@ order = [
     "12_MarketRegime.mqh","18_NewsIntelligence.mqh","17_SessionIntelligence.mqh",
     "13_Precision.mqh","14_Probability.mqh","15_Confluence.mqh","26_Diagnostics.mqh",
     "29_MarketMemory.mqh","20_CapitalProtection.mqh","19_Execution.mqh","16_AI_Core.mqh",
+    "UFSE_FastSignalEngine.mqh",
     "21_TradeManagement.mqh","22_MultiSymbol.mqh","23_MultiTimeframe.mqh",
     "25_Statistics.mqh","24_Dashboard.mqh",
     "32_BrokerCompatibility.mqh","36_BrokerHealth.mqh","33_OrderManagement.mqh",
@@ -19,13 +20,13 @@ order = [
 header = '''//+------------------------------------------------------------------+
 //| HITMAN_AI.mq5                                                     |
 //| BUILD_ID: HA_ULTRA_93                                             |
-//| HITMAN AI — MASTER BLUEPRINT — SINGLE-FILE (00-40)                |
+//| HITMAN AI — MASTER + ULTRA FAST SIGNAL ENGINE v1.0                |
 //| Comment: HITMAN AI | MaxOpen=3 | EntryTF follows chart            |
 //+------------------------------------------------------------------+
 #property copyright "HITMAN AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version   "1.00"
-#property description "HITMAN AI MASTER BLUEPRINT single-file EA 00-40"
+#property description "HITMAN AI + Ultra Fast Signal Engine v1.0"
 #property description "BUILD=HA_ULTRA_93 Comment=HITMAN AI MaxOpen=3"
 
 #include <Trade/Trade.mqh>
