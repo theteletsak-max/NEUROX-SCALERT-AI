@@ -3014,13 +3014,15 @@ bool ContStruct_HasQualityBOS(const bool buy);
 bool ContStruct_GetFreshZone(const bool buy, double &zTop, double &zBot, string &kind);
 bool ContStruct_PriceNearZone(const bool buy, const double zTop, const double zBot);
 bool ContStruct_HasDisplacement(const bool buy);
-bool ContFallbackBestStructureOK(const bool buy, string &detail)
-{
-   // OK93 REMOVED — ContFallback deleted (ULTRA ContSniper replaces it)
-   detail = "ContFallback retired OK93";
-   return false;
-}
+bool ContFallbackBestStructureOK(const bool buy, string &detail); // body later (helpers still call it)
 
+int FindSignalSnapshot(ulong ticket)
+{
+   for(int i = 0; i < ArraySize(SignalSnapshots); i++)
+      if(SignalSnapshots[i].ticket == ticket)
+         return i;
+   return -1;
+}
 
 void RemoveSignalSnapshot(int index)
 {
