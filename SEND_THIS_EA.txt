@@ -1,4 +1,4 @@
-HITMAN AI — MASTER + ULTRA FAST SIGNAL ENGINE v1.0
+HITMAN AI — MASTER + UFSE v1.0 + DEFENSE LINE ENGINE v1.0
 
 EA: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI.mq5
 
@@ -7,6 +7,5 @@ Same: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai
 Zip: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/HITMAN_AI.zip
 
 F7 → HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen=3
-UFSE: cache · master-trend lock · signal lock · explainable PASS/FAIL
-
-IMPORTANT: open HITMAN_AI.mq5 (not old SNIPER/PRISM). Re-download after this fix, then F7.
+Defense Line Engine v1.0: GREEN / YELLOW / RED · 10 lines
+Re-download HITMAN_AI.mq5 then F7.
