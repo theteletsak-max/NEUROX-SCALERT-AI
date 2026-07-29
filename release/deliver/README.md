@@ -1,9 +1,11 @@
-# SNIPER AI OK86 — APEX only
+# SNIPER AI OK87 — minimal APEX
 
-**One live entry path: APEX.**
+**~500 lines / ~17 KB.** One entry engine.
 
-PSI stays as a scoreboard on the chart. It does **not** open trades (`PSI_AllowEntryFire=false`).
+### Keep
+APEX (bias → pool → sweep → reclaim → displacement) + risk (SL/TP/BE/trail) + small HUD
 
-Removed from the live product noise: dual PSI entries, soft 50–69 fires, cross-SMT, extra bias TFs, TP ladder clutter, self-learn on by default.
+### Removed
+PSI, SMT, Cont/Rev, multi-path, scoreboard stack, self-learn
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK86.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK87.mq5

@@ -1,1 +1,1 @@
-APEX only entry. PSI = HUD scores.
+Minimal APEX-only EA. Use SNIPER_AI_OK87.mq5

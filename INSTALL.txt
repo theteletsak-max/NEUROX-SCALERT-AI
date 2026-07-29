@@ -1,4 +1,3 @@
-[ ] Remove OK85 from chart
-[ ] SNIPER_AI_OK86.mq5 → Experts → F7
-[ ] Journal: SA_APEX_86 — APEX ONLY ENTRY
-[ ] Leave PSI_AllowEntryFire = false
+[ ] Remove OK86 from chart
+[ ] SNIPER_AI_OK87.mq5 → Experts → F7
+[ ] Journal: SA_APEX_87 — APEX ONLY MINIMAL

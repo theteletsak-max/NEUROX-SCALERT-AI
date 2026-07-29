@@ -1,12 +1,15 @@
-SNIPER AI — CURRENT
+SNIPER AI — CURRENT (MINIMAL)
 
-EA:       SNIPER_AI_OK86.mq5
-BUILD_ID: SA_APEX_86
+EA:       SNIPER_AI_OK87.mq5
+BUILD_ID: SA_APEX_87
+Size:     ~17 KB / ~500 lines (was ~47KB OK86, ~510KB OK83)
 
-ONE live entry path: APEX
-PSI = scoreboard / dashboard only (does not open trades)
+LIVE ENTRY = APEX only
+  bias → pool → sweep → reclaim → displacement → sweep SL
+  + BE / trail / lot / dashboard
 
-APEX checklist:
-  HTF bias → liquidity pool → sweep → reclaim → displacement → sweep SL
+REMOVED from code:
+  PSI engine, SMT, Cont/Rev, multi-path, fake-signal stack,
+  premium/discount scoreboard, self-learn
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK86.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK87.mq5

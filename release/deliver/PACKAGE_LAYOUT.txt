@@ -1,3 +1,2 @@
-LIVE: SNIPER_AI_OK86.mq5 (SA_APEX_86)
-ENTRY: APEX only
-PSI: scores/dashboard (not entries)
+LIVE: SNIPER_AI_OK87.mq5 (~500 lines, APEX only)
+ARCHIVE: older OK builds in release/archive/
