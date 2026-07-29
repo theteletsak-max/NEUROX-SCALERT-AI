@@ -1,27 +1,26 @@
 //+------------------------------------------------------------------+
-//| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_ULTRA_93                                             |
-//| SNIPER AI ULTRA — MASTER BLUEPRINT — SINGLE-FILE EA (00-40)       |
-//| Comment: SNIPER AI | MaxOpen=3 | EntryTF follows chart            |
-//| Auto-assembled from Include/SNIPER_ULTRA modules 00-40 + Shells   |
+//| HITMAN_AI.mq5 / HITMAN_EA.mq5                                     |
+//| BUILD_ID: HA_ULTRA_93                                             |
+//| HITMAN EA / HITMAN AI — MASTER BLUEPRINT — SINGLE-FILE (00-40)    |
+//| Comment: HITMAN AI | MaxOpen=3 | EntryTF follows chart            |
 //+------------------------------------------------------------------+
-#property copyright "SNIPER AI"
+#property copyright "HITMAN AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version   "1.00"
-#property description "SNIPER AI ULTRA MASTER BLUEPRINT single-file EA 00-40"
-#property description "BUILD=SA_ULTRA_93 Comment=SNIPER AI MaxOpen=3"
+#property description "HITMAN EA / HITMAN AI MASTER BLUEPRINT single-file 00-40"
+#property description "BUILD=HA_ULTRA_93 Comment=HITMAN AI MaxOpen=3"
 
 #include <Trade/Trade.mqh>
 
-#define BG_OBJECT_NAME "SniperCoreAI_ChartBackground"
+#define BG_OBJECT_NAME "HitmanAI_ChartBackground"
 
 CTrade trade;
 
-//==================== SINGLE-FILE MASTER BLUEPRINT =================//
+//==================== HITMAN AI — SINGLE-FILE MASTER =================//
 
 //===== BEGIN Shell_A_InputsGlobals.mqh =====
-#ifndef SNIPER_ULTRA_SHELL_A_MQH
-#define SNIPER_ULTRA_SHELL_A_MQH
+#ifndef HITMAN_ULTRA_SHELL_A_MQH
+#define HITMAN_ULTRA_SHELL_A_MQH
 //+------------------------------------------------------------------+
 //| Shell A — Inputs, globals, forward declarations (pre-Ultra)      |
 //+------------------------------------------------------------------+
@@ -31,7 +30,7 @@ CTrade trade;
 input group "GENERAL"
 
 input long MagicNumber = 40001;
-input string TradeComment = "SNIPER AI";
+input string TradeComment = "HITMAN AI";
 
 input group "INSTANT OPEN + QUALITY PREFER"
 // BEST QUALITY selects the trade (structure + IDP + ADX).
@@ -605,13 +604,13 @@ int GetSymbolIndex(string symbol);
 //===== END Shell_A_InputsGlobals.mqh =====
 
 //===== BEGIN 00_Types.mqh =====
-#ifndef SNIPER_ULTRA_00_TYPES_MQH
-#define SNIPER_ULTRA_00_TYPES_MQH
+#ifndef HITMAN_ULTRA_00_TYPES_MQH
+#define HITMAN_ULTRA_00_TYPES_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 00_TYPES — Enums · Structures · Shared Definitions
+//| HITMAN AI — 00_TYPES — Enums · Structures · Shared Definitions
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
-//| 00. Shared Types — SNIPER AI ULTRA                               |
+//| 00. Shared Types — HITMAN AI                               |
 //+------------------------------------------------------------------+
 enum ENUM_ULTRA_REGIME
 {
@@ -824,14 +823,14 @@ datetime       g_UltraLastFireBar = 0;
 // 1. ULTRA CORE / DATA / CONFIG / VALIDATION / RECOVERY / LOG / PERF
 //--------------------------------------------------------------------//
 
-#endif // SNIPER_ULTRA_00_TYPES_MQH
+#endif // HITMAN_ULTRA_00_TYPES_MQH
 //===== END 00_Types.mqh =====
 
 //===== BEGIN 31_Inputs.mqh =====
-#ifndef SNIPER_ULTRA_31_INPUTS_MQH
-#define SNIPER_ULTRA_31_INPUTS_MQH
+#ifndef HITMAN_ULTRA_31_INPUTS_MQH
+#define HITMAN_ULTRA_31_INPUTS_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 31_INPUTS                                       |
+//| HITMAN AI — 31_INPUTS                                       |
 //| Trading · Risk · Dashboard · Strategy · Session · News ·          |
 //| Execution · Capital Protection                                    |
 //| Shell_A still holds Magic / TradeComment / MaxOpenTrades=3        |
@@ -913,14 +912,14 @@ input bool   UltraDiagnosticsEnabled     = true;
 input bool   UltraMarketMemoryEnabled    = true;
 input bool   UltraDebugEnabled           = false;
 
-#endif // SNIPER_ULTRA_31_INPUTS_MQH
+#endif // HITMAN_ULTRA_31_INPUTS_MQH
 //===== END 31_Inputs.mqh =====
 
 //===== BEGIN 28_Utilities.mqh =====
-#ifndef SNIPER_ULTRA_28_UTILITIES_MQH
-#define SNIPER_ULTRA_28_UTILITIES_MQH
+#ifndef HITMAN_ULTRA_28_UTILITIES_MQH
+#define HITMAN_ULTRA_28_UTILITIES_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 28_UTILITIES — Helpers · Math · Time · Price
+//| HITMAN AI — 28_UTILITIES — Helpers · Math · Time · Price
 //+------------------------------------------------------------------+
 // Timeframe / ATR / SMA / Swing helpers
 ENUM_TIMEFRAMES UltraETF()
@@ -981,14 +980,14 @@ bool UltraFindSwings(const string s, const ENUM_TIMEFRAMES tf, const int lb, con
    return (iH1 && iH2 && iL1 && iL2);
 }
 
-#endif // SNIPER_ULTRA_28_UTILITIES_MQH
+#endif // HITMAN_ULTRA_28_UTILITIES_MQH
 //===== END 28_Utilities.mqh =====
 
 //===== BEGIN 27_Logger.mqh =====
-#ifndef SNIPER_ULTRA_27_LOGGER_MQH
-#define SNIPER_ULTRA_27_LOGGER_MQH
+#ifndef HITMAN_ULTRA_27_LOGGER_MQH
+#define HITMAN_ULTRA_27_LOGGER_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 27_LOGGER — Error · Trade · AI · Execution · System logs
+//| HITMAN AI — 27_LOGGER — Error · Trade · AI · Execution · System logs
 //+------------------------------------------------------------------+
 void UltraLog(const string msg)
 {
@@ -1008,14 +1007,14 @@ void UltraLogAI(const string msg){ UltraLog("AI| " + msg); }
 void UltraLogExec(const string msg){ UltraLog("EXEC| " + msg); }
 void UltraLogPerf(const string msg){ UltraLog("PERF| " + msg); }
 
-#endif // SNIPER_ULTRA_27_LOGGER_MQH
+#endif // HITMAN_ULTRA_27_LOGGER_MQH
 //===== END 27_Logger.mqh =====
 
 //===== BEGIN 30_Recovery.mqh =====
-#ifndef SNIPER_ULTRA_30_RECOVERY_MQH
-#define SNIPER_ULTRA_30_RECOVERY_MQH
+#ifndef HITMAN_ULTRA_30_RECOVERY_MQH
+#define HITMAN_ULTRA_30_RECOVERY_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 30_RECOVERY — Restart · Connection · State · Position recovery
+//| HITMAN AI — 30_RECOVERY — Restart · Connection · State · Position recovery
 //+------------------------------------------------------------------+
 void UltraRecover(const string why)
 {
@@ -1042,19 +1041,19 @@ void UltraRecovery_OnReconnect(const string why)
    UltraRecover(why);
 }
 
-#endif // SNIPER_ULTRA_30_RECOVERY_MQH
+#endif // HITMAN_ULTRA_30_RECOVERY_MQH
 //===== END 30_Recovery.mqh =====
 
 //===== BEGIN 01_Core.mqh =====
-#ifndef SNIPER_ULTRA_01_CORE_MQH
-#define SNIPER_ULTRA_01_CORE_MQH
+#ifndef HITMAN_ULTRA_01_CORE_MQH
+#define HITMAN_ULTRA_01_CORE_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 01_CORE — Init · Loader · Config · Validation · State Controller
+//| HITMAN AI — 01_CORE — Init · Loader · Config · Validation · State Controller
 //+------------------------------------------------------------------+
 bool UltraConfigOK()
 {
    if(!UltraConfigEngineEnabled) return true;
-   if(TradeComment != "SNIPER AI") return false;
+   if(TradeComment != "HITMAN AI") return false;
    if(MaxOpenTrades < 1) return false;
    if(UltraMinConfluence < 1 || UltraMinConfluence > 100) return false;
    return true;
@@ -1100,14 +1099,14 @@ void UltraSystemController_Boot()
       UltraSetError("config validation failed at boot");
 }
 
-#endif // SNIPER_ULTRA_01_CORE_MQH
+#endif // HITMAN_ULTRA_01_CORE_MQH
 //===== END 01_Core.mqh =====
 
 //===== BEGIN 02_Data.mqh =====
-#ifndef SNIPER_ULTRA_02_DATA_MQH
-#define SNIPER_ULTRA_02_DATA_MQH
+#ifndef HITMAN_ULTRA_02_DATA_MQH
+#define HITMAN_ULTRA_02_DATA_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 02_DATA — Tick · Candle · Symbol · Broker · Spread · Cache
+//| HITMAN AI — 02_DATA — Tick · Candle · Symbol · Broker · Spread · Cache
 //+------------------------------------------------------------------+
 
 struct UltraDataCache
@@ -1152,14 +1151,14 @@ bool UltraData_BrokerInfo(string &company, long &login)
    return (login != 0);
 }
 
-#endif // SNIPER_ULTRA_02_DATA_MQH
+#endif // HITMAN_ULTRA_02_DATA_MQH
 //===== END 02_Data.mqh =====
 
 //===== BEGIN 11_Volatility.mqh =====
-#ifndef SNIPER_ULTRA_11_VOLATILITY_MQH
-#define SNIPER_ULTRA_11_VOLATILITY_MQH
+#ifndef HITMAN_ULTRA_11_VOLATILITY_MQH
+#define HITMAN_ULTRA_11_VOLATILITY_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 11_VOLATILITY — ATR Expand/Compress · Classification
+//| HITMAN AI — 11_VOLATILITY — ATR Expand/Compress · Classification
 //+------------------------------------------------------------------+
 void UltraEngVolatility(const string s, UltraSnap &u)
 {
@@ -1178,14 +1177,14 @@ void UltraEngVolatility(const string s, UltraSnap &u)
    else u.vol.classification = 0;
 }
 
-#endif // SNIPER_ULTRA_11_VOLATILITY_MQH
+#endif // HITMAN_ULTRA_11_VOLATILITY_MQH
 //===== END 11_Volatility.mqh =====
 
 //===== BEGIN 03_MarketStructure.mqh =====
-#ifndef SNIPER_ULTRA_03_MARKETSTRUCTURE_MQH
-#define SNIPER_ULTRA_03_MARKETSTRUCTURE_MQH
+#ifndef HITMAN_ULTRA_03_MARKETSTRUCTURE_MQH
+#define HITMAN_ULTRA_03_MARKETSTRUCTURE_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 03_MARKET_STRUCTURE — HH/HL/LH/LL · Swings · Internal/External
+//| HITMAN AI — 03_MARKET_STRUCTURE — HH/HL/LH/LL · Swings · Internal/External
 //+------------------------------------------------------------------+
 void UltraEngStructure(const string s, UltraSnap &u)
 {
@@ -1229,14 +1228,14 @@ void UltraEngStructure(const string s, UltraSnap &u)
    if(u.st.swingHigh <= u.st.swingLow) u.st.quality = MathMax(u.st.quality - 20, 0);
 }
 
-#endif // SNIPER_ULTRA_03_MARKETSTRUCTURE_MQH
+#endif // HITMAN_ULTRA_03_MARKETSTRUCTURE_MQH
 //===== END 03_MarketStructure.mqh =====
 
 //===== BEGIN 04_BOS.mqh =====
-#ifndef SNIPER_ULTRA_04_BOS_MQH
-#define SNIPER_ULTRA_04_BOS_MQH
+#ifndef HITMAN_ULTRA_04_BOS_MQH
+#define HITMAN_ULTRA_04_BOS_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 04_BOS                                          |
+//| HITMAN AI — 04_BOS                                          |
 //| Proprietary · Strong/Weak · Confirmed/Failed · Quality/Strength   |
 //+------------------------------------------------------------------+
 void UltraEngBOS(const string s, UltraSnap &u)
@@ -1311,14 +1310,14 @@ void UltraEngBOS(const string s, UltraSnap &u)
    u.bos.score = (u.bos.strength + u.bos.quality + u.bos.reliability) / 3;
 }
 
-#endif // SNIPER_ULTRA_04_BOS_MQH
+#endif // HITMAN_ULTRA_04_BOS_MQH
 //===== END 04_BOS.mqh =====
 
 //===== BEGIN 05_CHoCH.mqh =====
-#ifndef SNIPER_ULTRA_05_CHOCH_MQH
-#define SNIPER_ULTRA_05_CHOCH_MQH
+#ifndef HITMAN_ULTRA_05_CHOCH_MQH
+#define HITMAN_ULTRA_05_CHOCH_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 05_CHOCH — Proprietary Change Of Character
+//| HITMAN AI — 05_CHOCH — Proprietary Change Of Character
 //+------------------------------------------------------------------+
 void UltraEngCHoCH(const string s, UltraSnap &u)
 {
@@ -1334,14 +1333,14 @@ void UltraEngCHoCH(const string s, UltraSnap &u)
    u.choch.confidence = u.choch.strength;
 }
 
-#endif // SNIPER_ULTRA_05_CHOCH_MQH
+#endif // HITMAN_ULTRA_05_CHOCH_MQH
 //===== END 05_CHoCH.mqh =====
 
 //===== BEGIN 06_Liquidity.mqh =====
-#ifndef SNIPER_ULTRA_06_LIQUIDITY_MQH
-#define SNIPER_ULTRA_06_LIQUIDITY_MQH
+#ifndef HITMAN_ULTRA_06_LIQUIDITY_MQH
+#define HITMAN_ULTRA_06_LIQUIDITY_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 06_LIQUIDITY — Sweeps · Pools · Stop Hunts
+//| HITMAN AI — 06_LIQUIDITY — Sweeps · Pools · Stop Hunts
 //+------------------------------------------------------------------+
 void UltraEngLiquidity(const string s, UltraSnap &u)
 {
@@ -1412,14 +1411,14 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
    u.liq.rejectionScore = (int)MathRound(u.liq.quality);
 }
 
-#endif // SNIPER_ULTRA_06_LIQUIDITY_MQH
+#endif // HITMAN_ULTRA_06_LIQUIDITY_MQH
 //===== END 06_Liquidity.mqh =====
 
 //===== BEGIN 07_Fibonacci.mqh =====
-#ifndef SNIPER_ULTRA_07_FIBONACCI_MQH
-#define SNIPER_ULTRA_07_FIBONACCI_MQH
+#ifndef HITMAN_ULTRA_07_FIBONACCI_MQH
+#define HITMAN_ULTRA_07_FIBONACCI_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 07_FIBONACCI — Proprietary Fib Intelligence (UFIE)
+//| HITMAN AI — 07_FIBONACCI — Proprietary Fib Intelligence (UFIE)
 //+------------------------------------------------------------------+
 void UltraEngFib(const string s, UltraSnap &u)
 {
@@ -1459,14 +1458,14 @@ void UltraEngFib(const string s, UltraSnap &u)
    u.fib.confidence = u.fib.quality;
 }
 
-#endif // SNIPER_ULTRA_07_FIBONACCI_MQH
+#endif // HITMAN_ULTRA_07_FIBONACCI_MQH
 //===== END 07_Fibonacci.mqh =====
 
 //===== BEGIN 08_Institutional.mqh =====
-#ifndef SNIPER_ULTRA_08_INSTITUTIONAL_MQH
-#define SNIPER_ULTRA_08_INSTITUTIONAL_MQH
+#ifndef HITMAN_ULTRA_08_INSTITUTIONAL_MQH
+#define HITMAN_ULTRA_08_INSTITUTIONAL_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 08_INSTITUTIONAL — OB · Breaker · FVG · Smart Money
+//| HITMAN AI — 08_INSTITUTIONAL — OB · Breaker · FVG · Smart Money
 //+------------------------------------------------------------------+
 void UltraEngInstitutional(const string s, UltraSnap &u)
 {
@@ -1533,14 +1532,14 @@ void UltraEngInstitutional(const string s, UltraSnap &u)
                         ((u.ict.obSell || u.ict.fvgSell) && (u.liq.sweepSell || u.ict.dispSell));
 }
 
-#endif // SNIPER_ULTRA_08_INSTITUTIONAL_MQH
+#endif // HITMAN_ULTRA_08_INSTITUTIONAL_MQH
 //===== END 08_Institutional.mqh =====
 
 //===== BEGIN 09_Trend.mqh =====
-#ifndef SNIPER_ULTRA_09_TREND_MQH
-#define SNIPER_ULTRA_09_TREND_MQH
+#ifndef HITMAN_ULTRA_09_TREND_MQH
+#define HITMAN_ULTRA_09_TREND_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 09_TREND — Adaptive Trend · Strength · Persistence
+//| HITMAN AI — 09_TREND — Adaptive Trend · Strength · Persistence
 //+------------------------------------------------------------------+
 void UltraEngTrend(const string s, UltraSnap &u)
 {
@@ -1601,14 +1600,14 @@ void UltraEngTrend(const string s, UltraSnap &u)
    u.trend.exhaustion = false; // filled after momentum in UltraEngRegime
 }
 
-#endif // SNIPER_ULTRA_09_TREND_MQH
+#endif // HITMAN_ULTRA_09_TREND_MQH
 //===== END 09_Trend.mqh =====
 
 //===== BEGIN 10_Momentum.mqh =====
-#ifndef SNIPER_ULTRA_10_MOMENTUM_MQH
-#define SNIPER_ULTRA_10_MOMENTUM_MQH
+#ifndef HITMAN_ULTRA_10_MOMENTUM_MQH
+#define HITMAN_ULTRA_10_MOMENTUM_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 10_MOMENTUM — SMI · Strength · Acceleration · Quality
+//| HITMAN AI — 10_MOMENTUM — SMI · Strength · Acceleration · Quality
 //+------------------------------------------------------------------+
 void UltraEngMomentum(const string s, UltraSnap &u)
 {
@@ -1656,14 +1655,14 @@ void UltraEngIndicators(const string s, UltraSnap &u)
    u.ind.ifi = ifi;
 }
 
-#endif // SNIPER_ULTRA_10_MOMENTUM_MQH
+#endif // HITMAN_ULTRA_10_MOMENTUM_MQH
 //===== END 10_Momentum.mqh =====
 
 //===== BEGIN 12_MarketRegime.mqh =====
-#ifndef SNIPER_ULTRA_12_MARKETREGIME_MQH
-#define SNIPER_ULTRA_12_MARKETREGIME_MQH
+#ifndef HITMAN_ULTRA_12_MARKETREGIME_MQH
+#define HITMAN_ULTRA_12_MARKETREGIME_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 12_MARKET_REGIME                                |
+//| HITMAN AI — 12_MARKET_REGIME                                |
 //| Strong/Weak Trend · Range · Breakout · Reversal · Acc/Dist        |
 //+------------------------------------------------------------------+
 void UltraEngRegime(UltraSnap &u)
@@ -1703,14 +1702,14 @@ string UltraRegimeName(const ENUM_ULTRA_REGIME r)
    return "RANGE";
 }
 
-#endif // SNIPER_ULTRA_12_MARKETREGIME_MQH
+#endif // HITMAN_ULTRA_12_MARKETREGIME_MQH
 //===== END 12_MarketRegime.mqh =====
 
 //===== BEGIN 18_NewsIntelligence.mqh =====
-#ifndef SNIPER_ULTRA_18_NEWSINTELLIGENCE_MQH
-#define SNIPER_ULTRA_18_NEWSINTELLIGENCE_MQH
+#ifndef HITMAN_ULTRA_18_NEWSINTELLIGENCE_MQH
+#define HITMAN_ULTRA_18_NEWSINTELLIGENCE_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 18_NEWS_INTELLIGENCE                            |
+//| HITMAN AI — 18_NEWS_INTELLIGENCE                            |
 //| Economic Calendar proxy · News Analysis · Volatility Analysis     |
 //| Context Only · Trades Before / During / After News                |
 //| NEVER hard-blocks                                                 |
@@ -1752,14 +1751,14 @@ void UltraEngNews(const string s, UltraSnap &u)
    // Context only — trading continues before / during / after
 }
 
-#endif // SNIPER_ULTRA_18_NEWSINTELLIGENCE_MQH
+#endif // HITMAN_ULTRA_18_NEWSINTELLIGENCE_MQH
 //===== END 18_NewsIntelligence.mqh =====
 
 //===== BEGIN 17_SessionIntelligence.mqh =====
-#ifndef SNIPER_ULTRA_17_SESSIONINTELLIGENCE_MQH
-#define SNIPER_ULTRA_17_SESSIONINTELLIGENCE_MQH
+#ifndef HITMAN_ULTRA_17_SESSIONINTELLIGENCE_MQH
+#define HITMAN_ULTRA_17_SESSIONINTELLIGENCE_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 17_SESSION_INTELLIGENCE                         |
+//| HITMAN AI — 17_SESSION_INTELLIGENCE                         |
 //| Asian · London · New York · Overlap · Session Liquidity           |
 //| Context Only · Trades 24/5 · NEVER blocks                         |
 //+------------------------------------------------------------------+
@@ -1800,14 +1799,14 @@ void UltraEngSessionNews(const string s, UltraSnap &u)
    UltraEngNews(s, u);
 }
 
-#endif // SNIPER_ULTRA_17_SESSIONINTELLIGENCE_MQH
+#endif // HITMAN_ULTRA_17_SESSIONINTELLIGENCE_MQH
 //===== END 17_SessionIntelligence.mqh =====
 
 //===== BEGIN 13_Precision.mqh =====
-#ifndef SNIPER_ULTRA_13_PRECISION_MQH
-#define SNIPER_ULTRA_13_PRECISION_MQH
+#ifndef HITMAN_ULTRA_13_PRECISION_MQH
+#define HITMAN_ULTRA_13_PRECISION_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 13_PRECISION                                    |
+//| HITMAN AI — 13_PRECISION                                    |
 //| Entry Precision · Exit Precision · Signal Validation ·            |
 //| Trade Quality · Precision Score                                   |
 //+------------------------------------------------------------------+
@@ -1865,14 +1864,14 @@ int UltraPrecisionScore(const UltraSnap &u)
    return prec;
 }
 
-#endif // SNIPER_ULTRA_13_PRECISION_MQH
+#endif // HITMAN_ULTRA_13_PRECISION_MQH
 //===== END 13_Precision.mqh =====
 
 //===== BEGIN 14_Probability.mqh =====
-#ifndef SNIPER_ULTRA_14_PROBABILITY_MQH
-#define SNIPER_ULTRA_14_PROBABILITY_MQH
+#ifndef HITMAN_ULTRA_14_PROBABILITY_MQH
+#define HITMAN_ULTRA_14_PROBABILITY_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 14_PROBABILITY                                  |
+//| HITMAN AI — 14_PROBABILITY                                  |
 //| Probability Score · Confidence Score · Success Estimation         |
 //+------------------------------------------------------------------+
 
@@ -1909,14 +1908,14 @@ int UltraRiskProbability(const int successProb)
    return r;
 }
 
-#endif // SNIPER_ULTRA_14_PROBABILITY_MQH
+#endif // HITMAN_ULTRA_14_PROBABILITY_MQH
 //===== END 14_Probability.mqh =====
 
 //===== BEGIN 15_Confluence.mqh =====
-#ifndef SNIPER_ULTRA_15_CONFLUENCE_MQH
-#define SNIPER_ULTRA_15_CONFLUENCE_MQH
+#ifndef HITMAN_ULTRA_15_CONFLUENCE_MQH
+#define HITMAN_ULTRA_15_CONFLUENCE_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 15_CONFLUENCE — Combines all engines → AI Confidence
+//| HITMAN AI — 15_CONFLUENCE — Combines all engines → AI Confidence
 //+------------------------------------------------------------------+
 int UltraConfluenceBuy(const UltraSnap &u)
 {
@@ -1964,14 +1963,14 @@ int UltraConfluenceSell(const UltraSnap &u)
    return sc;
 }
 
-#endif // SNIPER_ULTRA_15_CONFLUENCE_MQH
+#endif // HITMAN_ULTRA_15_CONFLUENCE_MQH
 //===== END 15_Confluence.mqh =====
 
 //===== BEGIN 26_Diagnostics.mqh =====
-#ifndef SNIPER_ULTRA_26_DIAGNOSTICS_MQH
-#define SNIPER_ULTRA_26_DIAGNOSTICS_MQH
+#ifndef HITMAN_ULTRA_26_DIAGNOSTICS_MQH
+#define HITMAN_ULTRA_26_DIAGNOSTICS_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 26_DIAGNOSTICS — Tick · Memory · Connection · Health
+//| HITMAN AI — 26_DIAGNOSTICS — Tick · Memory · Connection · Health
 //+------------------------------------------------------------------+
 void UltraEngDiagnostics(const string s, UltraSnap &u)
 {
@@ -1987,14 +1986,14 @@ void UltraEngDiagnostics(const string s, UltraSnap &u)
    g_UltraCore.healthy = ok;
 }
 
-#endif // SNIPER_ULTRA_26_DIAGNOSTICS_MQH
+#endif // HITMAN_ULTRA_26_DIAGNOSTICS_MQH
 //===== END 26_Diagnostics.mqh =====
 
 //===== BEGIN 29_MarketMemory.mqh =====
-#ifndef SNIPER_ULTRA_29_MARKETMEMORY_MQH
-#define SNIPER_ULTRA_29_MARKETMEMORY_MQH
+#ifndef HITMAN_ULTRA_29_MARKETMEMORY_MQH
+#define HITMAN_ULTRA_29_MARKETMEMORY_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 29_MARKET_MEMORY — History · Behaviour · Strategy analytics
+//| HITMAN AI — 29_MARKET_MEMORY — History · Behaviour · Strategy analytics
 //+------------------------------------------------------------------+
 void UltraMemoryUpdateFromStats()
 {
@@ -2012,14 +2011,14 @@ void UltraMemory_NoteDecision(const string tag, const int conf)
    UltraLogAI("memory note tag=" + tag + " conf=" + IntegerToString(conf));
 }
 
-#endif // SNIPER_ULTRA_29_MARKETMEMORY_MQH
+#endif // HITMAN_ULTRA_29_MARKETMEMORY_MQH
 //===== END 29_MarketMemory.mqh =====
 
 //===== BEGIN 20_CapitalProtection.mqh =====
-#ifndef SNIPER_ULTRA_20_CAPITALPROTECTION_MQH
-#define SNIPER_ULTRA_20_CAPITALPROTECTION_MQH
+#ifndef HITMAN_ULTRA_20_CAPITALPROTECTION_MQH
+#define HITMAN_ULTRA_20_CAPITALPROTECTION_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 20_CAPITAL_PROTECTION — Equity · Margin · Exposure · Sizing
+//| HITMAN AI — 20_CAPITAL_PROTECTION — Equity · Margin · Exposure · Sizing
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
 //| 05. Capital Protection Engine                                    |
@@ -2041,14 +2040,14 @@ bool UltraCapitalOK(string &why)
 
 // Deep capital rules also live in Shell_B (RiskManagementOK / Drawdown / lots).
 
-#endif // SNIPER_ULTRA_20_CAPITALPROTECTION_MQH
+#endif // HITMAN_ULTRA_20_CAPITALPROTECTION_MQH
 //===== END 20_CapitalProtection.mqh =====
 
 //===== BEGIN 19_Execution.mqh =====
-#ifndef SNIPER_ULTRA_19_EXECUTION_MQH
-#define SNIPER_ULTRA_19_EXECUTION_MQH
+#ifndef HITMAN_ULTRA_19_EXECUTION_MQH
+#define HITMAN_ULTRA_19_EXECUTION_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 19_EXECUTION — Fast exec · Retry · Fill · Sync · Broker compat
+//| HITMAN AI — 19_EXECUTION — Fast exec · Retry · Fill · Sync · Broker compat
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
 //| 04. Ultra Execution Engine                                       |
@@ -2099,14 +2098,14 @@ int UltraExec_OpenCountMagic()
    return n;
 }
 
-#endif // SNIPER_ULTRA_19_EXECUTION_MQH
+#endif // HITMAN_ULTRA_19_EXECUTION_MQH
 //===== END 19_Execution.mqh =====
 
 //===== BEGIN 16_AI_Core.mqh =====
-#ifndef SNIPER_ULTRA_16_AI_CORE_MQH
-#define SNIPER_ULTRA_16_AI_CORE_MQH
+#ifndef HITMAN_ULTRA_16_AI_CORE_MQH
+#define HITMAN_ULTRA_16_AI_CORE_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 16_AI_CORE — Decision · Approval/Rejection · Controller · Strategies
+//| HITMAN AI — 16_AI_CORE — Decision · Approval/Rejection · Controller · Strategies
 //+------------------------------------------------------------------+
 
 datetime g_UltraLastWaitBar = 0;
@@ -2492,14 +2491,14 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
          " session=", snap.ctx.session, " on ", BrokerSymbol);
 }
 
-#endif // SNIPER_ULTRA_16_AI_CORE_MQH
+#endif // HITMAN_ULTRA_16_AI_CORE_MQH
 //===== END 16_AI_Core.mqh =====
 
 //===== BEGIN 21_TradeManagement.mqh =====
-#ifndef SNIPER_ULTRA_21_TRADEMANAGEMENT_MQH
-#define SNIPER_ULTRA_21_TRADEMANAGEMENT_MQH
+#ifndef HITMAN_ULTRA_21_TRADEMANAGEMENT_MQH
+#define HITMAN_ULTRA_21_TRADEMANAGEMENT_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 21_TRADE_MANAGEMENT                             |
+//| HITMAN AI — 21_TRADE_MANAGEMENT                             |
 //| Ultra Long Holding · Dynamic SL · Dynamic TP · Break-even ·       |
 //| Adaptive Trailing Stop · Intelligent Exit                         |
 //|                                                                   |
@@ -2543,14 +2542,14 @@ string UltraTM_ModuleStatus()
    return "UltraLong+DynSL/TP+BE+Trail+IntelExit via Shell_B ManageOpenTrades";
 }
 
-#endif // SNIPER_ULTRA_21_TRADEMANAGEMENT_MQH
+#endif // HITMAN_ULTRA_21_TRADEMANAGEMENT_MQH
 //===== END 21_TradeManagement.mqh =====
 
 //===== BEGIN 22_MultiSymbol.mqh =====
-#ifndef SNIPER_ULTRA_22_MULTISYMBOL_MQH
-#define SNIPER_ULTRA_22_MULTISYMBOL_MQH
+#ifndef HITMAN_ULTRA_22_MULTISYMBOL_MQH
+#define HITMAN_ULTRA_22_MULTISYMBOL_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 22_MULTI_SYMBOL — Scanner · Sync · Independent analysis
+//| HITMAN AI — 22_MULTI_SYMBOL — Scanner · Sync · Independent analysis
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
 //| 06. Ultra Multi Symbol Engine                                    |
@@ -2589,14 +2588,14 @@ bool UltraMulti_AnalyzeSymbol(const string s, UltraSnap &u)
    return UltraBuildSnapshot(s, u);
 }
 
-#endif // SNIPER_ULTRA_22_MULTISYMBOL_MQH
+#endif // HITMAN_ULTRA_22_MULTISYMBOL_MQH
 //===== END 22_MultiSymbol.mqh =====
 
 //===== BEGIN 23_MultiTimeframe.mqh =====
-#ifndef SNIPER_ULTRA_23_MULTITIMEFRAME_MQH
-#define SNIPER_ULTRA_23_MULTITIMEFRAME_MQH
+#ifndef HITMAN_ULTRA_23_MULTITIMEFRAME_MQH
+#define HITMAN_ULTRA_23_MULTITIMEFRAME_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 23_MULTI_TIMEFRAME — MN..M1 · Bias · Voting · Weighting
+//| HITMAN AI — 23_MULTI_TIMEFRAME — MN..M1 · Bias · Voting · Weighting
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
 //| 07. Ultra Multi Timeframe Engine                                 |
@@ -2657,14 +2656,14 @@ double UltraMTF_WeightBias(const int votesBuy, const int votesSell)
    return MathMax(-1.0, MathMin(1.0, d / 6.0));
 }
 
-#endif // SNIPER_ULTRA_23_MULTITIMEFRAME_MQH
+#endif // HITMAN_ULTRA_23_MULTITIMEFRAME_MQH
 //===== END 23_MultiTimeframe.mqh =====
 
 //===== BEGIN 25_Statistics.mqh =====
-#ifndef SNIPER_ULTRA_25_STATISTICS_MQH
-#define SNIPER_ULTRA_25_STATISTICS_MQH
+#ifndef HITMAN_ULTRA_25_STATISTICS_MQH
+#define HITMAN_ULTRA_25_STATISTICS_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 25_STATISTICS — WR · PF · Expectancy · RR · Reports
+//| HITMAN AI — 25_STATISTICS — WR · PF · Expectancy · RR · Reports
 //+------------------------------------------------------------------+
 
 void UltraStats_Refresh()
@@ -2683,14 +2682,14 @@ string UltraStats_Report()
           " RR=" + DoubleToString(g_UltraMem.avgRR, 2);
 }
 
-#endif // SNIPER_ULTRA_25_STATISTICS_MQH
+#endif // HITMAN_ULTRA_25_STATISTICS_MQH
 //===== END 25_Statistics.mqh =====
 
 //===== BEGIN 24_Dashboard.mqh =====
-#ifndef SNIPER_ULTRA_24_DASHBOARD_MQH
-#define SNIPER_ULTRA_24_DASHBOARD_MQH
+#ifndef HITMAN_ULTRA_24_DASHBOARD_MQH
+#define HITMAN_ULTRA_24_DASHBOARD_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — 24_DASHBOARD — AI Conf · Prec · Prob · Session · Stats
+//| HITMAN AI — 24_DASHBOARD — AI Conf · Prec · Prob · Session · Stats
 //+------------------------------------------------------------------+
 //+------------------------------------------------------------------+
 //| 08. Dashboard System                                             |
@@ -2701,8 +2700,8 @@ string UltraDashboardText(const string s)
    UltraSignal sig = g_UltraLastSignal;
    string dir = sig.buy ? "BUY" : (sig.sell ? "SELL" : "-");
    return
-      "======= SNIPER AI ULTRA =======\n" +
-      "BUILD: SA_ULTRA_93 MASTER | Comment: SNIPER AI\n" +
+      "======= HITMAN AI =======\n" +
+      "BUILD: HA_ULTRA_93 MASTER | Comment: HITMAN AI\n" +
       "Symbol: " + s + " | TF: " + EnumToString(UltraETF()) + "\n" +
       "Open: " + IntegerToString(CountOpenTrades()) + " / " + IntegerToString(MaxOpenTrades) + "\n" +
       "AI Conf: " + IntegerToString(u.score.confidence) +
@@ -2752,12 +2751,12 @@ void CreateDashboard()
    Comment(UltraDashboardText(BrokerSymbol));
 }
 
-#endif // SNIPER_ULTRA_24_DASHBOARD_MQH
+#endif // HITMAN_ULTRA_24_DASHBOARD_MQH
 //===== END 24_Dashboard.mqh =====
 
 //===== BEGIN 32_BrokerCompatibility.mqh =====
-#ifndef SNIPER_ULTRA_32_BROKERCOMPAT_MQH
-#define SNIPER_ULTRA_32_BROKERCOMPAT_MQH
+#ifndef HITMAN_ULTRA_32_BROKERCOMPAT_MQH
+#define HITMAN_ULTRA_32_BROKERCOMPAT_MQH
 //+------------------------------------------------------------------+
 //| 32_BrokerCompatibility — fill/exec modes · stops · freeze · caps |
 //+------------------------------------------------------------------+
@@ -2853,8 +2852,8 @@ string UltraBroker_Summary(const string s)
 //===== END 32_BrokerCompatibility.mqh =====
 
 //===== BEGIN 36_BrokerHealth.mqh =====
-#ifndef SNIPER_ULTRA_36_BROKERHEALTH_MQH
-#define SNIPER_ULTRA_36_BROKERHEALTH_MQH
+#ifndef HITMAN_ULTRA_36_BROKERHEALTH_MQH
+#define HITMAN_ULTRA_36_BROKERHEALTH_MQH
 //+------------------------------------------------------------------+
 //| 36_BrokerHealth — connection · permissions · market · symbols    |
 //+------------------------------------------------------------------+
@@ -2904,8 +2903,8 @@ string UltraHealth_Summary(const string s)
 //===== END 36_BrokerHealth.mqh =====
 
 //===== BEGIN 33_OrderManagement.mqh =====
-#ifndef SNIPER_ULTRA_33_ORDERMGMT_MQH
-#define SNIPER_ULTRA_33_ORDERMGMT_MQH
+#ifndef HITMAN_ULTRA_33_ORDERMGMT_MQH
+#define HITMAN_ULTRA_33_ORDERMGMT_MQH
 //+------------------------------------------------------------------+
 //| 33_OrderManagement — market/pending · modify · cancel · partial  |
 //| Deep market open path remains ExecuteBuy/Sell in Shell_B.        |
@@ -2975,8 +2974,8 @@ string UltraOrder_ModuleStatus()
 //===== END 33_OrderManagement.mqh =====
 
 //===== BEGIN 34_PositionManagement.mqh =====
-#ifndef SNIPER_ULTRA_34_POSMGMT_MQH
-#define SNIPER_ULTRA_34_POSMGMT_MQH
+#ifndef HITMAN_ULTRA_34_POSMGMT_MQH
+#define HITMAN_ULTRA_34_POSMGMT_MQH
 //+------------------------------------------------------------------+
 //| 34_PositionManagement — track · sync · monitor · stats           |
 //+------------------------------------------------------------------+
@@ -3059,8 +3058,8 @@ string UltraPos_Summary()
 //===== END 34_PositionManagement.mqh =====
 
 //===== BEGIN 35_SignalEngine.mqh =====
-#ifndef SNIPER_ULTRA_35_SIGNAL_MQH
-#define SNIPER_ULTRA_35_SIGNAL_MQH
+#ifndef HITMAN_ULTRA_35_SIGNAL_MQH
+#define HITMAN_ULTRA_35_SIGNAL_MQH
 //+------------------------------------------------------------------+
 //| 35_SignalEngine — Master Blueprint BUY/SELL checklist            |
 //| BUY:  Structure · BOS|CHoCH · Liquidity · Trend · Momentum ·     |
@@ -3195,12 +3194,12 @@ bool UltraSignal_Validate(const string s, const UltraRawSignal &sig, string &why
    return true;
 }
 
-#endif // SNIPER_ULTRA_35_SIGNAL_MQH
+#endif // HITMAN_ULTRA_35_SIGNAL_MQH
 //===== END 35_SignalEngine.mqh =====
 
 //===== BEGIN 37_Optimization.mqh =====
-#ifndef SNIPER_ULTRA_37_OPT_MQH
-#define SNIPER_ULTRA_37_OPT_MQH
+#ifndef HITMAN_ULTRA_37_OPT_MQH
+#define HITMAN_ULTRA_37_OPT_MQH
 //+------------------------------------------------------------------+
 //| 37_Optimization — memory/CPU/tick performance helpers            |
 //+------------------------------------------------------------------+
@@ -3249,8 +3248,8 @@ string UltraOpt_Summary()
 //===== END 37_Optimization.mqh =====
 
 //===== BEGIN 38_Backtesting.mqh =====
-#ifndef SNIPER_ULTRA_38_BACKTEST_MQH
-#define SNIPER_ULTRA_38_BACKTEST_MQH
+#ifndef HITMAN_ULTRA_38_BACKTEST_MQH
+#define HITMAN_ULTRA_38_BACKTEST_MQH
 //+------------------------------------------------------------------+
 //| 38_Backtesting — tester detection · stats · walk-forward hooks   |
 //+------------------------------------------------------------------+
@@ -3304,8 +3303,8 @@ bool UltraBT_InWalkForwardWindow(const datetime t)
 //===== END 38_Backtesting.mqh =====
 
 //===== BEGIN 39_EventEngine.mqh =====
-#ifndef SNIPER_ULTRA_39_EVENTS_MQH
-#define SNIPER_ULTRA_39_EVENTS_MQH
+#ifndef HITMAN_ULTRA_39_EVENTS_MQH
+#define HITMAN_ULTRA_39_EVENTS_MQH
 //+------------------------------------------------------------------+
 //| 39_EventEngine — dispatcher helpers around Shell_B handlers      |
 //| Actual OnInit/OnTick/OnTimer/... implementations live in Shell_B |
@@ -3365,8 +3364,8 @@ string UltraEvent_Summary()
 //===== END 39_EventEngine.mqh =====
 
 //===== BEGIN 40_DebugTools.mqh =====
-#ifndef SNIPER_ULTRA_40_DEBUG_MQH
-#define SNIPER_ULTRA_40_DEBUG_MQH
+#ifndef HITMAN_ULTRA_40_DEBUG_MQH
+#define HITMAN_ULTRA_40_DEBUG_MQH
 //+------------------------------------------------------------------+
 //| 40_DebugTools — asserts · timers · diagnostic helpers           |
 //+------------------------------------------------------------------+
@@ -3423,17 +3422,17 @@ string UltraDebug_ModuleStatus()
 //===== END 40_DebugTools.mqh =====
 
 //===== BEGIN Shell_B_TradeSystem.mqh =====
-#ifndef SNIPER_ULTRA_SHELL_B_MQH
-#define SNIPER_ULTRA_SHELL_B_MQH
+#ifndef HITMAN_ULTRA_SHELL_B_MQH
+#define HITMAN_ULTRA_SHELL_B_MQH
 //+------------------------------------------------------------------+
 //| Shell B — Trade system / management / events (post-Ultra)        |
 //+------------------------------------------------------------------+
 
 int OnInit()
 {
-   if(StringCompare(TradeComment, "SNIPER AI") != 0)
+   if(StringCompare(TradeComment, "HITMAN AI") != 0)
    {
-      Print("SNIPER AI INIT FAILED: TradeComment input must be exactly SNIPER AI");
+      Print("HITMAN AI INIT FAILED: TradeComment input must be exactly HITMAN AI");
       return(INIT_PARAMETERS_INCORRECT);
    }
 
@@ -3486,7 +3485,7 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI ULTRA v1 BLUEPRINT Loaded BUILD_ID=SA_ULTRA_93 MaxOpen=", MaxOpenTrades);
+   Print("HITMAN EA / HITMAN AI Loaded BUILD_ID=HA_ULTRA_93 MaxOpen=", MaxOpenTrades);
    UltraCoreInit();
    UltraSystemController_Boot();
    {
@@ -3495,7 +3494,7 @@ int OnInit()
             " (EntryTF input=", EnumToString(EntryTF),
             ") — change the chart timeframe to change trading TF, or set EntryTF input");
    }
-   Print("OK93 MASTER BLUEPRINT: modules 00-40 active | Shell A/B | ULTRA-only live path");
+   Print("HITMAN MASTER BLUEPRINT: modules 00-40 | Shell A/B | HITMAN AI live path");
    if(EnableAPEXStrategy || EnableContFallback || EnableLCSStrategy)
       Print("OK93 WARNING: old APEX/ContFallback/LCS input ON — evaluators STUBBED; ULTRA only fires");
    Print("INSTANT OPEN + QUALITY PREFER MODE=", InstantQualityMode);
@@ -3507,7 +3506,7 @@ int OnInit()
          " TickDetect=", EnableTickLevelSignalDetection,
          " NeverBlock=", NeverBlockValidSniperEntry,
          " UltraAggro=", UltraAggressiveFire);
-   Print("CRITICAL: SOURCE must be SNIPER_AI_OK81 — remove PRISM STRATEGY if present");
+   Print("CRITICAL: SOURCE must be HITMAN_AI / HITMAN_EA");
    Print("INSTANT QUALITY81: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
          " HardBlock=", APEX_SessionHardBlock, " (must be false)",
          " NewsAware=", EnableNewsAwareness,
@@ -3924,7 +3923,7 @@ double SigStat_VolExp_Win=0, SigStat_VolExp_Loss=0;
 
 string SigStatsGVPrefix()
 {
-   return "SniperCoreAI_" + IntegerToString(MagicNumber) + "_SigStats_";
+   return "HitmanAI_" + IntegerToString(MagicNumber) + "_SigStats_";
 }
 
 void SaveSignalStatistics()
@@ -4761,7 +4760,7 @@ input double MaxDrawdownPercent  = 20.0;
 
 string PeakEquityGVName()
 {
-   return "SniperCoreAI_" + IntegerToString(MagicNumber) + "_PeakEquity";
+   return "HitmanAI_" + IntegerToString(MagicNumber) + "_PeakEquity";
 }
 
 double GetPeakEquity()
@@ -4823,7 +4822,7 @@ input bool EnableDrawdownProtection = false;  // OFF: was blocking all entries w
 
 input bool EnableEmergencyCloseOnDrawdown = true;
 
-// Clear SniperCoreAI_<Magic>_PeakEquity on every OnInit and seed from current equity.
+// Clear HitmanAI_<Magic>_PeakEquity on every OnInit and seed from current equity.
 // Needed when shield is re-enabled after a deep drawdown so trading is not permanently dead.
 input bool ResetPeakEquityOnInit = true;  // TRADEUNBLOCK: wipe stuck peak equity GV on attach
 
@@ -5711,7 +5710,7 @@ TradeState TradeStates[];
 
 string TradeStateGVPrefix()
 {
-   return "SniperCoreAI_" + IntegerToString(MagicNumber) + "_TP1_";
+   return "HitmanAI_" + IntegerToString(MagicNumber) + "_TP1_";
 }
 
 void PersistTradeState(int index)
@@ -6852,7 +6851,7 @@ bool CooldownFinished()
 }
 // NOTE: Parts 7 and 8 used to hold a second, unused signal path
 // (RunAISignalEngine, calling the now-removed BuySignal/SellSignal) and
-// an EA "control module" (StartSniperCoreAI/RunSniperCoreAI/StopSniperCoreAI)
+// an EA "control module" (StartHitmanAI/RunHitmanAI/StopHitmanAI)
 // that just printed log messages and was never called from OnInit/OnTick/
 // OnDeinit. Removed as dead code - InstantExecution() (called from OnTick)
 // is the actual, and only, execution path.
@@ -14760,7 +14759,7 @@ input group "DASHBOARD"
 //================ CREATE DASHBOARD =================================//
 
 
-// CreateDashboard -> SNIPER_ULTRA/08_Dashboard.mqh
+// CreateDashboard -> HITMAN_ULTRA/08_Dashboard.mqh
 
 
 
@@ -14994,7 +14993,7 @@ string LiveMarketSummary()
 void PrintLiveMarketAnalysis()
 {
    AnalyzeLiveMarket(true);
-   Print("---- MARKET ANALYSIS BUILD=SA_ULTRA_93 (", BrokerSymbol, ") ----");
+   Print("---- MARKET ANALYSIS BUILD=HA_ULTRA_93 (", BrokerSymbol, ") ----");
    Print("SESSION=", g_LiveMkt.sessionName,
          " hour=", g_LiveMkt.sessionHour,
          (APEX_UseGMT ? " GMT" : " SERVER"),
@@ -15137,7 +15136,7 @@ void InstantExecution()
       return;
    }
 
-   // EvaluateStrategySignals() = OK93 SNIPER AI ULTRA complete architecture.
+   // EvaluateStrategySignals() = OK93 HITMAN AI complete architecture.
    bool buySignal, sellSignal;
    string strategyTag;
    EvaluateStrategySignals(buySignal, sellSignal, strategyTag);
@@ -15394,7 +15393,7 @@ void DebugSignals()
 
 string StatsGVPrefix()
 {
-   return "SniperCoreAI_" + IntegerToString(MagicNumber) + "_Stats_Aggregate";
+   return "HitmanAI_" + IntegerToString(MagicNumber) + "_Stats_Aggregate";
 }
 
 void SaveTradeStatistics()

@@ -1,12 +1,12 @@
-SNIPER AI ULTRA — MASTER BLUEPRINT (OK93)
+HITMAN EA / HITMAN AI — MASTER BLUEPRINT
 
-EA:       SNIPER_AI.mq5 / SNIPER_AI_OK93.mq5  (single-file, modules 00-40 inlined)
-BUILD_ID: SA_ULTRA_93
-Comment:  SNIPER AI
+EA:       HITMAN_AI.mq5 / HITMAN_EA.mq5 / HITMAN_AI_OK93.mq5
+BUILD_ID: HA_ULTRA_93
+Comment:  HITMAN AI  (must be exact)
 MaxOpen:  3
-EntryTF:  PERIOD_CURRENT (change chart TF to change trading TF)
+EntryTF:  PERIOD_CURRENT (chart TF)
 
-Architecture: Include/SNIPER_ULTRA/ 00-40 + Shell A/B
-Doc:      Include/SNIPER_ULTRA/MASTER_BLUEPRINT.txt
+Modules:  MQL5/Include/HITMAN_ULTRA/ (00-40 + Shell A/B)
+Doc:      MQL5/Include/HITMAN_ULTRA/MASTER_BLUEPRINT.txt
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI.mq5

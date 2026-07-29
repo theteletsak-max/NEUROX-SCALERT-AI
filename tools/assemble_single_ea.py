@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
-root = Path("MQL5/Include/SNIPER_ULTRA")
+root = Path("MQL5/Include/HITMAN_ULTRA")
 order = [
     "Shell_A_InputsGlobals.mqh","00_Types.mqh","31_Inputs.mqh","28_Utilities.mqh",
     "27_Logger.mqh","30_Recovery.mqh","01_Core.mqh","02_Data.mqh","11_Volatility.mqh",
@@ -17,25 +17,24 @@ order = [
     "Shell_B_TradeSystem.mqh",
 ]
 header = '''//+------------------------------------------------------------------+
-//| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_ULTRA_93                                             |
-//| SNIPER AI ULTRA — MASTER BLUEPRINT — SINGLE-FILE EA (00-40)       |
-//| Comment: SNIPER AI | MaxOpen=3 | EntryTF follows chart            |
-//| Auto-assembled from Include/SNIPER_ULTRA modules 00-40 + Shells   |
+//| HITMAN_AI.mq5 / HITMAN_EA.mq5                                     |
+//| BUILD_ID: HA_ULTRA_93                                             |
+//| HITMAN EA / HITMAN AI — MASTER BLUEPRINT — SINGLE-FILE (00-40)    |
+//| Comment: HITMAN AI | MaxOpen=3 | EntryTF follows chart            |
 //+------------------------------------------------------------------+
-#property copyright "SNIPER AI"
+#property copyright "HITMAN AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version   "1.00"
-#property description "SNIPER AI ULTRA MASTER BLUEPRINT single-file EA 00-40"
-#property description "BUILD=SA_ULTRA_93 Comment=SNIPER AI MaxOpen=3"
+#property description "HITMAN EA / HITMAN AI MASTER BLUEPRINT single-file 00-40"
+#property description "BUILD=HA_ULTRA_93 Comment=HITMAN AI MaxOpen=3"
 
 #include <Trade/Trade.mqh>
 
-#define BG_OBJECT_NAME "SniperCoreAI_ChartBackground"
+#define BG_OBJECT_NAME "HitmanAI_ChartBackground"
 
 CTrade trade;
 
-//==================== SINGLE-FILE MASTER BLUEPRINT =================//
+//==================== HITMAN AI — SINGLE-FILE MASTER =================//
 '''
 parts = [header]
 for name in order:
@@ -44,7 +43,7 @@ for name in order:
     for line in text.splitlines(True):
         s = line.strip()
         if s.startswith("#include"):
-            if s.startswith("#include <") and "SNIPER_ULTRA" not in s and '"' not in s:
+            if s.startswith("#include <") and "HITMAN_ULTRA" not in s and "SNIPER_ULTRA" not in s and '"' not in s:
                 lines.append(line)
             continue
         lines.append(line)
@@ -54,7 +53,20 @@ for name in order:
         parts.append("\n")
     parts.append(f"//===== END {name} =====\n")
 out = "".join(parts)
-for dest in [Path("SNIPER_AI.mq5"), Path("SNIPER_AI_OK93.mq5"),
-             Path("release/deliver/SNIPER_AI.mq5"), Path("release/deliver/SNIPER_AI_OK93.mq5")]:
+dests = [
+    Path("HITMAN_AI.mq5"),
+    Path("HITMAN_EA.mq5"),
+    Path("HITMAN_AI_OK93.mq5"),
+    Path("release/deliver/HITMAN_AI.mq5"),
+    Path("release/deliver/HITMAN_EA.mq5"),
+    Path("release/deliver/HITMAN_AI_OK93.mq5"),
+    # legacy aliases for previous downloaders
+    Path("SNIPER_AI.mq5"),
+    Path("SNIPER_AI_OK93.mq5"),
+    Path("release/deliver/SNIPER_AI.mq5"),
+    Path("release/deliver/SNIPER_AI_OK93.mq5"),
+]
+for dest in dests:
+    dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(out, encoding="utf-8")
     print(dest, dest.stat().st_size)
