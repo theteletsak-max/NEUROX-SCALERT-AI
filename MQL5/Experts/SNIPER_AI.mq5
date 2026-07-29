@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_PRISM_82                                      |
-//| SNIPER AI - PRISM COMPLETE LIVE STACK                   |
-//| Comment: SNIPER AI | PRISM Complete | Instant + Quality Prefer | No RSI/MACD/Stoch   |
+//| BUILD_ID: SA_PSI_83                                      |
+//| SNIPER AI - PRISM SIGNAL INDEX (PSI) v1.0                   |
+//| Comment: SNIPER AI | PSI v1.0 price-only institutional signals | No oscillators   |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.50"
-#property description "SNIPER AI OK82: PRISM COMPLETE live stack + instant quality"
-#property description "Source SNIPER_AI_OK82 BUILD=SA_PRISM_82"
+#property version   "5.51"
+#property description "SNIPER AI OK83: PRISM SIGNAL INDEX (PSI) v1.0 — price-only"
+#property description "Source SNIPER_AI_OK83 BUILD=SA_PSI_83"
 
 #include <Trade/Trade.mqh>
 
@@ -31,6 +31,34 @@ input group "INSTANT OPEN + QUALITY PREFER"
 // AGGRESSIVE INSTANT executes immediately once selected (tick path).
 input bool   InstantQualityMode          = true;   // soft quality prefer (no endless hard waits)
 input bool   EnablePrismLiveStack        = true;   // OK82: ContSniper/RevSniper/Instant live
+
+input group "PRISM SIGNAL INDEX (PSI) v1.0 — PRICE ONLY"
+// Custom institutional detector. NO RSI/MACD/Stoch/CCI/BB/oscillators.
+// Reads OHLC + structure + liquidity + ICT + SMT only.
+input bool   EnablePSI                     = true;   // master PSI engine
+input bool   PSI_GateAllLivePaths          = true;   // approve/cancel path FIREs via PSI
+input bool   PSI_AllowStandaloneFire       = true;   // FIRE as PSI when Conf>=Instant
+input int    PSI_MinConfidenceToTrade      = 50;     // <50 = NO TRADE
+input int    PSI_GoodConfidence            = 70;     // GOOD floor (path can fire)
+input int    PSI_InstantConfidence         = 90;     // >=90 execute immediately (standalone)
+input bool   PSI_HardCancelFakes           = true;   // fake detector cancels signal
+input bool   PSI_SoftLowQualityInInstant   = true;   // InstantQuality: allow 50-69 LOW
+input bool   PSI_LogDecisions              = true;   // print PSI reason
+input bool   PSI_EnableSelfLearn           = true;   // adjust weights after closed trades
+input double PSI_LearnStep                 = 0.01;   // weight nudge per win/loss
+input bool   PSI_RejectPremiumBuys         = true;
+input bool   PSI_RejectDiscountSells       = true;
+input double PSI_MinBOS_ATR                = 0.12;   // reject tiny/weak BOS
+input double PSI_MinFVG_ATR                = 0.15;   // reject tiny FVG
+input double PSI_MinDispBodyRatio          = 0.50;   // institutional candle body
+input double PSI_MinDispATR                = 0.35;   // expansion candle vs ATR
+
+// Early PSI state (full report filled by PSI_Evaluate later in file)
+int    g_PSI_LastConfidence = 0;
+string g_PSI_LastGrade      = "NO TRADE";
+string g_PSI_LastReason     = "";
+bool   g_PSI_LastCancelled  = false;
+
 
 input group "SNIPER IDP - BUILT INTO EA (signal core)"
 // Institutional Displacement Pulse computed INSIDE the EA (same math as SNIPER_IDP).
@@ -625,12 +653,17 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded BUILD_ID=SA_PRISM_82 — PRISM COMPLETE LIVE");
+   Print("SNIPER AI Loaded BUILD_ID=SA_PSI_83 — PRISM SIGNAL INDEX v1.0");
    Print("INSTANT OPEN + QUALITY PREFER MODE=", InstantQualityMode);
    Print("PRISM LIVE STACK=", EnablePrismLiveStack,
          " | BestPathsOnly=", BestPathsOnly,
          " | InstantSniper=", EnableInstantSniperMode,
          " | TryNextPath=", TryNextPathIfEnginesFail);
+   Print("PSI v1.0 Enable=", EnablePSI,
+         " Gate=", PSI_GateAllLivePaths,
+         " Standalone@", PSI_InstantConfidence,
+         " MinConf=", PSI_MinConfidenceToTrade,
+         " FakeCancel=", PSI_HardCancelFakes);
    Print("QUALITY SELECT: IDP_Hard=", IDP_HardGate, " MinPulse=", IDP_MinAbsPulse,
          " ContScore=", ContStruct_MinScore, " ADX=", ContStruct_RequireTrendADX,
          " SkipRange=", ContStruct_SkipRanging);
@@ -639,7 +672,7 @@ int OnInit()
          " TickDetect=", EnableTickLevelSignalDetection,
          " NeverBlock=", NeverBlockValidSniperEntry,
          " UltraAggro=", UltraAggressiveFire);
-   Print("CRITICAL: SOURCE must be SNIPER_AI_OK82 — BUILD SA_PRISM_82 (PRISM COMPLETE LIVE)");
+   Print("CRITICAL: SOURCE must be SNIPER_AI_OK83 — BUILD SA_PSI_83 (PSI v1.0)");
    Print("INSTANT QUALITY81: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
          " HardBlock=", APEX_SessionHardBlock, " (must be false)",
          " NewsAware=", EnableNewsAwareness,
@@ -1036,6 +1069,10 @@ int  EffectiveStructureRecency();
 bool IsOrderBlockMitigated(const bool buy);
 bool DetectStopHunt(const bool buySide);
 
+void PSI_LearnFromTrade(const bool wasWin, const string setup, const int conf);
+bool PSI_PathAllowed(const bool buy, const string strategyTag, string &detail);
+bool PSI_TryStandalone(bool &buySignal, bool &sellSignal, string &strategyTag);
+
 string ContStruct_Grade(const bool buy);
 bool NewsAwarenessInWindow(string &detail);
 bool APEX_InKillZone(string &detail);
@@ -1229,9 +1266,9 @@ void ReportSignalOutcome(ulong ticket, bool wasWin, double profit)
 // of these nine is worth keeping - rather than adding more strategies
 // being mistaken for adding more evidence.
 
-#define STRATEGY_TAG_COUNT 15
+#define STRATEGY_TAG_COUNT 16
 string g_StrategyTagNames[STRATEGY_TAG_COUNT] = {
-   "APEX", "ContFallback", "LCS",
+   "APEX", "ContFallback", "LCS", "PSI",
    "SMC", "MeanReversion", "VolBreakout", "TrendFollow",
    "TrendPullback", "LiquiditySweep", "FVG+OB", "VolBreakout(Spec)", "SpecCompliant",
    "InstantTrend", "ContSniper", "RevSniper"
@@ -1312,8 +1349,8 @@ void PrintStrategyPerformanceReport()
    Print("==== PER-STRATEGY PERFORMANCE (FULL UPGRADE) ====");
 
    // Focus on live PRISM tags first
-   string liveTags[6] = {"APEX", "ContSniper", "RevSniper", "InstantTrend", "ContFallback", "LCS"};
-   for(int t = 0; t < 6; t++)
+   string liveTags[7] = {"APEX", "PSI", "ContSniper", "RevSniper", "InstantTrend", "ContFallback", "LCS"};
+   for(int t = 0; t < 7; t++)
    {
       int i = FindStrategyTagIndex(liveTags[t]);
       if(i < 0) continue;
@@ -1434,6 +1471,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
    RecordTradeStatistic(profit);
    ReportSignalOutcome(trans.position, profit >= 0, profit);
    RecordStrategyPerformance(trans.position, profit >= 0);
+   PSI_LearnFromTrade(profit >= 0, g_UltraLastDecision, g_PSI_LastConfidence);
 }
 
 // FIX: EventSetTimer() was being called in OnInit whenever
@@ -9145,6 +9183,7 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
 
    // Live swing tags + InstantQuality ContSniper skip re-spam (engines already ran)
    bool liveSwing = (strategyTag == "APEX" || strategyTag == "ContFallback" || strategyTag == "LCS" ||
+                     strategyTag == "PSI" ||
                      (InstantQualityMode && (strategyTag == "ContSniper" || strategyTag == "InstantTrend")));
    if(liveSwing)
    {
@@ -9175,7 +9214,7 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
 bool PrismInstitutionalEnginesOK(bool buy, const string strategyTag)
 {
    // APEX / LCS / ContFallback embed own checklist — no ICE/IMCE/SMT re-veto
-   if(strategyTag == "APEX" || strategyTag == "LCS")
+   if(strategyTag == "APEX" || strategyTag == "LCS" || strategyTag == "PSI")
       return true;
    if(strategyTag == "ContFallback" && ContFallbackBypassEngines)
       return true;
@@ -9251,6 +9290,7 @@ int PathBasePriority(const string tag)
    if(!PreferQualityPaths)
    {
       // Aggressive-first order when quality preference is off
+      if(tag == "PSI")                return 0;
       if(tag == "InstantTrend")       return 1;
       if(tag == "ContSniper")         return 2;
       if(tag == "RevSniper")          return 3;
@@ -9261,6 +9301,7 @@ int PathBasePriority(const string tag)
       return 99;
    }
 
+   if(tag == "PSI")                return 0; // PRISM Signal Index
    if(tag == "RevSniper")          return 1; // most stacked SMT path
    if(tag == "ContSniper")         return 2; // trend + structure
    if(tag == "LiquiditySweep")     return 3;
@@ -11968,40 +12009,999 @@ void EvaluateContFallback(bool &buySignal, bool &sellSignal, string &strategyTag
    }
 }
 
+
+//+------------------------------------------------------------------+
+//|     PRISM SIGNAL INDEX (PSI) v1.0 — PRICE-ONLY DETECTOR          |
+//+------------------------------------------------------------------+
+// Institutional signal engine. Reads PRICE structure only.
+// NO RSI / MACD / Stochastic / CCI / Bollinger / lagging oscillators.
+
+enum PSI_RegimeClass
+{
+   PSI_REG_TREND = 0,
+   PSI_REG_RANGE,
+   PSI_REG_EXPANSION,
+   PSI_REG_COMPRESSION
+};
+
+enum PSI_BiasSide
+{
+   PSI_BIAS_BULL = 0,
+   PSI_BIAS_BEAR,
+   PSI_BIAS_NEUTRAL
+};
+
+enum PSI_SignalSide
+{
+   PSI_SIG_NONE = 0,
+   PSI_SIG_BUY,
+   PSI_SIG_SELL
+};
+
+struct PSI_Report
+{
+   PSI_SignalSide signal;
+   int            confidence;      // 0-100
+   string         grade;           // NO TRADE / LOW / GOOD / HIGH / A+ / INST SNIPER
+   string         reason;
+   bool           cancelled;       // fake detector
+   string         cancelReason;
+
+   PSI_RegimeClass regime;
+   int             regimeScore;    // 0-10
+   PSI_BiasSide    bias;
+   int             trendScore;     // 0-15
+   int             structureScore; // 0-20
+   int             liquidityScore; // 0-20
+   int             ictScore;       // 0-20
+   int             smtScore;       // 0-10
+   int             momentumScore;  // 0-10
+   int             entryScore;     // 0-10
+
+   bool strongTrend;
+   bool weakTrend;
+   bool compression;
+   bool expansion;
+   bool sessionTransition;
+   bool newsExpansion;
+};
+
+PSI_Report g_LastPSIBuy;
+PSI_Report g_LastPSISell;
+PSI_Report g_LastPSI;
+
+// Adaptive confidence weights (sum≈1.0) — self-learning nudges these
+double g_PSI_W_Trend      = 0.20;
+double g_PSI_W_Structure  = 0.25;
+double g_PSI_W_Liquidity  = 0.20;
+double g_PSI_W_ICT        = 0.15;
+double g_PSI_W_SMT        = 0.10;
+double g_PSI_W_Momentum   = 0.05;
+double g_PSI_W_Entry      = 0.05;
+
+int    g_PSI_LearnTrades  = 0;
+int    g_PSI_LearnWins    = 0;
+int    g_PSI_LearnLosses  = 0;
+
+double PSI_PriceATR(const int period = 14)
+{
+   int p = MathMax(period, 5);
+   if(Bars(BrokerSymbol, EntryTF) < p + 3)
+      return 0.0;
+   double sum = 0.0;
+   for(int i = 1; i <= p; i++)
+   {
+      double h = iHigh(BrokerSymbol, EntryTF, i);
+      double l = iLow(BrokerSymbol, EntryTF, i);
+      double prevC = iClose(BrokerSymbol, EntryTF, i + 1);
+      double tr = h - l;
+      double a = MathAbs(h - prevC);
+      double b = MathAbs(l - prevC);
+      if(a > tr) tr = a;
+      if(b > tr) tr = b;
+      sum += tr;
+   }
+   return sum / (double)p;
+}
+
+double PSI_AvgRange(const int fromBar, const int bars)
+{
+   if(bars <= 0) return 0.0;
+   double sum = 0.0;
+   int n = 0;
+   for(int i = fromBar; i < fromBar + bars; i++)
+   {
+      double h = iHigh(BrokerSymbol, EntryTF, i);
+      double l = iLow(BrokerSymbol, EntryTF, i);
+      if(h > l)
+      {
+         sum += (h - l);
+         n++;
+      }
+   }
+   return (n > 0) ? (sum / (double)n) : 0.0;
+}
+
+bool PSI_TF_BullBias(const ENUM_TIMEFRAMES tf, const int maPeriod)
+{
+   int need = maPeriod + 5;
+   if(Bars(BrokerSymbol, tf) < need)
+      return false;
+   double sum = 0.0;
+   for(int i = 1; i <= maPeriod; i++)
+      sum += iClose(BrokerSymbol, tf, i);
+   double ma = sum / (double)maPeriod;
+   double c = iClose(BrokerSymbol, tf, 1);
+   return (c > ma);
+}
+
+bool PSI_TF_BearBias(const ENUM_TIMEFRAMES tf, const int maPeriod)
+{
+   int need = maPeriod + 5;
+   if(Bars(BrokerSymbol, tf) < need)
+      return false;
+   double sum = 0.0;
+   for(int i = 1; i <= maPeriod; i++)
+      sum += iClose(BrokerSymbol, tf, i);
+   double ma = sum / (double)maPeriod;
+   double c = iClose(BrokerSymbol, tf, 1);
+   return (c < ma);
+}
+
+bool PSI_IsDoji()
+{
+   double o = iOpen(BrokerSymbol, EntryTF, 1);
+   double c = iClose(BrokerSymbol, EntryTF, 1);
+   double h = iHigh(BrokerSymbol, EntryTF, 1);
+   double l = iLow(BrokerSymbol, EntryTF, 1);
+   double range = h - l;
+   if(range <= 0.0) return true;
+   return (MathAbs(c - o) / range < 0.18);
+}
+
+bool PSI_StrongBody(const bool buy)
+{
+   double o = iOpen(BrokerSymbol, EntryTF, 1);
+   double c = iClose(BrokerSymbol, EntryTF, 1);
+   double h = iHigh(BrokerSymbol, EntryTF, 1);
+   double l = iLow(BrokerSymbol, EntryTF, 1);
+   double range = h - l;
+   if(range <= 0.0) return false;
+   double body = MathAbs(c - o);
+   if(body / range < PSI_MinDispBodyRatio) return false;
+   if(buy && c <= o) return false;
+   if(!buy && c >= o) return false;
+   double atr = PSI_PriceATR(14);
+   if(atr > 0.0 && range < atr * PSI_MinDispATR) return false;
+   return true;
+}
+
+bool PSI_QualityBOS(const bool buy, string &fail)
+{
+   fail = "";
+   if(!StructureDirectionalBOS(buy) && !ContStruct_HasQualityBOS(buy))
+   {
+      fail = "no BOS";
+      return false;
+   }
+   // Reject tiny / weak / late BOS via penetration vs ATR and recency
+   double atr = PSI_PriceATR(14);
+   if(atr <= 0.0) atr = GetFilterATR();
+   double close1 = iClose(BrokerSymbol, EntryTF, 1);
+   double level = buy ? GetRecentHigh() : GetRecentLow();
+   if(level == EMPTY_VALUE || level <= 0.0)
+   {
+      // soft pass if ContStruct quality BOS already confirmed geometry
+      if(ContStruct_HasQualityBOS(buy))
+         return true;
+      fail = "weak BOS level";
+      return false;
+   }
+   double pen = buy ? (close1 - level) : (level - close1);
+   if(atr > 0.0 && pen < atr * PSI_MinBOS_ATR)
+   {
+      fail = "tiny/weak BOS";
+      return false;
+   }
+   // Fake BOS: immediate reclaim against break on bar0/bar1 wick
+   double o1 = iOpen(BrokerSymbol, EntryTF, 1);
+   if(buy && close1 < o1 && ContStruct_HasDisplacement(false))
+   {
+      fail = "fake BOS reclaim";
+      return false;
+   }
+   if(!buy && close1 > o1 && ContStruct_HasDisplacement(true))
+   {
+      fail = "fake BOS reclaim";
+      return false;
+   }
+   // Late BOS: only ancient structure, no recent directional BOS
+   if(!RecentDirectionalBOS(buy, MathMax(ContStruct_BOS_MaxBars, 8)) &&
+      !ContStruct_HasQualityBOS(buy))
+   {
+      fail = "late BOS";
+      return false;
+   }
+   return true;
+}
+
+bool PSI_QualitySweep(const bool buy, string &fail)
+{
+   fail = "";
+   int rec = EffectiveStructureRecency();
+   if(!RecentDirectionalSweep(buy, rec))
+   {
+      fail = "no sweep";
+      return false;
+   }
+   // Sweep without rejection / weak / fake
+   if(!DetectStopHunt(buy ? false : true) && !DetectFalseBreak(buy) &&
+      GetDisplacementScore(buy) < 5 && !ContStruct_HasDisplacement(buy))
+   {
+      fail = "sweep without rejection";
+      return false;
+   }
+   return true;
+}
+
+bool PSI_QualityFVG(const bool buy, string &fail)
+{
+   fail = "";
+   if(!ActiveFVG(buy))
+   {
+      fail = "no FVG";
+      return false;
+   }
+   // Tiny / filled rejection via ContStruct zone helper when available
+   double zTop, zBot; string kind;
+   if(ContStruct_GetFreshZone(buy, zTop, zBot, kind))
+   {
+      if(StringFind(kind, "FVG") >= 0)
+      {
+         double atr = PSI_PriceATR(14);
+         double gap = zTop - zBot;
+         if(atr > 0.0 && gap < atr * PSI_MinFVG_ATR)
+         {
+            fail = "tiny FVG";
+            return false;
+         }
+      }
+   }
+   return true;
+}
+
+bool PSI_QualityOB(const bool buy, string &fail)
+{
+   fail = "";
+   if(IsOrderBlockFreshAndValid(buy))
+      return true;
+   if(IsOrderBlockMitigated(buy))
+   {
+      // mitigated still valid as breaker/mitigation — weaker but allowed
+      return true;
+   }
+   if(ActiveOrderBlock(buy))
+      return true;
+   fail = "invalid/broken OB";
+   return false;
+}
+
+int PSI_ScoreRegime(PSI_Report &r)
+{
+   double avgFast = PSI_AvgRange(1, 5);
+   double avgSlow = PSI_AvgRange(1, 20);
+   bool hh = DetectHigherHigh();
+   bool hl = DetectHigherLow();
+   bool lh = DetectLowerHigh();
+   bool ll = DetectLowerLow();
+   bool bullStruct = (hh && hl);
+   bool bearStruct = (lh && ll);
+   bool expanding = (avgSlow > 0.0 && avgFast >= avgSlow * 1.25);
+   bool compressing = (avgSlow > 0.0 && avgFast <= avgSlow * 0.70);
+   bool volExp = expanding || (IsVolatilityExpanding());
+   bool volComp = compressing || IsVolatilityContracting();
+
+   r.expansion = expanding || volExp;
+   r.compression = compressing || volComp;
+   r.strongTrend = (bullStruct || bearStruct) && expanding;
+   r.weakTrend = (bullStruct || bearStruct) && !expanding && !compressing;
+   r.sessionTransition = false;
+   string sess=""; string sdet=""; bool L=false,N=false,A=false,O=false; int hr=0;
+   DetectMarketSession(sess, sdet, L, N, A, O, hr);
+   r.sessionTransition = O; // London/NY overlap = transition energy
+   string nd="";
+   r.newsExpansion = NewsAwarenessInWindow(nd) && expanding;
+
+   int score = 0;
+   if(r.strongTrend) { r.regime = PSI_REG_TREND; score = 9; }
+   else if(r.weakTrend) { r.regime = PSI_REG_TREND; score = 6; }
+   else if(r.expansion) { r.regime = PSI_REG_EXPANSION; score = 8; }
+   else if(r.compression) { r.regime = PSI_REG_COMPRESSION; score = 5; }
+   else { r.regime = PSI_REG_RANGE; score = 3; }
+
+   if(r.sessionTransition) score = MathMin(10, score + 1);
+   if(r.newsExpansion) score = MathMin(10, score + 1);
+   r.regimeScore = score;
+   return score;
+}
+
+int PSI_ScoreTrend(const bool buy, PSI_Report &r)
+{
+   bool dBull = PSI_TF_BullBias(PERIOD_D1, 20);
+   bool dBear = PSI_TF_BearBias(PERIOD_D1, 20);
+   bool h4Bull = PSI_TF_BullBias(PERIOD_H4, 50);
+   bool h4Bear = PSI_TF_BearBias(PERIOD_H4, 50);
+   bool h1Bull = PSI_TF_BullBias(PERIOD_H1, 50);
+   bool h1Bear = PSI_TF_BearBias(PERIOD_H1, 50);
+   bool intBull = DetectInternalStructure(true);
+   bool intBear = DetectInternalStructure(false);
+   bool extBull = DetectExternalStructure(true);
+   bool extBear = DetectExternalStructure(false);
+   bool prem = InPremiumZone();
+   bool disc = InDiscountZone();
+   bool eq = !(prem || disc);
+
+   int bullPts = 0, bearPts = 0;
+   if(dBull) bullPts += 3; if(dBear) bearPts += 3;
+   if(h4Bull) bullPts += 3; if(h4Bear) bearPts += 3;
+   if(h1Bull) bullPts += 2; if(h1Bear) bearPts += 2;
+   if(intBull) bullPts += 2; if(intBear) bearPts += 2;
+   if(extBull) bullPts += 2; if(extBear) bearPts += 2;
+   if(buy && disc) bullPts += 2;
+   if(!buy && prem) bearPts += 2;
+   if(eq) { /* equilibrium — neutral lean */ }
+
+   if(bullPts > bearPts + 1) r.bias = PSI_BIAS_BULL;
+   else if(bearPts > bullPts + 1) r.bias = PSI_BIAS_BEAR;
+   else r.bias = PSI_BIAS_NEUTRAL;
+
+   int score = buy ? bullPts : bearPts;
+   if(score > 15) score = 15;
+   // Align bonus
+   if(buy && r.bias == PSI_BIAS_BULL) score = MathMin(15, score + 1);
+   if(!buy && r.bias == PSI_BIAS_BEAR) score = MathMin(15, score + 1);
+   if(buy && r.bias == PSI_BIAS_BEAR) score = MathMax(0, score - 4);
+   if(!buy && r.bias == PSI_BIAS_BULL) score = MathMax(0, score - 4);
+   r.trendScore = score;
+   return score;
+}
+
+int PSI_ScoreStructure(const bool buy, PSI_Report &r)
+{
+   int score = 0;
+   string bosFail = "";
+   bool hh = DetectHigherHigh();
+   bool hl = DetectHigherLow();
+   bool lh = DetectLowerHigh();
+   bool ll = DetectLowerLow();
+   if(buy && hh) score += 2;
+   if(buy && hl) score += 2;
+   if(!buy && lh) score += 2;
+   if(!buy && ll) score += 2;
+
+   if(PSI_QualityBOS(buy, bosFail)) score += 6;
+   else if(StructureDirectionalBOS(buy)) score += 1; // weak present but penalized
+
+   if(DetectMicroBOS(buy)) score += 2;
+   if(DetectCHoCH() && RecentDirectionalCHoCH(buy, EffectiveStructureRecency())) score += 3;
+   if(DetectMSS()) score += 3;
+   if(DetectInternalStructure(buy)) score += 2;
+   if(DetectExternalStructure(buy)) score += 2;
+
+   // Continuation vs reversal lean (price stack — no full RevSniper call/spam)
+   bool cont = (buy ? IsBullTrend() : IsBearTrend()) && StructureDirectionalBOS(buy);
+   bool rev = RecentDirectionalSweep(buy, EffectiveStructureRecency()) &&
+              (RecentDirectionalCHoCH(buy, EffectiveStructureRecency()) || DetectMSS()) &&
+              (ActiveOrderBlock(buy) || ActiveFVG(buy));
+   if(cont) score += 2;
+   if(rev) score += 2;
+
+   // Swing failure ≈ stop hunt + reclaim
+   if(DetectFalseBreak(buy)) score += 2;
+
+   if(score > 20) score = 20;
+   r.structureScore = score;
+   return score;
+}
+
+int PSI_ScoreLiquidity(const bool buy, PSI_Report &r)
+{
+   int score = 0;
+   if(IsEqualHigh()) score += 3;
+   if(IsEqualLow()) score += 3;
+   if(HasRestingLiquidity(buy)) score += 2;
+   if(HasRestingLiquidity(!buy)) score += 1; // opposing pool = target
+
+   string swFail = "";
+   if(PSI_QualitySweep(buy, swFail)) score += 7;
+   else if(RecentDirectionalSweep(buy, EffectiveStructureRecency())) score += 2;
+
+   if(DetectStopHunt(buy ? false : true)) score += 3;
+   if(DetectLiquidityGrab(buy)) score += 3;
+   // Engineered liquidity ≈ equal highs/lows + sweep
+   if((IsEqualHigh() || IsEqualLow()) && RecentDirectionalSweep(buy, EffectiveStructureRecency()))
+      score += 2;
+   // Liquidity void ≈ displacement leaving imbalance (FVG)
+   if(ActiveFVG(buy) && ContStruct_HasDisplacement(buy)) score += 2;
+
+   if(score > 20) score = 20;
+   r.liquidityScore = score;
+   return score;
+}
+
+int PSI_ScoreICT(const bool buy, PSI_Report &r)
+{
+   int score = 0;
+   string fvgFail = "", obFail = "";
+   if(PSI_QualityFVG(buy, fvgFail)) score += 5;
+   if(DetectIFVG(buy)) score += 2;
+   if(PSI_QualityOB(buy, obFail)) score += 5;
+   if(IsBreakerBlock(buy)) score += 2;
+   if(IsMitigationBlock(buy)) score += 1;
+   if(DetectBPR(buy)) score += 2;
+   if(ContStruct_HasDisplacement(buy) || GetDisplacementScore(buy) >= 5) score += 3;
+   if(PSI_StrongBody(buy)) score += 2; // institutional candle
+   if(buy && InDiscountZone()) score += 2;
+   if(!buy && InPremiumZone()) score += 2;
+   // Repricing ≈ displacement through equilibrium
+   double eq = GetEquilibrium();
+   double c1 = iClose(BrokerSymbol, EntryTF, 1);
+   double c2 = iClose(BrokerSymbol, EntryTF, 2);
+   if(eq > 0.0 && ContStruct_HasDisplacement(buy) &&
+      ((buy && c2 < eq && c1 > eq) || (!buy && c2 > eq && c1 < eq)))
+      score += 2;
+
+   if(score > 20) score = 20;
+   r.ictScore = score;
+   return score;
+}
+
+int PSI_ScoreSMT(const bool buy, PSI_Report &r)
+{
+   int score = 0;
+   bool internal = buy ? SMTInternalBullish() : SMTInternalBearish();
+   bool cross = buy ? SMTCrossAssetBullish() : SMTCrossAssetBearish();
+   if(internal) score += 4;
+   if(cross) score += 4;
+   // Continuation SMT: internal + trend align
+   if(internal && (buy ? IsBullTrend() : IsBearTrend())) score += 2;
+   // Reversal SMT: internal + CHoCH
+   if(internal && RecentDirectionalCHoCH(buy, EffectiveStructureRecency())) score += 2;
+   // Relative strength via TF bias stack
+   if(buy && PSI_TF_BullBias(PERIOD_H4, 50) && PSI_TF_BullBias(PERIOD_H1, 50)) score += 1;
+   if(!buy && PSI_TF_BearBias(PERIOD_H4, 50) && PSI_TF_BearBias(PERIOD_H1, 50)) score += 1;
+
+   // Conflict: opposite SMT firing
+   bool conflict = buy ? SMTInternalBearish() : SMTInternalBullish();
+   if(conflict && !internal) score = MathMax(0, score - 5);
+
+   if(score > 10) score = 10;
+   r.smtScore = score;
+   return score;
+}
+
+int PSI_ScoreMomentum(const bool buy, PSI_Report &r)
+{
+   int score = 0;
+   if(PSI_IsDoji()) { r.momentumScore = 0; return 0; }
+   if(PSI_StrongBody(buy)) score += 3;
+   if(GetDisplacementScore(buy) >= 10) score += 3;
+   else if(GetDisplacementScore(buy) >= 5) score += 2;
+   // Consecutive momentum
+   int streak = 0;
+   for(int i = 1; i <= 3; i++)
+   {
+      double o = iOpen(BrokerSymbol, EntryTF, i);
+      double c = iClose(BrokerSymbol, EntryTF, i);
+      if(buy && c > o) streak++;
+      if(!buy && c < o) streak++;
+   }
+   if(streak >= 3) score += 3;
+   else if(streak == 2) score += 2;
+   // Expansion candle
+   double avg = PSI_AvgRange(2, 10);
+   double r1 = iHigh(BrokerSymbol, EntryTF, 1) - iLow(BrokerSymbol, EntryTF, 1);
+   if(avg > 0.0 && r1 >= avg * 1.3 && PSI_StrongBody(buy)) score += 2;
+   // Rejection candle
+   if(DetectStopHunt(buy ? false : true)) score += 2;
+   // Continuation candle near EMA pullback finish
+   double ema = GetEMA();
+   double atr = PSI_PriceATR(14);
+   double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
+   if(ema != EMPTY_VALUE && atr > 0.0 && MathAbs(price - ema) <= atr * 1.2 && PSI_StrongBody(buy))
+      score += 1;
+
+   if(r.compression && score > 0) score = MathMax(0, score - 2);
+   if(score > 10) score = 10;
+   r.momentumScore = score;
+   return score;
+}
+
+int PSI_ScoreEntry(const bool buy, PSI_Report &r)
+{
+   int score = 0;
+   double ema = GetEMA();
+   double atr = PSI_PriceATR(14);
+   double price = buy ? SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK)
+                      : SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
+   bool pullbackDone = false;
+   if(ema != EMPTY_VALUE && atr > 0.0)
+   {
+      bool near = (MathAbs(price - ema) <= atr * EffectivePullbackATRMultiple());
+      pullbackDone = near && PSI_StrongBody(buy);
+   }
+   if(pullbackDone) score += 2;
+
+   // Sniper zone = near OB/FVG
+   double zTop, zBot; string kind;
+   if(ContStruct_GetFreshZone(buy, zTop, zBot, kind) && ContStruct_PriceNearZone(buy, zTop, zBot))
+      score += 3;
+
+   if(DetectMicroBOS(buy)) score += 2;
+   if(DetectMicroCHoCH(buy)) score += 2;
+   if(PSI_StrongBody(buy)) score += 2; // confirmation candle
+   if(ContStruct_HasDisplacement(buy)) score += 1;
+   if(buy ? AggressiveContinuationBuySetup() : AggressiveContinuationSellSetup()) score += 1;
+   if(buy ? AggressiveReversalBuySetup() : AggressiveReversalSellSetup()) score += 1;
+
+   if(score > 10) score = 10;
+   r.entryScore = score;
+   return score;
+}
+
+void PSI_NormalizeWeights()
+{
+   double s = g_PSI_W_Trend + g_PSI_W_Structure + g_PSI_W_Liquidity + g_PSI_W_ICT +
+              g_PSI_W_SMT + g_PSI_W_Momentum + g_PSI_W_Entry;
+   if(s <= 0.0) return;
+   g_PSI_W_Trend /= s; g_PSI_W_Structure /= s; g_PSI_W_Liquidity /= s;
+   g_PSI_W_ICT /= s; g_PSI_W_SMT /= s; g_PSI_W_Momentum /= s; g_PSI_W_Entry /= s;
+}
+
+int PSI_AdaptiveConfidence(const PSI_Report &r)
+{
+   // Normalize component scores to 0-100 contribution then weight
+   double conf =
+      g_PSI_W_Trend     * (100.0 * r.trendScore / 15.0) +
+      g_PSI_W_Structure * (100.0 * r.structureScore / 20.0) +
+      g_PSI_W_Liquidity * (100.0 * r.liquidityScore / 20.0) +
+      g_PSI_W_ICT       * (100.0 * r.ictScore / 20.0) +
+      g_PSI_W_SMT       * (100.0 * r.smtScore / 10.0) +
+      g_PSI_W_Momentum  * (100.0 * r.momentumScore / 10.0) +
+      g_PSI_W_Entry     * (100.0 * r.entryScore / 10.0);
+   int out = (int)MathRound(conf);
+   if(out < 0) out = 0;
+   if(out > 100) out = 100;
+   return out;
+}
+
+string PSI_GradeFromConfidence(const int conf)
+{
+   if(conf < 50) return "NO TRADE";
+   if(conf < 70) return "LOW QUALITY";
+   if(conf < 80) return "GOOD";
+   if(conf < 90) return "HIGH QUALITY";
+   if(conf < 95) return "A+";
+   return "INSTITUTIONAL SNIPER";
+}
+
+bool PSI_FakeSignalDetector(const bool buy, const PSI_Report &r, string &why)
+{
+   why = "";
+   // Against HTF
+   if(buy && r.bias == PSI_BIAS_BEAR && r.trendScore < 6)
+   { why = "Against HTF"; return true; }
+   if(!buy && r.bias == PSI_BIAS_BULL && r.trendScore < 6)
+   { why = "Against HTF"; return true; }
+
+   if(r.structureScore < 4)
+   { why = "Weak Structure"; return true; }
+
+   string bosFail = "";
+   if(StructureDirectionalBOS(buy) && !PSI_QualityBOS(buy, bosFail))
+   { why = "Fake/Weak/Tiny/Late BOS: " + bosFail; return true; }
+
+   // Fake CHoCH: CHoCH without multi-confirm / opposite sweep more recent
+   if(DetectCHoCH() && !RecentDirectionalCHoCH(buy, EffectiveStructureRecency()) &&
+      RecentDirectionalCHoCH(!buy, EffectiveStructureRecency()))
+   { why = "Fake CHoCH"; return true; }
+
+   if(r.momentumScore <= 1 || PSI_IsDoji())
+   { why = "Weak Momentum"; return true; }
+
+   // Low volume expansion ≈ no range expansion when claiming impulse
+   double avg = PSI_AvgRange(2, 12);
+   double r1 = iHigh(BrokerSymbol, EntryTF, 1) - iLow(BrokerSymbol, EntryTF, 1);
+   if(r.momentumScore >= 5 && avg > 0.0 && r1 < avg * 0.85)
+   { why = "Low Volume Expansion"; return true; }
+
+   string swFail = "";
+   if(RecentDirectionalSweep(buy, EffectiveStructureRecency()) && !PSI_QualitySweep(buy, swFail))
+   { why = "Weak Liquidity Sweep: " + swFail; return true; }
+
+   string obFail = "";
+   if(ActiveOrderBlock(buy) && !PSI_QualityOB(buy, obFail))
+   { why = "Invalid Order Block"; return true; }
+
+   string fvgFail = "";
+   if(ActiveFVG(buy) && !PSI_QualityFVG(buy, fvgFail))
+   { why = "Invalid FVG: " + fvgFail; return true; }
+
+   if(PSI_RejectPremiumBuys && buy && InPremiumZone() && !InDiscountZone())
+   {
+      if(!(InstantQualityMode && r.structureScore >= 10 && r.confidence >= PSI_GoodConfidence))
+      { why = "Premium Buy"; return true; }
+   }
+   if(PSI_RejectDiscountSells && !buy && InDiscountZone() && !InPremiumZone())
+   {
+      if(!(InstantQualityMode && r.structureScore >= 10 && r.confidence >= PSI_GoodConfidence))
+      { why = "Discount Sell"; return true; }
+   }
+
+   // Poor RR proxy: ATR stop would be huge vs structure
+   double atr = PSI_PriceATR(14);
+   if(atr > 0.0)
+   {
+      double stopDist = atr * 1.5;
+      double tpDist = atr * 2.0;
+      if(tpDist < stopDist * 1.0)
+      { why = "Poor Risk Reward"; return true; }
+   }
+
+   // Late entry / chasing: price far from zone after BOS
+   double zTop, zBot; string kind;
+   if(ContStruct_GetFreshZone(buy, zTop, zBot, kind))
+   {
+      if(!ContStruct_PriceNearZone(buy, zTop, zBot) && ContStruct_HasDisplacement(buy) &&
+         r.entryScore < 3)
+      { why = "Late Entry / Chasing Price"; return true; }
+   }
+
+   // Trade into liquidity: buying into equal highs / selling into equal lows without sweep
+   if(buy && IsEqualHigh() && !RecentDirectionalSweep(true, EffectiveStructureRecency()) &&
+      !DetectStopHunt(false))
+   { why = "Trade Into Liquidity"; return true; }
+   if(!buy && IsEqualLow() && !RecentDirectionalSweep(false, EffectiveStructureRecency()) &&
+      !DetectStopHunt(true))
+   { why = "Trade Into Liquidity"; return true; }
+
+   // Overextended: far from equilibrium with weak pullback
+   double eq = GetEquilibrium();
+   double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
+   if(eq > 0.0 && atr > 0.0 && MathAbs(price - eq) > atr * 3.5 && r.entryScore < 4)
+   { why = "Overextended Market"; return true; }
+
+   bool conflict = buy ? SMTInternalBearish() : SMTInternalBullish();
+   bool support = buy ? SMTInternalBullish() : SMTInternalBearish();
+   if(conflict && !support)
+   { why = "Conflicting SMT"; return true; }
+
+   if(r.confidence > 0 && r.confidence < PSI_MinConfidenceToTrade)
+   { why = "Low Confidence"; return true; }
+
+   return false;
+}
+
+string PSI_RegimeToString(const PSI_RegimeClass reg)
+{
+   if(reg == PSI_REG_TREND) return "TREND";
+   if(reg == PSI_REG_EXPANSION) return "EXPANSION";
+   if(reg == PSI_REG_COMPRESSION) return "COMPRESSION";
+   return "RANGE";
+}
+
+string PSI_BiasToString(const PSI_BiasSide b)
+{
+   if(b == PSI_BIAS_BULL) return "Bullish";
+   if(b == PSI_BIAS_BEAR) return "Bearish";
+   return "Neutral";
+}
+
+
+void PSI_Publish(const PSI_Report &r)
+{
+   g_LastPSI = r;
+   g_PSI_LastConfidence = r.confidence;
+   g_PSI_LastGrade = r.grade;
+   g_PSI_LastReason = r.reason;
+   g_PSI_LastCancelled = r.cancelled;
+}
+
+PSI_Report PSI_Evaluate(const bool buy)
+{
+   PSI_Report r;
+   r.signal = PSI_SIG_NONE;
+   r.confidence = 0;
+   r.grade = "NO TRADE";
+   r.reason = "";
+   r.cancelled = false;
+   r.cancelReason = "";
+   r.regime = PSI_REG_RANGE;
+   r.regimeScore = 0;
+   r.bias = PSI_BIAS_NEUTRAL;
+   r.trendScore = 0;
+   r.structureScore = 0;
+   r.liquidityScore = 0;
+   r.ictScore = 0;
+   r.smtScore = 0;
+   r.momentumScore = 0;
+   r.entryScore = 0;
+   r.strongTrend = false;
+   r.weakTrend = false;
+   r.compression = false;
+   r.expansion = false;
+   r.sessionTransition = false;
+   r.newsExpansion = false;
+
+   if(!EnablePSI)
+   {
+      r.reason = "PSI disabled";
+      PSI_Publish(r);
+      return r;
+   }
+
+   PSI_ScoreRegime(r);
+   PSI_ScoreTrend(buy, r);
+   PSI_ScoreStructure(buy, r);
+   PSI_ScoreLiquidity(buy, r);
+   PSI_ScoreICT(buy, r);
+   PSI_ScoreSMT(buy, r);
+   PSI_ScoreMomentum(buy, r);
+   PSI_ScoreEntry(buy, r);
+
+   r.confidence = PSI_AdaptiveConfidence(r);
+   r.grade = PSI_GradeFromConfidence(r.confidence);
+
+   string fakeWhy = "";
+   // Pre-set confidence for low-confidence fake check
+   if(PSI_HardCancelFakes && PSI_FakeSignalDetector(buy, r, fakeWhy))
+   {
+      r.cancelled = true;
+      r.cancelReason = fakeWhy;
+      r.signal = PSI_SIG_NONE;
+      r.grade = "NO TRADE";
+      r.reason = "SIGNAL CANCELLED — " + fakeWhy +
+                 StringFormat(" | Conf=%d Regime=%s Bias=%s Str=%d Liq=%d ICT=%d SMT=%d Mom=%d Ent=%d",
+                              r.confidence, PSI_RegimeToString(r.regime), PSI_BiasToString(r.bias),
+                              r.structureScore, r.liquidityScore, r.ictScore, r.smtScore,
+                              r.momentumScore, r.entryScore);
+      PSI_Publish(r);
+      return r;
+   }
+
+   if(r.confidence < PSI_MinConfidenceToTrade)
+   {
+      r.signal = PSI_SIG_NONE;
+      r.grade = "NO TRADE";
+      r.reason = StringFormat("NO TRADE Conf=%d<%d | %s %s | T%d S%d L%d I%d SMT%d M%d E%d",
+                             r.confidence, PSI_MinConfidenceToTrade,
+                             PSI_RegimeToString(r.regime), PSI_BiasToString(r.bias),
+                             r.trendScore, r.structureScore, r.liquidityScore, r.ictScore,
+                             r.smtScore, r.momentumScore, r.entryScore);
+      PSI_Publish(r);
+      return r;
+   }
+
+   r.signal = buy ? PSI_SIG_BUY : PSI_SIG_SELL;
+   r.reason = StringFormat("%s %s Conf=%d%% Grade=%s | Regime=%s(%d) Bias=%s | T%d/15 S%d/20 L%d/20 ICT%d/20 SMT%d/10 M%d/10 E%d/10",
+                           (buy ? "BUY" : "SELL"),
+                           (r.confidence >= PSI_InstantConfidence ? "INSTANT" : "QUALIFIED"),
+                           r.confidence, r.grade,
+                           PSI_RegimeToString(r.regime), r.regimeScore,
+                           PSI_BiasToString(r.bias),
+                           r.trendScore, r.structureScore, r.liquidityScore, r.ictScore,
+                           r.smtScore, r.momentumScore, r.entryScore);
+   PSI_Publish(r);
+   return r;
+}
+
+bool PSI_PathAllowed(const bool buy, const string strategyTag, string &detail)
+{
+   detail = "";
+   if(!EnablePSI || !PSI_GateAllLivePaths)
+      return true;
+
+   PSI_Report r = PSI_Evaluate(buy);
+   if(buy) g_LastPSIBuy = r; else g_LastPSISell = r;
+   g_LastPSI = r;
+
+   if(r.cancelled)
+   {
+      detail = "PSI CANCEL: " + r.cancelReason;
+      if(PSI_LogDecisions)
+         Print("PSI CANCELLED [", strategyTag, "] ", r.reason, " on ", BrokerSymbol);
+      return false;
+   }
+
+   if(r.confidence < PSI_MinConfidenceToTrade)
+   {
+      detail = "PSI NO TRADE: Conf=" + IntegerToString(r.confidence);
+      if(PSI_LogDecisions)
+         Print("PSI NO TRADE [", strategyTag, "] ", r.reason, " on ", BrokerSymbol);
+      return false;
+   }
+
+   // LOW QUALITY 50-69: only if InstantQuality soft allow
+   if(r.confidence < PSI_GoodConfidence)
+   {
+      if(!(InstantQualityMode && PSI_SoftLowQualityInInstant))
+      {
+         detail = "PSI LOW QUALITY blocked Conf=" + IntegerToString(r.confidence);
+         if(PSI_LogDecisions)
+            Print("PSI LOW blocked [", strategyTag, "] ", r.reason, " on ", BrokerSymbol);
+         return false;
+      }
+   }
+
+   detail = r.reason;
+   if(PSI_LogDecisions)
+      Print("PSI APPROVE [", strategyTag, "] ", r.reason, " on ", BrokerSymbol);
+   return true;
+}
+
+bool PSI_TryStandalone(bool &buySignal, bool &sellSignal, string &strategyTag)
+{
+   if(!EnablePSI || !PSI_AllowStandaloneFire)
+      return false;
+
+   PSI_Report b = PSI_Evaluate(true);
+   PSI_Report s = PSI_Evaluate(false);
+   g_LastPSIBuy = b;
+   g_LastPSISell = s;
+
+   bool bOK = (!b.cancelled && b.confidence >= PSI_InstantConfidence && b.signal == PSI_SIG_BUY);
+   bool sOK = (!s.cancelled && s.confidence >= PSI_InstantConfidence && s.signal == PSI_SIG_SELL);
+
+   if(bOK && sOK)
+   {
+      // conflict → higher confidence / bias
+      if(b.confidence > s.confidence) sOK = false;
+      else if(s.confidence > b.confidence) bOK = false;
+      else if(b.bias == PSI_BIAS_BULL) sOK = false;
+      else if(s.bias == PSI_BIAS_BEAR) bOK = false;
+      else return false;
+   }
+
+   if(bOK)
+   {
+      buySignal = true;
+      sellSignal = false;
+      strategyTag = "PSI";
+      g_LastPSI = b;
+      Print("PSI INSTANT FIRE BUY Conf=", b.confidence, "% Grade=", b.grade, " — ", b.reason, " on ", BrokerSymbol);
+      return true;
+   }
+   if(sOK)
+   {
+      sellSignal = true;
+      buySignal = false;
+      strategyTag = "PSI";
+      g_LastPSI = s;
+      Print("PSI INSTANT FIRE SELL Conf=", s.confidence, "% Grade=", s.grade, " — ", s.reason, " on ", BrokerSymbol);
+      return true;
+   }
+   return false;
+}
+
+void PSI_LearnFromTrade(const bool wasWin, const string /*setup*/, const int conf)
+{
+   if(!EnablePSI || !PSI_EnableSelfLearn)
+      return;
+
+   g_PSI_LearnTrades++;
+   if(wasWin) g_PSI_LearnWins++;
+   else g_PSI_LearnLosses++;
+
+   // Nudge weights toward components that dominated last report
+   double step = PSI_LearnStep;
+   if(!wasWin) step = -PSI_LearnStep;
+
+   // Prefer structure/liquidity on wins (institutional), reduce momentum chase on losses
+   g_PSI_W_Structure += step * 0.35;
+   g_PSI_W_Liquidity += step * 0.25;
+   g_PSI_W_ICT       += step * 0.20;
+   g_PSI_W_Trend     += step * 0.10;
+   g_PSI_W_SMT       += step * 0.05;
+   g_PSI_W_Momentum  += (wasWin ? step * 0.03 : -MathAbs(step) * 0.08);
+   g_PSI_W_Entry     += step * 0.02;
+
+   // Keep floors
+   g_PSI_W_Trend = MathMax(0.08, g_PSI_W_Trend);
+   g_PSI_W_Structure = MathMax(0.12, g_PSI_W_Structure);
+   g_PSI_W_Liquidity = MathMax(0.10, g_PSI_W_Liquidity);
+   g_PSI_W_ICT = MathMax(0.08, g_PSI_W_ICT);
+   g_PSI_W_SMT = MathMax(0.04, g_PSI_W_SMT);
+   g_PSI_W_Momentum = MathMax(0.02, g_PSI_W_Momentum);
+   g_PSI_W_Entry = MathMax(0.02, g_PSI_W_Entry);
+   PSI_NormalizeWeights();
+
+   if(PSI_LogDecisions)
+      Print("PSI LEARN ", (wasWin ? "WIN" : "LOSS"),
+            " trades=", g_PSI_LearnTrades,
+            " W/L=", g_PSI_LearnWins, "/", g_PSI_LearnLosses,
+            " conf=", conf,
+            " Wstruct=", DoubleToString(g_PSI_W_Structure, 3),
+            " on ", BrokerSymbol);
+}
+
+
 void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategyTag)
 {
    buySignal = false;
    sellSignal = false;
    strategyTag = "";
 
-   // OK82 PRISM COMPLETE LIVE:
-   // 1) APEX liquidity sniper
-   // 2) SpecCompliant ContSniper / RevSniper / InstantTrend / classic PRISM
-   // 3) ContFallback structure instant quality
-   // 4) LCS optional
+   // OK83: PRISM paths → PSI gate. PSI ≥90% may FIRE standalone (instant).
+   // 1) APEX
    if(EnableAPEXStrategy)
    {
       EvaluateAPEXStrategies(buySignal, sellSignal, strategyTag);
       if(buySignal || sellSignal)
-         return;
+      {
+         string d = "";
+         bool sideBuy = buySignal;
+         if(!PSI_PathAllowed(sideBuy, strategyTag, d))
+         {
+            buySignal = false; sellSignal = false; strategyTag = "";
+         }
+         else
+            return;
+      }
    }
 
+   // 2) SpecCompliant Cont/Rev/Instant
    if(EnablePrismLiveStack)
    {
       EvaluateSpecCompliantStrategies(buySignal, sellSignal, strategyTag);
       if(buySignal || sellSignal)
-         return;
+      {
+         string d = "";
+         bool sideBuy = buySignal;
+         if(!PSI_PathAllowed(sideBuy, strategyTag, d))
+         {
+            buySignal = false; sellSignal = false; strategyTag = "";
+         }
+         else
+            return;
+      }
    }
 
+   // 3) ContFallback
    if(EnableContFallback)
    {
       EvaluateContFallback(buySignal, sellSignal, strategyTag);
       if(buySignal || sellSignal)
-         return;
+      {
+         string d = "";
+         bool sideBuy = buySignal;
+         if(!PSI_PathAllowed(sideBuy, strategyTag, d))
+         {
+            buySignal = false; sellSignal = false; strategyTag = "";
+         }
+         else
+            return;
+      }
    }
 
+   // 4) LCS optional
    if(EnableLCSStrategy)
+   {
       EvaluateLCSStrategies(buySignal, sellSignal, strategyTag);
+      if(buySignal || sellSignal)
+      {
+         string d = "";
+         bool sideBuy = buySignal;
+         if(!PSI_PathAllowed(sideBuy, strategyTag, d))
+         {
+            buySignal = false; sellSignal = false; strategyTag = "";
+         }
+         else
+            return;
+      }
+   }
+
+   // 5) PSI institutional sniper standalone (Conf ≥ Instant threshold)
+   PSI_TryStandalone(buySignal, sellSignal, strategyTag);
 }
 
 //+------------------------------------------------------------------+
@@ -12697,6 +13697,15 @@ void CreateDashboard()
          "SMT: ", ((SMTInternalBullish()||SMTInternalBearish()) ? "ACTIVE" : "soft"),
          " | ICE: ", IntegerToString(GetInstitutionalConfidenceScore(true)),
          " | MPI: ", IntegerToString(CalculatePRISMScore(true)), "\n",
+         "PSI: ", (g_LastPSI.signal == PSI_SIG_BUY ? "BUY" : (g_LastPSI.signal == PSI_SIG_SELL ? "SELL" : "NO TRADE")),
+         " Conf=", IntegerToString(g_LastPSI.confidence), "%",
+         " ", g_LastPSI.grade, "\n",
+         "PSI Regime=", PSI_RegimeToString(g_LastPSI.regime),
+         " Bias=", PSI_BiasToString(g_LastPSI.bias),
+         " | S/L/I/SMT=", IntegerToString(g_LastPSI.structureScore), "/",
+         IntegerToString(g_LastPSI.liquidityScore), "/",
+         IntegerToString(g_LastPSI.ictScore), "/",
+         IntegerToString(g_LastPSI.smtScore), "\n",
          "Beast: ", IntegerToString(beast.overall),
          " | Conf: ", IntegerToString(beast.confidencePct), "%",
          " | Grade: ", g_UltraLastGrade, "\n",
@@ -12706,7 +13715,7 @@ void CreateDashboard()
          "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
          " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
          "Live: APEX→Cont/Rev/Instant→ContFallback | Comment: SNIPER AI\n",
-         "BUILD: SA_PRISM_82\n",
+         "BUILD: SA_PSI_83\n",
          "========================================"
       );
       return;
@@ -12728,7 +13737,7 @@ void CreateDashboard()
          " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
          "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
          " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_PRISM_82\n",
+         "BUILD: SA_PSI_83\n",
          "=========================================="
       );
       return;
@@ -12964,7 +13973,7 @@ string LiveMarketSummary()
 void PrintLiveMarketAnalysis()
 {
    AnalyzeLiveMarket(true);
-   Print("---- MARKET ANALYSIS BUILD=SA_PRISM_82 (", BrokerSymbol, ") ----");
+   Print("---- MARKET ANALYSIS BUILD=SA_PSI_83 (", BrokerSymbol, ") ----");
    Print("SESSION=", g_LiveMkt.sessionName,
          " hour=", g_LiveMkt.sessionHour,
          (APEX_UseGMT ? " GMT" : " SERVER"),

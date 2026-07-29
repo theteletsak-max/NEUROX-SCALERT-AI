@@ -1,10 +1,7 @@
-SNIPER AI OK82 — PRISM COMPLETE LIVE
+SNIPER AI OK83 — PRISM SIGNAL INDEX (PSI) v1.0
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK82.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK83.mq5
 
-Full PRISM stack restored:
-APEX → ContSniper / RevSniper / InstantTrend → ContFallback
-
-Instant open + quality prefer (soft gates).
-F7 → compile → attach → confirm BUILD_ID=SA_PRISM_82
+Price-only institutional detector (no RSI/MACD/Stoch/CCI/BB).
+F7 → attach → Journal must show SA_PSI_83
 Trade comment: SNIPER AI

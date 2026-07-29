@@ -1,17 +1,14 @@
 SNIPER AI — CURRENT
 
-EA:       SNIPER_AI_OK82.mq5
-BUILD_ID: SA_PRISM_82
-Mode:     PRISM COMPLETE LIVE + INSTANT QUALITY
+EA:       SNIPER_AI_OK83.mq5
+BUILD_ID: SA_PSI_83
+Mode:     PRISM SIGNAL INDEX (PSI) v1.0 — PRICE ONLY
 
-Live fire order:
-1) APEX (liquidity sniper)
-2) PRISM Spec — ContSniper / RevSniper / InstantTrend (+ classic paths)
-3) ContFallback (structure BOS/zone/disp)
-4) LCS (optional)
+PSI engines: Regime, Trend, Structure, Liquidity, ICT, SMT, Momentum, Entry
+→ Adaptive Confidence → Fake Signal Detector → Trade Grade → Execution
 
-InstantQualityMode = soft quality prefer (no endless ICE/IMCE/ADX waits)
-Trade comment = SNIPER AI
-Dashboard = ON (PRISM COMPLETE HUD)
+Live: APEX/Cont/Rev/Instant/ContFallback gated by PSI
+Standalone: PSI fires instantly at Confidence ≥ 90%
+Trade comment: SNIPER AI
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK82.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK83.mq5

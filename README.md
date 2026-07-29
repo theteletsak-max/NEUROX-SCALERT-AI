@@ -1,12 +1,12 @@
-# SNIPER AI OK82 — PRISM COMPLETE LIVE
+# SNIPER AI OK83 — PRISM SIGNAL Index (PSI) v1.0
 
-Full institutional PRISM stack is live again:
+Custom **price-only** institutional signal detector. No RSI, MACD, Stochastic, CCI, or Bollinger.
 
-1. APEX liquidity sniper  
-2. ContSniper / RevSniper / InstantTrend (SpecCompliant ranking)  
-3. ContFallback structure instant quality  
-4. LCS optional  
+**Pipeline:** Structure + Liquidity + ICT + SMT + Momentum + Entry → Confidence → Fake Detector → Grade → Execution
 
-InstantQualityMode softens ICE/IMCE/ADX hard waits while still preferring quality confluence. Trade comment: **SNIPER AI**. BUILD: `SA_PRISM_82`.
+- Confidence **&lt; 50** → NO TRADE  
+- **70–89** → GOOD / HIGH QUALITY path fire  
+- **≥ 90** → instant market execution (PSI standalone)  
+- Trade comment: `SNIPER AI` · BUILD: `SA_PSI_83`
 
-Download: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK82.mq5
+Download: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK83.mq5

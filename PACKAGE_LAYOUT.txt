@@ -1,6 +1,6 @@
-CURRENT: SNIPER_AI_OK82.mq5 (SA_PRISM_82)
-LIVE: APEX → ContSniper/RevSniper/InstantTrend → ContFallback → LCS(opt)
+CURRENT: SNIPER_AI_OK83.mq5 (SA_PSI_83)
+ENGINE: PRISM SIGNAL INDEX (PSI) v1.0 — price-only
+LIVE: APEX/Spec/ContFallback gated by PSI | PSI standalone ≥90%
 MIRRORS: SNIPER_AI.mq5 | MQL5/Experts/SNIPER_AI.mq5 | release/deliver/
-ARCHIVE: release/archive/ (OK11–OK81)
+ARCHIVE: release/archive/
 ZIP: release/deliver/SNIPER_AI.zip
-OPTIONAL CHART: SNIPER_IDP.mq5 (visual; pulse is built into EA)
