@@ -1,7 +1,5 @@
 1. Download SNIPER_AI_OK92.mq5
 2. Copy to MQL5/Experts/
 3. Compile (F7)
-4. Attach to chart
-5. Journal must show: BUILD_ID=SA_ULTRA_92
-6. Trade comment: SNIPER AI
-7. MaxOpenTrades=3
+4. Journal must show: BUILD_ID=SA_ULTRA_92R
+5. Comment: SNIPER AI | MaxOpen=3

@@ -1,5 +1,5 @@
-SNIPER AI ULTRA OK92 — COMPLETE FEATURE ARCHITECTURE
+SNIPER AI ULTRA OK92R — old strategies removed, ULTRA only
 
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK92.mq5
 
-F7 → SA_ULTRA_92 | Comment: SNIPER AI | MaxOpen=3
+F7 → SA_ULTRA_92R | Comment: SNIPER AI | MaxOpen=3

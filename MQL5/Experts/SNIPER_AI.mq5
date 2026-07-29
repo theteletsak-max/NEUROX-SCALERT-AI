@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_ULTRA_92                                             |
+//| BUILD_ID: SA_ULTRA_92R                                             |
 //| SNIPER AI ULTRA — COMPLETE FEATURE ARCHITECTURE                   |
 //| Comment: SNIPER AI | MaxOpen=3 | Session/News never hard-block    |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "9.20"
+#property version   "9.21"
 #property description "SNIPER AI ULTRA: full architecture on OK81 exec shell"
-#property description "UBOSE/UCHOCHE/ULSE/UFIE + SMI/MEO/IFI. BUILD=SA_ULTRA_92"
+#property description "ULTRA only. Old APEX/Cont/LCS/IDP-gate REMOVED. BUILD=SA_ULTRA_92R"
 
 #include <Trade/Trade.mqh>
 
@@ -642,7 +642,11 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI ULTRA Loaded BUILD_ID=SA_ULTRA_92 MaxOpen=", MaxOpenTrades); UltraCoreInit();
+   Print("SNIPER AI ULTRA Loaded BUILD_ID=SA_ULTRA_92R MaxOpen=", MaxOpenTrades);
+   UltraCoreInit();
+   if(EnableAPEXStrategy || EnableContFallback || EnableLCSStrategy)
+      Print("OK92 WARNING: old APEX/ContFallback/LCS input ON — evaluators STUBBED; ULTRA only fires");
+   Print("OK92: old APEX/ContFallback/LCS/IDP-gate REMOVED from live path — ULTRA only");
    Print("INSTANT OPEN + QUALITY PREFER MODE=", InstantQualityMode);
    Print("QUALITY SELECT: IDP_Hard=", IDP_HardGate, " MinPulse=", IDP_MinAbsPulse,
          " ContScore=", ContStruct_MinScore, " ADX=", ContStruct_RequireTrendADX,
@@ -1037,32 +1041,13 @@ bool ContStruct_HasQualityBOS(const bool buy);
 bool ContStruct_GetFreshZone(const bool buy, double &zTop, double &zBot, string &kind);
 bool ContStruct_PriceNearZone(const bool buy, const double zTop, const double zBot);
 bool ContStruct_HasDisplacement(const bool buy);
-bool ContFallbackBestStructureOK(const bool buy, string &detail);
-string ContStruct_Grade(const bool buy);
-bool NewsAwarenessInWindow(string &detail);
-bool APEX_InKillZone(string &detail);
-void DetectMarketSession(string &name, string &detail, bool &inLondon, bool &inNY, bool &inAsia, bool &inOverlap, int &hourOut);
-
-
-bool HasStructureConfluence(bool buy);
-bool HasHTFStructureConfluence(bool buy);
-bool IsVolatilityExpanding();
-MarketRegime GetMarketRegime();
-
-// NOTE: RecordSignalSnapshot() itself is defined in Part 6, alongside the
-// PendingSignalSnapshot mechanism (fix #6) - it needs to be able to reuse
-// the exact snapshot captured at the moment StrongBuySetup()/
-// StrongSellSetup() approved the trade, rather than recomputing everything
-// fresh after the fact.
-
-int FindSignalSnapshot(ulong ticket)
+bool ContFallbackBestStructureOK(const bool buy, string &detail)
 {
-   for(int i = 0; i < ArraySize(SignalSnapshots); i++)
-      if(SignalSnapshots[i].ticket == ticket)
-         return i;
-
-   return -1;
+   // OK92 REMOVED — ContFallback deleted (ULTRA ContSniper replaces it)
+   detail = "ContFallback retired OK92";
+   return false;
 }
+
 
 void RemoveSignalSnapshot(int index)
 {
@@ -9137,11 +9122,10 @@ int PathQualityRankScore(const string tag, const bool buy)
 // condition count.
 void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &strategyTag)
 {
-   // OK67 RETIRED — ContSniper/Rev/Instant/PRISM multi-path is not live
-   buySignal = false;
-   sellSignal = false;
-   strategyTag = "";
+   // OK92 REMOVED — old ContSniper/Rev/Instant/PRISM live router
+   buySignal = false; sellSignal = false; strategyTag = "";
 }
+
 
 bool TrendPullbackBuySetup()
 {
@@ -10372,329 +10356,28 @@ bool IDP_GetPulse(double &pulse, string &detail)
 
 bool IDP_ConfluenceOK(const bool buy, string &detail)
 {
-   double pulse;
-   string pd;
-   double need;
-   bool ok;
-   string grade;
-
-   detail = "";
-   if(!EnableIDPConfluence)
-   {
-      detail = "IDP off";
-      return true;
-   }
-
-   pulse = 0.0;
-   pd = "";
-   if(!IDP_GetPulse(pulse, pd))
-   {
-      detail = pd;
-      if(!IDP_HardGate)
-      {
-         if(IDP_LogGate)
-            Print("IDP soft-allow (no pulse): ", pd, " on ", BrokerSymbol);
-         return true;
-      }
-      return false;
-   }
-
-   need = IDP_RequireStrong ? IDP_StrongAbsPulse : IDP_MinAbsPulse;
-   if(need < 0.0) need = 0.0;
-
-   ok = buy ? (pulse >= need) : (pulse <= -need);
-   grade = (MathAbs(pulse) >= IDP_StrongAbsPulse) ? "STRONG"
-         : (MathAbs(pulse) >= IDP_MinAbsPulse) ? "QUALITY" : "WEAK";
-
-   detail = StringFormat("%s %s need %s%.0f (got %.1f)",
-                         pd, grade, buy ? "+" : "-", need, pulse);
-
-   if(ok)
-   {
-      if(IDP_LogGate)
-         Print("IDP PASS ", (buy ? "BUY" : "SELL"), " - ", detail, " on ", BrokerSymbol);
-      return true;
-   }
-
-   if(IDP_LogGate)
-      Print("IDP FAIL ", (buy ? "BUY" : "SELL"), " - ", detail, " on ", BrokerSymbol);
-
-   if(!IDP_HardGate)
-      return true;
-   return false;
+   // OK92: IDP retired as live gate — ULTRA confluence owns decisions
+   detail = "IDP retired soft-pass OK92";
+   return true;
 }
+
 
 
 bool APEX_SetupOK(const bool buy, string &detail, double &invalidation)
 {
-   detail = "";
+   // OK92 REMOVED — old APEX live strategy deleted
+   detail = "APEX retired OK92";
    invalidation = 0.0;
-   g_APEX_LastDetail = "";
-
-   if(!EnableAPEXStrategy)
-   {
-      detail = "APEX disabled";
-      return false;
-   }
-
-   string sessDetail = "";
-   if(!APEX_InKillZone(sessDetail))
-   {
-      detail = sessDetail;
-      return false;
-   }
-
-   if(Bars(BrokerSymbol, APEX_BiasTF) < APEX_BiasMA_Period + 10 ||
-      Bars(BrokerSymbol, APEX_EntryTF) < APEX_PoolLookback + 10)
-   {
-      detail = "APEX: insufficient Bias/Entry history";
-      return false;
-   }
-
-   string biasDetail = "";
-   if(buy)
-   {
-      if(!APEX_BiasBull(biasDetail)) { detail = biasDetail; return false; }
-   }
-   else
-   {
-      if(!APEX_BiasBear(biasDetail)) { detail = biasDetail; return false; }
-   }
-
-   double pool = 0.0;
-   if(buy)
-   {
-      if(!APEX_FindBuyPool(pool)) { detail = "APEX: no sell-side liquidity pool (lows)"; return false; }
-   }
-   else
-   {
-      if(!APEX_FindSellPool(pool)) { detail = "APEX: no buy-side liquidity pool (highs)"; return false; }
-   }
-
-   int sweepBar = 0;
-   double sweepExt = 0.0;
-   if(!APEX_SweepOfPool(buy, pool, sweepBar, sweepExt))
-   {
-      // OK62 relaxed: also accept a fresh stop-hunt of a recent swing (not only equal-pool)
-      if(APEX_RelaxedEntries)
-      {
-         ENUM_TIMEFRAMES tf = APEX_EntryTF;
-         double atr = APEX_AvgRange(tf, 14);
-         double minDepth = (atr > 0.0) ? (atr * APEX_MinSweepDepthATR) : 0.0;
-         int lb = MathMax(APEX_SweepLookback, 3);
-         bool found = false;
-         for(int i = 1; i <= lb && !found; i++)
-         {
-            double hi = iHigh(BrokerSymbol, tf, i);
-            double lo = iLow(BrokerSymbol, tf, i);
-            double cl = iClose(BrokerSymbol, tf, i);
-            double range = hi - lo;
-            if(range <= 0.0) continue;
-            if(buy)
-            {
-               double priorLow = iLow(BrokerSymbol, tf, i + 1);
-               for(int j = i + 2; j <= i + 6; j++)
-               {
-                  double l = iLow(BrokerSymbol, tf, j);
-                  if(l > 0.0 && l < priorLow) priorLow = l;
-               }
-               if(lo < priorLow - minDepth && cl > priorLow)
-               {
-                  double wick = MathMin(cl, priorLow) - lo;
-                  if(wick / range >= APEX_MinSweepWickRatio)
-                  {
-                     sweepBar = i; sweepExt = lo; pool = priorLow; found = true;
-                  }
-               }
-            }
-            else
-            {
-               double priorHigh = iHigh(BrokerSymbol, tf, i + 1);
-               for(int j = i + 2; j <= i + 6; j++)
-               {
-                  double h = iHigh(BrokerSymbol, tf, j);
-                  if(h > priorHigh) priorHigh = h;
-               }
-               if(hi > priorHigh + minDepth && cl < priorHigh)
-               {
-                  double wick = hi - MathMax(cl, priorHigh);
-                  if(wick / range >= APEX_MinSweepWickRatio)
-                  {
-                     sweepBar = i; sweepExt = hi; pool = priorHigh; found = true;
-                  }
-               }
-            }
-         }
-         if(!found)
-         {
-            detail = buy ? "APEX: waiting for sell-side sweep (lows taken)"
-                         : "APEX: waiting for buy-side sweep (highs taken)";
-            return false;
-         }
-      }
-      else
-      {
-         detail = buy ? "APEX: pool not swept (need lows taken + reclaim close)"
-                      : "APEX: pool not swept (need highs taken + reclaim close)";
-         return false;
-      }
-   }
-
-   if(!APEX_HasReclaim(buy, pool))
-   {
-      detail = "APEX: need reclaim close beyond pool after sweep";
-      return false;
-   }
-   if(!APEX_HasDisplacement(buy))
-   {
-      detail = APEX_RequireTickVol
-         ? "APEX: need displacement (body/ATR/tickVol)"
-         : "APEX: need displacement (body/ATR)";
-      return false;
-   }
-   if(APEX_RequireUnmitigatedZone && !APEX_HasUnmitigatedZone(buy))
-   {
-      detail = "APEX: need unmitigated FVG/OB zone";
-      return false;
-   }
-
-   double atr = APEX_AvgRange(APEX_EntryTF, 14);
-   double buf = (atr > 0.0) ? (atr * APEX_SL_BufferATR) : 0.0;
-   invalidation = buy ? (sweepExt - buf) : (sweepExt + buf);
-
-   // Reject absurd SL distance
-   double px = buy ? SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK)
-                   : SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
-   if(px > 0.0 && atr > 0.0 && APEX_MaxSL_ATR > 0.0)
-   {
-      double dist = MathAbs(px - invalidation);
-      if(dist > atr * APEX_MaxSL_ATR)
-      {
-         detail = "APEX: sweep SL too wide vs ATR (risk reject)";
-         return false;
-      }
-   }
-
-   if(IDP_ApplyToAPEX)
-   {
-      string idpDetail = "";
-      if(!IDP_ConfluenceOK(buy, idpDetail))
-      {
-         detail = "APEX IDP block: " + idpDetail;
-         return false;
-      }
-   }
-
-   string idpNote = "";
-   if(EnableIDPConfluence && IDP_ApplyToAPEX)
-   {
-      double p = 0.0;
-      string pd = "";
-      if(IDP_GetPulse(p, pd))
-         idpNote = " | " + pd;
-   }
-
-   detail = StringFormat("APEX OK %s pool=%s sweep@%d zone=%s inv=%s | %s%s",
-                         buy ? "BUY" : "SELL",
-                         DoubleToString(pool, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
-                         sweepBar,
-                         APEX_HasUnmitigatedZone(buy) ? "Y" : "N",
-                         DoubleToString(invalidation, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
-                         sessDetail,
-                         idpNote);
-   return true;
+   return false;
 }
+
 
 void EvaluateAPEXStrategies(bool &buySignal, bool &sellSignal, string &strategyTag)
 {
-   buySignal = false;
-   sellSignal = false;
-   strategyTag = "";
-   g_APEX_InvalidationPrice = 0.0;
-
-   if(!EnableAPEXStrategy)
-      return;
-
-   string buyDetail = "", sellDetail = "";
-   double buyInv = 0.0, sellInv = 0.0;
-   bool buyOK = APEX_SetupOK(true, buyDetail, buyInv);
-   bool sellOK = APEX_SetupOK(false, sellDetail, sellInv);
-   if(!buyOK) g_APEX_LastBuyFail = buyDetail;
-   if(!sellOK) g_APEX_LastSellFail = sellDetail;
-   if(buyOK) g_APEX_LastBuyFail = "";
-   if(sellOK) g_APEX_LastSellFail = "";
-
-   // OK60: PASS always prints; FAIL at most once per EntryTF bar per side
-   // (was flooding Experts every tick — looked like the EA was broken).
-   if(APEX_LogValidation)
-   {
-      datetime bar = iTime(BrokerSymbol, APEX_EntryTF, 0);
-      static datetime lastFailBarBuy = 0, lastFailBarSell = 0;
-      static string lastFailSymBuy = "", lastFailSymSell = "";
-
-      if(buyOK)
-         Print("APEX VALIDATE BUY: PASS - ", buyDetail, " on ", BrokerSymbol);
-      else if(APEX_LogFailsEveryBar)
-      {
-         bool newBar = (bar != lastFailBarBuy || BrokerSymbol != lastFailSymBuy);
-         if(newBar && bar > 0)
-         {
-            lastFailBarBuy = bar;
-            lastFailSymBuy = BrokerSymbol;
-            Print("APEX VALIDATE BUY: FAIL - ", buyDetail, " on ", BrokerSymbol);
-         }
-      }
-
-      if(sellOK)
-         Print("APEX VALIDATE SELL: PASS - ", sellDetail, " on ", BrokerSymbol);
-      else if(APEX_LogFailsEveryBar)
-      {
-         bool newBarS = (bar != lastFailBarSell || BrokerSymbol != lastFailSymSell);
-         if(newBarS && bar > 0)
-         {
-            lastFailBarSell = bar;
-            lastFailSymSell = BrokerSymbol;
-            Print("APEX VALIDATE SELL: FAIL - ", sellDetail, " on ", BrokerSymbol);
-         }
-      }
-   }
-
-   if(buyOK && sellOK)
-   {
-      string db = "", ds = "";
-      bool bull = APEX_BiasBull(db);
-      bool bear = APEX_BiasBear(ds);
-      if(bull && !bear) sellOK = false;
-      else if(bear && !bull) buyOK = false;
-      else
-      {
-         if(APEX_LogValidation)
-            Print("APEX: BUY+SELL conflict — reject on ", BrokerSymbol);
-         return;
-      }
-   }
-
-   if(buyOK)
-   {
-      buySignal = true;
-      strategyTag = "APEX";
-      g_APEX_InvalidationPrice = buyInv;
-      g_APEX_SweepBarTime = iTime(BrokerSymbol, APEX_EntryTF, 1);
-      g_APEX_LastDetail = buyDetail;
-      Print("ULTRA CORE FIRE BUY [APEX] ", buyDetail, " on ", BrokerSymbol);
-      return;
-   }
-   if(sellOK)
-   {
-      sellSignal = true;
-      strategyTag = "APEX";
-      g_APEX_InvalidationPrice = sellInv;
-      g_APEX_SweepBarTime = iTime(BrokerSymbol, APEX_EntryTF, 1);
-      g_APEX_LastDetail = sellDetail;
-      Print("ULTRA CORE FIRE SELL [APEX] ", sellDetail, " on ", BrokerSymbol);
-      return;
-   }
+   // OK92 REMOVED — never opens trades
+   buySignal = false; sellSignal = false; strategyTag = "";
 }
+
 
 //+------------------------------------------------------------------+
 //| LCS - LIQUIDITY CONTINUITY SNIPER (high-prob live engine)        |
@@ -11085,11 +10768,10 @@ bool LCSSellSetup()
 
 void EvaluateLCSStrategies(bool &buySignal, bool &sellSignal, string &strategyTag)
 {
-   // OK67 RETIRED — LCS not on live path
-   buySignal = false;
-   sellSignal = false;
-   strategyTag = "";
+   // OK92 REMOVED — LCS deleted from live path
+   buySignal = false; sellSignal = false; strategyTag = "";
 }
+
 
 void MarkContFallbackFillIfNeeded()
 {
@@ -11559,59 +11241,10 @@ bool ContFallbackSwingSellSetup()
 
 void EvaluateContFallback(bool &buySignal, bool &sellSignal, string &strategyTag)
 {
-   buySignal = false;
-   sellSignal = false;
-   strategyTag = "";
-   if(!EnableContFallback)
-      return;
-
-   string gateFail = "";
-   if(!ContFallbackAntiScalpGatesPass(gateFail))
-   {
-      if(EnableVerboseLogging || APEX_LogFailsEveryBar)
-         Print("ContFallback blocked [", gateFail, "] on ", BrokerSymbol);
-      return;
-   }
-
-   bool bull = IsBullTrend();
-   bool bear = IsBearTrend();
-   if(bull && bear)
-   {
-      // Resolve by structure quality — not PRISM score
-      if(ContStruct_Score(true) >= ContStruct_Score(false))
-         bear = false;
-      else
-         bull = false;
-   }
-
-   string detail = "";
-   if(bull && !bear && ContFallbackBestStructureOK(true, detail))
-   {
-      buySignal = true;
-      strategyTag = "ContFallback";
-      datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
-      if(barTime > 0) g_ContFallbackLastSignalBar = barTime;
-      Print("ULTRA CORE FIRE BUY [ContFallback] ", detail, " on ", BrokerSymbol);
-      return;
-   }
-   if(bear && !bull && ContFallbackBestStructureOK(false, detail))
-   {
-      sellSignal = true;
-      strategyTag = "ContFallback";
-      datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
-      if(barTime > 0) g_ContFallbackLastSignalBar = barTime;
-      Print("ULTRA CORE FIRE SELL [ContFallback] ", detail, " on ", BrokerSymbol);
-      return;
-   }
-
-   if(ContStruct_LogDetail && (EnableVerboseLogging || APEX_LogFailsEveryBar))
-   {
-      string db = "", ds = "";
-      ContFallbackBestStructureOK(true, db);
-      ContFallbackBestStructureOK(false, ds);
-      Print("ContFallback structure wait BUY[", db, "] SELL[", ds, "] on ", BrokerSymbol);
-   }
+   // OK92 REMOVED — never opens trades
+   buySignal = false; sellSignal = false; strategyTag = "";
 }
+
 
 
 //====================================================================//
@@ -12789,7 +12422,7 @@ string UltraDashboardText(const string s)
    string dir = sig.buy ? "BUY" : (sig.sell ? "SELL" : "-");
    return
       "======= SNIPER AI ULTRA =======\n" +
-      "BUILD: SA_ULTRA_92 | Comment: SNIPER AI\n" +
+      "BUILD: SA_ULTRA_92R | Comment: SNIPER AI\n" +
       "Symbol: " + s + " | TF: " + EnumToString(UltraETF()) + "\n" +
       "Open: " + IntegerToString(CountOpenTrades()) + " / " + IntegerToString(MaxOpenTrades) + "\n" +
       "AI Conf: " + IntegerToString(u.score.confidence) +
@@ -13527,82 +13160,10 @@ void CreateDashboard()
 {
    if(!EnableDashboard)
       return;
-
-   if(UltraDashboardEnabled)
-   {
-      Comment(UltraDashboardText(BrokerSymbol));
-      return;
-   }
-
-   if(EnableUltraCore && EnableUltraDashboard)
-   {
-      PRISM_MarketIntel intel = PRISM_GetMarketIntel(true);
-      PRISMStructureSnapshot s = PRISM_GetStructureSnapshot(true);
-      PRISMBeastScore beast = UltraGetBeastScore(true, "ContSniper");
-      long spread = SymbolInfoInteger(BrokerSymbol, SYMBOL_SPREAD);
-      Comment(
-         "======= SNIPER AI PRISM ULTRA CORE v11 =======\n",
-         "Chart: ", BrokerSymbol, " | EntryTF: ", EnumToString(EntryTF), "\n",
-         "Open: ", IntegerToString(CountOpenTrades()),
-         " / ", IntegerToString(MaxOpenTrades),
-         " | Spread: ", IntegerToString((int)spread), "\n",
-         "Regime: ", EnumToString(intel.regime),
-         " | IMCE: ", IMCEContextToString(intel.imce), "\n",
-         "BOS: ", (s.bos ? "Y" : "N"),
-         " CHoCH: ", (s.choch ? "Y" : "N"),
-         " Sweep: ", (s.sweep ? "Y" : "N"),
-         " OB: ", (s.ob ? "Y" : "N"),
-         " FVG: ", (s.fvg ? "Y" : "N"), "\n",
-         "Beast: ", IntegerToString(beast.overall),
-         " | Conf: ", IntegerToString(beast.confidencePct), "%",
-         " | Grade: ", g_UltraLastGrade, "\n",
-         "MPI: ", IntegerToString(CalculatePRISMScore(true)),
-         " | ICE: ", IntegerToString(GetInstitutionalConfidenceScore(true)), "\n",
-         "Daily: ", (intel.dailyBullBias ? "BULL" : "BEAR"),
-         " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"),
-         " | Event: ", (intel.eventWindow ? "ON" : "OFF"), "\n",
-         "Last: ", g_UltraLastDecision,
-         " | Latency: ", IntegerToString((int)g_UltraLastDecisionMs), "ms\n",
-         "Reject: ", (g_UltraLastReject == "" ? "-" : g_UltraLastReject), "\n",
-         "Health: ", (g_UltraHealthOK ? "OK" : "SLOW"),
-         " | A/R: ", IntegerToString(g_UltraApproveCount), "/", IntegerToString(g_UltraRejectCount), "\n",
-         "Comment: SNIPER AI | BUILD: SA_APEX_EXEC_63\n",
-         "=============================================="
-      );
-      return;
-   }
-
-   if(EnableBeastMode && EnableBeastDashboard)
-   {
-      PRISM_MarketIntel intel = PRISM_GetMarketIntel(true);
-      Comment(
-         "========== SNIPER AI PRISM BEAST ==========\n",
-         "Chart: ", BrokerSymbol, " | EntryTF: ", EnumToString(EntryTF), "\n",
-         "Open: ", IntegerToString(CountOpenTrades()),
-         " / ", IntegerToString(MaxOpenTrades), "\n",
-         "Regime: ", EnumToString(intel.regime),
-         " | IMCE: ", IMCEContextToString(intel.imce), "\n",
-         "MPI buy: ", IntegerToString(CalculatePRISMScore(true)),
-         " | ICE buy: ", IntegerToString(GetInstitutionalConfidenceScore(true)), "\n",
-         "Daily bias: ", (intel.dailyBullBias ? "BULL" : "BEAR"),
-         " | Weekly: ", (intel.weeklyBullBias ? "BULL" : "BEAR"), "\n",
-         "Event mode: ", (intel.eventWindow ? "ON" : "OFF"),
-         " | Sniper: ", (EnableSniperMode ? "ON" : "OFF"), "\n",
-         "BUILD: SA_APEX_EXEC_63\n",
-         "=========================================="
-      );
-      return;
-   }
-
-   Comment(
-      "============================\n",
-      "      SNIPER AI\n",
-      "============================\n",
-      "Chart: ", BrokerSymbol, ", ", EnumToString((ENUM_TIMEFRAMES)Period()), "\n",
-      "Open Trades: ", IntegerToString(CountOpenTrades()), "\n",
-      "============================"
-   );
+   // OK92: ULTRA dashboard only — old PRISM/Beast HUD removed (duplication)
+   Comment(UltraDashboardText(BrokerSymbol));
 }
+
 
 
 //================ UPDATE DASHBOARD =================================//
@@ -13762,8 +13323,19 @@ void AnalyzeLiveMarket(const bool force)
 
    m.contBuyDetail = "";
    m.contSellDetail = "";
-   m.contBuyOK  = ContFallbackBestStructureOK(true,  m.contBuyDetail);
-   m.contSellOK = ContFallbackBestStructureOK(false, m.contSellDetail);
+   // OK92: live analysis from ULTRA only (old ContFallback/APEX probes removed)
+   {
+      UltraSnap us;
+      UltraBuildSnapshot(BrokerSymbol, us);
+      UltraSignal ub = UltraStrat_ContSniper(us);
+      UltraSignal usw = UltraStrat_FlashSweep(us);
+      m.contBuyOK = (ub.buy || usw.buy);
+      m.contSellOK = (ub.sell || usw.sell);
+      m.contBuyDetail  = m.contBuyOK  ? "ULTRA READY" : ("ULTRA confB=" + IntegerToString(UltraConfluenceBuy(us)));
+      m.contSellDetail = m.contSellOK ? "ULTRA READY" : ("ULTRA confS=" + IntegerToString(UltraConfluenceSell(us)));
+      g_APEX_LastBuyFail  = us.bos.buy  ? "" : "no ULTRA BOS buy";
+      g_APEX_LastSellFail = us.bos.sell ? "" : "no ULTRA BOS sell";
+   }
 
    string sess = "", sessName = "";
    bool inL = false, inN = false, inA = false, inO = false;
@@ -13824,7 +13396,7 @@ string LiveMarketSummary()
 void PrintLiveMarketAnalysis()
 {
    AnalyzeLiveMarket(true);
-   Print("---- MARKET ANALYSIS BUILD=SA_ULTRA_92 (", BrokerSymbol, ") ----");
+   Print("---- MARKET ANALYSIS BUILD=SA_ULTRA_92R (", BrokerSymbol, ") ----");
    Print("SESSION=", g_LiveMkt.sessionName,
          " hour=", g_LiveMkt.sessionHour,
          (APEX_UseGMT ? " GMT" : " SERVER"),
@@ -14045,15 +13617,14 @@ void InstantExecution()
    if(g_UltraLastReject == "" && EnableUltraCore)
    {
       AnalyzeLiveMarket(false);
-      // Clean wait reason from live market analysis (never PRISM ContSniper spam)
-      string wait = "MARKET " + g_LiveMkt.summary;
-      if(EnableContFallback)
-         wait = StringFormat("WAIT | %s | ContB=%s ContS=%s | APEX B=%s S=%s",
+      string wait = StringFormat("ULTRA WAIT | %s | ContB=%s ContS=%s | conf=%d prec=%d prob=%d | %s",
                              g_LiveMkt.summary,
                              g_LiveMkt.contBuyOK ? "READY" : g_LiveMkt.contBuyDetail,
                              g_LiveMkt.contSellOK ? "READY" : g_LiveMkt.contSellDetail,
-                             (g_APEX_LastBuyFail == "" ? "-" : g_APEX_LastBuyFail),
-                             (g_APEX_LastSellFail == "" ? "-" : g_APEX_LastSellFail));
+                             g_UltraLastSnap.score.confidence,
+                             g_UltraLastSnap.score.precision,
+                             g_UltraLastSnap.score.probability,
+                             g_UltraLastSignal.reason == "" ? UltraRegimeName(g_UltraLastSnap.regime) : g_UltraLastSignal.reason);
       g_UltraLastReject = wait;
       g_UltraLastDecision = "WAIT";
    }

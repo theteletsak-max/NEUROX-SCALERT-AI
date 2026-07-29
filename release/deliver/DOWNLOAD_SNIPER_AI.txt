@@ -1,6 +1,3 @@
 EA: SNIPER_AI_OK92.mq5
-BUILD_ID: SA_ULTRA_92
-Comment: SNIPER AI
-MaxOpen: 3
-
+BUILD_ID: SA_ULTRA_92R
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK92.mq5

@@ -1,18 +1,15 @@
-SNIPER AI ULTRA — CURRENT (OK92)
+SNIPER AI ULTRA — CURRENT (OK92R)
 
 EA:       SNIPER_AI_OK92.mq5
-BUILD_ID: SA_ULTRA_92
+BUILD_ID: SA_ULTRA_92R
 Comment:  SNIPER AI
 MaxOpen:  3
 
-COMPLETE FEATURE ARCHITECTURE on OK81 exec shell:
-- Ultra Core / Data / Config / Validation / Recovery / Error / Memory / Log / State / Perf
-- Market Structure, UBOSE, UCHOCHE, ULSE, UFIE, Institutional, Trend, Momentum, Volatility, Regime
-- Session + News intelligence (NEVER hard-block)
-- Proprietary indicators: SMI, MEO, IFI
-- AI Decision + Confluence / Precision / Probability
-- Fast execution + capital protection + multi-symbol + MTF + dashboard + diagnostics + memory
-
-Strategies: FlashSweep | ContSniper | RevSniper | FibSniper | BreakImpulse | InstZone
+CLEANUP:
+- Old live strategies REMOVED/STUBBED: APEX, ContFallback, LCS, SpecCompliant
+- IDP live gate REMOVED (soft-pass only)
+- Old PRISM/Beast dashboard REMOVED
+- BB/FastEMA/SlowEMA not created
+- LIVE PATH: ULTRA only (no dual-fire duplication)
 
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK92.mq5
