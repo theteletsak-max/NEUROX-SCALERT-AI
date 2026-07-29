@@ -108,7 +108,7 @@ void UltraUFSE_ScanTick(const int idx)
    t.ask = SymbolInfoDouble(s, SYMBOL_ASK);
    t.last = SymbolInfoDouble(s, SYMBOL_LAST);
    if(t.last <= 0.0) t.last = t.bid;
-   t.tickVol = (long)SymbolInfoInteger(s, SYMBOL_SESSION_VOLUME);
+   t.tickVol = (long)iTickVolume(s, UltraETF(), 0);
    if(t.tickVol <= 0) t.tickVol = (long)iVolume(s, UltraETF(), 0);
    t.spread = (double)SymbolInfoInteger(s, SYMBOL_SPREAD);
    t.t = TimeCurrent();
