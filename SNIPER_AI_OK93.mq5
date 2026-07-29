@@ -312,8 +312,8 @@ input bool UseATR = true;
 
 input group "TIMEFRAMES"
 
-input ENUM_TIMEFRAMES TrendTF = PERIOD_CURRENT; // OK80 chart TF
-input ENUM_TIMEFRAMES EntryTF = PERIOD_CURRENT; // OK80: use chart TF (H4 chart = H4)
+input ENUM_TIMEFRAMES TrendTF = PERIOD_CURRENT; // follows chart — change chart TF to change trend TF
+input ENUM_TIMEFRAMES EntryTF = PERIOD_CURRENT; // follows chart — H1 chart=H1, H4 chart=H4, M15 chart=M15
 
 input group "LONG TERM HOLDING"
 
@@ -2733,6 +2733,12 @@ int OnInit()
    Print("SNIPER AI ULTRA v1 BLUEPRINT Loaded BUILD_ID=SA_ULTRA_93 MaxOpen=", MaxOpenTrades);
    UltraCoreInit();
    UltraSystemController_Boot();
+   {
+      ENUM_TIMEFRAMES etf = (EntryTF == PERIOD_CURRENT) ? (ENUM_TIMEFRAMES)Period() : EntryTF;
+      Print("OK93 ENTRY TF=", EnumToString(etf),
+            " (EntryTF input=", EnumToString(EntryTF),
+            ") — change the chart timeframe to change trading TF, or set EntryTF input");
+   }
    Print("OK93 v1 BLUEPRINT: modules 00-31 active | Shell A/B | ULTRA-only live path");
    if(EnableAPEXStrategy || EnableContFallback || EnableLCSStrategy)
       Print("OK93 WARNING: old APEX/ContFallback/LCS input ON — evaluators STUBBED; ULTRA only fires");

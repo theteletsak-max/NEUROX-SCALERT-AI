@@ -290,8 +290,8 @@ input bool UseATR = true;
 
 input group "TIMEFRAMES"
 
-input ENUM_TIMEFRAMES TrendTF = PERIOD_CURRENT; // OK80 chart TF
-input ENUM_TIMEFRAMES EntryTF = PERIOD_CURRENT; // OK80: use chart TF (H4 chart = H4)
+input ENUM_TIMEFRAMES TrendTF = PERIOD_CURRENT; // follows chart — change chart TF to change trend TF
+input ENUM_TIMEFRAMES EntryTF = PERIOD_CURRENT; // follows chart — H1 chart=H1, H4 chart=H4, M15 chart=M15
 
 input group "LONG TERM HOLDING"
 
