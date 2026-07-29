@@ -2602,7 +2602,7 @@ bool LevelTouchedForTP(const bool isBuy, const double level, const double price,
 
 double NormalizeTradePrice(double price)
 {
-   int digits = (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS);
+   int digits = UltraSymDigits(BrokerSymbol);
 
    double tickSize = SymbolInfoDouble(BrokerSymbol, SYMBOL_TRADE_TICK_SIZE);
 
@@ -2629,10 +2629,10 @@ bool CheckTradeStops(double entry,double &sl,double &tp)
       return false;
 
    long stopLevel =
-      SymbolInfoInteger(BrokerSymbol,SYMBOL_TRADE_STOPS_LEVEL);
+      UltraSymStopsLevel(BrokerSymbol);
 
    long freezeLevel =
-      SymbolInfoInteger(BrokerSymbol,SYMBOL_TRADE_FREEZE_LEVEL);
+      UltraSymFreezeLevel(BrokerSymbol);
 
    double minimumDistance =
       MathMax((double)stopLevel,(double)freezeLevel) * point;
@@ -2811,7 +2811,7 @@ void RecordSignalSnapshot(ulong ticket, bool buy)
 
 void ConfigureFillingMode(string symbol)
 {
-   long fillingModes = SymbolInfoInteger(symbol, SYMBOL_FILLING_MODE);
+   long fillingModes = UltraSymFillingMode(symbol);
 
    if((fillingModes & SYMBOL_FILLING_FOK) != 0)
       trade.SetTypeFilling(ORDER_FILLING_FOK);
@@ -2927,7 +2927,7 @@ bool ExecuteBuy()
       {
          if(apexSL < sl)
             sl = apexSL;
-         Print("APEX BUY SL → sweep invalidation ", DoubleToString(sl, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+         Print("APEX BUY SL → sweep invalidation ", DoubleToString(sl, UltraSymDigits(BrokerSymbol)),
                " on ", BrokerSymbol);
       }
    }
@@ -2938,7 +2938,7 @@ bool ExecuteBuy()
       {
          if(lcsSL < sl)
             sl = lcsSL;
-         Print("LCS BUY SL → sweep invalidation ", DoubleToString(sl, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+         Print("LCS BUY SL → sweep invalidation ", DoubleToString(sl, UltraSymDigits(BrokerSymbol)),
                " on ", BrokerSymbol);
       }
    }
@@ -3209,7 +3209,7 @@ bool ExecuteSell()
       {
          if(apexSL > sl)
             sl = apexSL;
-         Print("APEX SELL SL → sweep invalidation ", DoubleToString(sl, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+         Print("APEX SELL SL → sweep invalidation ", DoubleToString(sl, UltraSymDigits(BrokerSymbol)),
                " on ", BrokerSymbol);
       }
    }
@@ -3220,7 +3220,7 @@ bool ExecuteSell()
       {
          if(lcsSL > sl)
             sl = lcsSL;
-         Print("LCS SELL SL → sweep invalidation ", DoubleToString(sl, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+         Print("LCS SELL SL → sweep invalidation ", DoubleToString(sl, UltraSymDigits(BrokerSymbol)),
                " on ", BrokerSymbol);
       }
    }
@@ -3647,8 +3647,8 @@ bool ApplyProfitLockSL(const ulong ticket,
    bool ok = trade.PositionModify(ticket, newSL, newTP);
    if(ok)
       Print("PROFIT LOCK: ticket ", ticket,
-            " SL→", DoubleToString(newSL, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
-            " TP→", DoubleToString(newTP, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+            " SL→", DoubleToString(newSL, UltraSymDigits(BrokerSymbol)),
+            " TP→", DoubleToString(newTP, UltraSymDigits(BrokerSymbol)),
             " (secured after TP hit)");
    else
       Print("PROFIT LOCK failed on ticket ", ticket, ": ", trade.ResultRetcodeDescription());
@@ -4313,11 +4313,7 @@ void ManageOpenTrades()
             price - trailingDistance;
 
 
-            long stopLevel =
-SymbolInfoInteger(
-   BrokerSymbol,
-   SYMBOL_TRADE_STOPS_LEVEL
-);
+            long stopLevel = UltraSymStopsLevel(BrokerSymbol);
 
 
 double minimumDistance =
@@ -4347,11 +4343,7 @@ if((price - newSL) >= minimumDistance)
             price + trailingDistance;
 
 
-            long stopLevel =
-SymbolInfoInteger(
-   BrokerSymbol,
-   SYMBOL_TRADE_STOPS_LEVEL
-);
+            long stopLevel = UltraSymStopsLevel(BrokerSymbol);
 
 
 double minimumDistance =
@@ -7391,7 +7383,7 @@ PRISMBeastScore UltraComputeBeastScore(bool buy, const string strategyTag)
 
    b.confirmation = MathMin(conf * 2, 12);
    b.executionQuality = (GetFilterATR() > 0.0) ? 8 : 0;
-   double spr = (double)SymbolInfoInteger(BrokerSymbol, SYMBOL_SPREAD);
+   double spr = (double)UltraSymSpread(BrokerSymbol);
    if(spr > 0 && spr < 50) b.executionQuality += 2;
 
    b.institutional = MathMin(ice / 8, 12);
@@ -8238,7 +8230,7 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
                currentSL = lockSL;
                if(DefenseLogActions)
                   Print("DEFEND LOCK: peak retrace — SL→", DoubleToString(lockSL,
-                        (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+                        UltraSymDigits(BrokerSymbol)),
                         " ticket ", ticket);
             }
          }
@@ -10175,7 +10167,7 @@ bool LCS_SetupOK(const bool buy, string &detail, double &invalidation)
                          sweepBar,
                          zone ? "Y" : "N",
                          disp ? "Y" : "N",
-                         DoubleToString(invalidation, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)));
+                         DoubleToString(invalidation, UltraSymDigits(BrokerSymbol)));
    return true;
 }
 

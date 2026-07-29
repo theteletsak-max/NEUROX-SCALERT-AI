@@ -69,4 +69,39 @@ string UltraYN(const bool v)
    return "N";
 }
 
+int UltraSymDigits(const string s)
+{
+   long v = 0;
+   SymbolInfoInteger(s, SYMBOL_DIGITS, v);
+   return (int)v;
+}
+
+long UltraSymSpread(const string s)
+{
+   long v = 0;
+   SymbolInfoInteger(s, SYMBOL_SPREAD, v);
+   return v;
+}
+
+long UltraSymStopsLevel(const string s)
+{
+   long v = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL, v);
+   return v;
+}
+
+long UltraSymFreezeLevel(const string s)
+{
+   long v = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL, v);
+   return v;
+}
+
+long UltraSymFillingMode(const string s)
+{
+   long v = 0;
+   SymbolInfoInteger(s, SYMBOL_FILLING_MODE, v);
+   return v;
+}
+
 #endif // HITMAN_ULTRA_28_UTILITIES_MQH

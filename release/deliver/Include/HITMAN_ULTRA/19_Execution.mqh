@@ -12,7 +12,8 @@
 bool UltraExecReady(const string s, string &why)
 {
    why = "";
-   if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE)) { why = "symbol trade mode off"; return false; }
+   long tm = 0;
+   if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm) || tm == 0) { why = "symbol trade mode off"; return false; }
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)) { why = "terminal blocked"; return false; }
    // fill policy / stops validated later in ExecuteBuy/Sell
    return true;

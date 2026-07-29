@@ -14,7 +14,8 @@ bool UltraConfigOK()
 bool UltraValidateSymbol(const string s)
 {
    if(!UltraValidationEnabled) return true;
-   if(s == "" || !SymbolInfoInteger(s, SYMBOL_SELECT)) return false;
+   long sel = 0;
+   if(s == "" || !SymbolInfoInteger(s, SYMBOL_SELECT, sel) || sel == 0) return false;
    if(Bars(s, UltraETF()) < 60) return false;
    return true;
 }

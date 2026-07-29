@@ -1045,6 +1045,41 @@ string UltraYN(const bool v)
    return "N";
 }
 
+int UltraSymDigits(const string s)
+{
+   long v = 0;
+   SymbolInfoInteger(s, SYMBOL_DIGITS, v);
+   return (int)v;
+}
+
+long UltraSymSpread(const string s)
+{
+   long v = 0;
+   SymbolInfoInteger(s, SYMBOL_SPREAD, v);
+   return v;
+}
+
+long UltraSymStopsLevel(const string s)
+{
+   long v = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL, v);
+   return v;
+}
+
+long UltraSymFreezeLevel(const string s)
+{
+   long v = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL, v);
+   return v;
+}
+
+long UltraSymFillingMode(const string s)
+{
+   long v = 0;
+   SymbolInfoInteger(s, SYMBOL_FILLING_MODE, v);
+   return v;
+}
+
 #endif // HITMAN_ULTRA_28_UTILITIES_MQH
 //===== END 28_Utilities.mqh =====
 
@@ -1126,7 +1161,8 @@ bool UltraConfigOK()
 bool UltraValidateSymbol(const string s)
 {
    if(!UltraValidationEnabled) return true;
-   if(s == "" || !SymbolInfoInteger(s, SYMBOL_SELECT)) return false;
+   long sel = 0;
+   if(s == "" || !SymbolInfoInteger(s, SYMBOL_SELECT, sel) || sel == 0) return false;
    if(Bars(s, UltraETF()) < 60) return false;
    return true;
 }
@@ -1193,7 +1229,8 @@ bool UltraData_Refresh(const string s)
    g_UltraDataCache.symbol = s;
    g_UltraDataCache.bid = SymbolInfoDouble(s, SYMBOL_BID);
    g_UltraDataCache.ask = SymbolInfoDouble(s, SYMBOL_ASK);
-   g_UltraDataCache.spreadPts = (double)SymbolInfoInteger(s, SYMBOL_SPREAD);
+   long spr = 0; SymbolInfoInteger(s, SYMBOL_SPREAD, spr);
+   g_UltraDataCache.spreadPts = (double)spr;
    g_UltraDataCache.barTime = iTime(s, UltraETF(), 0);
    g_UltraDataCache.atr = UltraATR(s, ATR_Period);
    g_UltraDataCache.valid = (g_UltraDataCache.bid > 0 && g_UltraDataCache.ask > 0);
@@ -1202,8 +1239,8 @@ bool UltraData_Refresh(const string s)
 
 double UltraData_Bid(const string s){ return SymbolInfoDouble(s, SYMBOL_BID); }
 double UltraData_Ask(const string s){ return SymbolInfoDouble(s, SYMBOL_ASK); }
-double UltraData_Spread(const string s){ return (double)SymbolInfoInteger(s, SYMBOL_SPREAD); }
-int    UltraData_Digits(const string s){ return (int)SymbolInfoInteger(s, SYMBOL_DIGITS); }
+double UltraData_Spread(const string s){ long v=0; SymbolInfoInteger(s, SYMBOL_SPREAD, v); return (double)v; }
+int    UltraData_Digits(const string s){ long v=0; SymbolInfoInteger(s, SYMBOL_DIGITS, v); return (int)v; }
 double UltraData_Point(const string s){ return SymbolInfoDouble(s, SYMBOL_POINT); }
 
 double UltraData_Open(const string s, const int shift){ return iOpen(s, UltraETF(), shift); }
@@ -2125,7 +2162,8 @@ bool UltraCapitalOK(string &why)
 bool UltraExecReady(const string s, string &why)
 {
    why = "";
-   if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE)) { why = "symbol trade mode off"; return false; }
+   long tm = 0;
+   if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm) || tm == 0) { why = "symbol trade mode off"; return false; }
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)) { why = "terminal blocked"; return false; }
    // fill policy / stops validated later in ExecuteBuy/Sell
    return true;
@@ -2696,20 +2734,22 @@ bool UltraDefense_Line7_Execution(const string s, string &why)
    if(!TerminalInfoInteger(TERMINAL_CONNECTED)){ why = "connection loss"; return false; }
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)){ why = "terminal trade blocked"; return false; }
    if(!MQLInfoInteger(MQL_TRADE_ALLOWED)){ why = "EA trade disabled"; return false; }
-   long tm = SymbolInfoInteger(s, SYMBOL_TRADE_MODE);
-   if(tm == SYMBOL_TRADE_MODE_DISABLED){ why = "symbol trade disabled"; return false; }
+
+   long tm = 0;
+   if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm)){ why = "symbol mode unavailable"; return false; }
+   // trade mode 0 = disabled — compare as long to avoid enum convert errors
+   if(tm == 0){ why = "symbol trade disabled"; return false; }
 
    double bid = SymbolInfoDouble(s, SYMBOL_BID);
    double ask = SymbolInfoDouble(s, SYMBOL_ASK);
    if(bid <= 0.0 || ask <= 0.0){ why = "price not fresh"; return false; }
-   datetime qt = (datetime)SymbolInfoInteger(s, SYMBOL_TIME);
-   if(qt > 0 && (TimeCurrent() - qt) > 120){ why = "stale quotes"; return false; }
 
    double volMin = SymbolInfoDouble(s, SYMBOL_VOLUME_MIN);
    double volMax = SymbolInfoDouble(s, SYMBOL_VOLUME_MAX);
    if(volMin <= 0.0 || (volMax > 0.0 && volMax < volMin)){ why = "invalid volume limits"; return false; }
 
-   int stops = (int)SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL);
+   long stops = 0;
+   if(!SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL, stops)){ why = "stops level unavailable"; return false; }
    if(stops < 0){ why = "invalid stops level"; return false; }
 
    double eq = AccountInfoDouble(ACCOUNT_EQUITY);
@@ -2965,8 +3005,9 @@ void UltraDefense_Line9_Emergency(const string s)
    bool connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
    bool tradeCtxBusy = !((bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED));
    bool badEquity = (AccountInfoDouble(ACCOUNT_EQUITY) <= 0.0);
-   long tm = SymbolInfoInteger(s, SYMBOL_TRADE_MODE);
-   bool symbolErr = (tm == SYMBOL_TRADE_MODE_DISABLED) || (SymbolInfoDouble(s, SYMBOL_BID) <= 0.0);
+   long tm = 0;
+   bool modeOK = SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm);
+   bool symbolErr = (!modeOK) || (tm == 0) || (SymbolInfoDouble(s, SYMBOL_BID) <= 0.0);
    bool invalidData = (Bars(s, UltraETF()) < 50);
 
    string why = "";
@@ -3152,7 +3193,8 @@ void UltraUFSE_ScanTick(const int idx)
    if(t.last <= 0.0) t.last = t.bid;
    t.tickVol = (long)iTickVolume(s, UltraETF(), 0);
    if(t.tickVol <= 0) t.tickVol = (long)iVolume(s, UltraETF(), 0);
-   t.spread = (double)SymbolInfoInteger(s, SYMBOL_SPREAD);
+   long spr = 0; SymbolInfoInteger(s, SYMBOL_SPREAD, spr);
+   t.spread = (double)spr;
    t.t = TimeCurrent();
    t.dir = 0;
    if(prev.valid)
@@ -3344,13 +3386,12 @@ bool UltraUFSE_ExecReady(const string s, string &why)
    if(!TerminalInfoInteger(TERMINAL_CONNECTED)){ why = "terminal disconnected"; return false; }
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)){ why = "trading not allowed"; return false; }
    if(!MQLInfoInteger(MQL_TRADE_ALLOWED)){ why = "EA trading disabled"; return false; }
-   long tm = SymbolInfoInteger(s, SYMBOL_TRADE_MODE);
-   if(tm == SYMBOL_TRADE_MODE_DISABLED){ why = "symbol trade disabled"; return false; }
+   long tm = 0;
+   if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm)){ why = "symbol mode unavailable"; return false; }
+   if(tm == 0){ why = "symbol trade disabled"; return false; }
    double bid = SymbolInfoDouble(s, SYMBOL_BID);
    double ask = SymbolInfoDouble(s, SYMBOL_ASK);
    if(bid <= 0.0 || ask <= 0.0){ why = "price not fresh"; return false; }
-   datetime t = (datetime)SymbolInfoInteger(s, SYMBOL_TIME);
-   if(t > 0 && (TimeCurrent() - t) > 120){ why = "stale symbol quotes"; return false; }
    double eq = AccountInfoDouble(ACCOUNT_EQUITY);
    double fm = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
    if(eq <= 0.0){ why = "bad equity"; return false; }
@@ -3946,7 +3987,8 @@ string UltraDashboardText(const string s)
    t += " | MEO: "; t += DoubleToString(u.ind.meo, 1);
    t += " | IFI: "; t += DoubleToString(u.ind.ifi, 1);
    t += "\nVol: "; t += vol;
-   t += " ATR="; t += DoubleToString(u.vol.atr, (int)SymbolInfoInteger(s, SYMBOL_DIGITS));
+   long dig = 0; SymbolInfoInteger(s, SYMBOL_DIGITS, dig);
+   t += " ATR="; t += DoubleToString(u.vol.atr, (int)dig);
    t += "\nCapital: "; if(g_UltraCore.healthy) t += "OK"; else t += "CHECK";
    t += " | Health: "; t += u.diag.health;
    t += " | Lat: "; t += IntegerToString((int)g_UltraCore.lastLatencyMs); t += "ms";
@@ -4011,13 +4053,19 @@ bool UltraBroker_Detect(const string s, UltraBrokerCaps &c)
    UltraBroker_ClearCaps(c);
    c.company = AccountInfoString(ACCOUNT_COMPANY);
    c.login   = AccountInfoInteger(ACCOUNT_LOGIN);
-   c.stopsLevel  = (int)SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL);
-   c.freezeLevel = (int)SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL);
-   c.fillingMode = (int)SymbolInfoInteger(s, SYMBOL_FILLING_MODE);
-   c.fillFOK    = ((c.fillingMode & SYMBOL_FILLING_FOK) == SYMBOL_FILLING_FOK);
-   c.fillIOC    = ((c.fillingMode & SYMBOL_FILLING_IOC) == SYMBOL_FILLING_IOC);
+   long stopsLevel = 0, freezeLevel = 0, fillingMode = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL, stopsLevel);
+   SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL, freezeLevel);
+   SymbolInfoInteger(s, SYMBOL_FILLING_MODE, fillingMode);
+   c.stopsLevel  = (int)stopsLevel;
+   c.freezeLevel = (int)freezeLevel;
+   c.fillingMode = (int)fillingMode;
+   c.fillFOK    = ((c.fillingMode & SYMBOL_FILLING_FOK) != 0);
+   c.fillIOC    = ((c.fillingMode & SYMBOL_FILLING_IOC) != 0);
    c.fillRETURN = true;
-   c.tradeAllowed = (SymbolInfoInteger(s, SYMBOL_TRADE_MODE) != SYMBOL_TRADE_MODE_DISABLED);
+   long tmMode = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tmMode);
+   c.tradeAllowed = (tmMode != 0);
    c.valid = (SymbolInfoDouble(s, SYMBOL_BID) > 0.0);
    g_UltraBrokerCaps = c;
    return c.valid;
@@ -4035,7 +4083,8 @@ ENUM_ORDER_TYPE_FILLING UltraBroker_PickFilling(const string s)
 bool UltraBroker_StopsOK(const string s, const double price, const double sl, const double tp, string &why)
 {
    why = "";
-   int stops = (int)SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL);
+   long stops = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL, stops);
    double point = SymbolInfoDouble(s, SYMBOL_POINT);
    if(point <= 0){ why = "bad point"; return false; }
    double minDist = stops * point;
@@ -4047,7 +4096,8 @@ bool UltraBroker_StopsOK(const string s, const double price, const double sl, co
 bool UltraBroker_FreezeOK(const string s, const double price, const double sl, const double tp, string &why)
 {
    why = "";
-   int freeze = (int)SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL);
+   long freeze = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL, freeze);
    double point = SymbolInfoDouble(s, SYMBOL_POINT);
    if(freeze <= 0 || point <= 0) return true;
    double minDist = freeze * point;
@@ -4097,7 +4147,9 @@ void UltraHealth_Update(const string s)
    g_UltraBrokerHealth.connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
    g_UltraBrokerHealth.terminalTrade = (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED);
    g_UltraBrokerHealth.tradeAllowed = (AccountInfoInteger(ACCOUNT_TRADE_ALLOWED) != 0);
-   g_UltraBrokerHealth.symbolOK = (SymbolInfoInteger(s, SYMBOL_SELECT) != 0);
+   long sel = 0;
+   SymbolInfoInteger(s, SYMBOL_SELECT, sel);
+   g_UltraBrokerHealth.symbolOK = (sel != 0);
    double bid = SymbolInfoDouble(s, SYMBOL_BID);
    g_UltraBrokerHealth.marketOpen = (bid > 0.0);
    g_UltraBrokerHealth.pingMs = 0; // broker RTT probe reserved
@@ -7255,7 +7307,7 @@ bool LevelTouchedForTP(const bool isBuy, const double level, const double price,
 
 double NormalizeTradePrice(double price)
 {
-   int digits = (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS);
+   int digits = UltraSymDigits(BrokerSymbol);
 
    double tickSize = SymbolInfoDouble(BrokerSymbol, SYMBOL_TRADE_TICK_SIZE);
 
@@ -7282,10 +7334,10 @@ bool CheckTradeStops(double entry,double &sl,double &tp)
       return false;
 
    long stopLevel =
-      SymbolInfoInteger(BrokerSymbol,SYMBOL_TRADE_STOPS_LEVEL);
+      UltraSymStopsLevel(BrokerSymbol);
 
    long freezeLevel =
-      SymbolInfoInteger(BrokerSymbol,SYMBOL_TRADE_FREEZE_LEVEL);
+      UltraSymFreezeLevel(BrokerSymbol);
 
    double minimumDistance =
       MathMax((double)stopLevel,(double)freezeLevel) * point;
@@ -7464,7 +7516,7 @@ void RecordSignalSnapshot(ulong ticket, bool buy)
 
 void ConfigureFillingMode(string symbol)
 {
-   long fillingModes = SymbolInfoInteger(symbol, SYMBOL_FILLING_MODE);
+   long fillingModes = UltraSymFillingMode(symbol);
 
    if((fillingModes & SYMBOL_FILLING_FOK) != 0)
       trade.SetTypeFilling(ORDER_FILLING_FOK);
@@ -7580,7 +7632,7 @@ bool ExecuteBuy()
       {
          if(apexSL < sl)
             sl = apexSL;
-         Print("APEX BUY SL → sweep invalidation ", DoubleToString(sl, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+         Print("APEX BUY SL → sweep invalidation ", DoubleToString(sl, UltraSymDigits(BrokerSymbol)),
                " on ", BrokerSymbol);
       }
    }
@@ -7591,7 +7643,7 @@ bool ExecuteBuy()
       {
          if(lcsSL < sl)
             sl = lcsSL;
-         Print("LCS BUY SL → sweep invalidation ", DoubleToString(sl, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+         Print("LCS BUY SL → sweep invalidation ", DoubleToString(sl, UltraSymDigits(BrokerSymbol)),
                " on ", BrokerSymbol);
       }
    }
@@ -7862,7 +7914,7 @@ bool ExecuteSell()
       {
          if(apexSL > sl)
             sl = apexSL;
-         Print("APEX SELL SL → sweep invalidation ", DoubleToString(sl, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+         Print("APEX SELL SL → sweep invalidation ", DoubleToString(sl, UltraSymDigits(BrokerSymbol)),
                " on ", BrokerSymbol);
       }
    }
@@ -7873,7 +7925,7 @@ bool ExecuteSell()
       {
          if(lcsSL > sl)
             sl = lcsSL;
-         Print("LCS SELL SL → sweep invalidation ", DoubleToString(sl, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+         Print("LCS SELL SL → sweep invalidation ", DoubleToString(sl, UltraSymDigits(BrokerSymbol)),
                " on ", BrokerSymbol);
       }
    }
@@ -8300,8 +8352,8 @@ bool ApplyProfitLockSL(const ulong ticket,
    bool ok = trade.PositionModify(ticket, newSL, newTP);
    if(ok)
       Print("PROFIT LOCK: ticket ", ticket,
-            " SL→", DoubleToString(newSL, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
-            " TP→", DoubleToString(newTP, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+            " SL→", DoubleToString(newSL, UltraSymDigits(BrokerSymbol)),
+            " TP→", DoubleToString(newTP, UltraSymDigits(BrokerSymbol)),
             " (secured after TP hit)");
    else
       Print("PROFIT LOCK failed on ticket ", ticket, ": ", trade.ResultRetcodeDescription());
@@ -8966,11 +9018,7 @@ void ManageOpenTrades()
             price - trailingDistance;
 
 
-            long stopLevel =
-SymbolInfoInteger(
-   BrokerSymbol,
-   SYMBOL_TRADE_STOPS_LEVEL
-);
+            long stopLevel = UltraSymStopsLevel(BrokerSymbol);
 
 
 double minimumDistance =
@@ -9000,11 +9048,7 @@ if((price - newSL) >= minimumDistance)
             price + trailingDistance;
 
 
-            long stopLevel =
-SymbolInfoInteger(
-   BrokerSymbol,
-   SYMBOL_TRADE_STOPS_LEVEL
-);
+            long stopLevel = UltraSymStopsLevel(BrokerSymbol);
 
 
 double minimumDistance =
@@ -12044,7 +12088,7 @@ PRISMBeastScore UltraComputeBeastScore(bool buy, const string strategyTag)
 
    b.confirmation = MathMin(conf * 2, 12);
    b.executionQuality = (GetFilterATR() > 0.0) ? 8 : 0;
-   double spr = (double)SymbolInfoInteger(BrokerSymbol, SYMBOL_SPREAD);
+   double spr = (double)UltraSymSpread(BrokerSymbol);
    if(spr > 0 && spr < 50) b.executionQuality += 2;
 
    b.institutional = MathMin(ice / 8, 12);
@@ -12891,7 +12935,7 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
                currentSL = lockSL;
                if(DefenseLogActions)
                   Print("DEFEND LOCK: peak retrace — SL→", DoubleToString(lockSL,
-                        (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)),
+                        UltraSymDigits(BrokerSymbol)),
                         " ticket ", ticket);
             }
          }
@@ -14828,7 +14872,7 @@ bool LCS_SetupOK(const bool buy, string &detail, double &invalidation)
                          sweepBar,
                          zone ? "Y" : "N",
                          disp ? "Y" : "N",
-                         DoubleToString(invalidation, (int)SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS)));
+                         DoubleToString(invalidation, UltraSymDigits(BrokerSymbol)));
    return true;
 }
 

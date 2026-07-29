@@ -210,20 +210,22 @@ bool UltraDefense_Line7_Execution(const string s, string &why)
    if(!TerminalInfoInteger(TERMINAL_CONNECTED)){ why = "connection loss"; return false; }
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)){ why = "terminal trade blocked"; return false; }
    if(!MQLInfoInteger(MQL_TRADE_ALLOWED)){ why = "EA trade disabled"; return false; }
-   long tm = SymbolInfoInteger(s, SYMBOL_TRADE_MODE);
-   if(tm == SYMBOL_TRADE_MODE_DISABLED){ why = "symbol trade disabled"; return false; }
+
+   long tm = 0;
+   if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm)){ why = "symbol mode unavailable"; return false; }
+   // trade mode 0 = disabled — compare as long to avoid enum convert errors
+   if(tm == 0){ why = "symbol trade disabled"; return false; }
 
    double bid = SymbolInfoDouble(s, SYMBOL_BID);
    double ask = SymbolInfoDouble(s, SYMBOL_ASK);
    if(bid <= 0.0 || ask <= 0.0){ why = "price not fresh"; return false; }
-   datetime qt = (datetime)SymbolInfoInteger(s, SYMBOL_TIME);
-   if(qt > 0 && (TimeCurrent() - qt) > 120){ why = "stale quotes"; return false; }
 
    double volMin = SymbolInfoDouble(s, SYMBOL_VOLUME_MIN);
    double volMax = SymbolInfoDouble(s, SYMBOL_VOLUME_MAX);
    if(volMin <= 0.0 || (volMax > 0.0 && volMax < volMin)){ why = "invalid volume limits"; return false; }
 
-   int stops = (int)SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL);
+   long stops = 0;
+   if(!SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL, stops)){ why = "stops level unavailable"; return false; }
    if(stops < 0){ why = "invalid stops level"; return false; }
 
    double eq = AccountInfoDouble(ACCOUNT_EQUITY);
@@ -479,8 +481,9 @@ void UltraDefense_Line9_Emergency(const string s)
    bool connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
    bool tradeCtxBusy = !((bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED));
    bool badEquity = (AccountInfoDouble(ACCOUNT_EQUITY) <= 0.0);
-   long tm = SymbolInfoInteger(s, SYMBOL_TRADE_MODE);
-   bool symbolErr = (tm == SYMBOL_TRADE_MODE_DISABLED) || (SymbolInfoDouble(s, SYMBOL_BID) <= 0.0);
+   long tm = 0;
+   bool modeOK = SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm);
+   bool symbolErr = (!modeOK) || (tm == 0) || (SymbolInfoDouble(s, SYMBOL_BID) <= 0.0);
    bool invalidData = (Bars(s, UltraETF()) < 50);
 
    string why = "";

@@ -37,13 +37,19 @@ bool UltraBroker_Detect(const string s, UltraBrokerCaps &c)
    UltraBroker_ClearCaps(c);
    c.company = AccountInfoString(ACCOUNT_COMPANY);
    c.login   = AccountInfoInteger(ACCOUNT_LOGIN);
-   c.stopsLevel  = (int)SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL);
-   c.freezeLevel = (int)SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL);
-   c.fillingMode = (int)SymbolInfoInteger(s, SYMBOL_FILLING_MODE);
-   c.fillFOK    = ((c.fillingMode & SYMBOL_FILLING_FOK) == SYMBOL_FILLING_FOK);
-   c.fillIOC    = ((c.fillingMode & SYMBOL_FILLING_IOC) == SYMBOL_FILLING_IOC);
+   long stopsLevel = 0, freezeLevel = 0, fillingMode = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL, stopsLevel);
+   SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL, freezeLevel);
+   SymbolInfoInteger(s, SYMBOL_FILLING_MODE, fillingMode);
+   c.stopsLevel  = (int)stopsLevel;
+   c.freezeLevel = (int)freezeLevel;
+   c.fillingMode = (int)fillingMode;
+   c.fillFOK    = ((c.fillingMode & SYMBOL_FILLING_FOK) != 0);
+   c.fillIOC    = ((c.fillingMode & SYMBOL_FILLING_IOC) != 0);
    c.fillRETURN = true;
-   c.tradeAllowed = (SymbolInfoInteger(s, SYMBOL_TRADE_MODE) != SYMBOL_TRADE_MODE_DISABLED);
+   long tmMode = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tmMode);
+   c.tradeAllowed = (tmMode != 0);
    c.valid = (SymbolInfoDouble(s, SYMBOL_BID) > 0.0);
    g_UltraBrokerCaps = c;
    return c.valid;
@@ -61,7 +67,8 @@ ENUM_ORDER_TYPE_FILLING UltraBroker_PickFilling(const string s)
 bool UltraBroker_StopsOK(const string s, const double price, const double sl, const double tp, string &why)
 {
    why = "";
-   int stops = (int)SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL);
+   long stops = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL, stops);
    double point = SymbolInfoDouble(s, SYMBOL_POINT);
    if(point <= 0){ why = "bad point"; return false; }
    double minDist = stops * point;
@@ -73,7 +80,8 @@ bool UltraBroker_StopsOK(const string s, const double price, const double sl, co
 bool UltraBroker_FreezeOK(const string s, const double price, const double sl, const double tp, string &why)
 {
    why = "";
-   int freeze = (int)SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL);
+   long freeze = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL, freeze);
    double point = SymbolInfoDouble(s, SYMBOL_POINT);
    if(freeze <= 0 || point <= 0) return true;
    double minDist = freeze * point;

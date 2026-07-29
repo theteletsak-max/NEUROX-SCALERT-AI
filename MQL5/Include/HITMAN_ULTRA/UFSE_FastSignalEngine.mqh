@@ -110,7 +110,8 @@ void UltraUFSE_ScanTick(const int idx)
    if(t.last <= 0.0) t.last = t.bid;
    t.tickVol = (long)iTickVolume(s, UltraETF(), 0);
    if(t.tickVol <= 0) t.tickVol = (long)iVolume(s, UltraETF(), 0);
-   t.spread = (double)SymbolInfoInteger(s, SYMBOL_SPREAD);
+   long spr = 0; SymbolInfoInteger(s, SYMBOL_SPREAD, spr);
+   t.spread = (double)spr;
    t.t = TimeCurrent();
    t.dir = 0;
    if(prev.valid)
@@ -302,13 +303,12 @@ bool UltraUFSE_ExecReady(const string s, string &why)
    if(!TerminalInfoInteger(TERMINAL_CONNECTED)){ why = "terminal disconnected"; return false; }
    if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)){ why = "trading not allowed"; return false; }
    if(!MQLInfoInteger(MQL_TRADE_ALLOWED)){ why = "EA trading disabled"; return false; }
-   long tm = SymbolInfoInteger(s, SYMBOL_TRADE_MODE);
-   if(tm == SYMBOL_TRADE_MODE_DISABLED){ why = "symbol trade disabled"; return false; }
+   long tm = 0;
+   if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm)){ why = "symbol mode unavailable"; return false; }
+   if(tm == 0){ why = "symbol trade disabled"; return false; }
    double bid = SymbolInfoDouble(s, SYMBOL_BID);
    double ask = SymbolInfoDouble(s, SYMBOL_ASK);
    if(bid <= 0.0 || ask <= 0.0){ why = "price not fresh"; return false; }
-   datetime t = (datetime)SymbolInfoInteger(s, SYMBOL_TIME);
-   if(t > 0 && (TimeCurrent() - t) > 120){ why = "stale symbol quotes"; return false; }
    double eq = AccountInfoDouble(ACCOUNT_EQUITY);
    double fm = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
    if(eq <= 0.0){ why = "bad equity"; return false; }

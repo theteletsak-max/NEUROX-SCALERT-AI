@@ -22,7 +22,9 @@ void UltraHealth_Update(const string s)
    g_UltraBrokerHealth.connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
    g_UltraBrokerHealth.terminalTrade = (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED);
    g_UltraBrokerHealth.tradeAllowed = (AccountInfoInteger(ACCOUNT_TRADE_ALLOWED) != 0);
-   g_UltraBrokerHealth.symbolOK = (SymbolInfoInteger(s, SYMBOL_SELECT) != 0);
+   long sel = 0;
+   SymbolInfoInteger(s, SYMBOL_SELECT, sel);
+   g_UltraBrokerHealth.symbolOK = (sel != 0);
    double bid = SymbolInfoDouble(s, SYMBOL_BID);
    g_UltraBrokerHealth.marketOpen = (bid > 0.0);
    g_UltraBrokerHealth.pingMs = 0; // broker RTT probe reserved

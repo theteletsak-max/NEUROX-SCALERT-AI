@@ -66,7 +66,8 @@ string UltraDashboardText(const string s)
    t += " | MEO: "; t += DoubleToString(u.ind.meo, 1);
    t += " | IFI: "; t += DoubleToString(u.ind.ifi, 1);
    t += "\nVol: "; t += vol;
-   t += " ATR="; t += DoubleToString(u.vol.atr, (int)SymbolInfoInteger(s, SYMBOL_DIGITS));
+   long dig = 0; SymbolInfoInteger(s, SYMBOL_DIGITS, dig);
+   t += " ATR="; t += DoubleToString(u.vol.atr, (int)dig);
    t += "\nCapital: "; if(g_UltraCore.healthy) t += "OK"; else t += "CHECK";
    t += " | Health: "; t += u.diag.health;
    t += " | Lat: "; t += IntegerToString((int)g_UltraCore.lastLatencyMs); t += "ms";
