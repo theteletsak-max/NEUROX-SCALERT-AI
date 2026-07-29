@@ -61,11 +61,11 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI ULTRA Loaded BUILD_ID=SA_ULTRA_93 MaxOpen=", MaxOpenTrades);
+   Print("SNIPER AI ULTRA MODULAR Loaded BUILD_ID=SA_ULTRA_93 MaxOpen=", MaxOpenTrades);
    UltraCoreInit();
    if(EnableAPEXStrategy || EnableContFallback || EnableLCSStrategy)
       Print("OK93 WARNING: old APEX/ContFallback/LCS input ON — evaluators STUBBED; ULTRA only fires");
-   Print("OK93: old APEX/ContFallback/LCS/IDP-gate REMOVED from live path — ULTRA only");
+   Print("OK93 MODULAR: Core/Market/AI/Exec/Capital/MultiSym/MTF/Dash/Diag — ULTRA only");
    Print("INSTANT OPEN + QUALITY PREFER MODE=", InstantQualityMode);
    Print("QUALITY SELECT: IDP_Hard=", IDP_HardGate, " MinPulse=", IDP_MinAbsPulse,
          " ContScore=", ContStruct_MinScore, " ADX=", ContStruct_RequireTrendADX,
