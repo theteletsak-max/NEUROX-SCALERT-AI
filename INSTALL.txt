@@ -1,4 +1,5 @@
-[ ] Remove old OK82 from chart
-[ ] SNIPER_AI_OK83.mq5 → Experts → F7
-[ ] Attach → Journal SA_PSI_83 + PSI v1.0
-[ ] Trade comment must be SNIPER AI
+[ ] Remove old OK83/OK82/OK81 from chart and Experts folder
+[ ] Copy SNIPER_AI_OK84.mq5 → MQL5/Experts/
+[ ] F7 compile
+[ ] Attach → Journal: SA_LEAN_84 — PSI LEAN
+[ ] Trade comment = SNIPER AI

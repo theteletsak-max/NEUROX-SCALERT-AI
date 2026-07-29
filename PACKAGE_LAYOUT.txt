@@ -1,6 +1,9 @@
-CURRENT: SNIPER_AI_OK83.mq5 (SA_PSI_83)
-ENGINE: PRISM SIGNAL INDEX (PSI) v1.0 — price-only
-LIVE: APEX/Spec/ContFallback gated by PSI | PSI standalone ≥90%
-MIRRORS: SNIPER_AI.mq5 | MQL5/Experts/SNIPER_AI.mq5 | release/deliver/
-ARCHIVE: release/archive/
-ZIP: release/deliver/SNIPER_AI.zip
+LIVE ONLY (release/deliver/)
+  SNIPER_AI_OK84.mq5   ← use this
+  SNIPER_AI.mq5        ← same lean build
+  SNIPER_IDP.mq5       ← optional chart visual
+  CURRENT.txt INSTALL.txt SEND_THIS_EA.txt README.md
+  SNIPER_AI.zip
+
+ARCHIVE (release/archive/) — old OK builds, not for live attach
+ROOT mirrors: SNIPER_AI.mq5 + SNIPER_AI_OK84.mq5 + MQL5/Experts/SNIPER_AI.mq5

@@ -1,14 +1,13 @@
-SNIPER AI — CURRENT
+SNIPER AI — CURRENT (LEAN)
 
-EA:       SNIPER_AI_OK83.mq5
-BUILD_ID: SA_PSI_83
-Mode:     PRISM SIGNAL INDEX (PSI) v1.0 — PRICE ONLY
+EA:       SNIPER_AI_OK84.mq5
+BUILD_ID: SA_LEAN_84
+Size:     ~37 KB (was ~510 KB OK83)
 
-PSI engines: Regime, Trend, Structure, Liquidity, ICT, SMT, Momentum, Entry
-→ Adaptive Confidence → Fake Signal Detector → Trade Grade → Execution
+PSI v1.0 price-only institutional detector + market execution.
+Stripped: APEX/LCS/Beast/Ultra/multi-path bulk.
+Kept: PSI engines, fake filter, grades, self-learn, BE/trail, dashboard.
 
-Live: APEX/Cont/Rev/Instant/ContFallback gated by PSI
-Standalone: PSI fires instantly at Confidence ≥ 90%
 Trade comment: SNIPER AI
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK83.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK84.mq5

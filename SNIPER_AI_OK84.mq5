@@ -741,8 +741,17 @@ bool PSI_FakeDetector(const bool buy, const PSI_Report &r, string &why)
 PSI_Report PSI_Evaluate(const bool buy)
 {
    PSI_Report r;
-   ZeroMemory(r);
-   r.signal=PSI_SIG_NONE; r.grade="NO TRADE"; r.bias=PSI_BIAS_NEUTRAL; r.regime=PSI_REG_RANGE;
+   r.signal=PSI_SIG_NONE;
+   r.confidence=0;
+   r.grade="NO TRADE";
+   r.reason="";
+   r.cancelled=false;
+   r.cancelReason="";
+   r.regime=PSI_REG_RANGE;
+   r.regimeScore=0; r.trendScore=0; r.structureScore=0; r.liquidityScore=0;
+   r.ictScore=0; r.smtScore=0; r.momentumScore=0; r.entryScore=0;
+   r.bias=PSI_BIAS_NEUTRAL;
+   r.expansion=false; r.compression=false;
    if(!EnablePSI){ r.reason="PSI disabled"; PSI_Publish(r); return r; }
 
    PSI_ScoreRegime(r);

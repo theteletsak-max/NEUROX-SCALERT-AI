@@ -1,4 +1,4 @@
-SNIPER_AI_OK83.mq5
-BUILD SA_PSI_83
+SNIPER_AI_OK84.mq5
+BUILD SA_LEAN_84 (~37KB lean)
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK83.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK84.mq5

@@ -1,12 +1,17 @@
-# SNIPER AI OK83 — PRISM SIGNAL Index (PSI) v1.0
+# SNIPER AI OK84 LEAN
 
-Custom **price-only** institutional signal detector. No RSI, MACD, Stochastic, CCI, or Bollinger.
+**~37 KB** institutional EA (down from ~510 KB).
 
-**Pipeline:** Structure + Liquidity + ICT + SMT + Momentum + Entry → Confidence → Fake Detector → Grade → Execution
+Price-only **PRISM Signal Index (PSI) v1.0** + aggressive market execution.  
+No RSI / MACD / Stochastic / CCI / Bollinger.
 
-- Confidence **&lt; 50** → NO TRADE  
-- **70–89** → GOOD / HIGH QUALITY path fire  
-- **≥ 90** → instant market execution (PSI standalone)  
-- Trade comment: `SNIPER AI` · BUILD: `SA_PSI_83`
+| Conf | Action |
+|------|--------|
+| &lt;50 | NO TRADE |
+| 50–69 | LOW (soft allow) |
+| 70–89 | GOOD / HIGH — fire |
+| ≥90 | Instant institutional fire |
 
-Download: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK83.mq5
+Trade comment: `SNIPER AI` · BUILD: `SA_LEAN_84`
+
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK84.mq5
