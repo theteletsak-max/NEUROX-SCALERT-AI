@@ -3,62 +3,85 @@
 //+------------------------------------------------------------------+
 //| HITMAN AI — 24_DASHBOARD — AI Conf · Prec · Prob · Session · Stats
 //+------------------------------------------------------------------+
-//+------------------------------------------------------------------+
-//| 08. Dashboard System                                             |
-//+------------------------------------------------------------------+
 string UltraDashboardText(const string s)
 {
    UltraSnap u = g_UltraLastSnap;
    UltraSignal sig = g_UltraLastSignal;
-   string dir = sig.buy ? "BUY" : (sig.sell ? "SELL" : "-");
-   return
-      "======= HITMAN AI =======\n" +
-      "BUILD: HA_ULTRA_93 MASTER | Comment: HITMAN AI\n" +
-      "Symbol: " + s + " | TF: " + EnumToString(UltraETF()) + "\n" +
-      "Open: " + IntegerToString(CountOpenTrades()) + " / " + IntegerToString(MaxOpenTrades) + "\n" +
-      "AI Conf: " + IntegerToString(u.score.confidence) +
-      " | Prec: " + IntegerToString(u.score.precision) +
-      " | Prob: " + IntegerToString(u.score.probability) + "\n" +
-      "Session: " + u.ctx.session +
-      " | LiqWin: " + (u.ctx.sessionLiquidity ? "Y" : "N") +
-      " | News: " + u.ctx.newsPhase +
-      " | NewsVol: " + (u.ctx.newsVol ? "Y" : "N") +
-      " | (never blocks)\n" +
-      "Regime: " + UltraRegimeName(u.regime) + "\n" +
-      "Trend B/S votes: " + IntegerToString(u.trend.mtfVotesBuy) + "/" + IntegerToString(u.trend.mtfVotesSell) +
-      " | Str: " + IntegerToString(u.trend.strength) + "\n" +
-      "BOS: " + (u.bos.buy ? "BUY" : (u.bos.sell ? "SELL" : "-")) +
-      (u.bos.strong ? " STRONG" : (u.bos.weak ? " WEAK" : "")) +
-      (u.bos.failed ? " FAILED" : "") +
-      " CHoCH: " + (u.choch.buy ? "BUY" : (u.choch.sell ? "SELL" : "-")) +
-      " Sweep: " + (u.liq.sweepBuy ? "BUY" : (u.liq.sweepSell ? "SELL" : "-")) + "\n" +
-      "Fib zone B/S: " + (u.fib.atBuyZone ? "Y" : "N") + "/" + (u.fib.atSellZone ? "Y" : "N") +
-      " rank=" + IntegerToString(u.fib.zoneRank) + "\n" +
-      "SMI: " + DoubleToString(u.ind.smi, 1) +
-      " | MEO: " + DoubleToString(u.ind.meo, 1) +
-      " | IFI: " + DoubleToString(u.ind.ifi, 1) + "\n" +
-      "Vol: " + (u.vol.expansion ? "EXPAND" : (u.vol.compression ? "COMPRESS" : "NORMAL")) +
-      " ATR=" + DoubleToString(u.vol.atr, (int)SymbolInfoInteger(s, SYMBOL_DIGITS)) + "\n" +
-      "Capital: " + (g_UltraCore.healthy ? "OK" : "CHECK") +
-      " | Health: " + u.diag.health +
-      " | Lat: " + IntegerToString((int)g_UltraCore.lastLatencyMs) + "ms\n" +
-      "WR: " + DoubleToString(g_UltraMem.winRate, 1) + "%" +
-      " PF: " + DoubleToString(g_UltraMem.profitFactor, 2) +
-      " RR: " + DoubleToString(g_UltraMem.avgRR, 2) + "\n" +
-      "Signal: " + dir + " [" + sig.tag + "] " + sig.reason + "\n" +
-      "UFSE: " + UltraUFSE_Stats(s) + "\n" +
-      "---- EXPLAIN ----\n" +
-      (sig.explanation != "" ? sig.explanation : UltraUFSE_DebugExplain(u, (dir!="SELL"), (dir!="-"))) + "\n" +
-      "===============================";
+   string dir = "-";
+   if(sig.buy) dir = "BUY";
+   else if(sig.sell) dir = "SELL";
+
+   string bos = "-";
+   if(u.bos.buy) bos = "BUY";
+   else if(u.bos.sell) bos = "SELL";
+   if(u.bos.strong) bos += " STRONG";
+   else if(u.bos.weak) bos += " WEAK";
+   if(u.bos.failed) bos += " FAILED";
+
+   string choch = "-";
+   if(u.choch.buy) choch = "BUY";
+   else if(u.choch.sell) choch = "SELL";
+
+   string sweep = "-";
+   if(u.liq.sweepBuy) sweep = "BUY";
+   else if(u.liq.sweepSell) sweep = "SELL";
+
+   string vol = "NORMAL";
+   if(u.vol.expansion) vol = "EXPAND";
+   else if(u.vol.compression) vol = "COMPRESS";
+
+   string explain = sig.explanation;
+   if(StringLen(explain) == 0)
+   {
+      bool leanBuy = (dir != "SELL");
+      bool approved = (dir != "-");
+      explain = UltraUFSE_DebugExplain(u, leanBuy, approved);
+   }
+
+   string t = "======= HITMAN AI =======\n";
+   t += "BUILD: HA_ULTRA_93 MASTER | Comment: HITMAN AI\n";
+   t += "Symbol: "; t += s;
+   t += " | TF: "; t += EnumToString(UltraETF());
+   t += "\nOpen: "; t += IntegerToString(CountOpenTrades());
+   t += " / "; t += IntegerToString(MaxOpenTrades);
+   t += "\nAI Conf: "; t += IntegerToString(u.score.confidence);
+   t += " | Prec: "; t += IntegerToString(u.score.precision);
+   t += " | Prob: "; t += IntegerToString(u.score.probability);
+   t += "\nSession: "; t += u.ctx.session;
+   t += " | LiqWin: "; t += (u.ctx.sessionLiquidity ? "Y" : "N");
+   t += " | News: "; t += u.ctx.newsPhase;
+   t += " | NewsVol: "; t += (u.ctx.newsVol ? "Y" : "N");
+   t += " | (never blocks)";
+   t += "\nRegime: "; t += UltraRegimeName(u.regime);
+   t += "\nTrend B/S votes: "; t += IntegerToString(u.trend.mtfVotesBuy);
+   t += "/"; t += IntegerToString(u.trend.mtfVotesSell);
+   t += " | Str: "; t += IntegerToString(u.trend.strength);
+   t += "\nBOS: "; t += bos;
+   t += " CHoCH: "; t += choch;
+   t += " Sweep: "; t += sweep;
+   t += "\nFib zone B/S: "; t += (u.fib.atBuyZone ? "Y" : "N");
+   t += "/"; t += (u.fib.atSellZone ? "Y" : "N");
+   t += " rank="; t += IntegerToString(u.fib.zoneRank);
+   t += "\nSMI: "; t += DoubleToString(u.ind.smi, 1);
+   t += " | MEO: "; t += DoubleToString(u.ind.meo, 1);
+   t += " | IFI: "; t += DoubleToString(u.ind.ifi, 1);
+   t += "\nVol: "; t += vol;
+   t += " ATR="; t += DoubleToString(u.vol.atr, (int)SymbolInfoInteger(s, SYMBOL_DIGITS));
+   t += "\nCapital: "; t += (g_UltraCore.healthy ? "OK" : "CHECK");
+   t += " | Health: "; t += u.diag.health;
+   t += " | Lat: "; t += IntegerToString((int)g_UltraCore.lastLatencyMs); t += "ms";
+   t += "\nWR: "; t += DoubleToString(g_UltraMem.winRate, 1); t += "%";
+   t += " PF: "; t += DoubleToString(g_UltraMem.profitFactor, 2);
+   t += " RR: "; t += DoubleToString(g_UltraMem.avgRR, 2);
+   t += "\nSignal: "; t += dir; t += " ["; t += sig.tag; t += "] "; t += sig.reason;
+   t += "\nUFSE: "; t += UltraUFSE_Stats(s);
+   t += "\n---- EXPLAIN ----\n"; t += explain;
+   t += "\n===============================";
+   return t;
 }
-
-
-
-
 
 void CreateDashboard()
 {
-   // EnableDashboard (shell) OR UltraDashboardEnabled (ultra module)
    if(!EnableDashboard && !UltraDashboardEnabled)
       return;
    Comment(UltraDashboardText(BrokerSymbol));

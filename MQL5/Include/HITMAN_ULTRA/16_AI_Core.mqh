@@ -221,20 +221,28 @@ string UltraBuildExplanation(const UltraSnap &u, const bool buySide, const bool 
    bool fib   = buySide ? u.fib.atBuyZone : u.fib.atSellZone;
    int passed = (structure?1:0)+(bosCh?1:0)+(liq?1:0)+(trend?1:0)+(mom?1:0)+(fib?1:0);
 
-   string t = (approved ? tag : "NO TRADE") + "\n";
-   t += (structure ? "[OK] " : "[X]  ") + "Structure\n";
-   t += (bosCh     ? "[OK] " : "[X]  ") + "BOS/CHoCH\n";
-   t += (liq       ? "[OK] " : "[X]  ") + "Liquidity\n";
-   t += (fib       ? "[OK] " : "[-]  ") + "Fibonacci\n";
-   t += (trend     ? "[OK] " : "[X]  ") + "Trend\n";
-   t += (mom       ? "[OK] " : "[X]  ") + "Momentum\n";
-   t += "Confidence = " + IntegerToString(u.score.confidence) + "%\n";
-   t += "Precision  = " + IntegerToString(u.score.precision) + "%\n";
-   t += "Probability= " + IntegerToString(u.score.probability) + "%\n";
+   string t = (approved ? tag : "NO TRADE");
+   t += "\n"; t += (structure ? "[OK] Structure" : "[X]  Structure");
+   t += "\n"; t += (bosCh     ? "[OK] BOS/CHoCH" : "[X]  BOS/CHoCH");
+   t += "\n"; t += (liq       ? "[OK] Liquidity" : "[X]  Liquidity");
+   t += "\n"; t += (fib       ? "[OK] Fibonacci" : "[-]  Fibonacci");
+   t += "\n"; t += (trend     ? "[OK] Trend" : "[X]  Trend");
+   t += "\n"; t += (mom       ? "[OK] Momentum" : "[X]  Momentum");
+   t += "\nConfidence = "; t += IntegerToString(u.score.confidence); t += "%";
+   t += "\nPrecision  = "; t += IntegerToString(u.score.precision); t += "%";
+   t += "\nProbability= "; t += IntegerToString(u.score.probability); t += "%";
+   t += "\n";
    if(approved)
-      t += "Decision = " + (buySide ? "BUY" : "SELL");
+   {
+      t += "Decision = ";
+      t += (buySide ? "BUY" : "SELL");
+   }
    else
-      t += "Decision = WAIT | Reason = Insufficient Confluence (" + IntegerToString(passed) + "/6)";
+   {
+      t += "Decision = WAIT | Reason = Insufficient Confluence (";
+      t += IntegerToString(passed);
+      t += "/6)";
+   }
    return t;
 }
 

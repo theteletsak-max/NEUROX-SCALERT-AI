@@ -392,20 +392,22 @@ string UltraUFSE_DebugExplain(const UltraSnap &u, const bool buySide, const bool
    bool trend = buySide ? (u.trend.bull || u.trend.htfBull || u.trend.macroBull)
                         : (u.trend.bear || u.trend.htfBear || u.trend.macroBear);
 
-   string head = approved ? (buySide ? "BUY SIGNAL" : "SELL SIGNAL") : "NO TRADE";
-   string t = head + "\n";
-   t += "Trend ........ " + (trend ? "PASS" : "FAIL") + "\n";
-   t += "Structure .... " + (structure ? "PASS" : "FAIL") + "\n";
-   t += "BOS .......... " + (bos ? "PASS" : "FAIL") + "\n";
-   t += "CHoCH ........ " + (choch ? "PASS" : "FAIL") + "\n";
-   t += "Liquidity .... " + (liq ? "PASS" : "FAIL") + "\n";
-   t += "Momentum ..... " + (mom ? "PASS" : "FAIL") + "\n";
-   t += "\n";
-   t += "Confidence ... " + IntegerToString(u.score.confidence) + "%\n";
-   t += "Precision .... " + IntegerToString(u.score.precision) + "%\n";
-   t += "Probability .. " + IntegerToString(u.score.probability) + "%\n";
-   t += "\n";
-   t += "Decision ..... " + (approved ? (buySide ? "BUY" : "SELL") : "WAIT");
+   string head = "NO TRADE";
+   if(approved) head = (buySide ? "BUY SIGNAL" : "SELL SIGNAL");
+
+   string t = head;
+   t += "\nTrend ........ "; t += (trend ? "PASS" : "FAIL");
+   t += "\nStructure .... "; t += (structure ? "PASS" : "FAIL");
+   t += "\nBOS .......... "; t += (bos ? "PASS" : "FAIL");
+   t += "\nCHoCH ........ "; t += (choch ? "PASS" : "FAIL");
+   t += "\nLiquidity .... "; t += (liq ? "PASS" : "FAIL");
+   t += "\nMomentum ..... "; t += (mom ? "PASS" : "FAIL");
+   t += "\n\nConfidence ... "; t += IntegerToString(u.score.confidence); t += "%";
+   t += "\nPrecision .... "; t += IntegerToString(u.score.precision); t += "%";
+   t += "\nProbability .. "; t += IntegerToString(u.score.probability); t += "%";
+   t += "\n\nDecision ..... ";
+   if(approved) t += (buySide ? "BUY" : "SELL");
+   else t += "WAIT";
    return t;
 }
 
@@ -456,12 +458,23 @@ string UltraUFSE_Stats(const string s)
 {
    int idx = UltraUFSE_Find(s);
    if(idx < 0) return "UFSE n/a";
-   return "ticks=" + IntegerToString((int)g_UFSE[idx].tickCount) +
-          " hits=" + IntegerToString((int)g_UFSE[idx].cacheHits) +
-          " rebuilds=" + IntegerToString((int)g_UFSE[idx].fullRebuilds) +
-          " master=" + (g_UFSE[idx].masterTrend > 0 ? "BUY" : (g_UFSE[idx].masterTrend < 0 ? "SELL" : "FLAT")) +
-          " lock=" + (g_UFSE[idx].signalLocked ? "Y" : "N") +
-          " spd=" + DoubleToString(g_UFSE[idx].tick.speed, 1);
+   string master = "FLAT";
+   if(g_UFSE[idx].masterTrend > 0) master = "BUY";
+   else if(g_UFSE[idx].masterTrend < 0) master = "SELL";
+   string lock = (g_UFSE[idx].signalLocked ? "Y" : "N");
+   string t = "ticks=";
+   t += IntegerToString((int)g_UFSE[idx].tickCount);
+   t += " hits=";
+   t += IntegerToString((int)g_UFSE[idx].cacheHits);
+   t += " rebuilds=";
+   t += IntegerToString((int)g_UFSE[idx].fullRebuilds);
+   t += " master=";
+   t += master;
+   t += " lock=";
+   t += lock;
+   t += " spd=";
+   t += DoubleToString(g_UFSE[idx].tick.speed, 1);
+   return t;
 }
 
 //--------------------------------------------------------------------//
