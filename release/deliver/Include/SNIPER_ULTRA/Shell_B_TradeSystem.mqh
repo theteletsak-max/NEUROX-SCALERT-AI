@@ -65,9 +65,6 @@ int OnInit()
    UltraCoreInit();
    UltraSystemController_Boot();
    Print("OK93 v1 BLUEPRINT: modules 00-31 active | Shell A/B | ULTRA-only live path");
-   Print("OK93 ULTIMATE STRUCTURE: modules 00-40 | broker=", UltraBroker_Summary(_Symbol),
-         " | health=", UltraHealth_Summary(_Symbol),
-         " | mode=", UltraBT_ModeName());
    if(EnableAPEXStrategy || EnableContFallback || EnableLCSStrategy)
       Print("OK93 WARNING: old APEX/ContFallback/LCS input ON — evaluators STUBBED; ULTRA only fires");
    Print("INSTANT OPEN + QUALITY PREFER MODE=", InstantQualityMode);
