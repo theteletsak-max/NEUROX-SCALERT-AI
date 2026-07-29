@@ -171,9 +171,12 @@ void UltraClearSnap(UltraSnap &u)
    u.ctx.session = "OFF";
    u.ctx.asia = u.ctx.london = u.ctx.newyork = u.ctx.overlap = false;
    u.ctx.killZone = false;
+   u.ctx.sessionLiquidity = false;
    u.ctx.sessionConfidence = 0; u.ctx.sessionQuality = 0;
    u.ctx.newsVol = false;
    u.ctx.highImpactProxy = u.ctx.midImpactProxy = u.ctx.lowImpactProxy = false;
+   u.ctx.beforeNews = u.ctx.duringNews = u.ctx.afterNews = false;
+   u.ctx.newsPhase = "NONE";
    u.ctx.spreadPts = 0; u.ctx.slipProxy = 0;
    u.diag.tickOK = u.diag.brokerOK = u.diag.connectionOK = false;
    u.diag.indicatorOK = u.diag.memoryOK = false;

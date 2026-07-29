@@ -20,6 +20,8 @@ string UltraDashboardText(const string s)
       " | Prec: " + IntegerToString(u.score.precision) +
       " | Prob: " + IntegerToString(u.score.probability) + "\n" +
       "Session: " + u.ctx.session +
+      " | LiqWin: " + (u.ctx.sessionLiquidity ? "Y" : "N") +
+      " | News: " + u.ctx.newsPhase +
       " | NewsVol: " + (u.ctx.newsVol ? "Y" : "N") +
       " | (never blocks)\n" +
       "Regime: " + UltraRegimeName(u.regime) + "\n" +

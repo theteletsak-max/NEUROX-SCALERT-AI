@@ -126,11 +126,14 @@ struct UltraSessionNews
    string session;
    bool   asia, london, newyork, overlap;
    bool   killZone;
+   bool   sessionLiquidity;          // overlap / kill-zone liquidity window
    int    sessionConfidence, sessionQuality;
    bool   newsVol;
    bool   highImpactProxy, midImpactProxy, lowImpactProxy;
+   bool   beforeNews, duringNews, afterNews; // context phases — NEVER block
+   string newsPhase;                 // "BEFORE" | "DURING" | "AFTER" | "NONE"
    double spreadPts, slipProxy;
-   // NEVER blocks
+   // Session + News: CONTEXT ONLY · Trades 24/5 · never hard-block
 };
 
 struct UltraIndicators
