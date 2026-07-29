@@ -1,24 +1,11 @@
-SNIPER AI ULTRA v1 BLUEPRINT (OK93)
+SNIPER AI ULTRA v1 BLUEPRINT — SINGLE-FILE EA
 
-EA:       SNIPER_AI.mq5 / SNIPER_AI_OK93.mq5
+EA:       SNIPER_AI.mq5 / SNIPER_AI_OK93.mq5  (~14.6k lines, all modules inlined)
 BUILD_ID: SA_ULTRA_93
 Comment:  SNIPER AI
 MaxOpen:  3
 
-Include/SNIPER_ULTRA/
-  00_Types … 31_Inputs
-  Shell_A_InputsGlobals.mqh
-  Shell_B_TradeSystem.mqh
-  SNIPER_ULTRA.mqh
+Download:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.mq5
 
-Optional: SNIPER_ULTRA_EXT.mqh (32-40) — not in v1 master
-
-Session/News = context only · Trades 24/5 · never hard-block
-
-Flow:
-  Load → Config → Data → Structure → BOS → CHoCH → Liquidity → Fib →
-  Institutional → Trend → Momentum → Volatility → Regime → Session →
-  News → Confluence → Probability → Precision → AI → Capital →
-  Execution → Trade Management → Dashboard → Statistics → Logger → Recovery
-
-Zip: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/SNIPER_AI.zip
+Modular sources still in MQL5/Include/SNIPER_ULTRA/ (dev). Live send file is the single .mq5.

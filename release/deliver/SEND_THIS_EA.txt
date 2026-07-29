@@ -1,12 +1,12 @@
-SNIPER AI ULTRA v1 BLUEPRINT
+EA: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI.mq5
 
-Zip: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/SNIPER_AI.zip
-EA: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK93.mq5
-Modules: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/tree/cursor/sniper-ai-compile-fix-b12d/MQL5/Include/SNIPER_ULTRA
+Same build: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK93.mq5
 
-Install:
-  1) Copy SNIPER_AI.mq5 → MQL5/Experts/
-  2) Copy Include/SNIPER_ULTRA/ → MQL5/Include/SNIPER_ULTRA/
-  3) F7 compile → Journal: SNIPER AI ULTRA v1 BLUEPRINT Loaded BUILD_ID=SA_ULTRA_93
+BUILD_ID: SA_ULTRA_93
+Comment: SNIPER AI
+MaxOpen: 3
 
-Comment: SNIPER AI | MaxOpen=3 | modules 00-31
+Install (single file):
+  Copy SNIPER_AI.mq5 → MQL5/Experts/
+  F7 compile
+  Journal: SNIPER AI ULTRA v1 BLUEPRINT Loaded BUILD_ID=SA_ULTRA_93
