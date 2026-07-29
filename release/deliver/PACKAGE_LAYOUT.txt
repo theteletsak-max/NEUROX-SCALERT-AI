@@ -1,1 +1,2 @@
-LIVE: SNIPER_AI_OK88.mq5 (SA_APEX_88) — audited APEX-only
+LIVE: SNIPER_AI_OK89.mq5 (SA_FLASH_89) — from-scratch FLASH SNIPER
+ARCHIVE: older builds in release/archive/

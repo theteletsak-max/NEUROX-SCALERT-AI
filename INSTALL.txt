@@ -1,3 +1,5 @@
-[ ] Remove OK87 from chart
-[ ] SNIPER_AI_OK88.mq5 → Experts → F7
-[ ] Journal: SA_APEX_88 — APEX ONLY (AUDITED)
+[ ] Remove old OK88/OK87 from chart
+[ ] SNIPER_AI_OK89.mq5 → MQL5/Experts → F7
+[ ] Attach → Journal: SA_FLASH_89 — FROM-SCRATCH FLASH CORE
+[ ] Confirm comment = SNIPER AI
+[ ] MaxOpenTrades = 3

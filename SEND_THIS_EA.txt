@@ -1,5 +1,7 @@
-SNIPER AI OK88 — audited APEX minimal
+SNIPER AI OK89 — FLASH CORE (from scratch)
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK88.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK89.mq5
 
-BUILD SA_APEX_88 | Comment: SNIPER AI
+F7 → Journal SA_FLASH_89
+Trade comment: SNIPER AI
+MaxOpenTrades=3
