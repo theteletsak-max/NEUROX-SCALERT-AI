@@ -1,10 +1,18 @@
-SNIPER AI — CURRENT (FULL EA — NOT FROM SCRATCH)
+SNIPER AI ULTRA — CURRENT (OK92)
 
-EA:       SNIPER_AI_OK81.mq5
-BUILD_ID: SA_QUALITY_81
-Lines:    ~13074
+EA:       SNIPER_AI_OK92.mq5
+BUILD_ID: SA_ULTRA_92
 Comment:  SNIPER AI
+MaxOpen:  3
 
-This is the full live EA base (~13k lines). Do NOT replace with from-scratch rewrites.
+COMPLETE FEATURE ARCHITECTURE on OK81 exec shell:
+- Ultra Core / Data / Config / Validation / Recovery / Error / Memory / Log / State / Perf
+- Market Structure, UBOSE, UCHOCHE, ULSE, UFIE, Institutional, Trend, Momentum, Volatility, Regime
+- Session + News intelligence (NEVER hard-block)
+- Proprietary indicators: SMI, MEO, IFI
+- AI Decision + Confluence / Precision / Probability
+- Fast execution + capital protection + multi-symbol + MTF + dashboard + diagnostics + memory
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK81.mq5
+Strategies: FlashSweep | ContSniper | RevSniper | FibSniper | BreakImpulse | InstZone
+
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK92.mq5

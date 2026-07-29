@@ -1,18 +1,18 @@
-SNIPER AI — CURRENT (OK91)
+SNIPER AI ULTRA — CURRENT (OK92)
 
-EA:       SNIPER_AI_OK91.mq5
-BUILD_ID: SA_PRIME_91
-Base:     OK81 exec shell (~13k) — NOT a full rewrite
+EA:       SNIPER_AI_OK92.mq5
+BUILD_ID: SA_ULTRA_92
 Comment:  SNIPER AI
 MaxOpen:  3
 
-CHANGED:
-- MaxOpenTrades = 3
-- DELETED live: APEX, ContFallback (off + not in router)
-- DELETED indicators: BB, FastEMA, SlowEMA (no longer created)
-- NEW from-scratch engines: Structure, Trend, Liquidity, ICT, Fibonacci, Volume/Momentum
-- NEW strategies: FlashSweep | ContSniper | RevSniper | FibSniper | BreakImpulse
-- Never buy+sell same symbol together
-- Keeps: ExecuteBuy/Sell, TP1/TP2/TP3, margin, multi-symbol, session/news aware
+COMPLETE FEATURE ARCHITECTURE on OK81 exec shell:
+- Ultra Core / Data / Config / Validation / Recovery / Error / Memory / Log / State / Perf
+- Market Structure, UBOSE, UCHOCHE, ULSE, UFIE, Institutional, Trend, Momentum, Volatility, Regime
+- Session + News intelligence (NEVER hard-block)
+- Proprietary indicators: SMI, MEO, IFI
+- AI Decision + Confluence / Precision / Probability
+- Fast execution + capital protection + multi-symbol + MTF + dashboard + diagnostics + memory
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK91.mq5
+Strategies: FlashSweep | ContSniper | RevSniper | FibSniper | BreakImpulse | InstZone
+
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK92.mq5

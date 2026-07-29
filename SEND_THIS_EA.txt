@@ -1,5 +1,5 @@
-SNIPER AI OK91 — PRIME on OK81 shell
+SNIPER AI ULTRA OK92 — COMPLETE FEATURE ARCHITECTURE
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK91.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK92.mq5
 
-F7 → SA_PRIME_91 | Comment: SNIPER AI | MaxOpen=3 | Fib + 5 strategies
+F7 → SA_ULTRA_92 | Comment: SNIPER AI | MaxOpen=3

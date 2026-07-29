@@ -1,3 +1,3 @@
-SNIPER_AI.mq5      = live mirror of OK91
-SNIPER_AI_OK91.mq5 = CURRENT
+SNIPER_AI.mq5      = live mirror of OK92
+SNIPER_AI_OK92.mq5 = CURRENT ULTRA EA
 SNIPER_AI.zip      = deliver package

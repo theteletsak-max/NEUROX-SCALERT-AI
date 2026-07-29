@@ -1,5 +1,5 @@
-SNIPER AI OK81 — FULL EA (~13074 lines)
+SNIPER AI ULTRA OK92 — COMPLETE FEATURE ARCHITECTURE
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK81.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK92.mq5
 
-F7 → SA_QUALITY_81 | Comment: SNIPER AI
+F7 → SA_ULTRA_92 | Comment: SNIPER AI | MaxOpen=3
