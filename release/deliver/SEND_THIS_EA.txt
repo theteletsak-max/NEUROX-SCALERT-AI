@@ -1,8 +1,8 @@
-SNIPER AI OK76
+SNIPER AI OK77 — INSTANT QUALITY
 
 DOWNLOAD:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK76.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK77.mq5
 
-BUILD_ID: SA_QUALITY_76
-Fix: PullbackMaxATRMultiple input restored (compile errors cleared).
-IDP built into EA. Remove PRISM → F7 → attach.
+BUILD_ID: SA_QUALITY_77
+Instant when structure + IDP pass. Not trend-only spam.
+Remove PRISM → F7 → attach → SA_QUALITY_77

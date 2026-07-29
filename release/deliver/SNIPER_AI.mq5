@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_QUALITY_76                                      |
-//| SNIPER AI - anytime + strong quality + IDP built into EA          |
-//| Comment: SNIPER AI | IDP embedded pulse | No RSI/MACD/Stoch      |
+//| BUILD_ID: SA_QUALITY_77                                      |
+//| SNIPER AI - INSTANT QUALITY + IDP built into EA                   |
+//| Comment: SNIPER AI | Instant Quality + IDP | No RSI/MACD/Stoch   |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.44"
-#property description "SNIPER AI OK76: anytime + quality + built-in IDP"
-#property description "Remove PRISM. Source SNIPER_AI_OK76 BUILD=SA_QUALITY_76"
+#property version   "5.45"
+#property description "SNIPER AI OK77: INSTANT QUALITY + built-in IDP"
+#property description "Remove PRISM. Source SNIPER_AI_OK77 BUILD=SA_QUALITY_77"
 
 #include <Trade/Trade.mqh>
 
@@ -25,15 +25,20 @@ input group "GENERAL"
 input long MagicNumber = 40001;
 input string TradeComment = "SNIPER AI";
 
+input group "INSTANT QUALITY (fast fire when quality is ready)"
+// Instant = react on ticks as soon as quality stack passes.
+// Quality = still needs structure + IDP direction (NOT trend-only scalping).
+input bool   InstantQualityMode          = true;   // profile banner / intent lock
+
 input group "SNIPER IDP - BUILT INTO EA (signal core)"
 // Institutional Displacement Pulse computed INSIDE the EA (same math as SNIPER_IDP).
 // No separate indicator required for trading. Chart SNIPER_IDP is optional visual only.
 input bool   EnableIDPConfluence     = true;   // master: IDP pulse gates live FIRE
 input bool   IDP_HardGate            = true;   // true=must agree to FIRE; false=log only
 input bool   IDP_RequireStrong       = false;  // false=QUALITY |pulse|; true=STRONG only
-input double IDP_MinAbsPulse         = 45.0;   // QUALITY floor
+input double IDP_MinAbsPulse         = 35.0;   // OK77 instant-quality floor (was 45)
 input double IDP_StrongAbsPulse      = 70.0;   // STRONG floor
-input int    IDP_PulseShift          = 1;      // 1=closed bar (stable); 0=forming
+input int    IDP_PulseShift          = 0;      // OK77: forming bar = instant (0); use 1 for slower/stable
 input int    IDP_ATR_Period          = 14;
 input int    IDP_EMA_Period          = 50;     // trend-side reference
 input int    IDP_SwingLookback       = 5;
@@ -115,31 +120,31 @@ input bool   EnableAntiScalpMode         = true;   // ALWAYS on for ContFallback
 input bool   EnableContFallback          = true;   // second live path — structure Cont only
 input bool   ContFallbackBypassEngines   = true;   // ContFallback skips ICE/IMCE after structure pass
 input bool   ContFallbackOncePerBar      = true;   // max 1 ContFallback signal per EntryTF bar
-input int    ContFallbackCooldownMinutes = 60;     // OK69: can re-enter sooner (still anti-scalp)
-input int    ContFallbackMinimumHoldBars = 24;     // EntryTF bars before trail/trend mgmt (H1≈24h)
+input int    ContFallbackCooldownMinutes = 12;     // OK77 instant quality (was 60)
+input int    ContFallbackMinimumHoldBars = 6;      // OK77 faster management unlock (was 24)
 input double ContFallbackSL_ATR_Boost    = 1.5;    // wider SL — not a scalp stop
 input int    ContFallbackMaxOpen         = 1;      // max open ContFallback positions on this symbol
 input bool   ContFallbackDisableAdaptiveHold = true; // do not shorten hold in ranging for ContFallback/APEX
 
-input group "CONT STRUCTURE — STRONG QUALITY (OK76, anytime + built-in IDP)"
+input group "CONT STRUCTURE - INSTANT QUALITY (OK77)"
 // Anytime: sessions never hard-block.
-// Strong quality ContFallback: ADX trend + BOS + fresh zone + (near OR disp) + min score.
-// STRONG grade = near+disp+fresh OB. QUALITY grade = solid score with ZoneOrDisp.
+// Instant quality ContFallback: trend + BOS + zone + (near OR disp) + score.
+// ADX not hard-required (still scores). IDP still hard-gates direction.
 input int    ContStruct_BOS_MaxBars          = 10;    // directional BOS within N EntryTF bars
-input bool   ContStruct_RequireTwoBarBOS     = true;  // OK72: prefer 2-bar BOS (fresh single still ok ≤3)
+input bool   ContStruct_RequireTwoBarBOS     = false; // OK77: single fresh BOS OK (faster)
 input bool   ContStruct_FreshOBOnly          = true;  // reject mitigated OBs
 input double ContStruct_MinFVG_ATR           = 0.20;  // quality FVG size vs ATR
 input double ContStruct_MaxFVGFillPct        = 55.0;  // reject mostly-filled FVGs
-input double ContStruct_ZoneProximityATR     = 1.10;  // price near OB/FVG
+input double ContStruct_ZoneProximityATR     = 1.35;  // OK77: slightly wider near-zone
 input bool   ContStruct_RequireDisplacement  = false; // use ZoneOrDisp
 input bool   ContStruct_ZoneOrDisplacement   = true;  // near-zone OR displacement required
 input double ContStruct_MinDispBodyRatio     = 0.48;  // stronger impulse body
 input double ContStruct_MinDispATR           = 0.35;  // stronger displace vs ATR
 input bool   ContStruct_RequireHTF_BOS       = false; // optional HTF BOS
 input bool   ContStruct_PreferDiscountPrem   = false; // soft only (scores bonus; not hard gate)
-input bool   ContStruct_RequireTrendADX      = true;  // OK72: TrendStrong() required
-input bool   ContStruct_SkipRanging          = true;  // OK72: skip Cont in clear ranging regime
-input int    ContStruct_MinScore             = 60;    // OK72: minimum structure score to fire
+input bool   ContStruct_RequireTrendADX      = false; // OK77: ADX soft (trend side still required)
+input bool   ContStruct_SkipRanging          = false; // OK77: allow Cont if structure+IDP pass
+input int    ContStruct_MinScore             = 48;    // OK77 instant-quality floor (was 60)
 input bool   ContStruct_LogDetail            = true;
 
 input ENUM_TIMEFRAMES APEX_BiasTF        = PERIOD_H4;
@@ -152,8 +157,8 @@ input double APEX_EqualTolATR            = 0.12;    // equal high/low tolerance 
 input int    APEX_SweepLookback          = 24;     // OK62 longer
 input double APEX_MinSweepWickRatio      = 0.28;   // OK62 relaxed
 input double APEX_MinSweepDepthATR       = 0.06;
-input double APEX_DispMinBodyRatio       = 0.48;   // OK72: stronger displacement quality
-input double APEX_DispMinATR             = 0.45;   // OK72: stronger displacement quality
+input double APEX_DispMinBodyRatio       = 0.42;   // OK77 instant quality
+input double APEX_DispMinATR             = 0.32;   // OK77 instant quality
 input double APEX_TickVolExpansion       = 1.25;    // bar1 tick vol vs avg (1.0=off soft)
 input bool   APEX_RequireTickVol         = false;
 input bool   APEX_RequireUnmitigatedZone = false;  // OK69: OFF so APEX can fill (zone still preferred in path)
@@ -619,9 +624,11 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded BUILD_ID=SA_QUALITY_76");
-   Print("CRITICAL: SOURCE must be SNIPER_AI_OK76 — remove PRISM STRATEGY if present");
-   Print("QUALITY76: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
+   Print("SNIPER AI Loaded BUILD_ID=SA_QUALITY_77");
+   Print("INSTANT QUALITY MODE=", InstantQualityMode,
+         " | fire as soon as structure+IDP pass (not trend-only scalp)");
+   Print("CRITICAL: SOURCE must be SNIPER_AI_OK77 — remove PRISM STRATEGY if present");
+   Print("INSTANT QUALITY77: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
          " HardBlock=", APEX_SessionHardBlock, " (must be false)",
          " NewsAware=", EnableNewsAwareness,
          " IDP=", EnableIDPConfluence,
@@ -2691,8 +2698,8 @@ input bool EnableVerboseLogging = false;
 input double StopLossPoints   = 500;
 input double TakeProfitPoints = 1000;
 input int    SlippagePoints   = 20;
-input int TradeCooldownMinutes = 15;  // OK69: shorter idle wait (NeverBlock often bypasses anyway)
-input int AttemptCooldownSeconds = 5;  // OK69: allow retries after requote/fail
+input int TradeCooldownMinutes = 3;   // OK77 instant quality
+input int AttemptCooldownSeconds = 2;  // OK77 faster retry
 
 // #12 Broker filling / slippage profiles (per instrument class)
 input group "SLIPPAGE PROFILES (#12)"
@@ -12514,7 +12521,7 @@ string LiveMarketSummary()
 void PrintLiveMarketAnalysis()
 {
    AnalyzeLiveMarket(true);
-   Print("---- MARKET ANALYSIS BUILD=SA_QUALITY_76 (", BrokerSymbol, ") ----");
+   Print("---- MARKET ANALYSIS BUILD=SA_QUALITY_77 (", BrokerSymbol, ") ----");
    Print("SESSION=", g_LiveMkt.sessionName,
          " hour=", g_LiveMkt.sessionHour,
          (APEX_UseGMT ? " GMT" : " SERVER"),
