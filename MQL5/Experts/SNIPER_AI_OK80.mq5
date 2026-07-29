@@ -1,14 +1,14 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
-//| BUILD_ID: SA_QUALITY_79                                      |
-//| SNIPER AI - AGGRESSIVE INSTANT + BEST QUALITY                   |
-//| Comment: SNIPER AI | Aggressive Instant Best Quality | No RSI/MACD/Stoch   |
+//| BUILD_ID: SA_QUALITY_80                                      |
+//| SNIPER AI - AGGRESSIVE INSTANT QUALITY (chart TF)                   |
+//| Comment: SNIPER AI | Aggressive Instant Quality | No RSI/MACD/Stoch   |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "5.47"
-#property description "SNIPER AI OK79: aggressive instant + best quality"
-#property description "Remove PRISM. Source SNIPER_AI_OK79 BUILD=SA_QUALITY_79"
+#property version   "5.48"
+#property description "SNIPER AI OK80: aggressive instant quality chart TF"
+#property description "Remove PRISM. Source SNIPER_AI_OK80 BUILD=SA_QUALITY_80"
 
 #include <Trade/Trade.mqh>
 
@@ -25,7 +25,7 @@ input group "GENERAL"
 input long MagicNumber = 40001;
 input string TradeComment = "SNIPER AI";
 
-input group "AGGRESSIVE INSTANT + BEST QUALITY"
+input group "AGGRESSIVE INSTANT QUALITY (chart TF)"
 // BEST QUALITY selects the trade (structure + IDP + ADX).
 // AGGRESSIVE INSTANT executes immediately once selected (tick path, no idle cooldown).
 input bool   InstantQualityMode          = true;   // profile banner / intent lock
@@ -36,7 +36,7 @@ input group "SNIPER IDP - BUILT INTO EA (signal core)"
 input bool   EnableIDPConfluence     = true;   // master: IDP pulse gates live FIRE
 input bool   IDP_HardGate            = true;   // OK79 BEST QUALITY: IDP must agree
 input bool   IDP_RequireStrong       = false;  // false=QUALITY |pulse|; true=STRONG only
-input double IDP_MinAbsPulse         = 45.0;   // OK79 BEST QUALITY floor
+input double IDP_MinAbsPulse         = 38.0;   // OK80 quality floor
 input double IDP_StrongAbsPulse      = 70.0;   // STRONG floor
 input int    IDP_PulseShift          = 1;      // OK79: closed bar = stable quality pulse
 input int    IDP_ATR_Period          = 14;
@@ -126,13 +126,13 @@ input double ContFallbackSL_ATR_Boost    = 1.5;    // wider SL — not a scalp s
 input int    ContFallbackMaxOpen         = 1;      // max open ContFallback positions on this symbol
 input bool   ContFallbackDisableAdaptiveHold = true; // do not shorten hold in ranging for ContFallback/APEX
 
-input group "CONT STRUCTURE - BEST QUALITY (OK79)"
+input group "CONT STRUCTURE - AGGRESSIVE INSTANT QUALITY (OK80)"
 // Anytime: sessions never hard-block.
 // Instant quality ContFallback: trend + BOS + zone + (near OR disp) + score.
 // ADX not hard-required (still scores). IDP still hard-gates direction.
-input int    ContStruct_BOS_MaxBars          = 10;    // directional BOS within N EntryTF bars
-input bool   ContStruct_RequireTwoBarBOS     = true;  // OK79: prefer 2-bar BOS (fresh single <=3 ok)
-input bool   ContStruct_FreshOBOnly          = true;  // reject mitigated OBs
+input int    ContStruct_BOS_MaxBars          = 18;    // OK80 wider BOS window
+input bool   ContStruct_RequireTwoBarBOS     = false; // OK80: fresh single BOS OK
+input bool   ContStruct_FreshOBOnly          = false; // OK80: allow active OB/FVG
 input double ContStruct_MinFVG_ATR           = 0.20;  // quality FVG size vs ATR
 input double ContStruct_MaxFVGFillPct        = 55.0;  // reject mostly-filled FVGs
 input double ContStruct_ZoneProximityATR     = 1.15;  // OK79 quality near-zone
@@ -142,13 +142,13 @@ input double ContStruct_MinDispBodyRatio     = 0.48;  // OK79 quality displaceme
 input double ContStruct_MinDispATR           = 0.35;  // OK79 quality displacement
 input bool   ContStruct_RequireHTF_BOS       = false; // optional HTF BOS
 input bool   ContStruct_PreferDiscountPrem   = false; // soft only (scores bonus; not hard gate)
-input bool   ContStruct_RequireTrendADX      = true;  // OK79 BEST QUALITY: TrendStrong required
-input bool   ContStruct_SkipRanging          = true;  // OK79: skip clear ranging
-input int    ContStruct_MinScore             = 58;    // OK79 BEST QUALITY score floor
+input bool   ContStruct_RequireTrendADX      = false; // OK80: ADX soft (fixes ADX waits)
+input bool   ContStruct_SkipRanging          = false; // OK80: FIX ranging-regime hard wait
+input int    ContStruct_MinScore             = 42;    // OK80 quality floor (can still fill)
 input bool   ContStruct_LogDetail            = true;
 
 input ENUM_TIMEFRAMES APEX_BiasTF        = PERIOD_H4;
-input ENUM_TIMEFRAMES APEX_EntryTF       = PERIOD_H1;
+input ENUM_TIMEFRAMES APEX_EntryTF       = PERIOD_CURRENT; // OK80 chart TF
 input int    APEX_BiasMA_Period          = 200;
 input int    APEX_SwingStrength          = 2;      // bars left/right for swing pivot
 input int    APEX_SwingLookback          = 40;      // BiasTF bars to map structure
@@ -286,8 +286,8 @@ input bool UseATR = true;
 
 input group "TIMEFRAMES"
 
-input ENUM_TIMEFRAMES TrendTF = PERIOD_H4;
-input ENUM_TIMEFRAMES EntryTF = PERIOD_H1; // OK57: align management bars with LCS entry TF
+input ENUM_TIMEFRAMES TrendTF = PERIOD_CURRENT; // OK80 chart TF
+input ENUM_TIMEFRAMES EntryTF = PERIOD_CURRENT; // OK80: use chart TF (H4 chart = H4)
 
 input group "LONG TERM HOLDING"
 
@@ -624,8 +624,8 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI Loaded BUILD_ID=SA_QUALITY_79");
-   Print("AGGRESSIVE INSTANT + BEST QUALITY MODE=", InstantQualityMode);
+   Print("SNIPER AI Loaded BUILD_ID=SA_QUALITY_80");
+   Print("AGGRESSIVE INSTANT QUALITY (chart TF) MODE=", InstantQualityMode);
    Print("QUALITY SELECT: IDP_Hard=", IDP_HardGate, " MinPulse=", IDP_MinAbsPulse,
          " ContScore=", ContStruct_MinScore, " ADX=", ContStruct_RequireTrendADX,
          " SkipRange=", ContStruct_SkipRanging);
@@ -634,8 +634,8 @@ int OnInit()
          " TickDetect=", EnableTickLevelSignalDetection,
          " NeverBlock=", NeverBlockValidSniperEntry,
          " UltraAggro=", UltraAggressiveFire);
-   Print("CRITICAL: SOURCE must be SNIPER_AI_OK79 — remove PRISM STRATEGY if present");
-   Print("INSTANT QUALITY79: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
+   Print("CRITICAL: SOURCE must be SNIPER_AI_OK80 — remove PRISM STRATEGY if present");
+   Print("INSTANT QUALITY80: ANYTIME + STRONG/QUALITY + IDP CORE | AntiScalp=", EnableAntiScalpMode,
          " HardBlock=", APEX_SessionHardBlock, " (must be false)",
          " NewsAware=", EnableNewsAwareness,
          " IDP=", EnableIDPConfluence,
@@ -11387,20 +11387,36 @@ string ContStruct_Grade(const bool buy)
 bool ContFallbackBestStructureOK(const bool buy, string &detail)
 {
    detail = "";
-   if(buy && !IsBullTrend()) { detail = "no bull trend"; return false; }
-   if(!buy && !IsBearTrend()) { detail = "no bear trend"; return false; }
+   // OK80: InstantQuality soft trend — only block CLEAR opposite strong trend.
+   // Fixes endless "no bull trend" / ranging waits while still rejecting counter-trend spam.
+   if(InstantQualityMode)
+   {
+      if(buy && IsBearTrend() && TrendStrong())
+      {
+         detail = "strong bear blocks buy";
+         return false;
+      }
+      if(!buy && IsBullTrend() && TrendStrong())
+      {
+         detail = "strong bull blocks sell";
+         return false;
+      }
+   }
+   else
+   {
+      if(buy && !IsBullTrend()) { detail = "no bull trend"; return false; }
+      if(!buy && !IsBearTrend()) { detail = "no bear trend"; return false; }
+   }
 
-   // OK72: strong setups — require ADX trend strength
    if(ContStruct_RequireTrendADX && !TrendStrong())
    {
       detail = "trend not strong (ADX)";
       return false;
    }
 
-   // OK72: skip Cont in clear ranging — wait for quality trend conditions
    if(ContStruct_SkipRanging && EnableRegimeDetection && GetMarketRegime() == REGIME_RANGING)
    {
-      detail = "ranging regime — wait strong trend";
+      detail = "ranging regime - wait strong trend";
       return false;
    }
 
@@ -12528,7 +12544,7 @@ string LiveMarketSummary()
 void PrintLiveMarketAnalysis()
 {
    AnalyzeLiveMarket(true);
-   Print("---- MARKET ANALYSIS BUILD=SA_QUALITY_79 (", BrokerSymbol, ") ----");
+   Print("---- MARKET ANALYSIS BUILD=SA_QUALITY_80 (", BrokerSymbol, ") ----");
    Print("SESSION=", g_LiveMkt.sessionName,
          " hour=", g_LiveMkt.sessionHour,
          (APEX_UseGMT ? " GMT" : " SERVER"),

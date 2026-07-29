@@ -1,7 +1,6 @@
-SNIPER AI OK79 — AGGRESSIVE INSTANT + BEST QUALITY
+SNIPER AI OK80
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK79.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK80.mq5
 
-BUILD_ID: SA_QUALITY_79
-Best quality decides. Aggressive instant executes.
-F7 → attach → SA_QUALITY_79
+Fixes ContFallback waits: chart TF, no ranging hard-block, soft trend.
+F7 → attach → SA_QUALITY_80

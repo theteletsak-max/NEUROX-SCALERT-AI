@@ -1,17 +1,14 @@
 SNIPER AI — CURRENT
 
-EA:       SNIPER_AI_OK79.mq5
-BUILD_ID: SA_QUALITY_79
-Mode:     AGGRESSIVE INSTANT + BEST QUALITY
+EA:       SNIPER_AI_OK80.mq5
+BUILD_ID: SA_QUALITY_80
 
-QUALITY selects:
-- IDP hard ±45
-- Cont score ≥58 + ADX + skip ranging + 2-bar BOS prefer
-- APEX quality displacement
+Fixes your journal waits:
+- EntryTF = chart TF (H4 chart uses H4, was stuck on H1)
+- Skip ranging OFF (no more "ranging regime" hard wait)
+- Soft trend (no more endless "no bull trend" unless strong opposite)
+- Fresher BOS / zone rules so Cont can qualify
 
-INSTANT executes when selected:
-- Trade cooldown 0
-- Attempt 1s
-- Tick-level + NeverBlock + UltraAggressiveFire
+Still: structure + IDP. Aggressive instant execute when ready.
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK79.mq5
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK80.mq5
