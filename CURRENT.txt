@@ -1,21 +1,10 @@
-SNIPER AI ULTRA — RECOMMENDED STRUCTURE (OK93)
+SNIPER AI ULTRA — ULTIMATE PROFESSIONAL (OK93)
 
-EA:       SNIPER_AI_OK93.mq5  (also SNIPER_AI.mq5)
+EA:       SNIPER_AI.mq5 / SNIPER_AI_OK93.mq5
 BUILD_ID: SA_ULTRA_93
 Comment:  SNIPER AI
 MaxOpen:  3
 
-Include/SNIPER_ULTRA/
-  00_Types … 30_Recovery
-  31_Inputs
-  Shell_A_InputsGlobals.mqh
-  Shell_B_TradeSystem.mqh
-  SNIPER_ULTRA.mqh
+Include/SNIPER_ULTRA/ modules 00-40 + Shell A/B + master
 
-INSTALL:
-1) SNIPER_AI_OK93.mq5 → MQL5/Experts/
-2) Include/SNIPER_ULTRA/ → MQL5/Include/SNIPER_ULTRA/
-3) F7 → Journal SA_ULTRA_93
-
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK93.mq5
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/tree/cursor/sniper-ai-compile-fix-b12d/MQL5/Include/SNIPER_ULTRA
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/SNIPER_AI.zip

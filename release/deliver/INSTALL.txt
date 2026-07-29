@@ -1,7 +1,3 @@
-RECOMMENDED STRUCTURE INSTALL
-
-1. Copy SNIPER_AI_OK93.mq5 (or SNIPER_AI.mq5) → MQL5/Experts/
+1. Copy SNIPER_AI_OK93.mq5 → MQL5/Experts/
 2. Copy Include/SNIPER_ULTRA/ → MQL5/Include/SNIPER_ULTRA/
-3. Compile F7
-4. Journal: BUILD_ID=SA_ULTRA_93
-5. Comment: SNIPER AI | MaxOpen=3
+3. F7 compile → Journal SA_ULTRA_93

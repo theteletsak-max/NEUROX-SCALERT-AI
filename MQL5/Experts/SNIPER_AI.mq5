@@ -1,13 +1,13 @@
 //+------------------------------------------------------------------+
 //| SNIPER_AI.mq5                                                     |
 //| BUILD_ID: SA_ULTRA_93                                             |
-//| SNIPER AI ULTRA — RECOMMENDED PROJECT STRUCTURE (00-31)           |
+//| SNIPER AI ULTRA — ULTIMATE PROFESSIONAL STRUCTURE (00-40)         |
 //| Comment: SNIPER AI | MaxOpen=3                                    |
 //+------------------------------------------------------------------+
 #property copyright "SNIPER AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
-#property version   "9.30"
-#property description "SNIPER AI ULTRA recommended structure Include/SNIPER_ULTRA 00-31"
+#property version   "9.31"
+#property description "SNIPER AI ULTRA ultimate professional Include/SNIPER_ULTRA 00-40"
 #property description "BUILD=SA_ULTRA_93"
 
 #include <Trade/Trade.mqh>
@@ -16,8 +16,8 @@
 
 CTrade trade;
 
-//==================== RECOMMENDED MODULE LOAD ORDER ================//
-// Shell A → SNIPER_ULTRA (00-31) → Shell B
+//==================== ULTIMATE MODULE LOAD ORDER ===================//
+// Shell A → SNIPER_ULTRA (00-40) → Shell B
 //===================================================================//
 
 #include <SNIPER_ULTRA/Shell_A_InputsGlobals.mqh>

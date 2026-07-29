@@ -83,4 +83,7 @@ input bool   UltraDashboardEnabled       = true;
 // ULTRA TYPES
 //--------------------------------------------------------------------//
 
+input group "ULTRA DEBUG"
+input bool UltraDebugEnabled = false;
+
 #endif // SNIPER_ULTRA_31_INPUTS_MQH

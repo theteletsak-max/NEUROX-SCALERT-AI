@@ -61,11 +61,16 @@ int OnInit()
       Print("Multi-symbol timer started (", MultiSymbolTimerSeconds, "s interval).");
    }
 
-   Print("SNIPER AI ULTRA RECOMMENDED Loaded BUILD_ID=SA_ULTRA_93 MaxOpen=", MaxOpenTrades);
+   Print("SNIPER AI ULTRA ULTIMATE Loaded BUILD_ID=SA_ULTRA_93 MaxOpen=", MaxOpenTrades);
    UltraCoreInit();
+   UltraEvent_OnBoot();
+   UltraBroker_Detect(_Symbol, g_UltraBrokerCaps);
+   UltraHealth_Update(_Symbol);
+   Print("OK93 ULTIMATE STRUCTURE: modules 00-40 | broker=", UltraBroker_Summary(_Symbol),
+         " | health=", UltraHealth_Summary(_Symbol),
+         " | mode=", UltraBT_ModeName());
    if(EnableAPEXStrategy || EnableContFallback || EnableLCSStrategy)
       Print("OK93 WARNING: old APEX/ContFallback/LCS input ON — evaluators STUBBED; ULTRA only fires");
-   Print("OK93 RECOMMENDED STRUCTURE: modules 00-31 loaded (Types→Recovery) — ULTRA only");
    Print("INSTANT OPEN + QUALITY PREFER MODE=", InstantQualityMode);
    Print("QUALITY SELECT: IDP_Hard=", IDP_HardGate, " MinPulse=", IDP_MinAbsPulse,
          " ContScore=", ContStruct_MinScore, " ADX=", ContStruct_RequireTrendADX,

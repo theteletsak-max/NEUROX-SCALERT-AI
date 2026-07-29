@@ -1,7 +1,7 @@
 #ifndef SNIPER_ULTRA_MASTER_MQH
 #define SNIPER_ULTRA_MASTER_MQH
 //+------------------------------------------------------------------+
-//| SNIPER AI ULTRA — Recommended Master Include (00-31)             |
+//| SNIPER AI ULTRA — Ultimate Professional Master (00-40)           |
 //+------------------------------------------------------------------+
 
 #include "00_Types.mqh"
@@ -32,11 +32,20 @@
 #include "29_MarketMemory.mqh"
 #include "20_CapitalProtection.mqh"
 #include "19_Execution.mqh"
+#include "32_BrokerCompatibility.mqh"
+#include "36_BrokerHealth.mqh"
 #include "16_AI_Core.mqh"
+#include "35_SignalEngine.mqh"
+#include "33_OrderManagement.mqh"
+#include "34_PositionManagement.mqh"
 #include "21_TradeManagement.mqh"
 #include "22_MultiSymbol.mqh"
 #include "23_MultiTimeframe.mqh"
 #include "25_Statistics.mqh"
+#include "37_Optimization.mqh"
+#include "38_Backtesting.mqh"
+#include "39_EventEngine.mqh"
+#include "40_DebugTools.mqh"
 #include "24_Dashboard.mqh"
 
 #endif // SNIPER_ULTRA_MASTER_MQH

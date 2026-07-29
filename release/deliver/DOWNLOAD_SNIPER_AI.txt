@@ -1,5 +1,4 @@
 EA: SNIPER_AI_OK93.mq5
 BUILD_ID: SA_ULTRA_93
-Modules: Include/SNIPER_ULTRA/ (00-31)
-
+Modules: Include/SNIPER_ULTRA/ (00-40)
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/SNIPER_AI.zip

@@ -1,12 +1,11 @@
-SNIPER AI ULTRA — RECOMMENDED PROJECT STRUCTURE
+SNIPER AI ULTRA — ULTIMATE PROFESSIONAL PROJECT STRUCTURE
 
 Root:
   SNIPER_AI.mq5
   SNIPER_AI_OK93.mq5
 
 Include/SNIPER_ULTRA/
-  00_Types.mqh … 30_Recovery.mqh
-  31_Inputs.mqh
+  00_Types … 40_DebugTools
   Shell_A_InputsGlobals.mqh
   Shell_B_TradeSystem.mqh
   SNIPER_ULTRA.mqh

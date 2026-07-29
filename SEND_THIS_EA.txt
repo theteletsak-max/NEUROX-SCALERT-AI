@@ -1,6 +1,6 @@
-SNIPER AI ULTRA OK93 — RECOMMENDED STRUCTURE
+SNIPER AI ULTRA OK93 — ULTIMATE PROFESSIONAL (00-40)
 
-Full zip: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/SNIPER_AI.zip
+Zip: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/SNIPER_AI.zip
 EA: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK93.mq5
 Modules: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/tree/cursor/sniper-ai-compile-fix-b12d/MQL5/Include/SNIPER_ULTRA
 
