@@ -74,6 +74,9 @@ int OnInit()
             ") — change the chart timeframe to change trading TF, or set EntryTF input");
    }
    Print("HITMAN MASTER BLUEPRINT: modules 00-40 + UFSE v1.0 + DEFENSE LINE v1.0 | HITMAN AI live path");
+   Print("ONE DECISION PATH: Market→Analysis→Structure→SMT→UFSE→Thesis→USM→Mission→Exec→Manage→Exit→Log");
+   Print("ONE STRATEGY: UFSE only | MissionOnlyExits=", UltraYN(UltraMissionOnlyExits),
+         " | PositionClose sole owner=MissionControl");
    Print("UFSE: FastSignal=", UltraYN(UltraFastSignalEnabled),
          " MasterTrendLock=", UltraYN(UltraMasterTrendLock),
          " SignalLock=", UltraYN(UltraSignalLockEnabled),
@@ -493,7 +496,7 @@ bool ContStruct_HasQualityBOS(const bool buy);
 bool ContStruct_GetFreshZone(const bool buy, double &zTop, double &zBot, string &kind);
 bool ContStruct_PriceNearZone(const bool buy, const double zTop, const double zBot);
 bool ContStruct_HasDisplacement(const bool buy);
-bool ContFallbackBestStructureOK(const bool buy, string &detail); // body later (helpers still call it)
+// ContFallbackBestStructureOK removed — MASTER AUDIT
 
 int FindSignalSnapshot(ulong ticket)
 {
@@ -4309,11 +4312,12 @@ void ManageOpenTrades()
       //================ STAGNATION EXIT (UPGRADE) =================//
       // BUGFIX40: skip once TP1 profit is locked — current P/L distance is NOT
       // MFE and was killing pullback runners after a successful TP1 bank.
+      // MASTER AUDIT: blocked when UltraMissionOnlyExits (indicator-style exit).
 
       int stagState = FindTradeState(ticket);
       bool profitAlreadyLocked = (stagState >= 0 && TradeStates[stagState].tp1Taken);
 
-      if(EnableStagnationExit && barsHeld >= StagnationLookbackBars && !profitAlreadyLocked)
+      if(!UltraMissionOnlyExits && EnableStagnationExit && barsHeld >= StagnationLookbackBars && !profitAlreadyLocked)
       {
          double atrNow = GetFilterATR();
 
@@ -4337,8 +4341,10 @@ void ManageOpenTrades()
       // Closes the position if the trend has lost strength, once the
       // minimum hold period has passed. Skipped for non-scalp symbols
       // (BTC/ETH by default) unless NonScalpDisableTrendExit is turned off.
+      // MASTER AUDIT: blocked when UltraMissionOnlyExits (indicator-style exit).
 
-      bool trendExitAllowed = EnableTrendExit && !(IsNonScalpSymbol() && NonScalpDisableTrendExit);
+      bool trendExitAllowed = !UltraMissionOnlyExits && EnableTrendExit &&
+                              !(IsNonScalpSymbol() && NonScalpDisableTrendExit);
 
       if(trendExitAllowed && holdPeriodOK)
       {
@@ -6711,38 +6717,12 @@ bool GetBollingerBands(double &upper, double &lower, double &mid)
 // Legacy helper only (not on PRISM path). RSI removed — BB stretch alone.
 bool MeanReversionBuySetup()
 {
-   double upper, lower, mid;
-
-   if(!GetBollingerBands(upper, lower, mid))
-      return false;
-
-   double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
-
-   if(price > lower)
-      return false;
-
-   if(MeanReversionRequireHTFAgreement && !HTFConfirms(true))
-      return false;
-
-   return true;
+   return false; // MASTER AUDIT retired — UFSE sole signal path
 }
 
 bool MeanReversionSellSetup()
 {
-   double upper, lower, mid;
-
-   if(!GetBollingerBands(upper, lower, mid))
-      return false;
-
-   double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
-
-   if(price < upper)
-      return false;
-
-   if(MeanReversionRequireHTFAgreement && !HTFConfirms(false))
-      return false;
-
-   return true;
+   return false; // MASTER AUDIT retired — UFSE sole signal path
 }
 
 // Decides which model actually gets to trade this bar, per StrategyMode.
@@ -6933,34 +6913,12 @@ bool QualityNeedsTrendAndADX()
 // InstantTrend is intentionally weak — off under quality mode.
 bool InstantTrendSniperBuySetup()
 {
-   if(BestPathsOnly)
-      return false; // BEST-NEXT48: Cont/Rev only
-   if(!EnableInstantSniperMode || !AllowTrendOnlyInstantEntry)
-      return false;
-   // Aggressive institutional execution: InstantTrend stays alive.
-   // Only suppress when user explicitly disables weak paths AND not in aggressive mode.
-   if(QualityWeakPathsDisabled() && !AggressiveInstitutionalExecution)
-      return false;
-   if(!IsBullTrend())
-      return false;
-   if(!TrendStrong())
-      return false;
-   return true;
+   return false; // MASTER AUDIT retired — UFSE sole signal path
 }
 
 bool InstantTrendSniperSellSetup()
 {
-   if(BestPathsOnly)
-      return false; // BEST-NEXT48: Cont/Rev only
-   if(!EnableInstantSniperMode || !AllowTrendOnlyInstantEntry)
-      return false;
-   if(QualityWeakPathsDisabled() && !AggressiveInstitutionalExecution)
-      return false;
-   if(!IsBearTrend())
-      return false;
-   if(!TrendStrong())
-      return false;
-   return true;
+   return false; // MASTER AUDIT retired — UFSE sole signal path
 }
 
 bool RecentBOS(int lookbackBars)
@@ -7151,51 +7109,12 @@ input int SpecBreakout_ChannelLookbackBars = 20; // structure reference: recent 
 
 bool SpecVolatilityBreakoutBuySetup()
 {
-   // BEST QUALITY: suppress weak channel breakouts (Cont/Rev preferred)
-   if(BestQualitySetups && QualityDisableWeakPaths)
-      return false;
-   if(QualityWeakPathsDisabled() && !AggressiveInstitutionalExecution)
-      return false;
-
-   if(!TrendStrong())
-      return false;
-
-   double channelHigh = GetChannelHigh(SpecBreakout_ChannelLookbackBars);
-   if(channelHigh <= 0.0)
-      return false;
-
-   double closeBar = iClose(BrokerSymbol, EntryTF, SignalBarIndex());
-   if(EnableInstantSniperMode)
-   {
-      double atr = GetFilterATR();
-      double pad = (atr > 0.0 ? atr * InstantChannelBreakATR : 0.0);
-      return (closeBar >= channelHigh - pad);
-   }
-   return (closeBar > channelHigh);
+   return false; // MASTER AUDIT retired — UFSE sole signal path
 }
 
 bool SpecVolatilityBreakoutSellSetup()
 {
-   if(BestQualitySetups && QualityDisableWeakPaths)
-      return false;
-   if(QualityWeakPathsDisabled() && !AggressiveInstitutionalExecution)
-      return false;
-
-   if(!TrendStrong())
-      return false;
-
-   double channelLow = GetChannelLow(SpecBreakout_ChannelLookbackBars);
-   if(channelLow <= 0.0)
-      return false;
-
-   double closeBar = iClose(BrokerSymbol, EntryTF, SignalBarIndex());
-   if(EnableInstantSniperMode)
-   {
-      double atr = GetFilterATR();
-      double pad = (atr > 0.0 ? atr * InstantChannelBreakATR : 0.0);
-      return (closeBar <= channelLow + pad);
-   }
-   return (closeBar < channelLow);
+   return false; // MASTER AUDIT retired — UFSE sole signal path
 }
 
 bool IsDuplicateSignal(bool buy);
@@ -8184,7 +8103,8 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
    double peakAdv = (stateIndex >= 0) ? TradeStates[stateIndex].peakAdverse : adverseMove;
 
    // --- #8 MAE hard cut before TP1 ---
-   if(DefenseMAE_StopEnabled && preTP1 && DefenseMAE_ATR > 0.0 && atr > 0.0)
+   // MASTER AUDIT: hard defense closes disabled under UltraMissionOnlyExits
+   if(!UltraMissionOnlyExits && DefenseMAE_StopEnabled && preTP1 && DefenseMAE_ATR > 0.0 && atr > 0.0)
    {
       if(adverseMove >= atr * DefenseMAE_ATR)
       {
@@ -8219,7 +8139,7 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
    }
 
    // --- 1) Hard opposing reversal stack → close ---
-   if(DefenseCloseOnHardReversal)
+   if(!UltraMissionOnlyExits && DefenseCloseOnHardReversal)
    {
       string detail = "";
       bool oppositeRev = MarketReversalSignalOK(!isBuy, detail);
@@ -8233,7 +8153,7 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
    }
 
    // --- 2) Fake-breakout trap against our direction (pre-TP1) → close ---
-   if(DefenseCloseOnTrapAgainst && DetectFakeBreakoutTrap(isBuy))
+   if(!UltraMissionOnlyExits && DefenseCloseOnTrapAgainst && DetectFakeBreakoutTrap(isBuy))
    {
       if(preTP1)
       {
@@ -8480,6 +8400,18 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
       return false;
    }
 
+   // MASTER AUDIT: Ultra live tags already cleared UFSE → Defense → Discipline → Mission.
+   // Do NOT re-run UltraSniperEntryOK (second veto after Mission approve).
+   // Duplicate-bar guard above is the only post-FIRE hard block for live tags.
+   if(Ultra_IsLiveTag(strategyTag) || PRIME_IsLiveTag(strategyTag) ||
+      strategyTag == "APEX" || strategyTag == "ContFallback" || strategyTag == "LCS")
+   {
+      UltraSetApprove(strategyTag, "A", 100, 100);
+      if(EnableBeastMode && BeastCaptureSignalSnapshot)
+         CapturePendingSignalSnapshot(buy, strategyTag);
+      return true;
+   }
+
    if(EnableUltraCore && UltraSniperEntryGate)
    {
       string fail = "";
@@ -8488,16 +8420,6 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
          UltraSetReject("sniper entry: " + fail);
          return false;
       }
-   }
-
-   // Live APEX/ContFallback/LCS already passed their own checklist — skip PRISM score spam
-   bool liveSwing = (strategyTag == "APEX" || strategyTag == "ContFallback" || strategyTag == "LCS" || PRIME_IsLiveTag(strategyTag));
-   if(liveSwing)
-   {
-      UltraSetApprove(strategyTag, "A", 100, 100);
-      if(EnableBeastMode && BeastCaptureSignalSnapshot)
-         CapturePendingSignalSnapshot(buy, strategyTag);
-      return true;
    }
 
    PRISMBeastScore beast = UltraGetBeastScore(buy, strategyTag);
@@ -8651,182 +8573,7 @@ void EvaluateSpecCompliantStrategies(bool &buySignal, bool &sellSignal, string &
 }
 
 
-bool TrendPullbackBuySetup()
-{
-   if(!IsBullTrend())
-      return false;
-
-   if(!TrendStrong())
-      return false;
-
-   double ema = GetEMA();
-   double atr = GetFilterATR();
-
-   if(ema == EMPTY_VALUE || atr <= 0.0)
-      return false;
-
-   double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
-   double pullMul = EffectivePullbackATRMultiple();
-   bool nearEma = (MathAbs(price - ema) <= atr * pullMul);
-
-   // Quality mode (regular + events): need pullback or SAME-DIRECTION BOS — never trend-only.
-   if(EnableInstantSniperMode || NeverBlockValidSniperEntry || QualityGatesActive())
-   {
-      if(QualityGatesActive())
-         return (nearEma || StructureDirectionalBOS(true));
-      if(NeverBlockValidSniperEntry)
-         return true;
-      if(nearEma)
-         return true;
-      if(StructureDirectionalBOS(true))
-         return true;
-      return false;
-   }
-
-   if(!nearEma)
-      return false;
-   if(!StructureDirectionalBOS(true))
-      return false;
-   return true;
-}
-
-bool TrendPullbackSellSetup()
-{
-   if(!IsBearTrend())
-      return false;
-
-   if(!TrendStrong())
-      return false;
-
-   double ema = GetEMA();
-   double atr = GetFilterATR();
-
-   if(ema == EMPTY_VALUE || atr <= 0.0)
-      return false;
-
-   double price = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
-   double pullMul = EffectivePullbackATRMultiple();
-   bool nearEma = (MathAbs(price - ema) <= atr * pullMul);
-
-   if(EnableInstantSniperMode || NeverBlockValidSniperEntry || QualityGatesActive())
-   {
-      if(QualityGatesActive())
-         return (nearEma || StructureDirectionalBOS(false));
-      if(NeverBlockValidSniperEntry)
-         return true;
-      if(nearEma)
-         return true;
-      if(StructureDirectionalBOS(false))
-         return true;
-      return false;
-   }
-
-   if(!nearEma)
-      return false;
-   if(!StructureDirectionalBOS(false))
-      return false;
-   return true;
-}
-
-input group "LIQUIDITY SWEEP STRATEGY"
-
-bool LiquiditySweepBuySetup()
-{
-   int rec = EffectiveStructureRecency();
-   bool sweep = RecentDirectionalSweep(true, rec);
-   bool choch = RecentCHoCH(rec);
-   bool ob = ActiveOrderBlock(true);
-   bool dirOK = IsBullTrend() || !UseEMA;
-
-   if(!dirOK)
-      return false;
-
-   if(EnableInstantSniperMode && InstantTwoOfThreeLiquidity)
-   {
-      int hits = (sweep ? 1 : 0) + (choch ? 1 : 0) + (ob ? 1 : 0);
-      int need = 2; // quality: always 2 of 3
-      if(NeverBlockValidSniperEntry && !QualityGatesActive())
-         need = 1;
-      return (hits >= need);
-   }
-
-   return (sweep && choch && ob);
-}
-
-bool LiquiditySweepSellSetup()
-{
-   int rec = EffectiveStructureRecency();
-   bool sweep = RecentDirectionalSweep(false, rec);
-   bool choch = RecentCHoCH(rec);
-   bool ob = ActiveOrderBlock(false);
-   bool dirOK = IsBearTrend() || !UseEMA;
-
-   if(!dirOK)
-      return false;
-
-   if(EnableInstantSniperMode && InstantTwoOfThreeLiquidity)
-   {
-      int hits = (sweep ? 1 : 0) + (choch ? 1 : 0) + (ob ? 1 : 0);
-      int need = 2;
-      if(NeverBlockValidSniperEntry && !QualityGatesActive())
-         need = 1;
-      return (hits >= need);
-   }
-
-   return (sweep && choch && ob);
-}
-
-input group "FVG + ORDER BLOCK STRATEGY"
-
-bool FVGOrderBlockBuySetup()
-{
-   bool bos = StructureDirectionalBOS(true);
-   bool fvg = ActiveFVG(true);
-   bool ob = ActiveOrderBlock(true);
-
-   if(QualityGatesActive())
-   {
-      if(QualityNeedsTrendAndADX() && !(IsBullTrend() && TrendStrong()))
-         return false;
-      if(QualityNeedsStructureZone() && !(fvg || ob))
-         return false;
-      return (bos || (fvg && ob));
-   }
-
-   if(EnableInstantSniperMode && InstantFvgOrOb)
-   {
-      if(!(bos || IsBullTrend()))
-         return false;
-      return (fvg || ob);
-   }
-
-   return (bos && fvg && ob);
-}
-
-bool FVGOrderBlockSellSetup()
-{
-   bool bos = StructureDirectionalBOS(false);
-   bool fvg = ActiveFVG(false);
-   bool ob = ActiveOrderBlock(false);
-
-   if(QualityGatesActive())
-   {
-      if(QualityNeedsTrendAndADX() && !(IsBearTrend() && TrendStrong()))
-         return false;
-      if(QualityNeedsStructureZone() && !(fvg || ob))
-         return false;
-      return (bos || (fvg && ob));
-   }
-
-   if(EnableInstantSniperMode && InstantFvgOrOb)
-   {
-      if(!(bos || IsBearTrend()))
-         return false;
-      return (fvg || ob);
-   }
-
-   return (bos && fvg && ob);
-}
+// [HITMAN MASTER AUDIT] Legacy PRISM path setups removed (TrendPullback/Sweep/FVG+OB).
 
 //+------------------------------------------------------------------+
 //|              PART 15f - CORRELATION CONFIRMATION FILTER (NEW)    |
@@ -8900,87 +8647,7 @@ bool CorrelationFilterOK(bool buy)
    return true;
 }
 
-//+------------------------------------------------------------------+
-//|              PART 15e - TREND-FOLLOWING STRATEGY (NEW)           |
-//+------------------------------------------------------------------+
-// ADDED per request: a deliberately simple baseline model - a classic
-// fast/slow EMA crossover confirmed by ADX strength. This is NOT meant to
-// compete on sophistication with the SMC engine; it's meant to be a
-// simple, well-understood reference point. If SMC's added complexity
-// (BOS/CHoCH/FVG/Order Block/liquidity sweep) doesn't outperform this
-// plain crossover once there's real trade data behind both, that's a
-// meaningful signal the complexity isn't earning its keep. If SMC clearly
-// beats it, that validates the extra machinery. Either result is useful -
-// this exists to be compared against, not to be the "best" strategy.
-//
-// Honest caveat: EMA crossovers are among the most well-known, widely
-// traded signals in retail forex - if this alone reliably made money, it
-// wouldn't still be a beginner-tutorial staple. Treat it as a yardstick,
-// not a strategy you should expect an edge from.
-
-input group "TREND-FOLLOWING STRATEGY"
-
-input int    TrendFollow_FastEMA_Period = 20;
-input int    TrendFollow_SlowEMA_Period = 50;
-input double TrendFollow_ADXMinimum     = 20.0;
-
-// Returns fast/slow EMA values at the given bar offset (0 = SignalBarIndex()
-// itself, 1 = one bar further back) - used to detect the exact crossover
-// bar rather than just "which one is currently on top" (which would keep
-// re-triggering every bar the cross stays in place, not just once at the
-// actual cross).
-bool GetTrendFollowEMAs(int barOffset, double &fastEMA, double &slowEMA)
-{
-   int idx = GetSymbolIndex(BrokerSymbol);
-
-   if(idx < 0 || FastEMAHandlesArr[idx] == INVALID_HANDLE || SlowEMAHandlesArr[idx] == INVALID_HANDLE)
-      return false;
-
-   double fastBuf[], slowBuf[];
-   ArraySetAsSeries(fastBuf, true);
-   ArraySetAsSeries(slowBuf, true);
-
-   int need = SignalBarIndex() + barOffset + 1;
-
-   if(CopyBuffer(FastEMAHandlesArr[idx], 0, 0, need, fastBuf) < need) return false;
-   if(CopyBuffer(SlowEMAHandlesArr[idx], 0, 0, need, slowBuf) < need) return false;
-
-   int b = SignalBarIndex() + barOffset;
-   fastEMA = fastBuf[b];
-   slowEMA = slowBuf[b];
-
-   return true;
-}
-
-bool TrendFollowBuySetup()
-{
-   if(GetADX() < TrendFollow_ADXMinimum)
-      return false;
-
-   double fastNow, slowNow, fastPrev, slowPrev;
-
-   if(!GetTrendFollowEMAs(0, fastNow, slowNow))  return false;
-   if(!GetTrendFollowEMAs(1, fastPrev, slowPrev)) return false;
-
-   // A genuine fresh cross THIS bar - fast is above slow now, but was at
-   // or below slow the bar before. Requiring the actual cross event (not
-   // just "fast is currently above slow") avoids re-firing on every bar
-   // while an existing cross just continues to hold.
-   return (fastNow > slowNow && fastPrev <= slowPrev);
-}
-
-bool TrendFollowSellSetup()
-{
-   if(GetADX() < TrendFollow_ADXMinimum)
-      return false;
-
-   double fastNow, slowNow, fastPrev, slowPrev;
-
-   if(!GetTrendFollowEMAs(0, fastNow, slowNow))  return false;
-   if(!GetTrendFollowEMAs(1, fastPrev, slowPrev)) return false;
-
-   return (fastNow < slowNow && fastPrev >= slowPrev);
-}
+// [HITMAN MASTER AUDIT] Legacy TrendFollow strategy removed.
 
 //+------------------------------------------------------------------+
 //|              PART 15c - VOLATILITY-BREAKOUT STRATEGY (NEW)       |
@@ -9046,36 +8713,12 @@ double GetChannelLow(int lookbackBars)
 
 bool VolatilityBreakoutBuySetup()
 {
-   if(!IsVolatilityExpanding())
-      return false; // core gate - no genuine expansion, no breakout trade
-
-   double channelHigh = GetChannelHigh(VolBreakout_ChannelLookbackBars);
-
-   if(channelHigh <= 0.0)
-      return false;
-
-   double closeBar = iClose(BrokerSymbol, EntryTF, SignalBarIndex());
-   double atr = GetFilterATR();
-   double margin = (atr > 0.0) ? (atr * VolBreakout_MinBreakATRMultiple) : 0.0;
-
-   return (closeBar > channelHigh + margin);
+   return false; // MASTER AUDIT retired — UFSE sole signal path
 }
 
 bool VolatilityBreakoutSellSetup()
 {
-   if(!IsVolatilityExpanding())
-      return false;
-
-   double channelLow = GetChannelLow(VolBreakout_ChannelLookbackBars);
-
-   if(channelLow <= 0.0)
-      return false;
-
-   double closeBar = iClose(BrokerSymbol, EntryTF, SignalBarIndex());
-   double atr = GetFilterATR();
-   double margin = (atr > 0.0) ? (atr * VolBreakout_MinBreakATRMultiple) : 0.0;
-
-   return (closeBar < channelLow - margin);
+   return false; // MASTER AUDIT retired — UFSE sole signal path
 }
 
 //+------------------------------------------------------------------+
@@ -9903,399 +9546,11 @@ void EvaluateAPEXStrategies(bool &buySignal, bool &sellSignal, string &strategyT
 }
 
 
-//+------------------------------------------------------------------+
-//| LCS - LIQUIDITY CONTINUITY SNIPER (high-prob live engine)        |
-//+------------------------------------------------------------------+
-// From-scratch path (OK57):
-//   1) BiasTF (H4) clear SMA bias
-//   2) EntryTF (H1) stop-hunt sweep AGAINST bias (sell-side for BUY, buy-side for SELL)
-//   3) Reclaim + displacement in bias direction
-//   4) Price interacting with FVG or OB from that move
-//   5) Invalidation = sweep extreme (used as SL when LCS_UseSweepSL)
-
-double LCS_AvgRange(const ENUM_TIMEFRAMES tf, const int bars)
-{
-   int n = MathMax(bars, 2);
-   double sum = 0.0;
-   int used = 0;
-   for(int i = 1; i <= n; i++)
-   {
-      double hi = iHigh(BrokerSymbol, tf, i);
-      double lo = iLow(BrokerSymbol, tf, i);
-      if(hi <= 0.0 || lo <= 0.0 || hi < lo)
-         continue;
-      sum += (hi - lo);
-      used++;
-   }
-   return (used > 0) ? (sum / used) : 0.0;
-}
-
-double LCS_BiasSMA()
-{
-   int p = MathMax(LCS_BiasMA_Period, 10);
-   if(Bars(BrokerSymbol, LCS_BiasTF) < p + 5)
-      return 0.0;
-   double sum = 0.0;
-   for(int i = 0; i < p; i++)
-      sum += iClose(BrokerSymbol, LCS_BiasTF, i);
-   return sum / p;
-}
-
-bool LCS_BiasBull(string &detail)
-{
-   double sma = LCS_BiasSMA();
-   double c0 = iClose(BrokerSymbol, LCS_BiasTF, 0);
-   double c1 = iClose(BrokerSymbol, LCS_BiasTF, 1);
-   if(sma <= 0.0 || c0 <= 0.0)
-   {
-      detail = "bias: BiasTF history/SMA unavailable";
-      return false;
-   }
-   // Clear bull bias: price and prior close above SMA (no chop hug required beyond side)
-   if(!(c0 > sma && c1 > sma))
-   {
-      detail = "bias: not clear bull (close vs SMA200 H4)";
-      return false;
-   }
-   detail = "bias: BULL";
-   return true;
-}
-
-bool LCS_BiasBear(string &detail)
-{
-   double sma = LCS_BiasSMA();
-   double c0 = iClose(BrokerSymbol, LCS_BiasTF, 0);
-   double c1 = iClose(BrokerSymbol, LCS_BiasTF, 1);
-   if(sma <= 0.0 || c0 <= 0.0)
-   {
-      detail = "bias: BiasTF history/SMA unavailable";
-      return false;
-   }
-   if(!(c0 < sma && c1 < sma))
-   {
-      detail = "bias: not clear bear (close vs SMA200 H4)";
-      return false;
-   }
-   detail = "bias: BEAR";
-   return true;
-}
-
-bool LCS_IsBuySideSweepAt(const int bar, double &sweepExtreme)
-{
-   sweepExtreme = 0.0;
-   if(bar < 1)
-      return false;
-   ENUM_TIMEFRAMES tf = LCS_EntryTF;
-   double currentHigh = iHigh(BrokerSymbol, tf, bar);
-   double currentLow  = iLow(BrokerSymbol, tf, bar);
-   double close = iClose(BrokerSymbol, tf, bar);
-   double barRange = currentHigh - currentLow;
-   if(barRange <= 0.0)
-      return false;
-
-   double previousHigh = iHigh(BrokerSymbol, tf, bar + 1);
-   int pad = MathMax(LCS_SwingPadBars, 2);
-   for(int j = bar + 2; j <= bar + pad + 1; j++)
-   {
-      double h = iHigh(BrokerSymbol, tf, j);
-      if(h > previousHigh) previousHigh = h;
-   }
-
-   double atr = LCS_AvgRange(tf, 14);
-   double minDepth = (atr > 0.0) ? (atr * LCS_MinSweepDepthATR) : 0.0;
-   if(!(currentHigh > previousHigh + minDepth && close < previousHigh))
-      return false;
-
-   double wick = currentHigh - MathMax(close, previousHigh);
-   if(wick / barRange < LCS_MinSweepWickRatio)
-      return false;
-
-   sweepExtreme = currentHigh;
-   return true;
-}
-
-bool LCS_IsSellSideSweepAt(const int bar, double &sweepExtreme)
-{
-   sweepExtreme = 0.0;
-   if(bar < 1)
-      return false;
-   ENUM_TIMEFRAMES tf = LCS_EntryTF;
-   double currentHigh = iHigh(BrokerSymbol, tf, bar);
-   double currentLow  = iLow(BrokerSymbol, tf, bar);
-   double close = iClose(BrokerSymbol, tf, bar);
-   double barRange = currentHigh - currentLow;
-   if(barRange <= 0.0)
-      return false;
-
-   double previousLow = iLow(BrokerSymbol, tf, bar + 1);
-   int pad = MathMax(LCS_SwingPadBars, 2);
-   for(int j = bar + 2; j <= bar + pad + 1; j++)
-   {
-      double l = iLow(BrokerSymbol, tf, j);
-      if(l < previousLow && l > 0.0) previousLow = l;
-   }
-
-   double atr = LCS_AvgRange(tf, 14);
-   double minDepth = (atr > 0.0) ? (atr * LCS_MinSweepDepthATR) : 0.0;
-   if(!(currentLow < previousLow - minDepth && close > previousLow))
-      return false;
-
-   double wick = MathMin(close, previousLow) - currentLow;
-   if(wick / barRange < LCS_MinSweepWickRatio)
-      return false;
-
-   sweepExtreme = currentLow;
-   return true;
-}
-
-int LCS_FindCorrectSweep(const bool buy, double &sweepExtreme)
-{
-   sweepExtreme = 0.0;
-   int lb = MathMax(LCS_SweepLookbackBars, 2);
-   for(int i = 1; i <= lb; i++)
-   {
-      double ext = 0.0;
-      if(buy && LCS_IsSellSideSweepAt(i, ext))
-      {
-         sweepExtreme = ext;
-         return i;
-      }
-      if(!buy && LCS_IsBuySideSweepAt(i, ext))
-      {
-         sweepExtreme = ext;
-         return i;
-      }
-   }
-   return 0;
-}
-
-bool LCS_HasDisplacement(const bool buy)
-{
-   ENUM_TIMEFRAMES tf = LCS_EntryTF;
-   double o = iOpen(BrokerSymbol, tf, 1);
-   double c = iClose(BrokerSymbol, tf, 1);
-   double h = iHigh(BrokerSymbol, tf, 1);
-   double l = iLow(BrokerSymbol, tf, 1);
-   double range = h - l;
-   if(range <= 0.0)
-      return false;
-   if(buy && !(c > o))
-      return false;
-   if(!buy && !(c < o))
-      return false;
-   double bodyRatio = MathAbs(c - o) / range;
-   if(bodyRatio < LCS_DispMinBodyRatio)
-      return false;
-   double atr = LCS_AvgRange(tf, 14);
-   if(atr <= 0.0)
-      return true;
-   return ((range / atr) >= LCS_DispMinATR);
-}
-
-bool LCS_HasReclaim(const bool buy, const int sweepBar)
-{
-   // After sweep, price must be back on the correct side of the swept level
-   // and print a directional closed bar (bar 1).
-   ENUM_TIMEFRAMES tf = LCS_EntryTF;
-   double c1 = iClose(BrokerSymbol, tf, 1);
-   double o1 = iOpen(BrokerSymbol, tf, 1);
-   if(buy)
-   {
-      if(!(c1 > o1))
-         return false;
-      // reclaim above the sweep low extreme already implied by sell-side sweep close
-      // also require close above midpoint of sweep bar
-      double mid = 0.5 * (iHigh(BrokerSymbol, tf, sweepBar) + iLow(BrokerSymbol, tf, sweepBar));
-      return (c1 >= mid);
-   }
-   if(!(c1 < o1))
-      return false;
-   double midS = 0.5 * (iHigh(BrokerSymbol, tf, sweepBar) + iLow(BrokerSymbol, tf, sweepBar));
-   return (c1 <= midS);
-}
-
-bool LCS_BullishFVG()
-{
-   ENUM_TIMEFRAMES tf = LCS_EntryTF;
-   // Classic 3-candle imbalance: low[1] > high[3]
-   double low1 = iLow(BrokerSymbol, tf, 1);
-   double high3 = iHigh(BrokerSymbol, tf, 3);
-   return (low1 > 0.0 && high3 > 0.0 && low1 > high3);
-}
-
-bool LCS_BearishFVG()
-{
-   ENUM_TIMEFRAMES tf = LCS_EntryTF;
-   double high1 = iHigh(BrokerSymbol, tf, 1);
-   double low3 = iLow(BrokerSymbol, tf, 3);
-   return (high1 > 0.0 && low3 > 0.0 && high1 < low3);
-}
-
-bool LCS_BullishOB()
-{
-   // Last opposing (bearish) candle before bullish displacement, still relevant
-   ENUM_TIMEFRAMES tf = LCS_EntryTF;
-   double o2 = iOpen(BrokerSymbol, tf, 2);
-   double c2 = iClose(BrokerSymbol, tf, 2);
-   double o1 = iOpen(BrokerSymbol, tf, 1);
-   double c1 = iClose(BrokerSymbol, tf, 1);
-   if(!(c2 < o2 && c1 > o1))
-      return false;
-   double bid = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
-   double obLow = iLow(BrokerSymbol, tf, 2);
-   double obHigh = iHigh(BrokerSymbol, tf, 2);
-   // Price still at/above OB (not fully traded through below)
-   return (bid >= obLow && bid <= obHigh * 1.002);
-}
-
-bool LCS_BearishOB()
-{
-   ENUM_TIMEFRAMES tf = LCS_EntryTF;
-   double o2 = iOpen(BrokerSymbol, tf, 2);
-   double c2 = iClose(BrokerSymbol, tf, 2);
-   double o1 = iOpen(BrokerSymbol, tf, 1);
-   double c1 = iClose(BrokerSymbol, tf, 1);
-   if(!(c2 > o2 && c1 < o1))
-      return false;
-   double ask = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
-   double obLow = iLow(BrokerSymbol, tf, 2);
-   double obHigh = iHigh(BrokerSymbol, tf, 2);
-   return (ask <= obHigh && ask >= obLow * 0.998);
-}
-
-bool LCS_HasZone(const bool buy)
-{
-   if(buy)
-      return (LCS_BullishFVG() || LCS_BullishOB() || ActiveFVG(true) || ActiveOrderBlock(true));
-   return (LCS_BearishFVG() || LCS_BearishOB() || ActiveFVG(false) || ActiveOrderBlock(false));
-}
-
-bool LCS_SetupOK(const bool buy, string &detail, double &invalidation)
-{
-   detail = "";
-   invalidation = 0.0;
-   g_LCS_LastDetail = "";
-
-   if(!EnableLCSStrategy)
-   {
-      detail = "LCS disabled";
-      return false;
-   }
-
-   if(Bars(BrokerSymbol, LCS_BiasTF) < LCS_BiasMA_Period + 5 ||
-      Bars(BrokerSymbol, LCS_EntryTF) < LCS_SweepLookbackBars + 10)
-   {
-      detail = "LCS: insufficient Bias/Entry TF bars";
-      return false;
-   }
-
-   string biasDetail = "";
-   if(buy)
-   {
-      if(!LCS_BiasBull(biasDetail))
-      {
-         detail = biasDetail;
-         return false;
-      }
-   }
-   else
-   {
-      if(!LCS_BiasBear(biasDetail))
-      {
-         detail = biasDetail;
-         return false;
-      }
-   }
-
-   double sweepExt = 0.0;
-   int sweepBar = LCS_FindCorrectSweep(buy, sweepExt);
-   if(sweepBar <= 0 || sweepExt <= 0.0)
-   {
-      detail = buy ? "LCS: need sell-side sweep (lows taken) on EntryTF"
-                   : "LCS: need buy-side sweep (highs taken) on EntryTF";
-      return false;
-   }
-
-   if(!LCS_HasReclaim(buy, sweepBar))
-   {
-      detail = "LCS: need reclaim after sweep";
-      return false;
-   }
-
-   bool disp = LCS_HasDisplacement(buy);
-   if(LCS_RequireDisplacement && !disp)
-   {
-      detail = "LCS: need displacement candle in bias direction";
-      return false;
-   }
-
-   bool zone = LCS_HasZone(buy);
-   if(LCS_RequireZone && !zone)
-   {
-      detail = "LCS: need FVG/OB zone in trade direction";
-      return false;
-   }
-
-   // Invalidation = beyond sweep extreme
-   double atr = LCS_AvgRange(LCS_EntryTF, 14);
-   double buf = (atr > 0.0) ? (atr * LCS_SL_BufferATR) : 0.0;
-   invalidation = buy ? (sweepExt - buf) : (sweepExt + buf);
-   // For BUY, SL below sweep low; sweepExt IS the low. Subtract buffer.
-   // For SELL, SL above sweep high; add buffer. Already set.
-
-   detail = StringFormat("LCS OK %s sweep@%d zone=%s disp=%s inv=%s",
-                         buy ? "BUY" : "SELL",
-                         sweepBar,
-                         zone ? "Y" : "N",
-                         disp ? "Y" : "N",
-                         DoubleToString(invalidation, UltraSymDigits(BrokerSymbol)));
-   return true;
-}
-
-bool LCSBuySetup()
-{
-   string detail = "";
-   double inv = 0.0;
-   bool ok = LCS_SetupOK(true, detail, inv);
-   g_LCS_LastDetail = detail;
-   if(ok)
-   {
-      g_LCS_InvalidationPrice = inv;
-      g_LCS_SweepBarTime = iTime(BrokerSymbol, LCS_EntryTF, 1);
-      if(LCS_LogValidation)
-         Print("LCS VALIDATE BUY: PASS - ", detail, " on ", BrokerSymbol);
-      return true;
-   }
-   if(LCS_LogValidation && (EnableVerboseLogging || EnableSetupLogging))
-      Print("LCS VALIDATE BUY: FAIL - ", detail, " on ", BrokerSymbol);
-   return false;
-}
-
-bool LCSSellSetup()
-{
-   string detail = "";
-   double inv = 0.0;
-   bool ok = LCS_SetupOK(false, detail, inv);
-   g_LCS_LastDetail = detail;
-   if(ok)
-   {
-      g_LCS_InvalidationPrice = inv;
-      g_LCS_SweepBarTime = iTime(BrokerSymbol, LCS_EntryTF, 1);
-      if(LCS_LogValidation)
-         Print("LCS VALIDATE SELL: PASS - ", detail, " on ", BrokerSymbol);
-      return true;
-   }
-   if(LCS_LogValidation && (EnableVerboseLogging || EnableSetupLogging))
-      Print("LCS VALIDATE SELL: FAIL - ", detail, " on ", BrokerSymbol);
-   return false;
-}
-
+// [HITMAN MASTER AUDIT] LCS helper cluster removed — dead code.
 void EvaluateLCSStrategies(bool &buySignal, bool &sellSignal, string &strategyTag)
 {
-   // OK93 REMOVED — LCS deleted from live path
    buySignal = false; sellSignal = false; strategyTag = "";
 }
-
 
 void MarkContFallbackFillIfNeeded()
 {
@@ -10308,63 +9563,7 @@ void MarkContFallbackFillIfNeeded()
    }
 }
 
-int CountOpenContFallbackPositions()
-{
-   int count = 0;
-   for(int i = PositionsTotal() - 1; i >= 0; i--)
-   {
-      ulong ticket = PositionGetTicket(i);
-      if(ticket == 0 || !PositionSelectByTicket(ticket))
-         continue;
-      if(PositionGetString(POSITION_SYMBOL) != BrokerSymbol)
-         continue;
-      if(PositionGetInteger(POSITION_MAGIC) != MagicNumber)
-         continue;
-      int st = FindTradeState(ticket);
-      if(st >= 0 && TradeStates[st].strategyTag == "ContFallback")
-         count++;
-   }
-   return count;
-}
-
-bool ContFallbackAntiScalpGatesPass(string &failReason)
-{
-   failReason = "";
-   // OK81: InstantQualityMode never ContFallbackCooldown / OncePerBar blocks
-   if(InstantQualityMode)
-   {
-      if(ContFallbackMaxOpen > 0 && CountOpenContFallbackPositions() >= ContFallbackMaxOpen)
-      {
-         failReason = "ContFallbackMaxOpen";
-         return false;
-      }
-      return true;
-   }
-   if(ContFallbackMaxOpen > 0 && CountOpenContFallbackPositions() >= ContFallbackMaxOpen)
-   {
-      failReason = "ContFallbackMaxOpen";
-      return false;
-   }
-   if(ContFallbackCooldownMinutes > 0 && g_ContFallbackLastFillTime > 0)
-   {
-      int waited = (int)(TimeCurrent() - g_ContFallbackLastFillTime);
-      if(waited < ContFallbackCooldownMinutes * 60)
-      {
-         failReason = "ContFallbackCooldown";
-         return false;
-      }
-   }
-   if(EnableAntiScalpMode || ContFallbackOncePerBar)
-   {
-      datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
-      if(barTime > 0 && g_ContFallbackLastSignalBar == barTime)
-      {
-         failReason = "ContFallbackOncePerBar";
-         return false;
-      }
-   }
-   return true;
-}
+// [HITMAN MASTER AUDIT] ContFallback anti-scalp helpers removed (unused).
 
 //================ CONT STRUCTURE BEST (OK68) ========================//
 // World-class continuation structure — not PRISM ContSniper leftovers.
@@ -10603,179 +9802,7 @@ string ContStruct_Grade(const bool buy)
    return "QUALITY";
 }
 
-bool ContFallbackBestStructureOK(const bool buy, string &detail)
-{
-   detail = "";
-   double zTop = 0.0, zBot = 0.0;
-   string kind = "";
-   bool bos = false;
-   bool hasZone = false;
-   bool near = false;
-   bool disp = false;
-   int score = 0;
-
-   // OK81 INSTANT OPEN: no trend / ranging / opposite-trend HARD blocks when InstantQualityMode.
-   // Quality = prefer BOS + zone + displacement stack; open if ANY structural edge exists.
-   if(InstantQualityMode)
-   {
-      bos = ContStruct_HasQualityBOS(buy);
-      hasZone = ContStruct_GetFreshZone(buy, zTop, zBot, kind);
-      near = hasZone && ContStruct_PriceNearZone(buy, zTop, zBot);
-      disp = ContStruct_HasDisplacement(buy);
-      score = ContStruct_Score(buy);
-
-      // Must have at least one real edge (not random)
-      if(!bos && !hasZone && !disp)
-      {
-         detail = "no bos/zone/disp edge yet";
-         return false;
-      }
-
-      // Soft score: if two+ edges, allow even below MinScore
-      int edges = (bos ? 1 : 0) + (hasZone ? 1 : 0) + (disp ? 1 : 0);
-      if(ContStruct_MinScore > 0 && score < ContStruct_MinScore && edges < 2)
-      {
-         detail = StringFormat("score %d < %d and edges=%d", score, ContStruct_MinScore, edges);
-         return false;
-      }
-
-      if(!ContStruct_HTF_OK(buy))
-      {
-         // soft: do not block in InstantQualityMode
-      }
-
-      detail = StringFormat("%s INSTANT edges=%d bos=%s zone=%s near=%s disp=%s score=%d",
-                            ContStruct_Grade(buy),
-                            edges,
-                            bos ? "Y" : "N",
-                            hasZone ? kind : "N",
-                            near ? "Y" : "N",
-                            disp ? "Y" : "N",
-                            score);
-      return true;
-   }
-
-   // Strict mode (InstantQualityMode=false)
-   if(buy && !IsBullTrend()) { detail = "no bull trend"; return false; }
-   if(!buy && !IsBearTrend()) { detail = "no bear trend"; return false; }
-
-   if(ContStruct_RequireTrendADX && !TrendStrong())
-   {
-      detail = "trend not strong (ADX)";
-      return false;
-   }
-
-   if(ContStruct_SkipRanging && EnableRegimeDetection && GetMarketRegime() == REGIME_RANGING)
-   {
-      detail = "ranging regime - wait strong trend";
-      return false;
-   }
-
-   if(!ContStruct_HasQualityBOS(buy))
-   {
-      detail = "no quality directional BOS";
-      return false;
-   }
-
-   if(!ContStruct_GetFreshZone(buy, zTop, zBot, kind))
-   {
-      detail = "no fresh OB / quality FVG";
-      return false;
-   }
-
-   near = ContStruct_PriceNearZone(buy, zTop, zBot);
-   disp = ContStruct_HasDisplacement(buy);
-
-   if(ContStruct_ZoneOrDisplacement)
-   {
-      if(!near && !disp)
-      {
-         detail = "need price-at-zone OR displacement (" + kind + ")";
-         return false;
-      }
-   }
-   else
-   {
-      if(!near)
-      {
-         detail = "price not at structure zone (" + kind + ")";
-         return false;
-      }
-      if(ContStruct_RequireDisplacement && !disp)
-      {
-         detail = "no displacement impulse";
-         return false;
-      }
-   }
-
-   if(!ContStruct_HTF_OK(buy))
-   {
-      detail = "HTF BOS missing";
-      return false;
-   }
-
-   score = ContStruct_Score(buy);
-   if(ContStruct_MinScore > 0 && score < ContStruct_MinScore)
-   {
-      detail = StringFormat("score %d < min %d (need stronger setup)", score, ContStruct_MinScore);
-      return false;
-   }
-
-   if(IDP_ApplyToContFallback)
-   {
-      string idpDetail = "";
-      if(!IDP_ConfluenceOK(buy, idpDetail))
-      {
-         detail = "IDP block: " + idpDetail;
-         return false;
-      }
-   }
-
-   string grade = ContStruct_Grade(buy);
-   string idpNote = "";
-   if(EnableIDPConfluence && IDP_ApplyToContFallback)
-   {
-      double p = 0.0;
-      string pd = "";
-      if(IDP_GetPulse(p, pd))
-         idpNote = StringFormat(" | %s", pd);
-   }
-   string bosTag = "BOS";
-   if(ContStruct_RequireTwoBarBOS) bosTag = "BOS2";
-   string nearTag = "";
-   if(near) nearTag = " + near";
-   string dispTag = "";
-   if(disp) dispTag = " + disp";
-   detail = StringFormat("%s %s + %s%s%s score=%d%s",
-                         grade,
-                         bosTag,
-                         kind,
-                         nearTag,
-                         dispTag,
-                         score,
-                         idpNote);
-   return true;
-}
-
-bool ContFallbackSwingBuySetup()
-{
-   string d = "";
-   return ContFallbackBestStructureOK(true, d);
-}
-
-bool ContFallbackSwingSellSetup()
-{
-   string d = "";
-   return ContFallbackBestStructureOK(false, d);
-}
-
-void EvaluateContFallback(bool &buySignal, bool &sellSignal, string &strategyTag)
-{
-   // OK93 REMOVED — never opens trades
-   buySignal = false; sellSignal = false; strategyTag = "";
-}
-
-
+// [HITMAN MASTER AUDIT] ContFallback live checklist removed — ContStruct diagnostics retained above.
 
 //====================================================================//
 
@@ -11345,80 +10372,16 @@ void MarkSignalApproved(bool buy)
 
 bool StrongBuySetup()
 {
-   return false; // OK67 RETIRED — not on live path
-
-   // MANDATORY confirmations first, always - see MandatoryConfirmationsPassed().
-   // The optional, additive score below never even runs if these don't
-   // clear, by construction.
-   if(!MandatoryConfirmationsPassed(true))
-      return false;
-
-   int score = CalculateTradeScore(true);
-   int requiredScore = GetEffectiveMinimumScore();
-
-   if(EnableVerboseLogging)
-      Print("BUY AI Score: ", score, " / required: ", requiredScore,
-            " (regime: ", EnumToString(GetMarketRegime()), ")");
-
-   bool approved = (score >= requiredScore);
-
-   // NEW: duplicate-signal guard - see IsDuplicateSignal() above. Checked
-   // only once the setup has otherwise fully qualified, so it never masks
-   // a genuinely fresh signal; it only blocks re-approving the identical
-   // bar's signal a second time.
-   if(approved && IsDuplicateSignal(true))
-   {
-      if(EnableVerboseLogging) Print("BUY approval suppressed - duplicate signal on the same bar.");
-      approved = false;
-   }
-
-   // FIX #6: capture the exact snapshot (score + every signal flag) at the
-   // moment the decision is actually made - before ExecuteBuy() runs and
-   // potentially spends time on retries/requotes during which price and
-   // indicators can move on. RecordSignalSnapshot() (Part 6) uses this
-   // instead of recalculating everything fresh after the fact.
-   if(approved)
-   {
-      MarkSignalApproved(true);
-      CapturePendingSignalSnapshot(true);
-   }
-
-   return approved;
+   return false; // MASTER AUDIT retired — UFSE sole signal path
 }
-
 
 //================ STRONG SELL SETUP ===============================//
 
 bool StrongSellSetup()
 {
-   return false; // OK67 RETIRED — not on live path
-
-   if(!MandatoryConfirmationsPassed(false))
-      return false;
-
-   int score = CalculateTradeScore(false);
-   int requiredScore = GetEffectiveMinimumScore();
-
-   if(EnableVerboseLogging)
-      Print("SELL AI Score: ", score, " / required: ", requiredScore,
-            " (regime: ", EnumToString(GetMarketRegime()), ")");
-
-   bool approved = (score >= requiredScore);
-
-   if(approved && IsDuplicateSignal(false))
-   {
-      if(EnableVerboseLogging) Print("SELL approval suppressed - duplicate signal on the same bar.");
-      approved = false;
-   }
-
-   if(approved)
-   {
-      MarkSignalApproved(false);
-      CapturePendingSignalSnapshot(false);
-   }
-
-   return approved;
+   return false; // MASTER AUDIT retired — UFSE sole signal path
 }
+
 //+------------------------------------------------------------------+
 //|              PART 16 - CHART DASHBOARD & THEME                   |
 //+------------------------------------------------------------------+

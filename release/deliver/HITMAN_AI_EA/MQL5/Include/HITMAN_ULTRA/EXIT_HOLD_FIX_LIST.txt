@@ -1,0 +1,42 @@
+══════════════════════════════════════════════
+HITMAN AI
+EXIT & HOLD FIX LIST — IMPLEMENTED
+══════════════════════════════════════════════
+
+1. MISSION CONTROL IS THE ONLY MODULE ALLOWED TO CLOSE TRADES
+   ✓ UltraMission_ClosePosition / ClosePartial
+   ✓ All Shell_B + Defense closes routed through Mission Control
+   ✓ Only MissionControl.mqh calls g_Trade.PositionClose
+
+2. TRADE THESIS MEMORY
+   ✓ Trend · Structure · BOS · CHoCH · Liquidity · Fib · Momentum
+   ✓ Entry Price · Entry Time · Entry Reason
+
+3. EXIT VALIDATION ENGINE
+   ✓ Thesis Broken · Structure Changed · Master Trend Changed · Risk Rule
+   ✓ Else KEEP HOLDING
+
+4. IGNORE NORMAL MARKET NOISE
+   ✓ One candle / pullback / correction / temp mom / spread / small liq grab
+
+5. HEALTHY CORRECTION DETECTOR
+   ✓ Pullback · Continuation · Retest · Liquidity Sweep → do not close
+
+6. TRUE REVERSAL DETECTOR
+   ✓ Structure break + trend reversal + thesis invalid
+
+7. HOLD SCORE → HOLD / MANAGE / EXIT
+
+8. POSITION LOCK
+   ✓ Ticket · Thesis · Hold Score · Status
+
+9. ONE DECISION PER EVALUATION
+   ✓ Blocks close→open flip-flop same cycle
+
+10. EXIT CONFIRMATION
+    ✓ Thesis Invalid AND Structure Changed AND Master Trend Changed (+ reversal)
+
+11–15. Signal consistency · No duplicates · Ultra Hold · Smart Exit · Full decision log
+    ✓ Mission logs OPEN / HOLD / MANAGE / CLOSE with reasons
+
+FINAL RULE: Never close without validated reason (or riskForced).
