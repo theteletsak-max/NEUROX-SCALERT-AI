@@ -1,6 +1,15 @@
-HITMAN AI ULTRA X — SEND THIS ZIP
+HITMAN AI — SEND THIS ZIP (Expert Advisor)
 
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/release/deliver/HITMAN_AI.zip
 
-Inside: HITMAN_AI.mq5 + HITMAN_AI_ULTRA_X_ARCHITECTURE.txt (Levels 1-15)
-BUILD: HA_ULTRA_93 | Mission Control: BUY/SELL/WAIT/HOLD/MANAGE/EXIT
+Also:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI.zip
+
+Inside zip:
+  HITMAN_AI.mq5                         ← copy to MQL5/Experts/
+  MQL5/Experts/HITMAN_AI.mq5            ← same file
+  INSTALL.txt
+  README.txt
+  HITMAN_AI_ULTRA_X_ARCHITECTURE.txt
+
+BUILD_ID: HA_ULTRA_93 | Comment: HITMAN AI
