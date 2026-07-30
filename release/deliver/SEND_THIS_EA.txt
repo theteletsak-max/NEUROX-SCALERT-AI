@@ -6,4 +6,4 @@ Same: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai
 
 BUILD_ID: HA_ULTRA_93
 Comment:  HITMAN AI
-Fix: stop premature trade closes (Mission/Hold/Defense soft)
+Exit/Hold: Mission Control sole close authority + multi-confirm exit

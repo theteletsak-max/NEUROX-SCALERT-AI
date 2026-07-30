@@ -1,9 +1,8 @@
 #ifndef HITMAN_ULTRA_SMART_EXIT_MQH
 #define HITMAN_ULTRA_SMART_EXIT_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — LEVEL 14 SMART EXIT ENGINE                           |
-//| Exit ONLY on thesis invalidation + true reversal (or risk rule)  |
-//| Never close on 1 candle / small pullback / temp mom / temp spread|
+//| HITMAN AI — SMART EXIT — decision only (Mission executes close)  |
+//| Exit only when original idea failed OR risk requires exit        |
 //+------------------------------------------------------------------+
 
 enum ENUM_SMART_EXIT
@@ -37,37 +36,28 @@ UltraSmartExit UltraSmartExit_Decide(const UltraHoldScore &hold, const UltraCorr
       return x;
    }
 
-   // Hard close requires BOTH invalid thesis AND confirmed reversal
-   // (soft mode). Strict may close on either when hold says EXIT.
-   bool hardClose = false;
-   if(!UltraUpgradeStrict)
-      hardClose = (!thesisValid && corr.state == CORR_REVERSAL && hold.action == HOLD_EXIT);
-   else
-      hardClose = (hold.action == HOLD_EXIT && (!thesisValid || corr.state == CORR_REVERSAL));
-
-   if(hardClose)
-   {
-      x.action = SX_CLOSE;
-      x.reason = "thesis invalidated + true reversal";
-      return x;
-   }
-
-   // Never exit on pullback / continuation / liq grab / retest / unknown
+   // Never close on healthy correction / noise
    if(corr.state == CORR_PULLBACK || corr.state == CORR_CONTINUATION ||
       corr.state == CORR_LIQ_GRAB || corr.state == CORR_RETEST || corr.state == CORR_UNKNOWN)
    {
-      if(hold.action == HOLD_MANAGE || hold.action == HOLD_EXIT)
-      {
-         x.action = SX_BE;
-         x.reason = "healthy correction — protect / do not close";
-      }
+      x.action = SX_BE;
+      x.reason = "healthy correction — do not close";
       return x;
    }
 
-   if(hold.action == HOLD_MANAGE)
+   // CLOSE suggestion only if hold says EXIT and thesis invalid + true reversal
+   // (Mission Control still runs multi-confirm ValidateExit before closing)
+   if(hold.action == HOLD_EXIT && !thesisValid && corr.state == CORR_REVERSAL)
    {
-      x.action = SX_BE; // prefer BE over tighten-close path
-      x.reason = "manage open risk — breakeven protect";
+      x.action = SX_CLOSE;
+      x.reason = "trade thesis failed + true reversal";
+      return x;
+   }
+
+   if(hold.action == HOLD_MANAGE || hold.action == HOLD_EXIT)
+   {
+      x.action = SX_BE;
+      x.reason = "manage / protect — keep holding";
    }
    return x;
 }

@@ -509,9 +509,9 @@ bool UltraDefense_Line8_Position(const ulong ticket, const long type,
    if(UltraDefenseCloseOnFlip && trendFlip && bosAgainst && u.trend.exhaustion)
    {
       if(UltraDefenseLog)
-         Print("DEFENSE L8 POSITION: CLOSE adverse flip ticket=", ticket);
-      g_Trade.PositionClose(ticket);
-      return true;
+         Print("DEFENSE L8 POSITION: request CLOSE adverse flip ticket=", ticket);
+      // Sole close authority = Mission Control
+      return UltraMission_ClosePosition(ticket, "DEFENSE L8 adverse flip", false);
    }
 
    g_UltraDefenseLast.line[8].id = 8;

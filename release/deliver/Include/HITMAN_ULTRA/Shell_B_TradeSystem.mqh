@@ -1570,10 +1570,10 @@ void CloseAllEAPositions()
       if(PositionGetInteger(POSITION_MAGIC) != MagicNumber)
          continue;
 
-      if(g_Trade.PositionClose(ticket))
+      if(UltraMission_ClosePosition(ticket, "EMERGENCY CloseAllEAPositions", true))
          Print("Emergency close: closed ticket ", ticket);
       else
-         Print("Emergency close FAILED on ticket ", ticket, ": ", g_Trade.ResultRetcodeDescription());
+         Print("Emergency close FAILED/held on ticket ", ticket);
    }
 }
 
@@ -3149,7 +3149,7 @@ bool ExecuteBuy()
          if(!stopsAttached)
          {
             Print("BUY: could not attach SL/TP after fallback - closing the unprotected position for safety (ticket ", newTicket, ").");
-            g_Trade.PositionClose(newTicket);
+            UltraMission_ClosePosition(newTicket, "EXEC cleanup invalid stops", true);
             return false;
          }
 
@@ -3399,7 +3399,7 @@ bool ExecuteSell()
          if(!stopsAttached)
          {
             Print("SELL: could not attach SL/TP after fallback - closing the unprotected position for safety (ticket ", newTicket, ").");
-            g_Trade.PositionClose(newTicket);
+            UltraMission_ClosePosition(newTicket, "EXEC cleanup invalid stops", true);
             return false;
          }
 
@@ -3856,8 +3856,8 @@ void ManageOpenTrades()
 
       if(EnableMaxHoldBars && barsHeld >= MaxHoldBars)
       {
-         Print("Max hold time reached (", barsHeld, " bars) - closing ticket ", ticket);
-         g_Trade.PositionClose(ticket);
+         Print("Max hold time reached (", barsHeld, " bars) - Mission close ticket ", ticket);
+         UltraMission_ClosePosition(ticket, "RISK max hold bars", true);
          continue;
       }
 
@@ -3912,10 +3912,9 @@ void ManageOpenTrades()
          if((mission == SUP_EXIT || sx == SX_CLOSE) && canMissionExit)
          {
             if(UltraUpgradeLog)
-               Print("MISSION EXIT ticket=", ticket, " bars=", barsHeld, " ", sxWhy);
-            UltraThesis_Clear(ticket);
-            g_Trade.PositionClose(ticket);
-            continue;
+               Print("MISSION EXIT request ticket=", ticket, " bars=", barsHeld, " ", sxWhy);
+            if(UltraMission_ClosePosition(ticket, sxWhy, false))
+               continue;
          }
          if((mission == SUP_EXIT || sx == SX_CLOSE) && !canMissionExit)
          {
@@ -4027,7 +4026,7 @@ void ManageOpenTrades()
 
             if(closeVolume >= minVolume && remainder >= minVolume)
             {
-               if(g_Trade.PositionClosePartial(ticket, closeVolume))
+               if(UltraMission_ClosePartial(ticket, closeVolume, "TP1 partial"))
                {
                   Print("TP1 hit: closed ", DoubleToString(closeVolume,2),
                         " lots of ticket ", ticket, " — locking profit, remainder → TP2");
@@ -4042,7 +4041,7 @@ void ManageOpenTrades()
             }
             else if(remainder < minVolume && currentVolume >= minVolume && closeVolume >= minVolume)
             {
-               if(g_Trade.PositionClose(ticket))
+               if(UltraMission_ClosePosition(ticket, "TP ladder full close", true))
                {
                   Print("TP1 hit but position too small to split - closed in full: ", ticket);
                   TradeStates[stateIndex].tp1Taken = true;
@@ -4147,7 +4146,7 @@ void ManageOpenTrades()
 
             if(closeVolume2 >= minVolume2 && remainder2 >= minVolume2)
             {
-               if(g_Trade.PositionClosePartial(ticket, closeVolume2))
+               if(UltraMission_ClosePartial(ticket, closeVolume2, "TP2 partial"))
                {
                   Print("TP2 hit: closed ", DoubleToString(closeVolume2,2),
                         " lots of ticket ", ticket, " — locking more profit, runner → TP3/trail");
@@ -4163,7 +4162,7 @@ void ManageOpenTrades()
             else if(remainder2 < minVolume2 && currentVolume2 >= minVolume2 && closeVolume2 >= minVolume2)
             {
                // BUGFIX40: mirror TP1 — can't leave dust remainder
-               if(g_Trade.PositionClose(ticket))
+               if(UltraMission_ClosePosition(ticket, "TP ladder full close", true))
                {
                   Print("TP2 hit but position too small to split - closed in full: ", ticket);
                   TradeStates[stateIndex].tp2Taken = true;
@@ -4325,8 +4324,8 @@ void ManageOpenTrades()
             if(favorableMove < atrNow * StagnationProgressATRMultiple)
             {
                Print("Stagnation exit: ticket ", ticket, " has made no real progress after ",
-                     barsHeld, " bars - closing.");
-               g_Trade.PositionClose(ticket);
+                     barsHeld, " bars - Mission close.");
+               UltraMission_ClosePosition(ticket, "RISK stagnation exit", true);
                continue;
             }
          }
@@ -4345,8 +4344,8 @@ void ManageOpenTrades()
       {
          if(GetADX() < TrendExitADXLevel)
          {
-            Print("Trend exit: ADX below ", TrendExitADXLevel, ", closing ticket ", ticket);
-            g_Trade.PositionClose(ticket);
+            Print("Trend exit: ADX below ", TrendExitADXLevel, ", Mission close ticket ", ticket);
+            UltraMission_ClosePosition(ticket, "RISK trend exit ADX", true);
             continue;
          }
       }
@@ -8192,9 +8191,8 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
          if(DefenseLogActions)
             Print("DEFEND MAE: adverse ", DoubleToString(adverseMove / atr, 2),
                   " ATR ≥ ", DoubleToString(DefenseMAE_ATR, 2),
-                  " — closing ticket ", ticket);
-         g_Trade.PositionClose(ticket);
-         return true;
+                  " — Mission close ticket ", ticket);
+         return UltraMission_ClosePosition(ticket, "RISK DEFEND MAE", true);
       }
    }
 
@@ -8228,10 +8226,9 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
       if(oppositeRev && (!DefenseRequireInProfitToClose || inProfit))
       {
          if(DefenseLogActions)
-            Print("DEFEND CLOSE: hard opposite reversal vs ", (isBuy ? "BUY" : "SELL"),
+            Print("DEFEND CLOSE request: hard opposite reversal vs ", (isBuy ? "BUY" : "SELL"),
                   " ticket ", ticket, " — ", detail);
-         g_Trade.PositionClose(ticket);
-         return true;
+         return UltraMission_ClosePosition(ticket, "DEFEND hard reversal "+detail, false);
       }
    }
 
@@ -8241,10 +8238,9 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
       if(preTP1)
       {
          if(DefenseLogActions)
-            Print("DEFEND CLOSE: fake-breakout trap against ", (isBuy ? "BUY" : "SELL"),
+            Print("DEFEND CLOSE request: fake-breakout trap against ", (isBuy ? "BUY" : "SELL"),
                   " ticket ", ticket);
-         g_Trade.PositionClose(ticket);
-         return true;
+         return UltraMission_ClosePosition(ticket, "DEFEND trap against", false);
       }
       // After TP1: lock at least BE instead of full close
       if(inProfit)
@@ -11869,6 +11865,21 @@ void InstantExecution()
       {
          UltraDiscipline_OnFill(BrokerSymbol, true, strategyTag, g_UltraLastSnap);
          UltraThesis_StoreLatest(BrokerSymbol, true, strategyTag, g_UltraLastSnap, g_UltraLastSignal.reason);
+         // Position lock + decision log (Mission Control)
+         {
+            ulong tk = 0;
+            for(int i = PositionsTotal() - 1; i >= 0; i--)
+            {
+               ulong tix = PositionGetTicket(i);
+               if(tix == 0 || !PositionSelectByTicket(tix)) continue;
+               if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+               if(PositionGetString(POSITION_SYMBOL) != BrokerSymbol) continue;
+               if(PositionGetInteger(POSITION_TYPE) != POSITION_TYPE_BUY) continue;
+               tk = tix; break;
+            }
+            if(tk != 0)
+               UltraMission_NoteOpen(tk, BrokerSymbol, true, strategyTag);
+         }
          if(EnableBeastMode && BeastDuplicateBarGuard)
             MarkSignalApproved(true);
       }
@@ -11898,6 +11909,21 @@ void InstantExecution()
       {
          UltraDiscipline_OnFill(BrokerSymbol, false, strategyTag, g_UltraLastSnap);
          UltraThesis_StoreLatest(BrokerSymbol, false, strategyTag, g_UltraLastSnap, g_UltraLastSignal.reason);
+         // Position lock + decision log (Mission Control)
+         {
+            ulong tk = 0;
+            for(int i = PositionsTotal() - 1; i >= 0; i--)
+            {
+               ulong tix = PositionGetTicket(i);
+               if(tix == 0 || !PositionSelectByTicket(tix)) continue;
+               if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+               if(PositionGetString(POSITION_SYMBOL) != BrokerSymbol) continue;
+               if(PositionGetInteger(POSITION_TYPE) != POSITION_TYPE_SELL) continue;
+               tk = tix; break;
+            }
+            if(tk != 0)
+               UltraMission_NoteOpen(tk, BrokerSymbol, false, strategyTag);
+         }
          if(EnableBeastMode && BeastDuplicateBarGuard)
             MarkSignalApproved(false);
       }

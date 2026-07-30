@@ -3684,9 +3684,9 @@ bool UltraDefense_Line8_Position(const ulong ticket, const long type,
    if(UltraDefenseCloseOnFlip && trendFlip && bosAgainst && u.trend.exhaustion)
    {
       if(UltraDefenseLog)
-         Print("DEFENSE L8 POSITION: CLOSE adverse flip ticket=", ticket);
-      g_Trade.PositionClose(ticket);
-      return true;
+         Print("DEFENSE L8 POSITION: request CLOSE adverse flip ticket=", ticket);
+      // Sole close authority = Mission Control
+      return UltraMission_ClosePosition(ticket, "DEFENSE L8 adverse flip", false);
    }
 
    g_UltraDefenseLast.line[8].id = 8;
@@ -4798,17 +4798,23 @@ struct UltraTradeThesis
    string   symbol;
    bool     isBuy;
    string   tag;
-   string   reason;          // Complete Entry Reason
-   string   marketState;     // Market State
-   string   structureState;  // Structure State
-   string   trendState;      // Trend State
-   string   liquidityState;  // Liquidity State
-   string   momentumState;   // Momentum State
-   string   riskState;       // Risk State
-   string   confidenceState; // Confidence State
+   string   reason;          // Entry Reason
+   string   marketState;
+   string   structureState;
+   string   trendState;
+   string   bosState;        // BOS at entry
+   string   chochState;      // CHoCH at entry
+   string   liquidityState;
+   string   fibState;        // Fibonacci at entry
+   string   momentumState;
+   string   riskState;
+   string   confidenceState;
+   double   entryPrice;
+   datetime entryTime;
    int      conf, prec, prob;
    int      trendStr, structQ, bosScore, chochConf;
    bool     hadLiq, hadFib, hadMom;
+   bool     hadBos, hadChoch;
    int      epoch;
    datetime openBar;
    datetime lastCheckBar;
@@ -4884,6 +4890,36 @@ void UltraThesis_Store(const ulong ticket, const string s, const bool isBuy,
    if(u.score.riskProb >= 70) g_Thesis[idx].riskState = "HIGH";
    else g_Thesis[idx].riskState = "OK";
    g_Thesis[idx].confidenceState = IntegerToString(u.score.confidence);
+
+   // BOS / CHoCH / Fib memory at entry
+   if(isBuy)
+   {
+      if(u.bos.buy) g_Thesis[idx].bosState = u.bos.strong ? "BUY_STRONG" : "BUY";
+      else g_Thesis[idx].bosState = "NONE";
+      if(u.choch.buy) g_Thesis[idx].chochState = u.choch.majorC ? "BUY_MAJOR" : "BUY";
+      else g_Thesis[idx].chochState = "NONE";
+      if(u.fib.atBuyZone) g_Thesis[idx].fibState = "BUY_ZONE";
+      else g_Thesis[idx].fibState = "NONE";
+   }
+   else
+   {
+      if(u.bos.sell) g_Thesis[idx].bosState = u.bos.strong ? "SELL_STRONG" : "SELL";
+      else g_Thesis[idx].bosState = "NONE";
+      if(u.choch.sell) g_Thesis[idx].chochState = u.choch.majorC ? "SELL_MAJOR" : "SELL";
+      else g_Thesis[idx].chochState = "NONE";
+      if(u.fib.atSellZone) g_Thesis[idx].fibState = "SELL_ZONE";
+      else g_Thesis[idx].fibState = "NONE";
+   }
+   g_Thesis[idx].hadBos = isBuy ? u.bos.buy : u.bos.sell;
+   g_Thesis[idx].hadChoch = isBuy ? u.choch.buy : u.choch.sell;
+
+   g_Thesis[idx].entryPrice = isBuy ? SymbolInfoDouble(s, SYMBOL_ASK) : SymbolInfoDouble(s, SYMBOL_BID);
+   if(PositionSelectByTicket(ticket))
+      g_Thesis[idx].entryPrice = PositionGetDouble(POSITION_PRICE_OPEN);
+   g_Thesis[idx].entryTime = TimeCurrent();
+   if(PositionSelectByTicket(ticket))
+      g_Thesis[idx].entryTime = (datetime)PositionGetInteger(POSITION_TIME);
+
    g_Thesis[idx].conf = u.score.confidence;
    g_Thesis[idx].prec = u.score.precision;
    g_Thesis[idx].prob = u.score.probability;
@@ -5199,9 +5235,8 @@ string UltraHold_Dashboard()
 #ifndef HITMAN_ULTRA_SMART_EXIT_MQH
 #define HITMAN_ULTRA_SMART_EXIT_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — LEVEL 14 SMART EXIT ENGINE                           |
-//| Exit ONLY on thesis invalidation + true reversal (or risk rule)  |
-//| Never close on 1 candle / small pullback / temp mom / temp spread|
+//| HITMAN AI — SMART EXIT — decision only (Mission executes close)  |
+//| Exit only when original idea failed OR risk requires exit        |
 //+------------------------------------------------------------------+
 
 enum ENUM_SMART_EXIT
@@ -5235,37 +5270,28 @@ UltraSmartExit UltraSmartExit_Decide(const UltraHoldScore &hold, const UltraCorr
       return x;
    }
 
-   // Hard close requires BOTH invalid thesis AND confirmed reversal
-   // (soft mode). Strict may close on either when hold says EXIT.
-   bool hardClose = false;
-   if(!UltraUpgradeStrict)
-      hardClose = (!thesisValid && corr.state == CORR_REVERSAL && hold.action == HOLD_EXIT);
-   else
-      hardClose = (hold.action == HOLD_EXIT && (!thesisValid || corr.state == CORR_REVERSAL));
-
-   if(hardClose)
-   {
-      x.action = SX_CLOSE;
-      x.reason = "thesis invalidated + true reversal";
-      return x;
-   }
-
-   // Never exit on pullback / continuation / liq grab / retest / unknown
+   // Never close on healthy correction / noise
    if(corr.state == CORR_PULLBACK || corr.state == CORR_CONTINUATION ||
       corr.state == CORR_LIQ_GRAB || corr.state == CORR_RETEST || corr.state == CORR_UNKNOWN)
    {
-      if(hold.action == HOLD_MANAGE || hold.action == HOLD_EXIT)
-      {
-         x.action = SX_BE;
-         x.reason = "healthy correction — protect / do not close";
-      }
+      x.action = SX_BE;
+      x.reason = "healthy correction — do not close";
       return x;
    }
 
-   if(hold.action == HOLD_MANAGE)
+   // CLOSE suggestion only if hold says EXIT and thesis invalid + true reversal
+   // (Mission Control still runs multi-confirm ValidateExit before closing)
+   if(hold.action == HOLD_EXIT && !thesisValid && corr.state == CORR_REVERSAL)
    {
-      x.action = SX_BE; // prefer BE over tighten-close path
-      x.reason = "manage open risk — breakeven protect";
+      x.action = SX_CLOSE;
+      x.reason = "trade thesis failed + true reversal";
+      return x;
+   }
+
+   if(hold.action == HOLD_MANAGE || hold.action == HOLD_EXIT)
+   {
+      x.action = SX_BE;
+      x.reason = "manage / protect — keep holding";
    }
    return x;
 }
@@ -5672,10 +5698,12 @@ string UltraSupreme_Dashboard()
 #ifndef HITMAN_ULTRA_MISSION_CONTROL_MQH
 #define HITMAN_ULTRA_MISSION_CONTROL_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI ULTRA X — LEVEL 8 ULTRA MISSION CONTROL                |
-//| Single authority — BUY/SELL/WAIT/HOLD/MANAGE/EXIT                |
-//| EXIT only when Smart Exit confirms (never noise / soft hold-exit)|
+//| HITMAN AI — LEVEL 8 MISSION CONTROL (SOLE CLOSE AUTHORITY)       |
+//| EXIT & HOLD FIX LIST — only this module may close trades         |
+//| Approves: BUY · SELL · WAIT · HOLD · MANAGE · EXIT               |
 //+------------------------------------------------------------------+
+
+#define ULTRA_POSLOCK_MAX 64
 
 struct UltraMissionState
 {
@@ -5689,8 +5717,40 @@ struct UltraMissionState
    datetime ts;
 };
 
-UltraMissionState g_UltraMissionLast;
+struct UltraPosLock
+{
+   ulong    ticket;
+   string   symbol;
+   bool     isBuy;
+   bool     active;
+   string   status;      // HOLD / MANAGE / EXIT
+   int      holdScore;
+   string   thesisTag;
+   datetime openTime;
+   datetime lastEvalBar;
+   bool     decidedThisCycle; // one decision per evaluation
+};
 
+struct UltraExitValidation
+{
+   bool thesisBroken;
+   bool structureChanged;
+   bool masterTrendChanged;
+   bool riskRule;
+   bool healthyCorrection;
+   bool trueReversal;
+   bool allowClose;
+   string reason;
+};
+
+UltraMissionState g_UltraMissionLast;
+UltraPosLock      g_UltraPosLock[ULTRA_POSLOCK_MAX];
+int               g_UltraPosLockN = 0;
+datetime          g_UltraMissionCycleBar = 0;
+bool              g_UltraMissionClosedThisCycle = false;
+bool              g_UltraMissionOpenedThisCycle = false;
+
+//--------------------------------------------------------------------//
 void UltraMission_Init()
 {
    g_UltraMissionLast.command = SUP_WAIT;
@@ -5701,6 +5761,23 @@ void UltraMission_Init()
    g_UltraMissionLast.thesis = "";
    g_UltraMissionLast.ticket = 0;
    g_UltraMissionLast.ts = 0;
+   g_UltraPosLockN = 0;
+   g_UltraMissionCycleBar = 0;
+   g_UltraMissionClosedThisCycle = false;
+   g_UltraMissionOpenedThisCycle = false;
+}
+
+void UltraMission_NewCycle(const string s)
+{
+   datetime bar = iTime(s, UltraETF(), 0);
+   if(bar != g_UltraMissionCycleBar)
+   {
+      g_UltraMissionCycleBar = bar;
+      g_UltraMissionClosedThisCycle = false;
+      g_UltraMissionOpenedThisCycle = false;
+      for(int i = 0; i < g_UltraPosLockN; i++)
+         g_UltraPosLock[i].decidedThisCycle = false;
+   }
 }
 
 string UltraMission_Name(const ENUM_SUPREME_DECISION c)
@@ -5728,8 +5805,257 @@ void UltraMission_Set(const ENUM_SUPREME_DECISION c, const string reason,
    g_UltraMissionLast.ts = TimeCurrent();
 }
 
+void UltraMission_Log(const string action, const ulong ticket, const string why)
+{
+   string t = "MISSION ";
+   t += action;
+   t += " ticket=";
+   t += IntegerToString((int)ticket);
+   t += " | ";
+   t += why;
+   UltraLogTrade(t);
+   if(UltraUpgradeLog || EnableVerboseLogging)
+      Print(t);
+}
+
+//--------------------------------------------------------------------//
+// POSITION LOCK — one thesis / hold status per ticket
+//--------------------------------------------------------------------//
+int UltraPosLock_Find(const ulong ticket)
+{
+   for(int i = 0; i < g_UltraPosLockN; i++)
+      if(g_UltraPosLock[i].active && g_UltraPosLock[i].ticket == ticket) return i;
+   return -1;
+}
+
+int UltraPosLock_Alloc()
+{
+   for(int i = 0; i < g_UltraPosLockN; i++)
+      if(!g_UltraPosLock[i].active) return i;
+   if(g_UltraPosLockN >= ULTRA_POSLOCK_MAX) return 0;
+   return g_UltraPosLockN++;
+}
+
+void UltraPosLock_Register(const ulong ticket, const string s, const bool isBuy, const string tag)
+{
+   if(ticket == 0) return;
+   int idx = UltraPosLock_Find(ticket);
+   if(idx < 0) idx = UltraPosLock_Alloc();
+   g_UltraPosLock[idx].ticket = ticket;
+   g_UltraPosLock[idx].symbol = s;
+   g_UltraPosLock[idx].isBuy = isBuy;
+   g_UltraPosLock[idx].active = true;
+   g_UltraPosLock[idx].status = "HOLD";
+   g_UltraPosLock[idx].holdScore = 0;
+   g_UltraPosLock[idx].thesisTag = tag;
+   g_UltraPosLock[idx].openTime = TimeCurrent();
+   g_UltraPosLock[idx].lastEvalBar = 0;
+   g_UltraPosLock[idx].decidedThisCycle = false;
+   UltraMission_Log("LOCK", ticket, tag);
+}
+
+void UltraPosLock_Clear(const ulong ticket)
+{
+   int idx = UltraPosLock_Find(ticket);
+   if(idx < 0) return;
+   g_UltraPosLock[idx].active = false;
+   g_UltraPosLock[idx].status = "CLOSED";
+}
+
+void UltraPosLock_Update(const ulong ticket, const string status, const int holdScore)
+{
+   int idx = UltraPosLock_Find(ticket);
+   if(idx < 0) return;
+   g_UltraPosLock[idx].status = status;
+   g_UltraPosLock[idx].holdScore = holdScore;
+}
+
+//--------------------------------------------------------------------//
+// EXIT VALIDATION ENGINE — multi-confirm before close
+//--------------------------------------------------------------------//
+UltraExitValidation UltraMission_ValidateExit(const ulong ticket, const string s,
+                                              const bool isBuy, const UltraSnap &u,
+                                              const bool riskForced)
+{
+   UltraExitValidation v;
+   v.thesisBroken = false;
+   v.structureChanged = false;
+   v.masterTrendChanged = false;
+   v.riskRule = riskForced;
+   v.healthyCorrection = false;
+   v.trueReversal = false;
+   v.allowClose = false;
+   v.reason = "";
+
+   string tw = "";
+   bool thesisOK = UltraThesis_Revalidate(ticket, u, tw);
+   v.thesisBroken = !thesisOK;
+
+   UltraCorrection corr = UltraCorr_Detect(u, isBuy);
+   v.healthyCorrection = corr.isHealthy &&
+      (corr.state == CORR_PULLBACK || corr.state == CORR_CONTINUATION ||
+       corr.state == CORR_LIQ_GRAB || corr.state == CORR_RETEST || corr.state == CORR_UNKNOWN);
+   v.trueReversal = (corr.state == CORR_REVERSAL);
+
+   // Structure changed against position
+   v.structureChanged = isBuy
+      ? ((u.bos.sell && u.bos.confirmed && u.bos.strong) || (u.choch.sell && u.choch.majorC) || u.st.externalBear)
+      : ((u.bos.buy && u.bos.confirmed && u.bos.strong) || (u.choch.buy && u.choch.majorC) || u.st.externalBull);
+
+   // Master trend changed (H4 bias)
+   int master = UltraMTF_MasterDir(s);
+   v.masterTrendChanged = isBuy ? (master < 0) : (master > 0);
+
+   // IGNORE noise — healthy correction never allows close
+   if(v.healthyCorrection && !v.riskRule)
+   {
+      v.allowClose = false;
+      v.reason = "KEEP HOLDING — healthy correction / market noise";
+      return v;
+   }
+
+   if(v.riskRule)
+   {
+      v.allowClose = true;
+      v.reason = "RISK RULE requires exit";
+      return v;
+   }
+
+   // Rule #10: Thesis Invalid AND Structure Changed AND Master Trend Changed
+   if(v.thesisBroken && v.structureChanged && v.masterTrendChanged && v.trueReversal)
+   {
+      v.allowClose = true;
+      v.reason = "EXIT CONFIRMED — thesis+structure+master trend+reversal";
+      return v;
+   }
+
+   // Soft InstantQuality: still require at least thesis broken + true reversal + structure
+   if(!UltraUpgradeStrict)
+   {
+      if(v.thesisBroken && v.trueReversal && v.structureChanged)
+      {
+         v.allowClose = true;
+         v.reason = "EXIT CONFIRMED — thesis invalid + structure + reversal";
+         return v;
+      }
+      v.allowClose = false;
+      v.reason = "KEEP HOLDING — exit confirmations incomplete";
+      return v;
+   }
+
+   // Strict: thesis broken + (structure or master) + reversal
+   if(v.thesisBroken && v.trueReversal && (v.structureChanged || v.masterTrendChanged))
+   {
+      v.allowClose = true;
+      v.reason = "EXIT CONFIRMED (strict)";
+      return v;
+   }
+
+   v.allowClose = false;
+   v.reason = "KEEP HOLDING — thesis still valid or noise";
+   return v;
+}
+
+//--------------------------------------------------------------------//
+// SOLE CLOSE AUTHORITY
+//--------------------------------------------------------------------//
+bool UltraMission_ClosePosition(const ulong ticket, const string whyIn, const bool riskForced)
+{
+   if(ticket == 0) return false;
+   if(!PositionSelectByTicket(ticket)) return false;
+
+   string s = PositionGetString(POSITION_SYMBOL);
+   bool isBuy = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY);
+   UltraMission_NewCycle(s);
+
+   // One decision per evaluation — block close→open flip-flop same cycle
+   int lk = UltraPosLock_Find(ticket);
+   if(lk >= 0 && g_UltraPosLock[lk].decidedThisCycle && !riskForced)
+   {
+      UltraMission_Log("HOLD", ticket, "one decision per cycle — close blocked");
+      return false;
+   }
+
+   UltraSnap u = g_UltraLastSnap;
+   // Use core snapshot only (UFSE is assembled after Mission Control)
+   UltraBuildSnapshot(s, u);
+
+   UltraExitValidation v = UltraMission_ValidateExit(ticket, s, isBuy, u, riskForced);
+   if(!v.allowClose)
+   {
+      UltraMission_Set(SUP_HOLD, v.reason, u.score.confidence, g_UltraHoldLast.total, "HOLD", "", ticket);
+      UltraPosLock_Update(ticket, "HOLD", g_UltraHoldLast.total);
+      UltraMission_Log("HOLD", ticket, v.reason);
+      if(lk >= 0) g_UltraPosLock[lk].decidedThisCycle = true;
+      return false;
+   }
+
+   string why = whyIn;
+   if(StringLen(why) == 0) why = v.reason;
+   else
+   {
+      why += " | ";
+      why += v.reason;
+   }
+
+   UltraMission_Set(SUP_EXIT, why, u.score.confidence, g_UltraHoldLast.total, "EXIT", "", ticket);
+   UltraMission_Log("CLOSE", ticket, why);
+
+   bool ok = g_Trade.PositionClose(ticket);
+   if(ok)
+   {
+      g_UltraMissionClosedThisCycle = true;
+      UltraThesis_Clear(ticket);
+      UltraPosLock_Clear(ticket);
+      if(lk >= 0) g_UltraPosLock[lk].decidedThisCycle = true;
+   }
+   else
+   {
+      UltraMission_Log("CLOSE_FAIL", ticket, g_Trade.ResultRetcodeDescription());
+   }
+   return ok;
+}
+
+bool UltraMission_ClosePartial(const ulong ticket, const double volume, const string why)
+{
+   if(ticket == 0 || volume <= 0.0) return false;
+   if(!PositionSelectByTicket(ticket)) return false;
+   UltraMission_Log("PARTIAL", ticket, why);
+   UltraMission_Set(SUP_MANAGE, why, 0, 0, "PARTIAL", "", ticket);
+   return g_Trade.PositionClosePartial(ticket, volume);
+}
+
+// Mark that an entry filled this cycle (blocks immediate reopen after close)
+void UltraMission_NoteOpen(const ulong ticket, const string s, const bool isBuy, const string tag)
+{
+   UltraMission_NewCycle(s);
+   g_UltraMissionOpenedThisCycle = true;
+   UltraPosLock_Register(ticket, s, isBuy, tag);
+   UltraMission_Log("OPEN", ticket, tag);
+}
+
+// Block new entries if we already closed this cycle (anti flip-flop)
+bool UltraMission_AllowNewEntry(const string s)
+{
+   UltraMission_NewCycle(s);
+   if(g_UltraMissionClosedThisCycle && !UltraUpgradeStrict)
+   {
+      UltraMission_Log("WAIT", 0, "one decision per cycle — open blocked after close");
+      return false;
+   }
+   return true;
+}
+
+//--------------------------------------------------------------------//
 bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, string &why)
 {
+   if(!UltraMission_AllowNewEntry(s))
+   {
+      why = "MISSION: one decision per cycle";
+      UltraMission_Set(SUP_WAIT, why, u.score.confidence, u.score.confidence, "WAIT", "", 0);
+      return false;
+   }
+
    bool ok = UltraSupreme_FinalizeEntry(s, u, sig, why);
    if(ok)
    {
@@ -5737,6 +6063,7 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
       UltraMission_Set(c, g_UltraSupremeLast.reason, g_UltraSupremeLast.confidence,
                        g_UltraSupremeLast.tradeScore, g_UltraSupremeLast.grade,
                        g_UltraSupremeLast.thesis, 0);
+      UltraMission_Log(UltraMission_Name(c), 0, g_UltraSupremeLast.reason);
    }
    else
    {
@@ -5745,41 +6072,39 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
    return ok;
 }
 
-// Open-position path — EXIT only if SmartExit returns SX_CLOSE.
-// HoldScore HOLD_EXIT alone must NOT force a close (that was closing trades on noise).
+// Open-position command — never closes here; Shell must call UltraMission_ClosePosition
 ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const string s,
                                                    const bool isBuy, const UltraSnap &u,
                                                    string &why)
 {
    why = "";
-   ENUM_SMART_EXIT sx = UltraSupreme_ManagePosition(ticket, s, isBuy, u, why);
-   ENUM_SUPREME_DECISION cmd = SUP_MANAGE;
+   UltraMission_NewCycle(s);
 
-   if(sx == SX_CLOSE)
+   UltraExitValidation v = UltraMission_ValidateExit(ticket, s, isBuy, u, false);
+   UltraHoldScore hold = UltraHold_Evaluate(u, isBuy, !v.thesisBroken, UltraCorr_Detect(u, isBuy));
+   UltraSmartExit sx = UltraSmartExit_Decide(hold, UltraCorr_Detect(u, isBuy), !v.thesisBroken, false);
+
+   ENUM_SUPREME_DECISION cmd = SUP_HOLD;
+   if(v.allowClose && sx.action == SX_CLOSE)
    {
       cmd = SUP_EXIT;
+      why = v.reason;
    }
-   else if(sx == SX_BE || sx == SX_TIGHTEN)
+   else if(v.healthyCorrection || sx.action == SX_BE || sx.action == SX_TIGHTEN || hold.action == HOLD_MANAGE)
    {
       cmd = SUP_MANAGE;
-   }
-   else if(g_UltraHoldLast.action == HOLD_HOLD || sx == SX_NONE)
-   {
-      // Prefer HOLD; treat soft HOLD_EXIT as MANAGE (protect, do not close)
-      if(g_UltraHoldLast.action == HOLD_EXIT && !UltraUpgradeStrict)
-         cmd = SUP_MANAGE;
-      else if(g_UltraHoldLast.action == HOLD_HOLD)
-         cmd = SUP_HOLD;
-      else
-         cmd = SUP_MANAGE;
+      why = v.healthyCorrection ? "healthy correction — manage/protect" : sx.reason;
+      if(StringLen(why) == 0) why = "MANAGE";
    }
    else
    {
-      cmd = SUP_MANAGE;
+      cmd = SUP_HOLD;
+      why = "ULTRA HOLD — thesis/structure/trend valid";
    }
 
-   UltraMission_Set(cmd, why, u.score.confidence, g_UltraHoldLast.total,
-                    g_UltraHoldLast.label, g_UltraBrainLast.thesis, ticket);
+   UltraMission_Set(cmd, why, u.score.confidence, hold.total, hold.label, "", ticket);
+   UltraPosLock_Update(ticket, UltraMission_Name(cmd), hold.total);
+   UltraMission_Log(UltraMission_Name(cmd), ticket, why);
    return cmd;
 }
 
@@ -5787,7 +6112,7 @@ ENUM_SMART_EXIT UltraMission_ToSmartExit(const ENUM_SUPREME_DECISION cmd)
 {
    if(cmd == SUP_EXIT) return SX_CLOSE;
    if(cmd == SUP_MANAGE) return SX_BE;
-   return SX_NONE; // HOLD
+   return SX_NONE;
 }
 
 string UltraMission_Dashboard()
@@ -8956,10 +9281,10 @@ void CloseAllEAPositions()
       if(PositionGetInteger(POSITION_MAGIC) != MagicNumber)
          continue;
 
-      if(g_Trade.PositionClose(ticket))
+      if(UltraMission_ClosePosition(ticket, "EMERGENCY CloseAllEAPositions", true))
          Print("Emergency close: closed ticket ", ticket);
       else
-         Print("Emergency close FAILED on ticket ", ticket, ": ", g_Trade.ResultRetcodeDescription());
+         Print("Emergency close FAILED/held on ticket ", ticket);
    }
 }
 
@@ -10535,7 +10860,7 @@ bool ExecuteBuy()
          if(!stopsAttached)
          {
             Print("BUY: could not attach SL/TP after fallback - closing the unprotected position for safety (ticket ", newTicket, ").");
-            g_Trade.PositionClose(newTicket);
+            UltraMission_ClosePosition(newTicket, "EXEC cleanup invalid stops", true);
             return false;
          }
 
@@ -10785,7 +11110,7 @@ bool ExecuteSell()
          if(!stopsAttached)
          {
             Print("SELL: could not attach SL/TP after fallback - closing the unprotected position for safety (ticket ", newTicket, ").");
-            g_Trade.PositionClose(newTicket);
+            UltraMission_ClosePosition(newTicket, "EXEC cleanup invalid stops", true);
             return false;
          }
 
@@ -11242,8 +11567,8 @@ void ManageOpenTrades()
 
       if(EnableMaxHoldBars && barsHeld >= MaxHoldBars)
       {
-         Print("Max hold time reached (", barsHeld, " bars) - closing ticket ", ticket);
-         g_Trade.PositionClose(ticket);
+         Print("Max hold time reached (", barsHeld, " bars) - Mission close ticket ", ticket);
+         UltraMission_ClosePosition(ticket, "RISK max hold bars", true);
          continue;
       }
 
@@ -11298,10 +11623,9 @@ void ManageOpenTrades()
          if((mission == SUP_EXIT || sx == SX_CLOSE) && canMissionExit)
          {
             if(UltraUpgradeLog)
-               Print("MISSION EXIT ticket=", ticket, " bars=", barsHeld, " ", sxWhy);
-            UltraThesis_Clear(ticket);
-            g_Trade.PositionClose(ticket);
-            continue;
+               Print("MISSION EXIT request ticket=", ticket, " bars=", barsHeld, " ", sxWhy);
+            if(UltraMission_ClosePosition(ticket, sxWhy, false))
+               continue;
          }
          if((mission == SUP_EXIT || sx == SX_CLOSE) && !canMissionExit)
          {
@@ -11413,7 +11737,7 @@ void ManageOpenTrades()
 
             if(closeVolume >= minVolume && remainder >= minVolume)
             {
-               if(g_Trade.PositionClosePartial(ticket, closeVolume))
+               if(UltraMission_ClosePartial(ticket, closeVolume, "TP1 partial"))
                {
                   Print("TP1 hit: closed ", DoubleToString(closeVolume,2),
                         " lots of ticket ", ticket, " — locking profit, remainder → TP2");
@@ -11428,7 +11752,7 @@ void ManageOpenTrades()
             }
             else if(remainder < minVolume && currentVolume >= minVolume && closeVolume >= minVolume)
             {
-               if(g_Trade.PositionClose(ticket))
+               if(UltraMission_ClosePosition(ticket, "TP ladder full close", true))
                {
                   Print("TP1 hit but position too small to split - closed in full: ", ticket);
                   TradeStates[stateIndex].tp1Taken = true;
@@ -11533,7 +11857,7 @@ void ManageOpenTrades()
 
             if(closeVolume2 >= minVolume2 && remainder2 >= minVolume2)
             {
-               if(g_Trade.PositionClosePartial(ticket, closeVolume2))
+               if(UltraMission_ClosePartial(ticket, closeVolume2, "TP2 partial"))
                {
                   Print("TP2 hit: closed ", DoubleToString(closeVolume2,2),
                         " lots of ticket ", ticket, " — locking more profit, runner → TP3/trail");
@@ -11549,7 +11873,7 @@ void ManageOpenTrades()
             else if(remainder2 < minVolume2 && currentVolume2 >= minVolume2 && closeVolume2 >= minVolume2)
             {
                // BUGFIX40: mirror TP1 — can't leave dust remainder
-               if(g_Trade.PositionClose(ticket))
+               if(UltraMission_ClosePosition(ticket, "TP ladder full close", true))
                {
                   Print("TP2 hit but position too small to split - closed in full: ", ticket);
                   TradeStates[stateIndex].tp2Taken = true;
@@ -11711,8 +12035,8 @@ void ManageOpenTrades()
             if(favorableMove < atrNow * StagnationProgressATRMultiple)
             {
                Print("Stagnation exit: ticket ", ticket, " has made no real progress after ",
-                     barsHeld, " bars - closing.");
-               g_Trade.PositionClose(ticket);
+                     barsHeld, " bars - Mission close.");
+               UltraMission_ClosePosition(ticket, "RISK stagnation exit", true);
                continue;
             }
          }
@@ -11731,8 +12055,8 @@ void ManageOpenTrades()
       {
          if(GetADX() < TrendExitADXLevel)
          {
-            Print("Trend exit: ADX below ", TrendExitADXLevel, ", closing ticket ", ticket);
-            g_Trade.PositionClose(ticket);
+            Print("Trend exit: ADX below ", TrendExitADXLevel, ", Mission close ticket ", ticket);
+            UltraMission_ClosePosition(ticket, "RISK trend exit ADX", true);
             continue;
          }
       }
@@ -15578,9 +15902,8 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
          if(DefenseLogActions)
             Print("DEFEND MAE: adverse ", DoubleToString(adverseMove / atr, 2),
                   " ATR ≥ ", DoubleToString(DefenseMAE_ATR, 2),
-                  " — closing ticket ", ticket);
-         g_Trade.PositionClose(ticket);
-         return true;
+                  " — Mission close ticket ", ticket);
+         return UltraMission_ClosePosition(ticket, "RISK DEFEND MAE", true);
       }
    }
 
@@ -15614,10 +15937,9 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
       if(oppositeRev && (!DefenseRequireInProfitToClose || inProfit))
       {
          if(DefenseLogActions)
-            Print("DEFEND CLOSE: hard opposite reversal vs ", (isBuy ? "BUY" : "SELL"),
+            Print("DEFEND CLOSE request: hard opposite reversal vs ", (isBuy ? "BUY" : "SELL"),
                   " ticket ", ticket, " — ", detail);
-         g_Trade.PositionClose(ticket);
-         return true;
+         return UltraMission_ClosePosition(ticket, "DEFEND hard reversal "+detail, false);
       }
    }
 
@@ -15627,10 +15949,9 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
       if(preTP1)
       {
          if(DefenseLogActions)
-            Print("DEFEND CLOSE: fake-breakout trap against ", (isBuy ? "BUY" : "SELL"),
+            Print("DEFEND CLOSE request: fake-breakout trap against ", (isBuy ? "BUY" : "SELL"),
                   " ticket ", ticket);
-         g_Trade.PositionClose(ticket);
-         return true;
+         return UltraMission_ClosePosition(ticket, "DEFEND trap against", false);
       }
       // After TP1: lock at least BE instead of full close
       if(inProfit)
@@ -19255,6 +19576,21 @@ void InstantExecution()
       {
          UltraDiscipline_OnFill(BrokerSymbol, true, strategyTag, g_UltraLastSnap);
          UltraThesis_StoreLatest(BrokerSymbol, true, strategyTag, g_UltraLastSnap, g_UltraLastSignal.reason);
+         // Position lock + decision log (Mission Control)
+         {
+            ulong tk = 0;
+            for(int i = PositionsTotal() - 1; i >= 0; i--)
+            {
+               ulong tix = PositionGetTicket(i);
+               if(tix == 0 || !PositionSelectByTicket(tix)) continue;
+               if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+               if(PositionGetString(POSITION_SYMBOL) != BrokerSymbol) continue;
+               if(PositionGetInteger(POSITION_TYPE) != POSITION_TYPE_BUY) continue;
+               tk = tix; break;
+            }
+            if(tk != 0)
+               UltraMission_NoteOpen(tk, BrokerSymbol, true, strategyTag);
+         }
          if(EnableBeastMode && BeastDuplicateBarGuard)
             MarkSignalApproved(true);
       }
@@ -19284,6 +19620,21 @@ void InstantExecution()
       {
          UltraDiscipline_OnFill(BrokerSymbol, false, strategyTag, g_UltraLastSnap);
          UltraThesis_StoreLatest(BrokerSymbol, false, strategyTag, g_UltraLastSnap, g_UltraLastSignal.reason);
+         // Position lock + decision log (Mission Control)
+         {
+            ulong tk = 0;
+            for(int i = PositionsTotal() - 1; i >= 0; i--)
+            {
+               ulong tix = PositionGetTicket(i);
+               if(tix == 0 || !PositionSelectByTicket(tix)) continue;
+               if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+               if(PositionGetString(POSITION_SYMBOL) != BrokerSymbol) continue;
+               if(PositionGetInteger(POSITION_TYPE) != POSITION_TYPE_SELL) continue;
+               tk = tix; break;
+            }
+            if(tk != 0)
+               UltraMission_NoteOpen(tk, BrokerSymbol, false, strategyTag);
+         }
          if(EnableBeastMode && BeastDuplicateBarGuard)
             MarkSignalApproved(false);
       }

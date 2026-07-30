@@ -271,6 +271,12 @@ enum ENUM_SUPREME_DECISION
    SUP_EXIT
 };
 
+// Forward — Mission Control is sole close authority (defined later)
+bool UltraMission_ClosePosition(const ulong ticket, const string whyIn, const bool riskForced);
+bool UltraMission_ClosePartial(const ulong ticket, const double volume, const string why);
+void UltraMission_NoteOpen(const ulong ticket, const string s, const bool isBuy, const string tag);
+bool UltraMission_AllowNewEntry(const string s);
+
 //--------------------------------------------------------------------//
 // 1. ULTRA CORE / DATA / CONFIG / VALIDATION / RECOVERY / LOG / PERF
 //--------------------------------------------------------------------//

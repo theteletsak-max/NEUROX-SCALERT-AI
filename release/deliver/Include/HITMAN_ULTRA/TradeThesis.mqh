@@ -13,17 +13,23 @@ struct UltraTradeThesis
    string   symbol;
    bool     isBuy;
    string   tag;
-   string   reason;          // Complete Entry Reason
-   string   marketState;     // Market State
-   string   structureState;  // Structure State
-   string   trendState;      // Trend State
-   string   liquidityState;  // Liquidity State
-   string   momentumState;   // Momentum State
-   string   riskState;       // Risk State
-   string   confidenceState; // Confidence State
+   string   reason;          // Entry Reason
+   string   marketState;
+   string   structureState;
+   string   trendState;
+   string   bosState;        // BOS at entry
+   string   chochState;      // CHoCH at entry
+   string   liquidityState;
+   string   fibState;        // Fibonacci at entry
+   string   momentumState;
+   string   riskState;
+   string   confidenceState;
+   double   entryPrice;
+   datetime entryTime;
    int      conf, prec, prob;
    int      trendStr, structQ, bosScore, chochConf;
    bool     hadLiq, hadFib, hadMom;
+   bool     hadBos, hadChoch;
    int      epoch;
    datetime openBar;
    datetime lastCheckBar;
@@ -99,6 +105,36 @@ void UltraThesis_Store(const ulong ticket, const string s, const bool isBuy,
    if(u.score.riskProb >= 70) g_Thesis[idx].riskState = "HIGH";
    else g_Thesis[idx].riskState = "OK";
    g_Thesis[idx].confidenceState = IntegerToString(u.score.confidence);
+
+   // BOS / CHoCH / Fib memory at entry
+   if(isBuy)
+   {
+      if(u.bos.buy) g_Thesis[idx].bosState = u.bos.strong ? "BUY_STRONG" : "BUY";
+      else g_Thesis[idx].bosState = "NONE";
+      if(u.choch.buy) g_Thesis[idx].chochState = u.choch.majorC ? "BUY_MAJOR" : "BUY";
+      else g_Thesis[idx].chochState = "NONE";
+      if(u.fib.atBuyZone) g_Thesis[idx].fibState = "BUY_ZONE";
+      else g_Thesis[idx].fibState = "NONE";
+   }
+   else
+   {
+      if(u.bos.sell) g_Thesis[idx].bosState = u.bos.strong ? "SELL_STRONG" : "SELL";
+      else g_Thesis[idx].bosState = "NONE";
+      if(u.choch.sell) g_Thesis[idx].chochState = u.choch.majorC ? "SELL_MAJOR" : "SELL";
+      else g_Thesis[idx].chochState = "NONE";
+      if(u.fib.atSellZone) g_Thesis[idx].fibState = "SELL_ZONE";
+      else g_Thesis[idx].fibState = "NONE";
+   }
+   g_Thesis[idx].hadBos = isBuy ? u.bos.buy : u.bos.sell;
+   g_Thesis[idx].hadChoch = isBuy ? u.choch.buy : u.choch.sell;
+
+   g_Thesis[idx].entryPrice = isBuy ? SymbolInfoDouble(s, SYMBOL_ASK) : SymbolInfoDouble(s, SYMBOL_BID);
+   if(PositionSelectByTicket(ticket))
+      g_Thesis[idx].entryPrice = PositionGetDouble(POSITION_PRICE_OPEN);
+   g_Thesis[idx].entryTime = TimeCurrent();
+   if(PositionSelectByTicket(ticket))
+      g_Thesis[idx].entryTime = (datetime)PositionGetInteger(POSITION_TIME);
+
    g_Thesis[idx].conf = u.score.confidence;
    g_Thesis[idx].prec = u.score.precision;
    g_Thesis[idx].prob = u.score.probability;
