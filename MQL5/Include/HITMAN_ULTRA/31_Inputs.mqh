@@ -98,8 +98,8 @@ input group "31 · TRADE ENTRY DISCIPLINE v1.0"
 input bool   UltraDisciplineEnabled      = true;  // irregular trade prevention master
 input bool   UltraDisciplineStrict       = false; // true = hard 12-rule gates
 input bool   UltraDisciplineLog          = true;  // journal discipline PASS/WAIT
-input int    UltraDisciplineStableEvals  = 2;     // Rule #3: consecutive same-dir evals
-input int    UltraDisciplineMTFMinAgree  = 3;     // Rule #6: H4..M5 agreement (of 5)
+input int    UltraDisciplineStableEvals  = 1;     // Rule #3: InstantQuality default = 1 (was 2 WAIT)
+input int    UltraDisciplineMTFMinAgree  = 2;     // Rule #6: InstantQuality default = 2 of 5 (was 3)
 input bool   UltraDisciplineNeedNewStruct= false; // Rule #11: require new structure after fill
 
 input group "31 · ULTRA UPGRADE PACK (Levels 1-20)"
@@ -113,7 +113,9 @@ input bool   UltraSignalEvoEnabled       = true;  // L3 Signal Evolution
 input bool   UltraThesisEnabled          = true;  // L11 Trade Thesis Engine
 input bool   UltraHoldScoreEnabled       = true;  // L12 Hold Score
 input bool   UltraCorrectionEnabled      = true;  // L13 Correction Detector
-input bool   UltraSmartExitEnabled       = true;  // L14 Smart Exit
+// FIX: thesis SmartExit was closing before SL/TP — off by default.
+// Trades exit via SL/TP ladder or opt-in risk nets. Re-enable deliberately.
+input bool   UltraSmartExitEnabled       = false; // L14 Smart Exit
 input bool   UltraSystemHealthEnabled    = true;  // L15-17 System Health
 
 input group "31 · DASHBOARD INPUTS"

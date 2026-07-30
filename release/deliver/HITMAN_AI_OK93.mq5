@@ -991,8 +991,8 @@ input group "31 · TRADE ENTRY DISCIPLINE v1.0"
 input bool   UltraDisciplineEnabled      = true;  // irregular trade prevention master
 input bool   UltraDisciplineStrict       = false; // true = hard 12-rule gates
 input bool   UltraDisciplineLog          = true;  // journal discipline PASS/WAIT
-input int    UltraDisciplineStableEvals  = 2;     // Rule #3: consecutive same-dir evals
-input int    UltraDisciplineMTFMinAgree  = 3;     // Rule #6: H4..M5 agreement (of 5)
+input int    UltraDisciplineStableEvals  = 1;     // Rule #3: InstantQuality default = 1 (was 2 WAIT)
+input int    UltraDisciplineMTFMinAgree  = 2;     // Rule #6: InstantQuality default = 2 of 5 (was 3)
 input bool   UltraDisciplineNeedNewStruct= false; // Rule #11: require new structure after fill
 
 input group "31 · ULTRA UPGRADE PACK (Levels 1-20)"
@@ -1006,7 +1006,9 @@ input bool   UltraSignalEvoEnabled       = true;  // L3 Signal Evolution
 input bool   UltraThesisEnabled          = true;  // L11 Trade Thesis Engine
 input bool   UltraHoldScoreEnabled       = true;  // L12 Hold Score
 input bool   UltraCorrectionEnabled      = true;  // L13 Correction Detector
-input bool   UltraSmartExitEnabled       = true;  // L14 Smart Exit
+// FIX: thesis SmartExit was closing before SL/TP — off by default.
+// Trades exit via SL/TP ladder or opt-in risk nets. Re-enable deliberately.
+input bool   UltraSmartExitEnabled       = false; // L14 Smart Exit
 input bool   UltraSystemHealthEnabled    = true;  // L15-17 System Health
 
 input group "31 · DASHBOARD INPUTS"
@@ -3322,6 +3324,18 @@ bool UltraDefense_Line3_Liquidity(const UltraSnap &u, const bool buySide, string
    if(sweep || hunt || grab) return true;
    if(UltraDefense_SoftMode() && (u.liq.quality >= 20 || u.ict.dispBuy || u.ict.dispSell))
       return true;
+   // InstantQuality Cont/Fib/Inst paths often pass without a fresh sweep —
+   // do not WAIT-block once confluence already selected a strategy.
+   if(InstantQualityMode && UltraDefense_SoftMode())
+   {
+      bool zone = buySide
+         ? (u.ict.obBuy || u.ict.fvgBuy || u.ict.instZoneBuy || u.fib.atBuyZone || u.ict.inDiscount)
+         : (u.ict.obSell || u.ict.fvgSell || u.ict.instZoneSell || u.fib.atSellZone || u.ict.inPremium);
+      bool mom = buySide ? (u.mom.momBuy || u.mom.impulse) : (u.mom.momSell || u.mom.impulse);
+      if(zone || mom || u.st.continuation || u.bos.buy || u.bos.sell ||
+         u.score.confidence >= UltraFireFloor() - 5)
+         return true;
+   }
    why = "liquidity not confirmed";
    return false;
 }
@@ -3916,6 +3930,8 @@ bool UltraDisc_R1_MultiConfirm(const UltraSnap &u, const bool buySide, string &w
 
    int n = (structure?1:0)+(trend?1:0)+(bosCh?1:0)+(liq?1:0)+(fib?1:0)+(mom?1:0);
    int need = UltraDisc_Soft() ? 3 : 4;
+   // InstantQuality ContSniper is 2-of-3 — do not re-demand 3/6 here
+   if(InstantQualityMode && UltraDisc_Soft()) need = 2;
    if(n >= need) return true;
    why = "R1 irregular: only " + IntegerToString(n) + "/" + IntegerToString(need) + " confirms";
    return false;
@@ -3971,7 +3987,9 @@ bool UltraDisc_R3_Stability(const int idx, const bool buySide, string &why)
 
    int need = UltraDisciplineStableEvals;
    if(need < 1) need = 1;
-   if(UltraDisc_Soft() && InstantQualityMode && need > 2) need = 2;
+   // InstantQuality: fire on first stable eval (was forcing 2 ticks → silent WAIT)
+   if(UltraDisc_Soft() && InstantQualityMode) need = 1;
+   else if(UltraDisc_Soft() && need > 2) need = 2;
    if(!UltraDisc_Soft() && need < 2) need = 2;
 
    if(g_UltraDisc[idx].stableCount >= need) return true;
@@ -4022,6 +4040,8 @@ bool UltraDisc_R5_MasterTrend(const string s, const bool buySide, string &why)
 {
    why = "";
    if(!UltraMasterTrendLock) return true;
+   // InstantQuality: master trend is soft preference — Cont can fire on chart TF
+   if(InstantQualityMode && UltraDisc_Soft()) return true;
 
    // H4 bias + D1 macro as master (no UFSE dependency — this module loads before UFSE)
    bool bull = UltraDisc_TFBull(s, UltraTF_Bias) || UltraDisc_TFBull(s, UltraTF_Macro);
@@ -4072,7 +4092,8 @@ bool UltraDisc_R6_Timeframes(const string s, const bool buySide, string &why)
    int need = UltraDisciplineMTFMinAgree;
    if(need < 1) need = 1;
    if(need > 5) need = 5;
-   if(UltraDisc_Soft() && need > 3) need = 3;
+   if(UltraDisc_Soft() && InstantQualityMode) need = MathMin(need, 2);
+   else if(UltraDisc_Soft() && need > 3) need = 3;
 
    if(!UltraDisc_Soft() && h4known && !h4ok)
    { why = "R6 TF hierarchy: H4 against thesis"; return false; }
@@ -4081,6 +4102,8 @@ bool UltraDisc_R6_Timeframes(const string s, const bool buySide, string &why)
    string cf = "";
    if(!UltraMTF_NoConflict(s, buySide, cf))
    {
+      if(InstantQualityMode && UltraDisc_Soft())
+         return true; // soft InstantQuality — MTF conflict is advisory
       if(!UltraDisc_Soft())
       { why = cf; return false; }
       // soft: allow only if agreement already strong
@@ -4089,6 +4112,9 @@ bool UltraDisc_R6_Timeframes(const string s, const bool buySide, string &why)
    }
 
    if(agree >= need) return true;
+   // InstantQuality: if H4 agrees, one more TF is enough
+   if(InstantQualityMode && UltraDisc_Soft() && h4known && h4ok && agree >= 1)
+      return true;
    why = "R6 TF agree " + IntegerToString(agree) + "/" + IntegerToString(need);
    return false;
 }
@@ -6422,6 +6448,8 @@ bool UltraUFSE_MasterAllows(const int idx, const bool wantBuy, string &why)
 {
    why = "";
    if(!UltraMasterTrendLock) return true;
+   // InstantQuality: chart TF Cont/Fib can run against mild HTF mix
+   if(InstantQualityMode) return true;
    if(idx < 0 || idx >= g_UFSE_N) return true;
    int mt = g_UFSE[idx].masterTrend;
    if(mt == 0) return true; // no clear master — allow (InstantQuality)
@@ -6472,7 +6500,8 @@ bool UltraUFSE_EntryTrigger(const UltraSnap &u, const bool buySide, string &why)
    if(InstantQualityMode)
    {
       int n = (structure?1:0)+(bosCh?1:0)+(liq?1:0)+(mom?1:0)+(trend?1:0);
-      if(n < 3){ why = "entry trigger soft fail "+IntegerToString(n)+"/5"; return false; }
+      // ContSniper InstantQuality is 2-of-3 — match that here (was 3/5 WAIT spam)
+      if(n < 2){ why = "entry trigger soft fail "+IntegerToString(n)+"/5"; return false; }
    }
    else
    {

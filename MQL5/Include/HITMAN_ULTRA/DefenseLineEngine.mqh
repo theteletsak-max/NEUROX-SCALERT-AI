@@ -141,6 +141,18 @@ bool UltraDefense_Line3_Liquidity(const UltraSnap &u, const bool buySide, string
    if(sweep || hunt || grab) return true;
    if(UltraDefense_SoftMode() && (u.liq.quality >= 20 || u.ict.dispBuy || u.ict.dispSell))
       return true;
+   // InstantQuality Cont/Fib/Inst paths often pass without a fresh sweep —
+   // do not WAIT-block once confluence already selected a strategy.
+   if(InstantQualityMode && UltraDefense_SoftMode())
+   {
+      bool zone = buySide
+         ? (u.ict.obBuy || u.ict.fvgBuy || u.ict.instZoneBuy || u.fib.atBuyZone || u.ict.inDiscount)
+         : (u.ict.obSell || u.ict.fvgSell || u.ict.instZoneSell || u.fib.atSellZone || u.ict.inPremium);
+      bool mom = buySide ? (u.mom.momBuy || u.mom.impulse) : (u.mom.momSell || u.mom.impulse);
+      if(zone || mom || u.st.continuation || u.bos.buy || u.bos.sell ||
+         u.score.confidence >= UltraFireFloor() - 5)
+         return true;
+   }
    why = "liquidity not confirmed";
    return false;
 }

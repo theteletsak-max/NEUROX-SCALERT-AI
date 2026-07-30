@@ -124,6 +124,8 @@ bool UltraDisc_R1_MultiConfirm(const UltraSnap &u, const bool buySide, string &w
 
    int n = (structure?1:0)+(trend?1:0)+(bosCh?1:0)+(liq?1:0)+(fib?1:0)+(mom?1:0);
    int need = UltraDisc_Soft() ? 3 : 4;
+   // InstantQuality ContSniper is 2-of-3 — do not re-demand 3/6 here
+   if(InstantQualityMode && UltraDisc_Soft()) need = 2;
    if(n >= need) return true;
    why = "R1 irregular: only " + IntegerToString(n) + "/" + IntegerToString(need) + " confirms";
    return false;
@@ -179,7 +181,9 @@ bool UltraDisc_R3_Stability(const int idx, const bool buySide, string &why)
 
    int need = UltraDisciplineStableEvals;
    if(need < 1) need = 1;
-   if(UltraDisc_Soft() && InstantQualityMode && need > 2) need = 2;
+   // InstantQuality: fire on first stable eval (was forcing 2 ticks → silent WAIT)
+   if(UltraDisc_Soft() && InstantQualityMode) need = 1;
+   else if(UltraDisc_Soft() && need > 2) need = 2;
    if(!UltraDisc_Soft() && need < 2) need = 2;
 
    if(g_UltraDisc[idx].stableCount >= need) return true;
@@ -230,6 +234,8 @@ bool UltraDisc_R5_MasterTrend(const string s, const bool buySide, string &why)
 {
    why = "";
    if(!UltraMasterTrendLock) return true;
+   // InstantQuality: master trend is soft preference — Cont can fire on chart TF
+   if(InstantQualityMode && UltraDisc_Soft()) return true;
 
    // H4 bias + D1 macro as master (no UFSE dependency — this module loads before UFSE)
    bool bull = UltraDisc_TFBull(s, UltraTF_Bias) || UltraDisc_TFBull(s, UltraTF_Macro);
@@ -280,7 +286,8 @@ bool UltraDisc_R6_Timeframes(const string s, const bool buySide, string &why)
    int need = UltraDisciplineMTFMinAgree;
    if(need < 1) need = 1;
    if(need > 5) need = 5;
-   if(UltraDisc_Soft() && need > 3) need = 3;
+   if(UltraDisc_Soft() && InstantQualityMode) need = MathMin(need, 2);
+   else if(UltraDisc_Soft() && need > 3) need = 3;
 
    if(!UltraDisc_Soft() && h4known && !h4ok)
    { why = "R6 TF hierarchy: H4 against thesis"; return false; }
@@ -289,6 +296,8 @@ bool UltraDisc_R6_Timeframes(const string s, const bool buySide, string &why)
    string cf = "";
    if(!UltraMTF_NoConflict(s, buySide, cf))
    {
+      if(InstantQualityMode && UltraDisc_Soft())
+         return true; // soft InstantQuality — MTF conflict is advisory
       if(!UltraDisc_Soft())
       { why = cf; return false; }
       // soft: allow only if agreement already strong
@@ -297,6 +306,9 @@ bool UltraDisc_R6_Timeframes(const string s, const bool buySide, string &why)
    }
 
    if(agree >= need) return true;
+   // InstantQuality: if H4 agrees, one more TF is enough
+   if(InstantQualityMode && UltraDisc_Soft() && h4known && h4ok && agree >= 1)
+      return true;
    why = "R6 TF agree " + IntegerToString(agree) + "/" + IntegerToString(need);
    return false;
 }

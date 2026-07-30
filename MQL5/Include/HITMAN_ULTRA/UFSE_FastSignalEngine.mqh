@@ -286,6 +286,8 @@ bool UltraUFSE_MasterAllows(const int idx, const bool wantBuy, string &why)
 {
    why = "";
    if(!UltraMasterTrendLock) return true;
+   // InstantQuality: chart TF Cont/Fib can run against mild HTF mix
+   if(InstantQualityMode) return true;
    if(idx < 0 || idx >= g_UFSE_N) return true;
    int mt = g_UFSE[idx].masterTrend;
    if(mt == 0) return true; // no clear master — allow (InstantQuality)
@@ -336,7 +338,8 @@ bool UltraUFSE_EntryTrigger(const UltraSnap &u, const bool buySide, string &why)
    if(InstantQualityMode)
    {
       int n = (structure?1:0)+(bosCh?1:0)+(liq?1:0)+(mom?1:0)+(trend?1:0);
-      if(n < 3){ why = "entry trigger soft fail "+IntegerToString(n)+"/5"; return false; }
+      // ContSniper InstantQuality is 2-of-3 — match that here (was 3/5 WAIT spam)
+      if(n < 2){ why = "entry trigger soft fail "+IntegerToString(n)+"/5"; return false; }
    }
    else
    {
