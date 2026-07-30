@@ -285,6 +285,17 @@ bool UltraDisc_R6_Timeframes(const string s, const bool buySide, string &why)
    if(!UltraDisc_Soft() && h4known && !h4ok)
    { why = "R6 TF hierarchy: H4 against thesis"; return false; }
 
+   // Timeframe synchronization + no conflicts (MN→M5 / master lock)
+   string cf = "";
+   if(!UltraMTF_NoConflict(s, buySide, cf))
+   {
+      if(!UltraDisc_Soft())
+      { why = cf; return false; }
+      // soft: allow only if agreement already strong
+      if(agree < need)
+      { why = cf; return false; }
+   }
+
    if(agree >= need) return true;
    why = "R6 TF agree " + IntegerToString(agree) + "/" + IntegerToString(need);
    return false;

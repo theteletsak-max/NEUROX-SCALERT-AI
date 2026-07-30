@@ -258,6 +258,8 @@ void UltraClearSnap(UltraSnap &u)
    u.fib = fib; u.ict = ict; u.trend = trend; u.mom = mom; u.vol = vol;
    u.ind = ind; u.score = score;
    u.regime = UREG_RANGE;
+   u.st.cycle = 4; // CYCLE_UNKNOWN
+   u.st.cycleName = "UNKNOWN";
    u.buyBias = false; u.sellBias = false;
    u.ctx.session = "OFF";
    u.ctx.asia = u.ctx.london = u.ctx.newyork = u.ctx.overlap = false;
@@ -293,11 +295,13 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
    UltraEngTrend(s, u);
    UltraEngMomentum(s, u);
    UltraEngRegime(u);
+   UltraEngCycle(u);               // market cycle after regime/structure
    UltraEngSessionNews(s, u);
    UltraEngIndicators(s, u);
    UltraEngDiagnostics(s, u);
    UltraMemoryUpdateFromStats();
    UltraEngScoresBest(u);          // always fill conf/prec/prob for dashboard + wait logs
+   UltraEvent_NoteMarket(u);       // event-driven market edges
 
    g_UltraCore.lastLatencyMs = (long)GetTickCount() - t0;
    g_UltraCore.lastCycleMs = (long)GetTickCount();

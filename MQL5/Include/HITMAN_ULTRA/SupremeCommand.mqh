@@ -5,13 +5,6 @@
 //| Global coordinator · mission manager · trade approval authority  |
 //+------------------------------------------------------------------+
 
-enum ENUM_SUPREME_DECISION
-{
-   SUP_BUY = 0,
-   SUP_SELL,
-   SUP_WAIT
-};
-
 struct UltraSupremeDecision
 {
    ENUM_SUPREME_DECISION decision;
@@ -54,6 +47,7 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
       else if(sig.sell) d.decision = SUP_SELL;
       d.reason = "supreme off — pass-through";
       g_UltraSupremeLast = d;
+      UltraBrain_Publish(d.approved, sig.buy, u, "", d.reason);
       return d.approved;
    }
 
@@ -64,6 +58,7 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
       why += g_UltraSysHealth.detail;
       d.reason = why;
       g_UltraSupremeLast = d;
+      UltraBrain_Publish(false, false, u, "", why);
       return false;
    }
 
@@ -72,10 +67,26 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
       why = "SUPREME: no candidate";
       d.reason = why;
       g_UltraSupremeLast = d;
+      UltraBrain_Publish(false, false, u, "", why);
       return false;
    }
 
    bool buySide = sig.buy;
+
+   // One signal = one trade thesis (per symbol)
+   if(UltraThesisEnabled)
+   {
+      for(int ti = 0; ti < g_ThesisN; ti++)
+      {
+         if(!g_Thesis[ti].valid) continue;
+         if(g_Thesis[ti].symbol != s) continue;
+         why = "SUPREME: one thesis already active on symbol";
+         d.reason = why;
+         g_UltraSupremeLast = d;
+         UltraBrain_Publish(false, buySide, u, "", why);
+         return false;
+      }
+   }
 
    // USM2 scoring (Level 4) + dynamic weights (Level 5)
    UltraUSM2Scores usm;
@@ -102,6 +113,7 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
       why = "SUPREME: signal evolution REVERSAL";
       d.reason = why;
       g_UltraSupremeLast = d;
+      UltraBrain_Publish(false, buySide, u, "", why);
       return false;
    }
 
@@ -116,6 +128,7 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
          why += IntegerToString(d.tradeScore);
          d.reason = why;
          g_UltraSupremeLast = d;
+         UltraBrain_Publish(false, buySide, u, "", why);
          return false;
       }
    }
@@ -126,6 +139,7 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
       why = "SUPREME: grade IGNORE";
       d.reason = why;
       g_UltraSupremeLast = d;
+      UltraBrain_Publish(false, buySide, u, "", why);
       return false;
    }
 
@@ -138,6 +152,7 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
    d.approved = true;
    d.reason = "APPROVED";
    g_UltraSupremeLast = d;
+   UltraBrain_Publish(true, buySide, u, thesis, "APPROVED");
 
    if(UltraUpgradeLog)
    {

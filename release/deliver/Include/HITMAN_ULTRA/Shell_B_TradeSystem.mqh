@@ -64,6 +64,8 @@ int OnInit()
    Print("HITMAN AI Loaded BUILD_ID=HA_ULTRA_93 MaxOpen=", MaxOpenTrades);
    UltraCoreInit();
    UltraSystemController_Boot();
+   UltraEvent_OnBoot();
+   UltraOpt_OnTickStart();
    {
       ENUM_TIMEFRAMES etf = (EntryTF == PERIOD_CURRENT) ? (ENUM_TIMEFRAMES)Period() : EntryTF;
       Print("OK93 ENTRY TF=", EnumToString(etf),

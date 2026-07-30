@@ -1,7 +1,7 @@
-HITMAN AI — Expert Advisor package
+HITMAN AI — Full Architecture EA
 
 ZIP:      HITMAN_AI.zip
 EA:       HITMAN_AI.mq5
 BUILD_ID: HA_ULTRA_93
 Comment:  HITMAN AI
-MaxOpen:  3
+Arch:     HITMAN_AI_ARCHITECTURE.txt

@@ -1,7 +1,7 @@
 #ifndef HITMAN_ULTRA_37_OPT_MQH
 #define HITMAN_ULTRA_37_OPT_MQH
 //+------------------------------------------------------------------+
-//| 37_Optimization — memory/CPU/tick performance helpers            |
+//| 37_Optimization — cache · event cadence · resource monitoring    |
 //+------------------------------------------------------------------+
 
 struct UltraPerfOpt
@@ -10,6 +10,8 @@ struct UltraPerfOpt
    long lastHeavyMs;
    ulong cycleCount;
    bool skipHeavy;
+   long peakLatencyMs;
+   long lastLatencyMs;
 };
 
 UltraPerfOpt g_UltraPerfOpt;
@@ -36,6 +38,29 @@ bool UltraOpt_ShouldSkipHeavy(const int minIntervalMs=50)
 void UltraOpt_MarkHeavyDone()
 {
    g_UltraPerfOpt.lastHeavyMs = (long)GetTickCount();
+}
+
+void UltraOpt_NoteLatency(const long ms)
+{
+   g_UltraPerfOpt.lastLatencyMs = ms;
+   if(ms > g_UltraPerfOpt.peakLatencyMs)
+      g_UltraPerfOpt.peakLatencyMs = ms;
+}
+
+// Lightweight resource monitor (tick budget / latency / cycle pressure)
+string UltraResource_Monitor()
+{
+   long lat = g_UltraCore.lastLatencyMs;
+   UltraOpt_NoteLatency(lat);
+   string t = "RES: lat=";
+   t += IntegerToString((int)lat);
+   t += "ms peak=";
+   t += IntegerToString((int)g_UltraPerfOpt.peakLatencyMs);
+   t += "ms cycles=";
+   t += IntegerToString((int)g_UltraPerfOpt.cycleCount);
+   if(lat > 500) t += " WARN";
+   else t += " OK";
+   return t;
 }
 
 string UltraOpt_Summary()

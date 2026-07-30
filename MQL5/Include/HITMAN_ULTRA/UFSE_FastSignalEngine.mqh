@@ -627,6 +627,7 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       {
          g_UltraLastWaitBar = bar;
          g_UltraLastWaitSym = BrokerSymbol;
+         UltraEvent_Note(UEV_WAIT);
          string cacheTag = "REBUILD";
          if(fromCache) cacheTag = "HIT";
          Print("ULTRA wait [", why, "] conf=", snap.score.confidence,
@@ -655,6 +656,7 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       g_UFSE[idx].lastEvalBar = iTime(BrokerSymbol, UltraETF(), 0);
    }
    UltraExec_MarkFired(BrokerSymbol);
+   UltraEvent_Note(UEV_FIRE);
 
    string sideTag = "SELL";
    if(best.buy) sideTag = "BUY";

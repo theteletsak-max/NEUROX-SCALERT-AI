@@ -7,7 +7,7 @@
 #property copyright "HITMAN AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version   "1.00"
-#property description "HITMAN AI ULTRA X — Upgrade Pack Levels 1-20"
+#property description "HITMAN AI ULTRA X — Full Architecture Blueprint"
 #property description "BUILD=HA_ULTRA_93 Comment=HITMAN AI MaxOpen=3"
 
 #include <Trade/Trade.mqh>
@@ -651,6 +651,8 @@ struct UltraStructure
    int  strength;   // 0-100
    int  quality;    // 0-100
    double swingHigh, swingLow;
+   int    cycle;       // ENUM_MARKET_CYCLE as int
+   string cycleName;   // ACCUMULATION / MARKUP / DISTRIBUTION / MARKDOWN
 };
 
 struct UltraBOS
@@ -700,6 +702,8 @@ struct UltraInst
    bool breakerBuy, breakerSell;
    bool mitigationBuy, mitigationSell;
    bool fvgBuy, fvgSell;
+   bool imbalanceBuy, imbalanceSell;     // raw imbalance (gap) distinct from FVG zone use
+   bool institutionalLiqBuy, institutionalLiqSell;
    bool instZoneBuy, instZoneSell;
    bool rejectZoneBuy, rejectZoneSell;
    bool smConfluence;
@@ -859,6 +863,16 @@ struct UltraDefenseReport
 };
 
 UltraDefenseReport g_UltraDefenseLast;
+
+//--------------------------------------------------------------------//
+// FINAL AI DECISION — BUY / SELL / WAIT only
+//--------------------------------------------------------------------//
+enum ENUM_SUPREME_DECISION
+{
+   SUP_BUY = 0,
+   SUP_SELL,
+   SUP_WAIT
+};
 
 //--------------------------------------------------------------------//
 // 1. ULTRA CORE / DATA / CONFIG / VALIDATION / RECOVERY / LOG / PERF
@@ -1613,15 +1627,23 @@ void UltraEngInstitutional(const string s, UltraSnap &u)
       }
    }
 
-   // FVG lookback across recent bars (not only 1 vs 3)
+   // FVG + raw imbalance lookback across recent bars
    for(int g = 1; g <= 5; g++)
    {
       double gapB = iLow(s, tf, g) - iHigh(s, tf, g + 2);
       double gapS = iLow(s, tf, g + 2) - iHigh(s, tf, g);
-      if(gapB > 0 && (u.vol.atr <= 0 || gapB >= u.vol.atr * UltraFVG_MinATR * 0.8))
-         u.ict.fvgBuy = true;
-      if(gapS > 0 && (u.vol.atr <= 0 || gapS >= u.vol.atr * UltraFVG_MinATR * 0.8))
-         u.ict.fvgSell = true;
+      if(gapB > 0)
+      {
+         u.ict.imbalanceBuy = true;
+         if(u.vol.atr <= 0 || gapB >= u.vol.atr * UltraFVG_MinATR * 0.8)
+            u.ict.fvgBuy = true;
+      }
+      if(gapS > 0)
+      {
+         u.ict.imbalanceSell = true;
+         if(u.vol.atr <= 0 || gapS >= u.vol.atr * UltraFVG_MinATR * 0.8)
+            u.ict.fvgSell = true;
+      }
    }
 
    double o2 = iOpen(s, tf, 2), c2 = iClose(s, tf, 2);
@@ -1654,8 +1676,17 @@ void UltraEngInstitutional(const string s, UltraSnap &u)
    u.ict.instZoneSell = (u.ict.obSell || u.ict.fvgSell || u.ict.breakerSell) && (u.ict.inPremium || u.fib.atSellZone);
    u.ict.rejectZoneBuy = u.liq.stopHuntBuy && u.ict.inDiscount;
    u.ict.rejectZoneSell = u.liq.stopHuntSell && u.ict.inPremium;
+   // Institutional liquidity = pools / equal HL + displacement / OB confluence
+   u.ict.institutionalLiqBuy =
+      (u.liq.poolBuy || u.liq.equalLows || u.liq.sweepBuy) &&
+      (u.ict.obBuy || u.ict.fvgBuy || u.ict.dispBuy || u.ict.imbalanceBuy);
+   u.ict.institutionalLiqSell =
+      (u.liq.poolSell || u.liq.equalHighs || u.liq.sweepSell) &&
+      (u.ict.obSell || u.ict.fvgSell || u.ict.dispSell || u.ict.imbalanceSell);
+
    u.ict.smConfluence = ((u.ict.obBuy || u.ict.fvgBuy) && (u.liq.sweepBuy || u.ict.dispBuy)) ||
-                        ((u.ict.obSell || u.ict.fvgSell) && (u.liq.sweepSell || u.ict.dispSell));
+                        ((u.ict.obSell || u.ict.fvgSell) && (u.liq.sweepSell || u.ict.dispSell)) ||
+                        u.ict.institutionalLiqBuy || u.ict.institutionalLiqSell;
 }
 
 #endif // HITMAN_ULTRA_08_INSTITUTIONAL_MQH
@@ -1830,6 +1861,77 @@ string UltraRegimeName(const ENUM_ULTRA_REGIME r)
 
 #endif // HITMAN_ULTRA_12_MARKETREGIME_MQH
 //===== END 12_MarketRegime.mqh =====
+
+//===== BEGIN MarketCycle.mqh =====
+#ifndef HITMAN_ULTRA_MARKET_CYCLE_MQH
+#define HITMAN_ULTRA_MARKET_CYCLE_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — MARKET CYCLE ENGINE                                  |
+//| Accumulation · Markup · Distribution · Markdown                  |
+//+------------------------------------------------------------------+
+
+enum ENUM_MARKET_CYCLE
+{
+   CYCLE_ACCUMULATION = 0,
+   CYCLE_MARKUP,
+   CYCLE_DISTRIBUTION,
+   CYCLE_MARKDOWN,
+   CYCLE_UNKNOWN
+};
+
+string UltraCycle_Name(const ENUM_MARKET_CYCLE c)
+{
+   if(c == CYCLE_ACCUMULATION) return "ACCUMULATION";
+   if(c == CYCLE_MARKUP) return "MARKUP";
+   if(c == CYCLE_DISTRIBUTION) return "DISTRIBUTION";
+   if(c == CYCLE_MARKDOWN) return "MARKDOWN";
+   return "UNKNOWN";
+}
+
+void UltraEngCycle(UltraSnap &u)
+{
+   ENUM_MARKET_CYCLE c = CYCLE_UNKNOWN;
+   bool bullExt = u.st.externalBull;
+   bool bearExt = u.st.externalBear;
+   bool rangeLike = (u.regime == UREG_RANGE || u.regime == UREG_COMPRESSION || u.regime == UREG_ACCUMULATION);
+   bool expand = (u.vol.expansion || u.regime == UREG_EXPANSION || u.regime == UREG_BREAKOUT);
+   bool exhaust = u.trend.exhaustion || (u.regime == UREG_EXHAUSTION);
+
+   if(bullExt && expand && !exhaust)
+      c = CYCLE_MARKUP;
+   else if(bearExt && expand && !exhaust)
+      c = CYCLE_MARKDOWN;
+   else if(bullExt && (exhaust || u.regime == UREG_DISTRIBUTION || u.ict.inPremium))
+      c = CYCLE_DISTRIBUTION;
+   else if(bearExt && (exhaust || u.regime == UREG_ACCUMULATION || u.ict.inDiscount))
+      c = CYCLE_ACCUMULATION;
+   else if(rangeLike && (u.liq.poolBuy || u.liq.equalLows || u.ict.inDiscount))
+      c = CYCLE_ACCUMULATION;
+   else if(rangeLike && (u.liq.poolSell || u.liq.equalHighs || u.ict.inPremium))
+      c = CYCLE_DISTRIBUTION;
+   else if(u.st.continuation && bullExt)
+      c = CYCLE_MARKUP;
+   else if(u.st.continuation && bearExt)
+      c = CYCLE_MARKDOWN;
+
+   u.st.cycle = (int)c;
+   u.st.cycleName = UltraCycle_Name(c);
+}
+
+bool UltraCycle_SupportsBuy(const UltraSnap &u)
+{
+   return (u.st.cycle == (int)CYCLE_ACCUMULATION || u.st.cycle == (int)CYCLE_MARKUP ||
+           u.st.cycle == (int)CYCLE_UNKNOWN);
+}
+
+bool UltraCycle_SupportsSell(const UltraSnap &u)
+{
+   return (u.st.cycle == (int)CYCLE_DISTRIBUTION || u.st.cycle == (int)CYCLE_MARKDOWN ||
+           u.st.cycle == (int)CYCLE_UNKNOWN);
+}
+
+#endif
+//===== END MarketCycle.mqh =====
 
 //===== BEGIN 18_NewsIntelligence.mqh =====
 #ifndef HITMAN_ULTRA_18_NEWSINTELLIGENCE_MQH
@@ -2200,6 +2302,126 @@ string UltraMemory_Dashboard()
 #endif // HITMAN_ULTRA_29_MARKETMEMORY_MQH
 //===== END 29_MarketMemory.mqh =====
 
+//===== BEGIN 39_EventEngine.mqh =====
+#ifndef HITMAN_ULTRA_39_EVENTS_MQH
+#define HITMAN_ULTRA_39_EVENTS_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — 39_EVENT ENGINE — event-driven market + lifecycle    |
+//+------------------------------------------------------------------+
+
+enum ENUM_ULTRA_EVENT
+{
+   UEV_INIT = 0,
+   UEV_TICK,
+   UEV_TIMER,
+   UEV_TRADE_TX,
+   UEV_CHART,
+   UEV_DEINIT,
+   UEV_BOS,
+   UEV_CHOCH,
+   UEV_SWEEP,
+   UEV_FIRE,
+   UEV_WAIT
+};
+
+struct UltraEventStats
+{
+   ulong initCount;
+   ulong tickCount;
+   ulong timerCount;
+   ulong tradeTxCount;
+   ulong chartCount;
+   ulong deinitCount;
+   ulong bosCount;
+   ulong chochCount;
+   ulong sweepCount;
+   ulong fireCount;
+   ulong waitCount;
+   datetime lastMarketEvent;
+   string lastMarketTag;
+};
+
+UltraEventStats g_UltraEventStats;
+
+void UltraEvent_Note(const ENUM_ULTRA_EVENT e)
+{
+   switch(e)
+   {
+      case UEV_INIT:     g_UltraEventStats.initCount++; break;
+      case UEV_TICK:     g_UltraEventStats.tickCount++; break;
+      case UEV_TIMER:    g_UltraEventStats.timerCount++; break;
+      case UEV_TRADE_TX: g_UltraEventStats.tradeTxCount++; break;
+      case UEV_CHART:    g_UltraEventStats.chartCount++; break;
+      case UEV_DEINIT:   g_UltraEventStats.deinitCount++; break;
+      case UEV_BOS:      g_UltraEventStats.bosCount++; break;
+      case UEV_CHOCH:    g_UltraEventStats.chochCount++; break;
+      case UEV_SWEEP:    g_UltraEventStats.sweepCount++; break;
+      case UEV_FIRE:     g_UltraEventStats.fireCount++; break;
+      case UEV_WAIT:     g_UltraEventStats.waitCount++; break;
+   }
+}
+
+void UltraEvent_NoteMarket(const UltraSnap &u)
+{
+   bool edged = false;
+   if(u.bos.buy || u.bos.sell)
+   {
+      UltraEvent_Note(UEV_BOS);
+      g_UltraEventStats.lastMarketTag = "BOS";
+      edged = true;
+   }
+   if(u.choch.buy || u.choch.sell)
+   {
+      UltraEvent_Note(UEV_CHOCH);
+      g_UltraEventStats.lastMarketTag = "CHoCH";
+      edged = true;
+   }
+   if(u.liq.sweepBuy || u.liq.sweepSell || u.liq.stopHuntBuy || u.liq.stopHuntSell)
+   {
+      UltraEvent_Note(UEV_SWEEP);
+      g_UltraEventStats.lastMarketTag = "SWEEP";
+      edged = true;
+   }
+   if(edged)
+      g_UltraEventStats.lastMarketEvent = TimeCurrent();
+}
+
+void UltraEvent_OnBoot()
+{
+   UltraEvent_Note(UEV_INIT);
+   UltraLog("EVENT boot — HITMAN AI event engine ready");
+}
+
+string UltraEvent_Summary()
+{
+   string t = "ticks=";
+   t += IntegerToString((int)g_UltraEventStats.tickCount);
+   t += " bos=";
+   t += IntegerToString((int)g_UltraEventStats.bosCount);
+   t += " choch=";
+   t += IntegerToString((int)g_UltraEventStats.chochCount);
+   t += " sweep=";
+   t += IntegerToString((int)g_UltraEventStats.sweepCount);
+   t += " fire=";
+   t += IntegerToString((int)g_UltraEventStats.fireCount);
+   return t;
+}
+
+string UltraEvent_Dashboard()
+{
+   string t = "EVENT: ";
+   t += UltraEvent_Summary();
+   if(StringLen(g_UltraEventStats.lastMarketTag) > 0)
+   {
+      t += " last=";
+      t += g_UltraEventStats.lastMarketTag;
+   }
+   return t;
+}
+
+#endif
+//===== END 39_EventEngine.mqh =====
+
 //===== BEGIN 20_CapitalProtection.mqh =====
 #ifndef HITMAN_ULTRA_20_CAPITALPROTECTION_MQH
 #define HITMAN_ULTRA_20_CAPITALPROTECTION_MQH
@@ -2287,6 +2509,175 @@ int UltraExec_OpenCountMagic()
 
 #endif // HITMAN_ULTRA_19_EXECUTION_MQH
 //===== END 19_Execution.mqh =====
+
+//===== BEGIN 23_MultiTimeframe.mqh =====
+#ifndef HITMAN_ULTRA_23_MULTITIMEFRAME_MQH
+#define HITMAN_ULTRA_23_MULTITIMEFRAME_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — 23_MULTI_TIMEFRAME — MN..M1 · Bias · Sync · Lock     |
+//| Monthly · Weekly · Daily · H4 · H1 · M30 · M15 · M5 · M1         |
+//+------------------------------------------------------------------+
+
+ENUM_TIMEFRAMES UltraMTF_List(const int idx)
+{
+   switch(idx)
+   {
+      case 0: return PERIOD_MN1;
+      case 1: return PERIOD_W1;
+      case 2: return PERIOD_D1;
+      case 3: return PERIOD_H4;
+      case 4: return PERIOD_H1;
+      case 5: return PERIOD_M30;
+      case 6: return PERIOD_M15;
+      case 7: return PERIOD_M5;
+      case 8: return PERIOD_M1;
+   }
+   return PERIOD_CURRENT;
+}
+
+int UltraMTF_Count() { return 9; }
+
+string UltraMTF_Label(const int idx)
+{
+   switch(idx)
+   {
+      case 0: return "MN";
+      case 1: return "W1";
+      case 2: return "D1";
+      case 3: return "H4";
+      case 4: return "H1";
+      case 5: return "M30";
+      case 6: return "M15";
+      case 7: return "M5";
+      case 8: return "M1";
+   }
+   return "?";
+}
+
+bool UltraMTF_Bull(const string s, const ENUM_TIMEFRAMES tf, const int smaPeriod=20)
+{
+   double sma = UltraSMA(s, tf, smaPeriod);
+   if(sma <= 0.0) return false;
+   return (iClose(s, tf, 1) > sma);
+}
+
+bool UltraMTF_Bear(const string s, const ENUM_TIMEFRAMES tf, const int smaPeriod=20)
+{
+   double sma = UltraSMA(s, tf, smaPeriod);
+   if(sma <= 0.0) return false;
+   return (iClose(s, tf, 1) < sma);
+}
+
+void UltraMTF_Vote(const string s, int &votesBuy, int &votesSell)
+{
+   votesBuy = 0; votesSell = 0;
+   ENUM_TIMEFRAMES core[4] = {UltraTF_Month, UltraTF_Week, UltraTF_Macro, UltraTF_Bias};
+   for(int i = 0; i < 4; i++)
+   {
+      if(UltraMTF_Bull(s, core[i])) votesBuy++;
+      if(UltraMTF_Bear(s, core[i])) votesSell++;
+   }
+   if(UltraUseM30){ if(UltraMTF_Bull(s, PERIOD_M30)) votesBuy++; if(UltraMTF_Bear(s, PERIOD_M30)) votesSell++; }
+   if(UltraUseM15){ if(UltraMTF_Bull(s, PERIOD_M15)) votesBuy++; if(UltraMTF_Bear(s, PERIOD_M15)) votesSell++; }
+   if(UltraUseM5){  if(UltraMTF_Bull(s, PERIOD_M5))  votesBuy++; if(UltraMTF_Bear(s, PERIOD_M5))  votesSell++; }
+   if(UltraUseM1Optional){ if(UltraMTF_Bull(s, PERIOD_M1)) votesBuy++; if(UltraMTF_Bear(s, PERIOD_M1)) votesSell++; }
+}
+
+double UltraMTF_WeightBias(const int votesBuy, const int votesSell)
+{
+   int d = votesBuy - votesSell;
+   return MathMax(-1.0, MathMin(1.0, d / 6.0));
+}
+
+// Master trend from H4 (bias TF). Returns +1 buy, -1 sell, 0 unknown.
+int UltraMTF_MasterDir(const string s)
+{
+   if(UltraMTF_Bull(s, UltraTF_Bias)) return 1;
+   if(UltraMTF_Bear(s, UltraTF_Bias)) return -1;
+   return 0;
+}
+
+// Timeframe synchronization: count agreement across MN→M5 ladder for side.
+int UltraMTF_SyncAgree(const string s, const bool buySide, int &known)
+{
+   known = 0;
+   int agree = 0;
+   for(int i = 0; i < 8; i++) // MN..M5 (skip optional M1)
+   {
+      ENUM_TIMEFRAMES tf = UltraMTF_List(i);
+      if(i == 5 && !UltraUseM30) continue;
+      if(i == 6 && !UltraUseM15) continue;
+      if(i == 7 && !UltraUseM5) continue;
+      double sma = UltraSMA(s, tf, 20, 1);
+      if(sma <= 0.0) continue;
+      known++;
+      bool bull = (iClose(s, tf, 1) > sma);
+      bool bear = (iClose(s, tf, 1) < sma);
+      if(buySide ? bull : bear) agree++;
+   }
+   return agree;
+}
+
+// No timeframe conflicts: LTF must not fight H4 master (strict) / soft allows mild mix.
+bool UltraMTF_NoConflict(const string s, const bool buySide, string &why)
+{
+   why = "";
+   int master = UltraMTF_MasterDir(s);
+   if(master == 0) return true; // unknown master — fail-open
+   if(buySide && master < 0)
+   {
+      why = "MTF conflict: H4 master SELL vs BUY";
+      return false;
+   }
+   if(!buySide && master > 0)
+   {
+      why = "MTF conflict: H4 master BUY vs SELL";
+      return false;
+   }
+
+   // Higher TF stack (MN/W1/D1) should not be strongly opposite in strict mode
+   int htfOpp = 0;
+   int htfKnown = 0;
+   ENUM_TIMEFRAMES htf[3];
+   htf[0] = PERIOD_MN1; htf[1] = PERIOD_W1; htf[2] = PERIOD_D1;
+   for(int i = 0; i < 3; i++)
+   {
+      double sma = UltraSMA(s, htf[i], 20, 1);
+      if(sma <= 0.0) continue;
+      htfKnown++;
+      bool bull = (iClose(s, htf[i], 1) > sma);
+      bool bear = (iClose(s, htf[i], 1) < sma);
+      if(buySide && bear) htfOpp++;
+      if(!buySide && bull) htfOpp++;
+   }
+   if(!InstantQualityMode && UltraDisciplineStrict && htfKnown >= 2 && htfOpp >= 2)
+   {
+      why = "MTF conflict: higher TF stack against thesis";
+      return false;
+   }
+   return true;
+}
+
+string UltraMTF_Dashboard(const string s)
+{
+   int known = 0;
+   int ab = UltraMTF_SyncAgree(s, true, known);
+   int k2 = 0;
+   int asell = UltraMTF_SyncAgree(s, false, k2);
+   string t = "MTF: BUY ";
+   t += IntegerToString(ab);
+   t += " SELL ";
+   t += IntegerToString(asell);
+   t += " master=";
+   int m = UltraMTF_MasterDir(s);
+   if(m > 0) t += "BUY";
+   else if(m < 0) t += "SELL";
+   else t += "-";
+   return t;
+}
+
+#endif // HITMAN_ULTRA_23_MULTITIMEFRAME_MQH
+//===== END 23_MultiTimeframe.mqh =====
 
 //===== BEGIN 16_AI_Core.mqh =====
 #ifndef HITMAN_ULTRA_16_AI_CORE_MQH
@@ -2549,6 +2940,8 @@ void UltraClearSnap(UltraSnap &u)
    u.fib = fib; u.ict = ict; u.trend = trend; u.mom = mom; u.vol = vol;
    u.ind = ind; u.score = score;
    u.regime = UREG_RANGE;
+   u.st.cycle = 4; // CYCLE_UNKNOWN
+   u.st.cycleName = "UNKNOWN";
    u.buyBias = false; u.sellBias = false;
    u.ctx.session = "OFF";
    u.ctx.asia = u.ctx.london = u.ctx.newyork = u.ctx.overlap = false;
@@ -2584,11 +2977,13 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
    UltraEngTrend(s, u);
    UltraEngMomentum(s, u);
    UltraEngRegime(u);
+   UltraEngCycle(u);               // market cycle after regime/structure
    UltraEngSessionNews(s, u);
    UltraEngIndicators(s, u);
    UltraEngDiagnostics(s, u);
    UltraMemoryUpdateFromStats();
    UltraEngScoresBest(u);          // always fill conf/prec/prob for dashboard + wait logs
+   UltraEvent_NoteMarket(u);       // event-driven market edges
 
    g_UltraCore.lastLatencyMs = (long)GetTickCount() - t0;
    g_UltraCore.lastCycleMs = (long)GetTickCount();
@@ -2752,15 +3147,17 @@ bool UltraDefense_Line3_Liquidity(const UltraSnap &u, const bool buySide, string
 }
 
 //--------------------------------------------------------------------//
-// LINE 4 — BOS / CHoCH DEFENSE  → fail = NO TRADE (RED)
+// LINE 4 — BOS + CHoCH DEFENSE  → fail = NO TRADE (RED)
+// Checklist: BOS Defense · CHoCH Defense (both evaluated)
 //--------------------------------------------------------------------//
 bool UltraDefense_Line4_BosChoch(const UltraSnap &u, const bool buySide, string &why)
 {
    why = "";
    bool bos = buySide ? u.bos.buy : u.bos.sell;
    bool choch = buySide ? u.choch.buy : u.choch.sell;
-   bool confirmed = (bos && (u.bos.confirmed || u.bos.strong || u.bos.score >= 30)) ||
-                    (choch && (u.choch.majorC || u.choch.confidence >= 30 || u.choch.strength >= 30));
+   bool bosOK = bos && (u.bos.confirmed || u.bos.strong || u.bos.score >= 30 || UltraDefense_SoftMode());
+   bool chochOK = choch && (u.choch.majorC || u.choch.confidence >= 30 || u.choch.strength >= 30 || UltraDefense_SoftMode());
+   bool confirmed = bosOK || chochOK;
    bool strong = (u.bos.strong || u.bos.score >= 40 || u.choch.majorC || u.ict.dispBuy || u.ict.dispSell);
 
    if(UltraDefense_SoftMode())
@@ -2775,7 +3172,47 @@ bool UltraDefense_Line4_BosChoch(const UltraSnap &u, const bool buySide, string 
 }
 
 //--------------------------------------------------------------------//
-// LINE 5 — PRECISION DEFENSE  → fail = WAIT (YELLOW)
+// Momentum Defense (feeds Line 5)
+//--------------------------------------------------------------------//
+bool UltraDefense_MomentumOK(const UltraSnap &u, const bool buySide, string &why)
+{
+   why = "";
+   bool mom = buySide ? (u.mom.momBuy || u.mom.impulse || u.mom.direction > 0)
+                      : (u.mom.momSell || u.mom.impulse || u.mom.direction < 0);
+   if(mom || u.mom.strength >= 25) return true;
+   if(UltraDefense_SoftMode() && !u.mom.weakness) return true;
+   why = "momentum against";
+   return false;
+}
+
+//--------------------------------------------------------------------//
+// Fibonacci Defense (feeds Line 5)
+//--------------------------------------------------------------------//
+bool UltraDefense_FibOK(const UltraSnap &u, const bool buySide, string &why)
+{
+   why = "";
+   bool zone = buySide ? (u.fib.atBuyZone || u.ict.inDiscount) : (u.fib.atSellZone || u.ict.inPremium);
+   if(zone || u.fib.quality >= 25 || u.fib.zoneRank >= 1) return true;
+   if(UltraDefense_SoftMode()) return true; // soft — fib preferred not required
+   why = "fib zone miss";
+   return false;
+}
+
+//--------------------------------------------------------------------//
+// Risk Defense (feeds Line 6)
+//--------------------------------------------------------------------//
+bool UltraDefense_RiskOK(const UltraSnap &u, string &why)
+{
+   why = "";
+   if(u.score.riskProb > 0 && u.score.riskProb >= 70 && !UltraDefense_SoftMode())
+   { why = "risk probability high"; return false; }
+   if(u.diag.health == "DEGRADED" && !UltraDefense_SoftMode())
+   { why = "diag degraded risk"; return false; }
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// LINE 5 — PRECISION + MOMENTUM + FIB DEFENSE  → fail = WAIT (YELLOW)
 //--------------------------------------------------------------------//
 bool UltraDefense_Line5_Precision(const UltraSnap &u, const bool buySide, string &why)
 {
@@ -2788,18 +3225,28 @@ bool UltraDefense_Line5_Precision(const UltraSnap &u, const bool buySide, string
                 (InstantQualityMode && u.score.precision >= UltraMinPrecision - 8));
    bool lowErr = (u.score.precision >= 30 || u.fib.quality >= 30 || zone);
 
-   if(rrOk && (zone || lowErr || UltraDefense_SoftMode())) return true;
+   string mw = "", fw = "";
+   bool momOK = UltraDefense_MomentumOK(u, buySide, mw);
+   bool fibOK = UltraDefense_FibOK(u, buySide, fw);
+
+   if(rrOk && (zone || lowErr || UltraDefense_SoftMode()) && (momOK || UltraDefense_SoftMode()) && (fibOK || UltraDefense_SoftMode()))
+      return true;
    if(UltraDefense_SoftMode() && u.score.confidence >= UltraFireFloor() - 5) return true;
+   if(!momOK){ why = mw; return false; }
+   if(!fibOK){ why = fw; return false; }
    why = "precision / zone wait";
    return false;
 }
 
 //--------------------------------------------------------------------//
-// LINE 6 — PROBABILITY DEFENSE  → fail = NO TRADE (RED)
+// LINE 6 — PROBABILITY + RISK DEFENSE  → fail = NO TRADE (RED)
 //--------------------------------------------------------------------//
 bool UltraDefense_Line6_Probability(const UltraSnap &u, string &why)
 {
    why = "";
+   string rw = "";
+   if(!UltraDefense_RiskOK(u, rw))
+   { why = rw; return false; }
    if(u.score.probability >= UltraMinProbability) return true;
    if(u.score.confidence >= UltraInstantFireConf) return true;
    if(InstantQualityMode && u.score.probability >= UltraMinProbability - 8) return true;
@@ -2927,12 +3374,12 @@ bool UltraDefense_EvaluateEntry(const string s, const UltraSnap &u, const bool b
 
    w = "";
    bool p5 = UltraDefense_Line5_Precision(u, buySide, w);
-   UltraDefense_SetLine(r, 5, "PRECISION", p5, DEF_YELLOW, w);
+   UltraDefense_SetLine(r, 5, "PREC_MOM_FIB", p5, DEF_YELLOW, w);
    if(!p5) UltraDefense_RaiseOverall(r, DEF_YELLOW);
 
    w = "";
    bool p6 = UltraDefense_Line6_Probability(u, w);
-   UltraDefense_SetLine(r, 6, "PROBABILITY", p6, DEF_RED, w);
+   UltraDefense_SetLine(r, 6, "PROB_RISK", p6, DEF_RED, w);
    if(!p6) UltraDefense_RaiseOverall(r, DEF_RED);
 
    w = "";
@@ -3449,6 +3896,17 @@ bool UltraDisc_R6_Timeframes(const string s, const bool buySide, string &why)
 
    if(!UltraDisc_Soft() && h4known && !h4ok)
    { why = "R6 TF hierarchy: H4 against thesis"; return false; }
+
+   // Timeframe synchronization + no conflicts (MN→M5 / master lock)
+   string cf = "";
+   if(!UltraMTF_NoConflict(s, buySide, cf))
+   {
+      if(!UltraDisc_Soft())
+      { why = cf; return false; }
+      // soft: allow only if agreement already strong
+      if(agree < need)
+      { why = cf; return false; }
+   }
 
    if(agree >= need) return true;
    why = "R6 TF agree " + IntegerToString(agree) + "/" + IntegerToString(need);
@@ -4423,6 +4881,8 @@ struct UltraHoldScore
    string label;
 };
 
+UltraHoldScore g_UltraHoldLast;
+
 string UltraHold_ActionName(const ENUM_HOLD_ACTION a)
 {
    if(a == HOLD_HOLD) return "HOLD";
@@ -4452,6 +4912,7 @@ UltraHoldScore UltraHold_Evaluate(const UltraSnap &u, const bool isBuy, const bo
    {
       h.action = HOLD_MANAGE;
       h.label = "MANAGE";
+      g_UltraHoldLast = h;
       return h;
    }
 
@@ -4467,8 +4928,19 @@ UltraHoldScore UltraHold_Evaluate(const UltraSnap &u, const bool isBuy, const bo
       h.action = HOLD_MANAGE;
 
    h.label = UltraHold_ActionName(h.action);
+   g_UltraHoldLast = h;
    return h;
 }
+
+string UltraHold_Dashboard()
+{
+   string t = "HOLD: ";
+   t += g_UltraHoldLast.label;
+   t += " ";
+   t += IntegerToString(g_UltraHoldLast.total);
+   return t;
+}
+
 
 #endif
 //===== END HoldScore.mqh =====
@@ -4637,6 +5109,89 @@ string UltraSystemHealth_Dashboard()
 #endif
 //===== END SystemHealth.mqh =====
 
+//===== BEGIN MasterAIBrain.mqh =====
+#ifndef HITMAN_ULTRA_MASTER_AI_BRAIN_MQH
+#define HITMAN_ULTRA_MASTER_AI_BRAIN_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — MASTER AI BRAIN                                      |
+//| Final decision surface: BUY · SELL · WAIT only                   |
+//+------------------------------------------------------------------+
+
+struct UltraBrainDecision
+{
+   ENUM_SUPREME_DECISION decision;
+   int confidence;
+   int tradeScore;
+   string grade;
+   string thesis;
+   string reason;
+   bool explainable;
+   bool consistent;
+};
+
+UltraBrainDecision g_UltraBrainLast;
+
+void UltraBrain_Clear()
+{
+   g_UltraBrainLast.decision = SUP_WAIT;
+   g_UltraBrainLast.confidence = 0;
+   g_UltraBrainLast.tradeScore = 0;
+   g_UltraBrainLast.grade = "IGNORE";
+   g_UltraBrainLast.thesis = "";
+   g_UltraBrainLast.reason = "WAIT";
+   g_UltraBrainLast.explainable = false;
+   g_UltraBrainLast.consistent = true;
+}
+
+void UltraBrain_Publish(const bool approved, const bool buySide, const UltraSnap &u,
+                        const string thesis, const string why)
+{
+   UltraBrain_Clear();
+   g_UltraBrainLast.confidence = u.score.confidence;
+   g_UltraBrainLast.tradeScore = g_UltraUSM2Last.tradeScore > 0 ? g_UltraUSM2Last.tradeScore : u.score.confidence;
+   g_UltraBrainLast.grade = g_UltraUSM2Last.grade;
+   g_UltraBrainLast.thesis = thesis;
+   g_UltraBrainLast.explainable = (StringLen(thesis) > 0 || StringLen(why) > 0);
+   g_UltraBrainLast.consistent = true;
+
+   if(!approved)
+   {
+      g_UltraBrainLast.decision = SUP_WAIT;
+      g_UltraBrainLast.reason = why;
+      if(StringLen(g_UltraBrainLast.reason) == 0) g_UltraBrainLast.reason = "WAIT";
+      return;
+   }
+
+   g_UltraBrainLast.decision = buySide ? SUP_BUY : SUP_SELL;
+   g_UltraBrainLast.reason = "APPROVED";
+}
+
+string UltraBrain_Name()
+{
+   if(g_UltraBrainLast.decision == SUP_BUY) return "BUY";
+   if(g_UltraBrainLast.decision == SUP_SELL) return "SELL";
+   return "WAIT";
+}
+
+string UltraBrain_Dashboard()
+{
+   string t = "BRAIN: ";
+   t += UltraBrain_Name();
+   t += " conf=";
+   t += IntegerToString(g_UltraBrainLast.confidence);
+   t += " score=";
+   t += IntegerToString(g_UltraBrainLast.tradeScore);
+   if(StringLen(g_UltraBrainLast.grade) > 0)
+   {
+      t += " ";
+      t += g_UltraBrainLast.grade;
+   }
+   return t;
+}
+
+#endif
+//===== END MasterAIBrain.mqh =====
+
 //===== BEGIN SupremeCommand.mqh =====
 #ifndef HITMAN_ULTRA_SUPREME_COMMAND_MQH
 #define HITMAN_ULTRA_SUPREME_COMMAND_MQH
@@ -4644,13 +5199,6 @@ string UltraSystemHealth_Dashboard()
 //| HITMAN AI — LEVEL 1 / 20 SUPREME COMMAND + FINAL AI DECISION     |
 //| Global coordinator · mission manager · trade approval authority  |
 //+------------------------------------------------------------------+
-
-enum ENUM_SUPREME_DECISION
-{
-   SUP_BUY = 0,
-   SUP_SELL,
-   SUP_WAIT
-};
 
 struct UltraSupremeDecision
 {
@@ -4694,6 +5242,7 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
       else if(sig.sell) d.decision = SUP_SELL;
       d.reason = "supreme off — pass-through";
       g_UltraSupremeLast = d;
+      UltraBrain_Publish(d.approved, sig.buy, u, "", d.reason);
       return d.approved;
    }
 
@@ -4704,6 +5253,7 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
       why += g_UltraSysHealth.detail;
       d.reason = why;
       g_UltraSupremeLast = d;
+      UltraBrain_Publish(false, false, u, "", why);
       return false;
    }
 
@@ -4712,10 +5262,26 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
       why = "SUPREME: no candidate";
       d.reason = why;
       g_UltraSupremeLast = d;
+      UltraBrain_Publish(false, false, u, "", why);
       return false;
    }
 
    bool buySide = sig.buy;
+
+   // One signal = one trade thesis (per symbol)
+   if(UltraThesisEnabled)
+   {
+      for(int ti = 0; ti < g_ThesisN; ti++)
+      {
+         if(!g_Thesis[ti].valid) continue;
+         if(g_Thesis[ti].symbol != s) continue;
+         why = "SUPREME: one thesis already active on symbol";
+         d.reason = why;
+         g_UltraSupremeLast = d;
+         UltraBrain_Publish(false, buySide, u, "", why);
+         return false;
+      }
+   }
 
    // USM2 scoring (Level 4) + dynamic weights (Level 5)
    UltraUSM2Scores usm;
@@ -4742,6 +5308,7 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
       why = "SUPREME: signal evolution REVERSAL";
       d.reason = why;
       g_UltraSupremeLast = d;
+      UltraBrain_Publish(false, buySide, u, "", why);
       return false;
    }
 
@@ -4756,6 +5323,7 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
          why += IntegerToString(d.tradeScore);
          d.reason = why;
          g_UltraSupremeLast = d;
+         UltraBrain_Publish(false, buySide, u, "", why);
          return false;
       }
    }
@@ -4766,6 +5334,7 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
       why = "SUPREME: grade IGNORE";
       d.reason = why;
       g_UltraSupremeLast = d;
+      UltraBrain_Publish(false, buySide, u, "", why);
       return false;
    }
 
@@ -4778,6 +5347,7 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
    d.approved = true;
    d.reason = "APPROVED";
    g_UltraSupremeLast = d;
+   UltraBrain_Publish(true, buySide, u, thesis, "APPROVED");
 
    if(UltraUpgradeLog)
    {
@@ -5459,6 +6029,7 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       {
          g_UltraLastWaitBar = bar;
          g_UltraLastWaitSym = BrokerSymbol;
+         UltraEvent_Note(UEV_WAIT);
          string cacheTag = "REBUILD";
          if(fromCache) cacheTag = "HIT";
          Print("ULTRA wait [", why, "] conf=", snap.score.confidence,
@@ -5487,6 +6058,7 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       g_UFSE[idx].lastEvalBar = iTime(BrokerSymbol, UltraETF(), 0);
    }
    UltraExec_MarkFired(BrokerSymbol);
+   UltraEvent_Note(UEV_FIRE);
 
    string sideTag = "SELL";
    if(best.buy) sideTag = "BUY";
@@ -5603,74 +6175,6 @@ bool UltraMulti_AnalyzeSymbol(const string s, UltraSnap &u)
 #endif // HITMAN_ULTRA_22_MULTISYMBOL_MQH
 //===== END 22_MultiSymbol.mqh =====
 
-//===== BEGIN 23_MultiTimeframe.mqh =====
-#ifndef HITMAN_ULTRA_23_MULTITIMEFRAME_MQH
-#define HITMAN_ULTRA_23_MULTITIMEFRAME_MQH
-//+------------------------------------------------------------------+
-//| HITMAN AI — 23_MULTI_TIMEFRAME — MN..M1 · Bias · Voting · Weighting
-//+------------------------------------------------------------------+
-//+------------------------------------------------------------------+
-//| 07. Ultra Multi Timeframe Engine                                 |
-//| MN / W1 / D1 / H4 / H1 / M30 / M15 / M5 / M1                     |
-//+------------------------------------------------------------------+
-
-ENUM_TIMEFRAMES UltraMTF_List(const int idx)
-{
-   switch(idx)
-   {
-      case 0: return PERIOD_MN1;
-      case 1: return PERIOD_W1;
-      case 2: return PERIOD_D1;
-      case 3: return PERIOD_H4;
-      case 4: return PERIOD_H1;
-      case 5: return PERIOD_M30;
-      case 6: return PERIOD_M15;
-      case 7: return PERIOD_M5;
-      case 8: return PERIOD_M1;
-   }
-   return PERIOD_CURRENT;
-}
-
-int UltraMTF_Count() { return 9; }
-
-bool UltraMTF_Bull(const string s, const ENUM_TIMEFRAMES tf, const int smaPeriod=20)
-{
-   double sma = UltraSMA(s, tf, smaPeriod);
-   if(sma <= 0.0) return false;
-   return (iClose(s, tf, 1) > sma);
-}
-
-bool UltraMTF_Bear(const string s, const ENUM_TIMEFRAMES tf, const int smaPeriod=20)
-{
-   double sma = UltraSMA(s, tf, smaPeriod);
-   if(sma <= 0.0) return false;
-   return (iClose(s, tf, 1) < sma);
-}
-
-void UltraMTF_Vote(const string s, int &votesBuy, int &votesSell)
-{
-   votesBuy = 0; votesSell = 0;
-   ENUM_TIMEFRAMES core[4] = {UltraTF_Month, UltraTF_Week, UltraTF_Macro, UltraTF_Bias};
-   for(int i = 0; i < 4; i++)
-   {
-      if(UltraMTF_Bull(s, core[i])) votesBuy++;
-      if(UltraMTF_Bear(s, core[i])) votesSell++;
-   }
-   if(UltraUseM30){ if(UltraMTF_Bull(s, PERIOD_M30)) votesBuy++; if(UltraMTF_Bear(s, PERIOD_M30)) votesSell++; }
-   if(UltraUseM15){ if(UltraMTF_Bull(s, PERIOD_M15)) votesBuy++; if(UltraMTF_Bear(s, PERIOD_M15)) votesSell++; }
-   if(UltraUseM5){  if(UltraMTF_Bull(s, PERIOD_M5))  votesBuy++; if(UltraMTF_Bear(s, PERIOD_M5))  votesSell++; }
-   if(UltraUseM1Optional){ if(UltraMTF_Bull(s, PERIOD_M1)) votesBuy++; if(UltraMTF_Bear(s, PERIOD_M1)) votesSell++; }
-}
-
-double UltraMTF_WeightBias(const int votesBuy, const int votesSell)
-{
-   int d = votesBuy - votesSell;
-   return MathMax(-1.0, MathMin(1.0, d / 6.0));
-}
-
-#endif // HITMAN_ULTRA_23_MULTITIMEFRAME_MQH
-//===== END 23_MultiTimeframe.mqh =====
-
 //===== BEGIN 25_Statistics.mqh =====
 #ifndef HITMAN_ULTRA_25_STATISTICS_MQH
 #define HITMAN_ULTRA_25_STATISTICS_MQH
@@ -5697,11 +6201,89 @@ string UltraStats_Report()
 #endif // HITMAN_ULTRA_25_STATISTICS_MQH
 //===== END 25_Statistics.mqh =====
 
+//===== BEGIN 37_Optimization.mqh =====
+#ifndef HITMAN_ULTRA_37_OPT_MQH
+#define HITMAN_ULTRA_37_OPT_MQH
+//+------------------------------------------------------------------+
+//| 37_Optimization — cache · event cadence · resource monitoring    |
+//+------------------------------------------------------------------+
+
+struct UltraPerfOpt
+{
+   long lastTickMs;
+   long lastHeavyMs;
+   ulong cycleCount;
+   bool skipHeavy;
+   long peakLatencyMs;
+   long lastLatencyMs;
+};
+
+UltraPerfOpt g_UltraPerfOpt;
+
+void UltraOpt_OnTickStart()
+{
+   g_UltraPerfOpt.lastTickMs = (long)GetTickCount();
+   g_UltraPerfOpt.cycleCount++;
+}
+
+bool UltraOpt_ShouldSkipHeavy(const int minIntervalMs=50)
+{
+   long now = (long)GetTickCount();
+   if(g_UltraPerfOpt.lastHeavyMs > 0 && (now - g_UltraPerfOpt.lastHeavyMs) < minIntervalMs)
+   {
+      g_UltraPerfOpt.skipHeavy = true;
+      return true;
+   }
+   g_UltraPerfOpt.skipHeavy = false;
+   g_UltraPerfOpt.lastHeavyMs = now;
+   return false;
+}
+
+void UltraOpt_MarkHeavyDone()
+{
+   g_UltraPerfOpt.lastHeavyMs = (long)GetTickCount();
+}
+
+void UltraOpt_NoteLatency(const long ms)
+{
+   g_UltraPerfOpt.lastLatencyMs = ms;
+   if(ms > g_UltraPerfOpt.peakLatencyMs)
+      g_UltraPerfOpt.peakLatencyMs = ms;
+}
+
+// Lightweight resource monitor (tick budget / latency / cycle pressure)
+string UltraResource_Monitor()
+{
+   long lat = g_UltraCore.lastLatencyMs;
+   UltraOpt_NoteLatency(lat);
+   string t = "RES: lat=";
+   t += IntegerToString((int)lat);
+   t += "ms peak=";
+   t += IntegerToString((int)g_UltraPerfOpt.peakLatencyMs);
+   t += "ms cycles=";
+   t += IntegerToString((int)g_UltraPerfOpt.cycleCount);
+   if(lat > 500) t += " WARN";
+   else t += " OK";
+   return t;
+}
+
+string UltraOpt_Summary()
+{
+   string t = "cycles=";
+   t += IntegerToString((int)g_UltraPerfOpt.cycleCount);
+   t += " skipHeavy=";
+   if(g_UltraPerfOpt.skipHeavy) t += "Y"; else t += "N";
+   return t;
+}
+
+#endif
+//===== END 37_Optimization.mqh =====
+
 //===== BEGIN 24_Dashboard.mqh =====
 #ifndef HITMAN_ULTRA_24_DASHBOARD_MQH
 #define HITMAN_ULTRA_24_DASHBOARD_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — 24_DASHBOARD — AI Conf · Prec · Prob · Session · Stats
+//| HITMAN AI — 24_DASHBOARD — Master · Regime · Thesis · Hold · Risk
 //+------------------------------------------------------------------+
 string UltraDashboardText(const string s)
 {
@@ -5710,6 +6292,9 @@ string UltraDashboardText(const string s)
    string dir = "-";
    if(sig.buy) dir = "BUY";
    else if(sig.sell) dir = "SELL";
+   if(g_UltraBrainLast.decision == SUP_BUY) dir = "BUY";
+   else if(g_UltraBrainLast.decision == SUP_SELL) dir = "SELL";
+   else if(g_UltraBrainLast.decision == SUP_WAIT && !(sig.buy || sig.sell)) dir = "WAIT";
 
    string bos = "-";
    if(u.bos.buy) bos = "BUY";
@@ -5730,11 +6315,16 @@ string UltraDashboardText(const string s)
    if(u.vol.expansion) vol = "EXPAND";
    else if(u.vol.compression) vol = "COMPRESS";
 
+   string master = "-";
+   int md = UltraMTF_MasterDir(s);
+   if(md > 0) master = "BUY";
+   else if(md < 0) master = "SELL";
+
    string explain = sig.explanation;
    if(StringLen(explain) == 0)
    {
       bool leanBuy = (dir != "SELL");
-      bool approved = (dir != "-");
+      bool approved = (dir == "BUY" || dir == "SELL");
       explain = UltraUFSE_DebugExplain(u, leanBuy, approved);
    }
 
@@ -5742,18 +6332,24 @@ string UltraDashboardText(const string s)
    t += "BUILD: HA_ULTRA_93 MASTER | Comment: HITMAN AI\n";
    t += "Symbol: "; t += s;
    t += " | TF: "; t += EnumToString(UltraETF());
-   t += "\nOpen: "; t += IntegerToString(CountOpenTrades());
+   t += "\n"; t += UltraBrain_Dashboard();
+   t += "\nMaster Trend: "; t += master;
+   t += " | Regime: "; t += UltraRegimeName(u.regime);
+   t += " | Cycle: "; t += u.st.cycleName;
+   t += "\nOpen Trades: "; t += IntegerToString(CountOpenTrades());
    t += " / "; t += IntegerToString(MaxOpenTrades);
    t += "\nAI Conf: "; t += IntegerToString(u.score.confidence);
    t += " | Prec: "; t += IntegerToString(u.score.precision);
    t += " | Prob: "; t += IntegerToString(u.score.probability);
+   t += "\n"; t += UltraThesis_Dashboard();
+   t += " | "; t += UltraHold_Dashboard();
+   t += "\n"; t += UltraMTF_Dashboard(s);
    t += "\nSession: "; t += u.ctx.session;
    t += " | LiqWin: "; if(u.ctx.sessionLiquidity) t += "Y"; else t += "N";
+   t += " | Qual: "; t += IntegerToString(u.ctx.sessionQuality);
    t += " | News: "; t += u.ctx.newsPhase;
-   t += " | NewsVol: "; if(u.ctx.newsVol) t += "Y"; else t += "N";
    t += " | (never blocks)";
-   t += "\nRegime: "; t += UltraRegimeName(u.regime);
-   t += "\nTrend B/S votes: "; t += IntegerToString(u.trend.mtfVotesBuy);
+   t += "\nTrend votes B/S: "; t += IntegerToString(u.trend.mtfVotesBuy);
    t += "/"; t += IntegerToString(u.trend.mtfVotesSell);
    t += " | Str: "; t += IntegerToString(u.trend.strength);
    t += "\nBOS: "; t += bos;
@@ -5761,16 +6357,19 @@ string UltraDashboardText(const string s)
    t += " Sweep: "; t += sweep;
    t += "\nFib zone B/S: "; if(u.fib.atBuyZone) t += "Y"; else t += "N";
    t += "/"; if(u.fib.atSellZone) t += "Y"; else t += "N";
-   t += " rank="; t += IntegerToString(u.fib.zoneRank);
+   t += " | InstLiq B/S: "; if(u.ict.institutionalLiqBuy) t += "Y"; else t += "N";
+   t += "/"; if(u.ict.institutionalLiqSell) t += "Y"; else t += "N";
    t += "\nSMI: "; t += DoubleToString(u.ind.smi, 1);
    t += " | MEO: "; t += DoubleToString(u.ind.meo, 1);
    t += " | IFI: "; t += DoubleToString(u.ind.ifi, 1);
    t += "\nVol: "; t += vol;
    long dig = 0; SymbolInfoInteger(s, SYMBOL_DIGITS, dig);
    t += " ATR="; t += DoubleToString(u.vol.atr, (int)dig);
-   t += "\nCapital: "; if(g_UltraCore.healthy) t += "OK"; else t += "CHECK";
-   t += " | Health: "; t += u.diag.health;
-   t += " | Lat: "; t += IntegerToString((int)g_UltraCore.lastLatencyMs); t += "ms";
+   t += "\nExec: "; if(u.diag.brokerOK && u.diag.connectionOK) t += "READY"; else t += "CHECK";
+   t += " | Risk: "; if(u.score.riskProb < 70) t += "OK"; else t += "HIGH";
+   t += " | Capital: "; if(g_UltraCore.healthy) t += "OK"; else t += "CHECK";
+   t += "\n"; t += UltraSystemHealth_Dashboard();
+   t += " | "; t += UltraResource_Monitor();
    t += "\nWR: "; t += DoubleToString(g_UltraMem.winRate, 1); t += "%";
    t += " PF: "; t += DoubleToString(g_UltraMem.profitFactor, 2);
    t += " RR: "; t += DoubleToString(g_UltraMem.avgRR, 2);
@@ -5778,8 +6377,7 @@ string UltraDashboardText(const string s)
    t += "\n"; t += UltraDefense_DashboardLine();
    t += " | "; t += UltraDiscipline_DashboardLine();
    t += "\n"; t += UltraSupreme_Dashboard();
-   t += " | "; t += UltraThesis_Dashboard();
-   t += "\n"; t += UltraSystemHealth_Dashboard();
+   t += " | "; t += UltraMemory_Dashboard();
    if(UltraUSM2Enabled && g_UltraUSM2Last.tradeScore > 0)
    {
       t += "\nUSM2: conf="; t += IntegerToString(g_UltraUSM2Last.confidence);
@@ -5788,6 +6386,7 @@ string UltraDashboardText(const string s)
       t += " evo="; t += g_UltraSupremeLast.evo;
    }
    t += "\nUFSE: "; t += UltraUFSE_Stats(s);
+   t += "\n"; t += UltraEvent_Dashboard();
    t += "\n---- EXPLAIN ----\n"; t += explain;
    t += "\n===============================";
    return t;
@@ -6260,59 +6859,6 @@ bool UltraSignal_Validate(const string s, const UltraRawSignal &sig, string &why
 #endif // HITMAN_ULTRA_35_SIGNAL_MQH
 //===== END 35_SignalEngine.mqh =====
 
-//===== BEGIN 37_Optimization.mqh =====
-#ifndef HITMAN_ULTRA_37_OPT_MQH
-#define HITMAN_ULTRA_37_OPT_MQH
-//+------------------------------------------------------------------+
-//| 37_Optimization — memory/CPU/tick performance helpers            |
-//+------------------------------------------------------------------+
-
-struct UltraPerfOpt
-{
-   long lastTickMs;
-   long lastHeavyMs;
-   ulong cycleCount;
-   bool skipHeavy;
-};
-
-UltraPerfOpt g_UltraPerfOpt;
-
-void UltraOpt_OnTickStart()
-{
-   g_UltraPerfOpt.lastTickMs = (long)GetTickCount();
-   g_UltraPerfOpt.cycleCount++;
-}
-
-bool UltraOpt_ShouldSkipHeavy(const int minIntervalMs=50)
-{
-   long now = (long)GetTickCount();
-   if(g_UltraPerfOpt.lastHeavyMs > 0 && (now - g_UltraPerfOpt.lastHeavyMs) < minIntervalMs)
-   {
-      g_UltraPerfOpt.skipHeavy = true;
-      return true;
-   }
-   g_UltraPerfOpt.skipHeavy = false;
-   g_UltraPerfOpt.lastHeavyMs = now;
-   return false;
-}
-
-void UltraOpt_MarkHeavyDone()
-{
-   g_UltraPerfOpt.lastHeavyMs = (long)GetTickCount();
-}
-
-string UltraOpt_Summary()
-{
-   string t = "cycles=";
-   t += IntegerToString((int)g_UltraPerfOpt.cycleCount);
-   t += " skipHeavy=";
-   if(g_UltraPerfOpt.skipHeavy) t += "Y"; else t += "N";
-   return t;
-}
-
-#endif
-//===== END 37_Optimization.mqh =====
-
 //===== BEGIN 38_Backtesting.mqh =====
 #ifndef HITMAN_ULTRA_38_BACKTEST_MQH
 #define HITMAN_ULTRA_38_BACKTEST_MQH
@@ -6371,67 +6917,6 @@ bool UltraBT_InWalkForwardWindow(const datetime t)
 
 #endif
 //===== END 38_Backtesting.mqh =====
-
-//===== BEGIN 39_EventEngine.mqh =====
-#ifndef HITMAN_ULTRA_39_EVENTS_MQH
-#define HITMAN_ULTRA_39_EVENTS_MQH
-//+------------------------------------------------------------------+
-//| 39_EventEngine — dispatcher helpers around Shell_B handlers      |
-//| Actual OnInit/OnTick/OnTimer/... implementations live in Shell_B |
-//+------------------------------------------------------------------+
-
-enum ENUM_ULTRA_EVENT
-{
-   UEV_INIT = 0,
-   UEV_TICK,
-   UEV_TIMER,
-   UEV_TRADE_TX,
-   UEV_CHART,
-   UEV_DEINIT
-};
-
-struct UltraEventStats
-{
-   ulong initCount;
-   ulong tickCount;
-   ulong timerCount;
-   ulong tradeTxCount;
-   ulong chartCount;
-   ulong deinitCount;
-};
-
-UltraEventStats g_UltraEventStats;
-
-void UltraEvent_Note(const ENUM_ULTRA_EVENT e)
-{
-   switch(e)
-   {
-      case UEV_INIT:     g_UltraEventStats.initCount++; break;
-      case UEV_TICK:     g_UltraEventStats.tickCount++; break;
-      case UEV_TIMER:    g_UltraEventStats.timerCount++; break;
-      case UEV_TRADE_TX: g_UltraEventStats.tradeTxCount++; break;
-      case UEV_CHART:    g_UltraEventStats.chartCount++; break;
-      case UEV_DEINIT:   g_UltraEventStats.deinitCount++; break;
-   }
-}
-
-void UltraEvent_OnBoot()
-{
-   UltraEvent_Note(UEV_INIT);
-   UltraOpt_OnTickStart();
-   UltraSystemController_Boot();
-   UltraLog("EVENT boot mode=" + UltraBT_ModeName());
-}
-
-string UltraEvent_Summary()
-{
-   return "ticks=" + IntegerToString((int)g_UltraEventStats.tickCount) +
-          " timers=" + IntegerToString((int)g_UltraEventStats.timerCount) +
-          " tx=" + IntegerToString((int)g_UltraEventStats.tradeTxCount);
-}
-
-#endif
-//===== END 39_EventEngine.mqh =====
 
 //===== BEGIN 40_DebugTools.mqh =====
 #ifndef HITMAN_ULTRA_40_DEBUG_MQH
@@ -6559,6 +7044,8 @@ int OnInit()
    Print("HITMAN AI Loaded BUILD_ID=HA_ULTRA_93 MaxOpen=", MaxOpenTrades);
    UltraCoreInit();
    UltraSystemController_Boot();
+   UltraEvent_OnBoot();
+   UltraOpt_OnTickStart();
    {
       ENUM_TIMEFRAMES etf = (EntryTF == PERIOD_CURRENT) ? (ENUM_TIMEFRAMES)Period() : EntryTF;
       Print("OK93 ENTRY TF=", EnumToString(etf),

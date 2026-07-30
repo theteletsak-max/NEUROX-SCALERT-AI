@@ -20,6 +20,8 @@ struct UltraHoldScore
    string label;
 };
 
+UltraHoldScore g_UltraHoldLast;
+
 string UltraHold_ActionName(const ENUM_HOLD_ACTION a)
 {
    if(a == HOLD_HOLD) return "HOLD";
@@ -49,6 +51,7 @@ UltraHoldScore UltraHold_Evaluate(const UltraSnap &u, const bool isBuy, const bo
    {
       h.action = HOLD_MANAGE;
       h.label = "MANAGE";
+      g_UltraHoldLast = h;
       return h;
    }
 
@@ -64,7 +67,18 @@ UltraHoldScore UltraHold_Evaluate(const UltraSnap &u, const bool isBuy, const bo
       h.action = HOLD_MANAGE;
 
    h.label = UltraHold_ActionName(h.action);
+   g_UltraHoldLast = h;
    return h;
 }
+
+string UltraHold_Dashboard()
+{
+   string t = "HOLD: ";
+   t += g_UltraHoldLast.label;
+   t += " ";
+   t += IntegerToString(g_UltraHoldLast.total);
+   return t;
+}
+
 
 #endif

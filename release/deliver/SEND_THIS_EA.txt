@@ -1,14 +1,11 @@
 HITMAN AI — SEND THIS ZIP
 
-ZIP:  release/deliver/HITMAN_AI.zip
-Same: /opt/cursor/artifacts/HITMAN_AI.zip
+ZIP: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/release/deliver/HITMAN_AI.zip
+Same: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI.zip
 
-GitHub:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/HITMAN_AI.zip
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/release/deliver/HITMAN_AI.zip
-
-Inside zip:
-  HITMAN_AI.mq5          ← copy to MQL5/Experts/
+Inside:
+  HITMAN_AI.mq5
+  HITMAN_AI_ARCHITECTURE.txt
   INSTALL.txt
   README.txt
   MQL5/Experts/HITMAN_AI.mq5

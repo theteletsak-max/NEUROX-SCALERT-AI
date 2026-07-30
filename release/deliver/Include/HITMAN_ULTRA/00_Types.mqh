@@ -45,6 +45,8 @@ struct UltraStructure
    int  strength;   // 0-100
    int  quality;    // 0-100
    double swingHigh, swingLow;
+   int    cycle;       // ENUM_MARKET_CYCLE as int
+   string cycleName;   // ACCUMULATION / MARKUP / DISTRIBUTION / MARKDOWN
 };
 
 struct UltraBOS
@@ -94,6 +96,8 @@ struct UltraInst
    bool breakerBuy, breakerSell;
    bool mitigationBuy, mitigationSell;
    bool fvgBuy, fvgSell;
+   bool imbalanceBuy, imbalanceSell;     // raw imbalance (gap) distinct from FVG zone use
+   bool institutionalLiqBuy, institutionalLiqSell;
    bool instZoneBuy, instZoneSell;
    bool rejectZoneBuy, rejectZoneSell;
    bool smConfluence;
@@ -253,6 +257,16 @@ struct UltraDefenseReport
 };
 
 UltraDefenseReport g_UltraDefenseLast;
+
+//--------------------------------------------------------------------//
+// FINAL AI DECISION — BUY / SELL / WAIT only
+//--------------------------------------------------------------------//
+enum ENUM_SUPREME_DECISION
+{
+   SUP_BUY = 0,
+   SUP_SELL,
+   SUP_WAIT
+};
 
 //--------------------------------------------------------------------//
 // 1. ULTRA CORE / DATA / CONFIG / VALIDATION / RECOVERY / LOG / PERF

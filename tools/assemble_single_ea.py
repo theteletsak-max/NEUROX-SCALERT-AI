@@ -6,20 +6,24 @@ order = [
     "27_Logger.mqh","30_Recovery.mqh","01_Core.mqh","02_Data.mqh","11_Volatility.mqh",
     "03_MarketStructure.mqh","04_BOS.mqh","05_CHoCH.mqh","06_Liquidity.mqh",
     "07_Fibonacci.mqh","08_Institutional.mqh","09_Trend.mqh","10_Momentum.mqh",
-    "12_MarketRegime.mqh","18_NewsIntelligence.mqh","17_SessionIntelligence.mqh",
+    "12_MarketRegime.mqh","MarketCycle.mqh",
+    "18_NewsIntelligence.mqh","17_SessionIntelligence.mqh",
     "13_Precision.mqh","14_Probability.mqh","15_Confluence.mqh","26_Diagnostics.mqh",
-    "29_MarketMemory.mqh",    "20_CapitalProtection.mqh","19_Execution.mqh","16_AI_Core.mqh",
+    "29_MarketMemory.mqh","39_EventEngine.mqh",
+    "20_CapitalProtection.mqh","19_Execution.mqh",
+    "23_MultiTimeframe.mqh",
+    "16_AI_Core.mqh",
     "DefenseLineEngine.mqh",
     "TradeEntryDiscipline.mqh",
     "DynamicWeights.mqh","UltraScoringMachine2.mqh","SignalEvolution.mqh",
     "TradeThesis.mqh","CorrectionDetector.mqh","HoldScore.mqh",
-    "SmartExit.mqh","SystemHealth.mqh","SupremeCommand.mqh",
+    "SmartExit.mqh","SystemHealth.mqh","MasterAIBrain.mqh","SupremeCommand.mqh",
     "UFSE_FastSignalEngine.mqh",
-    "21_TradeManagement.mqh","22_MultiSymbol.mqh","23_MultiTimeframe.mqh",
-    "25_Statistics.mqh","24_Dashboard.mqh",
+    "21_TradeManagement.mqh","22_MultiSymbol.mqh",
+    "25_Statistics.mqh","37_Optimization.mqh","24_Dashboard.mqh",
     "32_BrokerCompatibility.mqh","36_BrokerHealth.mqh","33_OrderManagement.mqh",
-    "34_PositionManagement.mqh","35_SignalEngine.mqh","37_Optimization.mqh",
-    "38_Backtesting.mqh","39_EventEngine.mqh","40_DebugTools.mqh",
+    "34_PositionManagement.mqh","35_SignalEngine.mqh",
+    "38_Backtesting.mqh","40_DebugTools.mqh",
     "Shell_B_TradeSystem.mqh",
 ]
 header = '''//+------------------------------------------------------------------+
@@ -31,7 +35,7 @@ header = '''//+-----------------------------------------------------------------
 #property copyright "HITMAN AI"
 #property link      "https://github.com/theteletsak-max/NEUROX-SCALERT-AI"
 #property version   "1.00"
-#property description "HITMAN AI ULTRA X — Upgrade Pack Levels 1-20"
+#property description "HITMAN AI ULTRA X — Full Architecture Blueprint"
 #property description "BUILD=HA_ULTRA_93 Comment=HITMAN AI MaxOpen=3"
 
 #include <Trade/Trade.mqh>

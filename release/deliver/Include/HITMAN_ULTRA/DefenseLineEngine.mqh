@@ -146,15 +146,17 @@ bool UltraDefense_Line3_Liquidity(const UltraSnap &u, const bool buySide, string
 }
 
 //--------------------------------------------------------------------//
-// LINE 4 — BOS / CHoCH DEFENSE  → fail = NO TRADE (RED)
+// LINE 4 — BOS + CHoCH DEFENSE  → fail = NO TRADE (RED)
+// Checklist: BOS Defense · CHoCH Defense (both evaluated)
 //--------------------------------------------------------------------//
 bool UltraDefense_Line4_BosChoch(const UltraSnap &u, const bool buySide, string &why)
 {
    why = "";
    bool bos = buySide ? u.bos.buy : u.bos.sell;
    bool choch = buySide ? u.choch.buy : u.choch.sell;
-   bool confirmed = (bos && (u.bos.confirmed || u.bos.strong || u.bos.score >= 30)) ||
-                    (choch && (u.choch.majorC || u.choch.confidence >= 30 || u.choch.strength >= 30));
+   bool bosOK = bos && (u.bos.confirmed || u.bos.strong || u.bos.score >= 30 || UltraDefense_SoftMode());
+   bool chochOK = choch && (u.choch.majorC || u.choch.confidence >= 30 || u.choch.strength >= 30 || UltraDefense_SoftMode());
+   bool confirmed = bosOK || chochOK;
    bool strong = (u.bos.strong || u.bos.score >= 40 || u.choch.majorC || u.ict.dispBuy || u.ict.dispSell);
 
    if(UltraDefense_SoftMode())
@@ -169,7 +171,47 @@ bool UltraDefense_Line4_BosChoch(const UltraSnap &u, const bool buySide, string 
 }
 
 //--------------------------------------------------------------------//
-// LINE 5 — PRECISION DEFENSE  → fail = WAIT (YELLOW)
+// Momentum Defense (feeds Line 5)
+//--------------------------------------------------------------------//
+bool UltraDefense_MomentumOK(const UltraSnap &u, const bool buySide, string &why)
+{
+   why = "";
+   bool mom = buySide ? (u.mom.momBuy || u.mom.impulse || u.mom.direction > 0)
+                      : (u.mom.momSell || u.mom.impulse || u.mom.direction < 0);
+   if(mom || u.mom.strength >= 25) return true;
+   if(UltraDefense_SoftMode() && !u.mom.weakness) return true;
+   why = "momentum against";
+   return false;
+}
+
+//--------------------------------------------------------------------//
+// Fibonacci Defense (feeds Line 5)
+//--------------------------------------------------------------------//
+bool UltraDefense_FibOK(const UltraSnap &u, const bool buySide, string &why)
+{
+   why = "";
+   bool zone = buySide ? (u.fib.atBuyZone || u.ict.inDiscount) : (u.fib.atSellZone || u.ict.inPremium);
+   if(zone || u.fib.quality >= 25 || u.fib.zoneRank >= 1) return true;
+   if(UltraDefense_SoftMode()) return true; // soft — fib preferred not required
+   why = "fib zone miss";
+   return false;
+}
+
+//--------------------------------------------------------------------//
+// Risk Defense (feeds Line 6)
+//--------------------------------------------------------------------//
+bool UltraDefense_RiskOK(const UltraSnap &u, string &why)
+{
+   why = "";
+   if(u.score.riskProb > 0 && u.score.riskProb >= 70 && !UltraDefense_SoftMode())
+   { why = "risk probability high"; return false; }
+   if(u.diag.health == "DEGRADED" && !UltraDefense_SoftMode())
+   { why = "diag degraded risk"; return false; }
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// LINE 5 — PRECISION + MOMENTUM + FIB DEFENSE  → fail = WAIT (YELLOW)
 //--------------------------------------------------------------------//
 bool UltraDefense_Line5_Precision(const UltraSnap &u, const bool buySide, string &why)
 {
@@ -182,18 +224,28 @@ bool UltraDefense_Line5_Precision(const UltraSnap &u, const bool buySide, string
                 (InstantQualityMode && u.score.precision >= UltraMinPrecision - 8));
    bool lowErr = (u.score.precision >= 30 || u.fib.quality >= 30 || zone);
 
-   if(rrOk && (zone || lowErr || UltraDefense_SoftMode())) return true;
+   string mw = "", fw = "";
+   bool momOK = UltraDefense_MomentumOK(u, buySide, mw);
+   bool fibOK = UltraDefense_FibOK(u, buySide, fw);
+
+   if(rrOk && (zone || lowErr || UltraDefense_SoftMode()) && (momOK || UltraDefense_SoftMode()) && (fibOK || UltraDefense_SoftMode()))
+      return true;
    if(UltraDefense_SoftMode() && u.score.confidence >= UltraFireFloor() - 5) return true;
+   if(!momOK){ why = mw; return false; }
+   if(!fibOK){ why = fw; return false; }
    why = "precision / zone wait";
    return false;
 }
 
 //--------------------------------------------------------------------//
-// LINE 6 — PROBABILITY DEFENSE  → fail = NO TRADE (RED)
+// LINE 6 — PROBABILITY + RISK DEFENSE  → fail = NO TRADE (RED)
 //--------------------------------------------------------------------//
 bool UltraDefense_Line6_Probability(const UltraSnap &u, string &why)
 {
    why = "";
+   string rw = "";
+   if(!UltraDefense_RiskOK(u, rw))
+   { why = rw; return false; }
    if(u.score.probability >= UltraMinProbability) return true;
    if(u.score.confidence >= UltraInstantFireConf) return true;
    if(InstantQualityMode && u.score.probability >= UltraMinProbability - 8) return true;
@@ -321,12 +373,12 @@ bool UltraDefense_EvaluateEntry(const string s, const UltraSnap &u, const bool b
 
    w = "";
    bool p5 = UltraDefense_Line5_Precision(u, buySide, w);
-   UltraDefense_SetLine(r, 5, "PRECISION", p5, DEF_YELLOW, w);
+   UltraDefense_SetLine(r, 5, "PREC_MOM_FIB", p5, DEF_YELLOW, w);
    if(!p5) UltraDefense_RaiseOverall(r, DEF_YELLOW);
 
    w = "";
    bool p6 = UltraDefense_Line6_Probability(u, w);
-   UltraDefense_SetLine(r, 6, "PROBABILITY", p6, DEF_RED, w);
+   UltraDefense_SetLine(r, 6, "PROB_RISK", p6, DEF_RED, w);
    if(!p6) UltraDefense_RaiseOverall(r, DEF_RED);
 
    w = "";

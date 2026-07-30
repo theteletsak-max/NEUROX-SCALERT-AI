@@ -23,15 +23,23 @@ void UltraEngInstitutional(const string s, UltraSnap &u)
       }
    }
 
-   // FVG lookback across recent bars (not only 1 vs 3)
+   // FVG + raw imbalance lookback across recent bars
    for(int g = 1; g <= 5; g++)
    {
       double gapB = iLow(s, tf, g) - iHigh(s, tf, g + 2);
       double gapS = iLow(s, tf, g + 2) - iHigh(s, tf, g);
-      if(gapB > 0 && (u.vol.atr <= 0 || gapB >= u.vol.atr * UltraFVG_MinATR * 0.8))
-         u.ict.fvgBuy = true;
-      if(gapS > 0 && (u.vol.atr <= 0 || gapS >= u.vol.atr * UltraFVG_MinATR * 0.8))
-         u.ict.fvgSell = true;
+      if(gapB > 0)
+      {
+         u.ict.imbalanceBuy = true;
+         if(u.vol.atr <= 0 || gapB >= u.vol.atr * UltraFVG_MinATR * 0.8)
+            u.ict.fvgBuy = true;
+      }
+      if(gapS > 0)
+      {
+         u.ict.imbalanceSell = true;
+         if(u.vol.atr <= 0 || gapS >= u.vol.atr * UltraFVG_MinATR * 0.8)
+            u.ict.fvgSell = true;
+      }
    }
 
    double o2 = iOpen(s, tf, 2), c2 = iClose(s, tf, 2);
@@ -64,8 +72,17 @@ void UltraEngInstitutional(const string s, UltraSnap &u)
    u.ict.instZoneSell = (u.ict.obSell || u.ict.fvgSell || u.ict.breakerSell) && (u.ict.inPremium || u.fib.atSellZone);
    u.ict.rejectZoneBuy = u.liq.stopHuntBuy && u.ict.inDiscount;
    u.ict.rejectZoneSell = u.liq.stopHuntSell && u.ict.inPremium;
+   // Institutional liquidity = pools / equal HL + displacement / OB confluence
+   u.ict.institutionalLiqBuy =
+      (u.liq.poolBuy || u.liq.equalLows || u.liq.sweepBuy) &&
+      (u.ict.obBuy || u.ict.fvgBuy || u.ict.dispBuy || u.ict.imbalanceBuy);
+   u.ict.institutionalLiqSell =
+      (u.liq.poolSell || u.liq.equalHighs || u.liq.sweepSell) &&
+      (u.ict.obSell || u.ict.fvgSell || u.ict.dispSell || u.ict.imbalanceSell);
+
    u.ict.smConfluence = ((u.ict.obBuy || u.ict.fvgBuy) && (u.liq.sweepBuy || u.ict.dispBuy)) ||
-                        ((u.ict.obSell || u.ict.fvgSell) && (u.liq.sweepSell || u.ict.dispSell));
+                        ((u.ict.obSell || u.ict.fvgSell) && (u.liq.sweepSell || u.ict.dispSell)) ||
+                        u.ict.institutionalLiqBuy || u.ict.institutionalLiqSell;
 }
 
 #endif // HITMAN_ULTRA_08_INSTITUTIONAL_MQH
