@@ -170,9 +170,19 @@ bool UltraThesis_Revalidate(const ulong ticket, const UltraSnap &u, string &why)
       : (u.trend.bear || u.trend.htfBear || u.trend.macroBear || (!UltraUpgradeStrict && !u.trend.bull));
    bool structOK = (u.st.quality >= 15 || u.st.continuation || UltraUSM2_Clamp(u.st.strength) >= 15);
    bool hardInvalid = isBuy
-      ? ((u.bos.sell && u.bos.confirmed && u.bos.strong) || (u.choch.sell && u.choch.majorC && u.trend.exhaustion))
-      : ((u.bos.buy && u.bos.confirmed && u.bos.strong) || (u.choch.buy && u.choch.majorC && u.trend.exhaustion));
+      ? ((u.bos.sell && u.bos.confirmed && u.bos.strong && u.trend.exhaustion) ||
+         (u.choch.sell && u.choch.majorC && u.trend.exhaustion && u.bos.sell))
+      : ((u.bos.buy && u.bos.confirmed && u.bos.strong && u.trend.exhaustion) ||
+         (u.choch.buy && u.choch.majorC && u.trend.exhaustion && u.bos.buy));
 
+   // Soft: never invalidate on a single structure flicker
+   if(!UltraUpgradeStrict && hardInvalid)
+   {
+      // require both BOS strong + major CHoCH against
+      hardInvalid = isBuy
+         ? (u.bos.sell && u.bos.confirmed && u.bos.strong && u.choch.sell && u.choch.majorC && u.trend.exhaustion)
+         : (u.bos.buy && u.bos.confirmed && u.bos.strong && u.choch.buy && u.choch.majorC && u.trend.exhaustion);
+   }
    if(hardInvalid)
    {
       g_Thesis[idx].stillValid = false;

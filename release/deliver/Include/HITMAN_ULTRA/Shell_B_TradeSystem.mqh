@@ -2264,14 +2264,14 @@ input group "MARKET DEFENSE ENGINE"
 // Runs every tick in ManageOpenTrades — can lock BE, tighten SL, or close.
 
 input bool   EnableMarketDefense            = true;  // master defense switch
-input bool   DefenseCloseOnHardReversal     = true;  // opposite correct RevSniper stack → close
+input bool   DefenseCloseOnHardReversal     = false; // OFF — was closing runners on soft opposite stacks
 input bool   DefenseLockBEOnAdverseSweep    = true;  // wrong-side sweep vs our trade → lock BE
 input bool   DefenseTightenOnChop           = true;  // IMCE manipulation/chop while in profit → BE
-input bool   DefenseCloseOnTrapAgainst      = true;  // fake-breakout trap in our direction → close if pre-TP1
+input bool   DefenseCloseOnTrapAgainst      = false; // OFF — fake-breakout closes were too aggressive
 input bool   DefenseRetraceLockFromPeak     = true;  // retrace from MFE → lock portion of peak profit
 input double DefenseRetraceATR              = 0.70;  // ATR retrace from peak that triggers lock
 input double DefenseRetraceLockFraction     = 0.50;  // lock this fraction of peak favorable move
-input bool   DefenseRequireInProfitToClose  = false; // if true, hard-reversal close only when already green
+input bool   DefenseRequireInProfitToClose  = true;  // if hard-reversal re-enabled, only close when green
 input bool   DefenseLogActions              = true;  // print DEFEND actions to Experts
 
 // #7 mid-path BE before TP1 (lighter than full close)
@@ -2280,8 +2280,8 @@ input double DefensePreTP1AdverseATR        = 0.55;  // adverse ATR from entry t
 input bool   DefensePreTP1RequireProfitTiny = false; // if true, only BE when back near flat/green
 
 // #8 MAE hard cut before TP1
-input bool   DefenseMAE_StopEnabled         = true;  // close if floating loss exceeds MAE ATR
-input double DefenseMAE_ATR                 = 1.25;  // max adverse excursion in ATR before TP1 (0=off)
+input bool   DefenseMAE_StopEnabled         = false; // OFF — MAE hard-cut closed too many positions
+input double DefenseMAE_ATR                 = 2.50;  // only if MAE stop re-enabled (was 1.25)
 
 //================ TRADE STATE TRACKING (for TP1/TP2/TP3) ============//
 // MT5 positions only carry one SL and one TP natively - there's no built-in
@@ -3696,9 +3696,9 @@ input int    MaxHoldBars            = 800;   // hard cap (EntryTF bars) - closes
 input bool   EnableAdaptiveHoldTime = true;   // shortens the minimum hold requirement while the market is in a RANGING regime (Part 15) - a trade sitting through chop doesn't need the same patience as one riding a genuine trend
 input double RangingHoldTimeFactor  = 0.5;    // effectiveMinHoldBars is multiplied by this while GetMarketRegime() == REGIME_RANGING
 
-input bool   EnableStagnationExit      = true;
-input int    StagnationLookbackBars    = 150; // only checked once a trade has been open at least this many EntryTF bars
-input double StagnationProgressATRMultiple = 0.5; // if the position's favorable excursion hasn't reached this many ATRs by then, it's judged stagnant and closed
+input bool   EnableStagnationExit      = false; // OFF — was closing trades that were still developing
+input int    StagnationLookbackBars    = 250; // only checked once a trade has been open at least this many EntryTF bars
+input double StagnationProgressATRMultiple = 0.35; // if re-enabled: require less progress before judging stagnant
 
 // Forward — implemented with Market Defense Engine (after IMCE/trap helpers)
 bool MarketDefendOpenPosition(const ulong ticket, const long type, const double openPrice,
@@ -3893,23 +3893,37 @@ void ManageOpenTrades()
          string sxWhy = "";
          UltraSnap sxSnap = g_UltraLastSnap;
          bool sxCached = false;
+         bool snapOK = false;
          if(UltraFastSignalEnabled)
-         {
-            if(!UltraUFSE_BuildSnapshot(BrokerSymbol, sxSnap, sxCached))
-               sxSnap = g_UltraLastSnap;
-         }
-         else if(!UltraBuildSnapshot(BrokerSymbol, sxSnap))
+            snapOK = UltraUFSE_BuildSnapshot(BrokerSymbol, sxSnap, sxCached);
+         else
+            snapOK = UltraBuildSnapshot(BrokerSymbol, sxSnap);
+         if(!snapOK)
             sxSnap = g_UltraLastSnap;
 
          ENUM_SUPREME_DECISION mission = UltraMission_PositionCommand(ticket, BrokerSymbol, isBuyPos, sxSnap, sxWhy);
          ENUM_SMART_EXIT sx = UltraMission_ToSmartExit(mission);
-         if(mission == SUP_EXIT || sx == SX_CLOSE)
+
+         // Minimum hold before Mission EXIT can fire (protect fresh entries)
+         int minMissionExitBars = MinimumHoldBars;
+         if(minMissionExitBars < 3) minMissionExitBars = 3;
+         bool canMissionExit = (barsHeld >= minMissionExitBars);
+
+         if((mission == SUP_EXIT || sx == SX_CLOSE) && canMissionExit)
          {
             if(UltraUpgradeLog)
-               Print("MISSION EXIT ticket=", ticket, " ", sxWhy);
+               Print("MISSION EXIT ticket=", ticket, " bars=", barsHeld, " ", sxWhy);
             UltraThesis_Clear(ticket);
             g_Trade.PositionClose(ticket);
             continue;
+         }
+         if((mission == SUP_EXIT || sx == SX_CLOSE) && !canMissionExit)
+         {
+            // Too early to exit — protect with BE if possible instead
+            if(UltraUpgradeLog)
+               Print("MISSION EXIT blocked (min hold) ticket=", ticket, " bars=", barsHeld);
+            mission = SUP_MANAGE;
+            sx = SX_BE;
          }
          if(mission == SUP_MANAGE || sx == SX_BE || sx == SX_TIGHTEN)
          {

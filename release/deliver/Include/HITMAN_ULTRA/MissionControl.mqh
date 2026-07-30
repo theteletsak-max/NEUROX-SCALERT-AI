@@ -2,8 +2,8 @@
 #define HITMAN_ULTRA_MISSION_CONTROL_MQH
 //+------------------------------------------------------------------+
 //| HITMAN AI ULTRA X — LEVEL 8 ULTRA MISSION CONTROL                |
-//| Single authority — no other module may override                  |
-//| Approves: BUY · SELL · WAIT · HOLD · MANAGE · EXIT               |
+//| Single authority — BUY/SELL/WAIT/HOLD/MANAGE/EXIT                |
+//| EXIT only when Smart Exit confirms (never noise / soft hold-exit)|
 //+------------------------------------------------------------------+
 
 struct UltraMissionState
@@ -14,7 +14,7 @@ struct UltraMissionState
    int tradeScore;
    string grade;
    string thesis;
-   ulong ticket;   // for manage path
+   ulong ticket;
    datetime ts;
 };
 
@@ -57,7 +57,6 @@ void UltraMission_Set(const ENUM_SUPREME_DECISION c, const string reason,
    g_UltraMissionLast.ts = TimeCurrent();
 }
 
-// Entry path — sole approval authority for BUY/SELL/WAIT
 bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, string &why)
 {
    bool ok = UltraSupreme_FinalizeEntry(s, u, sig, why);
@@ -75,7 +74,8 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
    return ok;
 }
 
-// Open-position path — sole authority for HOLD/MANAGE/EXIT
+// Open-position path — EXIT only if SmartExit returns SX_CLOSE.
+// HoldScore HOLD_EXIT alone must NOT force a close (that was closing trades on noise).
 ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const string s,
                                                    const bool isBuy, const UltraSnap &u,
                                                    string &why)
@@ -83,19 +83,35 @@ ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const str
    why = "";
    ENUM_SMART_EXIT sx = UltraSupreme_ManagePosition(ticket, s, isBuy, u, why);
    ENUM_SUPREME_DECISION cmd = SUP_MANAGE;
-   if(sx == SX_CLOSE) cmd = SUP_EXIT;
-   else if(sx == SX_NONE && g_UltraHoldLast.action == HOLD_HOLD) cmd = SUP_HOLD;
-   else if(sx == SX_BE || sx == SX_TIGHTEN) cmd = SUP_MANAGE;
-   else if(g_UltraHoldLast.action == HOLD_EXIT) cmd = SUP_EXIT;
-   else if(g_UltraHoldLast.action == HOLD_HOLD) cmd = SUP_HOLD;
-   else cmd = SUP_MANAGE;
+
+   if(sx == SX_CLOSE)
+   {
+      cmd = SUP_EXIT;
+   }
+   else if(sx == SX_BE || sx == SX_TIGHTEN)
+   {
+      cmd = SUP_MANAGE;
+   }
+   else if(g_UltraHoldLast.action == HOLD_HOLD || sx == SX_NONE)
+   {
+      // Prefer HOLD; treat soft HOLD_EXIT as MANAGE (protect, do not close)
+      if(g_UltraHoldLast.action == HOLD_EXIT && !UltraUpgradeStrict)
+         cmd = SUP_MANAGE;
+      else if(g_UltraHoldLast.action == HOLD_HOLD)
+         cmd = SUP_HOLD;
+      else
+         cmd = SUP_MANAGE;
+   }
+   else
+   {
+      cmd = SUP_MANAGE;
+   }
 
    UltraMission_Set(cmd, why, u.score.confidence, g_UltraHoldLast.total,
                     g_UltraHoldLast.label, g_UltraBrainLast.thesis, ticket);
    return cmd;
 }
 
-// Map mission EXIT/MANAGE/HOLD → smart-exit actions for Shell
 ENUM_SMART_EXIT UltraMission_ToSmartExit(const ENUM_SUPREME_DECISION cmd)
 {
    if(cmd == SUP_EXIT) return SX_CLOSE;

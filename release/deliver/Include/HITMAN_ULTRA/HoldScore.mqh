@@ -2,7 +2,7 @@
 #define HITMAN_ULTRA_HOLD_SCORE_MQH
 //+------------------------------------------------------------------+
 //| HITMAN AI — LEVEL 12 HOLD SCORE ENGINE                           |
-//| Trend · Structure · Momentum · Liquidity · Risk · Thesis → action|
+//| Soft default: never EXIT on temporary score dips / UNKNOWN noise |
 //+------------------------------------------------------------------+
 
 enum ENUM_HOLD_ACTION
@@ -40,9 +40,10 @@ UltraHoldScore UltraHold_Evaluate(const UltraSnap &u, const bool isBuy, const bo
    h.risk = UltraUSM2_ComponentRisk(u);
    h.thesis = thesisValid ? 80 : 20;
    if(corr.state == CORR_REVERSAL) h.thesis = 10;
-   if(corr.state == CORR_PULLBACK || corr.state == CORR_LIQ_GRAB || corr.state == CORR_RETEST)
+   if(corr.state == CORR_PULLBACK || corr.state == CORR_LIQ_GRAB || corr.state == CORR_RETEST ||
+      corr.state == CORR_CONTINUATION || corr.state == CORR_UNKNOWN)
    {
-      if(h.thesis < 60) h.thesis = 60;
+      if(h.thesis < 60) h.thesis = 60; // healthy / unknown noise → do not punish thesis
    }
 
    h.total = (h.trend + h.structure + h.momentum + h.liquidity + h.risk + h.thesis) / 6;
@@ -55,16 +56,25 @@ UltraHoldScore UltraHold_Evaluate(const UltraSnap &u, const bool isBuy, const bo
       return h;
    }
 
-   if(!thesisValid || corr.state == CORR_REVERSAL || h.total < 35)
-      h.action = HOLD_EXIT;
-   else if(h.total >= 65 && corr.isHealthy)
-      h.action = HOLD_HOLD;
+   // Soft InstantQuality path: EXIT only on confirmed thesis death + reversal
+   if(!UltraUpgradeStrict)
+   {
+      if(!thesisValid && corr.state == CORR_REVERSAL)
+         h.action = HOLD_EXIT;
+      else if(h.total >= 55 && corr.isHealthy)
+         h.action = HOLD_HOLD;
+      else
+         h.action = HOLD_MANAGE; // low score / pullback → manage, never force-close
+   }
    else
-      h.action = HOLD_MANAGE;
-
-   // Soft: never EXIT on UNKNOWN correction alone
-   if(!UltraUpgradeStrict && corr.state == CORR_UNKNOWN && thesisValid && h.action == HOLD_EXIT)
-      h.action = HOLD_MANAGE;
+   {
+      if((!thesisValid && corr.state == CORR_REVERSAL) || (corr.state == CORR_REVERSAL && h.total < 30))
+         h.action = HOLD_EXIT;
+      else if(h.total >= 65 && corr.isHealthy)
+         h.action = HOLD_HOLD;
+      else
+         h.action = HOLD_MANAGE;
+   }
 
    h.label = UltraHold_ActionName(h.action);
    g_UltraHoldLast = h;
@@ -79,6 +89,5 @@ string UltraHold_Dashboard()
    t += IntegerToString(g_UltraHoldLast.total);
    return t;
 }
-
 
 #endif

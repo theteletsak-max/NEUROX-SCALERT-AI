@@ -2,7 +2,8 @@
 #define HITMAN_ULTRA_SMART_EXIT_MQH
 //+------------------------------------------------------------------+
 //| HITMAN AI — LEVEL 14 SMART EXIT ENGINE                           |
-//| Exit only on thesis invalidation OR risk rule — decision only    |
+//| Exit ONLY on thesis invalidation + true reversal (or risk rule)  |
+//| Never close on 1 candle / small pullback / temp mom / temp spread|
 //+------------------------------------------------------------------+
 
 enum ENUM_SMART_EXIT
@@ -36,29 +37,37 @@ UltraSmartExit UltraSmartExit_Decide(const UltraHoldScore &hold, const UltraCorr
       return x;
    }
 
-   if(hold.action == HOLD_EXIT && (!thesisValid || corr.state == CORR_REVERSAL))
+   // Hard close requires BOTH invalid thesis AND confirmed reversal
+   // (soft mode). Strict may close on either when hold says EXIT.
+   bool hardClose = false;
+   if(!UltraUpgradeStrict)
+      hardClose = (!thesisValid && corr.state == CORR_REVERSAL && hold.action == HOLD_EXIT);
+   else
+      hardClose = (hold.action == HOLD_EXIT && (!thesisValid || corr.state == CORR_REVERSAL));
+
+   if(hardClose)
    {
       x.action = SX_CLOSE;
-      x.reason = "trade thesis invalidated";
+      x.reason = "thesis invalidated + true reversal";
       return x;
    }
 
-   // Never exit on one opposite candle / small pullback / temp vol / minor mom loss
+   // Never exit on pullback / continuation / liq grab / retest / unknown
    if(corr.state == CORR_PULLBACK || corr.state == CORR_CONTINUATION ||
       corr.state == CORR_LIQ_GRAB || corr.state == CORR_RETEST || corr.state == CORR_UNKNOWN)
    {
-      if(hold.action == HOLD_MANAGE)
+      if(hold.action == HOLD_MANAGE || hold.action == HOLD_EXIT)
       {
          x.action = SX_BE;
-         x.reason = "healthy correction — protect / manage";
+         x.reason = "healthy correction — protect / do not close";
       }
       return x;
    }
 
    if(hold.action == HOLD_MANAGE)
    {
-      x.action = SX_TIGHTEN;
-      x.reason = "manage open risk";
+      x.action = SX_BE; // prefer BE over tighten-close path
+      x.reason = "manage open risk — breakeven protect";
    }
    return x;
 }

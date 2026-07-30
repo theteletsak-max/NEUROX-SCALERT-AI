@@ -4955,9 +4955,19 @@ bool UltraThesis_Revalidate(const ulong ticket, const UltraSnap &u, string &why)
       : (u.trend.bear || u.trend.htfBear || u.trend.macroBear || (!UltraUpgradeStrict && !u.trend.bull));
    bool structOK = (u.st.quality >= 15 || u.st.continuation || UltraUSM2_Clamp(u.st.strength) >= 15);
    bool hardInvalid = isBuy
-      ? ((u.bos.sell && u.bos.confirmed && u.bos.strong) || (u.choch.sell && u.choch.majorC && u.trend.exhaustion))
-      : ((u.bos.buy && u.bos.confirmed && u.bos.strong) || (u.choch.buy && u.choch.majorC && u.trend.exhaustion));
+      ? ((u.bos.sell && u.bos.confirmed && u.bos.strong && u.trend.exhaustion) ||
+         (u.choch.sell && u.choch.majorC && u.trend.exhaustion && u.bos.sell))
+      : ((u.bos.buy && u.bos.confirmed && u.bos.strong && u.trend.exhaustion) ||
+         (u.choch.buy && u.choch.majorC && u.trend.exhaustion && u.bos.buy));
 
+   // Soft: never invalidate on a single structure flicker
+   if(!UltraUpgradeStrict && hardInvalid)
+   {
+      // require both BOS strong + major CHoCH against
+      hardInvalid = isBuy
+         ? (u.bos.sell && u.bos.confirmed && u.bos.strong && u.choch.sell && u.choch.majorC && u.trend.exhaustion)
+         : (u.bos.buy && u.bos.confirmed && u.bos.strong && u.choch.buy && u.choch.majorC && u.trend.exhaustion);
+   }
    if(hardInvalid)
    {
       g_Thesis[idx].stillValid = false;
@@ -5050,7 +5060,15 @@ UltraCorrection UltraCorr_Detect(const UltraSnap &u, const bool isBuy)
    bool cont = u.st.continuation || (isBuy ? u.trend.bull : u.trend.bear);
    bool softMomLoss = u.mom.weakness && !adverseBos && !adverseCh;
 
-   if((adverseBos || adverseCh) && u.trend.exhaustion)
+   // True reversal = confirmed adverse BOS + major CHoCH + exhaustion (soft)
+   // Soft mode refuses to call REVERSAL on a single BOS flicker.
+   bool trueReversal = false;
+   if(UltraUpgradeStrict)
+      trueReversal = (adverseBos || adverseCh) && u.trend.exhaustion;
+   else
+      trueReversal = adverseBos && adverseCh && u.trend.exhaustion;
+
+   if(trueReversal)
    {
       c.state = CORR_REVERSAL;
       c.isHealthy = false;
@@ -5063,10 +5081,16 @@ UltraCorrection UltraCorr_Detect(const UltraSnap &u, const bool isBuy)
       c.state = CORR_CONTINUATION;
    else if(isBuy ? u.fib.atBuyZone : u.fib.atSellZone)
       c.state = CORR_RETEST;
+   else if(adverseBos || adverseCh)
+   {
+      // Single adverse break without full stack → treat as pullback, not exit
+      c.state = CORR_PULLBACK;
+      c.isHealthy = true;
+   }
    else
    {
       c.state = CORR_UNKNOWN;
-      c.isHealthy = true; // unknown → treat as healthy (do not exit)
+      c.isHealthy = true;
    }
    c.label = UltraCorr_Name(c.state);
    return c;
@@ -5080,7 +5104,7 @@ UltraCorrection UltraCorr_Detect(const UltraSnap &u, const bool isBuy)
 #define HITMAN_ULTRA_HOLD_SCORE_MQH
 //+------------------------------------------------------------------+
 //| HITMAN AI — LEVEL 12 HOLD SCORE ENGINE                           |
-//| Trend · Structure · Momentum · Liquidity · Risk · Thesis → action|
+//| Soft default: never EXIT on temporary score dips / UNKNOWN noise |
 //+------------------------------------------------------------------+
 
 enum ENUM_HOLD_ACTION
@@ -5118,9 +5142,10 @@ UltraHoldScore UltraHold_Evaluate(const UltraSnap &u, const bool isBuy, const bo
    h.risk = UltraUSM2_ComponentRisk(u);
    h.thesis = thesisValid ? 80 : 20;
    if(corr.state == CORR_REVERSAL) h.thesis = 10;
-   if(corr.state == CORR_PULLBACK || corr.state == CORR_LIQ_GRAB || corr.state == CORR_RETEST)
+   if(corr.state == CORR_PULLBACK || corr.state == CORR_LIQ_GRAB || corr.state == CORR_RETEST ||
+      corr.state == CORR_CONTINUATION || corr.state == CORR_UNKNOWN)
    {
-      if(h.thesis < 60) h.thesis = 60;
+      if(h.thesis < 60) h.thesis = 60; // healthy / unknown noise → do not punish thesis
    }
 
    h.total = (h.trend + h.structure + h.momentum + h.liquidity + h.risk + h.thesis) / 6;
@@ -5133,16 +5158,25 @@ UltraHoldScore UltraHold_Evaluate(const UltraSnap &u, const bool isBuy, const bo
       return h;
    }
 
-   if(!thesisValid || corr.state == CORR_REVERSAL || h.total < 35)
-      h.action = HOLD_EXIT;
-   else if(h.total >= 65 && corr.isHealthy)
-      h.action = HOLD_HOLD;
+   // Soft InstantQuality path: EXIT only on confirmed thesis death + reversal
+   if(!UltraUpgradeStrict)
+   {
+      if(!thesisValid && corr.state == CORR_REVERSAL)
+         h.action = HOLD_EXIT;
+      else if(h.total >= 55 && corr.isHealthy)
+         h.action = HOLD_HOLD;
+      else
+         h.action = HOLD_MANAGE; // low score / pullback → manage, never force-close
+   }
    else
-      h.action = HOLD_MANAGE;
-
-   // Soft: never EXIT on UNKNOWN correction alone
-   if(!UltraUpgradeStrict && corr.state == CORR_UNKNOWN && thesisValid && h.action == HOLD_EXIT)
-      h.action = HOLD_MANAGE;
+   {
+      if((!thesisValid && corr.state == CORR_REVERSAL) || (corr.state == CORR_REVERSAL && h.total < 30))
+         h.action = HOLD_EXIT;
+      else if(h.total >= 65 && corr.isHealthy)
+         h.action = HOLD_HOLD;
+      else
+         h.action = HOLD_MANAGE;
+   }
 
    h.label = UltraHold_ActionName(h.action);
    g_UltraHoldLast = h;
@@ -5158,7 +5192,6 @@ string UltraHold_Dashboard()
    return t;
 }
 
-
 #endif
 //===== END HoldScore.mqh =====
 
@@ -5167,7 +5200,8 @@ string UltraHold_Dashboard()
 #define HITMAN_ULTRA_SMART_EXIT_MQH
 //+------------------------------------------------------------------+
 //| HITMAN AI — LEVEL 14 SMART EXIT ENGINE                           |
-//| Exit only on thesis invalidation OR risk rule — decision only    |
+//| Exit ONLY on thesis invalidation + true reversal (or risk rule)  |
+//| Never close on 1 candle / small pullback / temp mom / temp spread|
 //+------------------------------------------------------------------+
 
 enum ENUM_SMART_EXIT
@@ -5201,29 +5235,37 @@ UltraSmartExit UltraSmartExit_Decide(const UltraHoldScore &hold, const UltraCorr
       return x;
    }
 
-   if(hold.action == HOLD_EXIT && (!thesisValid || corr.state == CORR_REVERSAL))
+   // Hard close requires BOTH invalid thesis AND confirmed reversal
+   // (soft mode). Strict may close on either when hold says EXIT.
+   bool hardClose = false;
+   if(!UltraUpgradeStrict)
+      hardClose = (!thesisValid && corr.state == CORR_REVERSAL && hold.action == HOLD_EXIT);
+   else
+      hardClose = (hold.action == HOLD_EXIT && (!thesisValid || corr.state == CORR_REVERSAL));
+
+   if(hardClose)
    {
       x.action = SX_CLOSE;
-      x.reason = "trade thesis invalidated";
+      x.reason = "thesis invalidated + true reversal";
       return x;
    }
 
-   // Never exit on one opposite candle / small pullback / temp vol / minor mom loss
+   // Never exit on pullback / continuation / liq grab / retest / unknown
    if(corr.state == CORR_PULLBACK || corr.state == CORR_CONTINUATION ||
       corr.state == CORR_LIQ_GRAB || corr.state == CORR_RETEST || corr.state == CORR_UNKNOWN)
    {
-      if(hold.action == HOLD_MANAGE)
+      if(hold.action == HOLD_MANAGE || hold.action == HOLD_EXIT)
       {
          x.action = SX_BE;
-         x.reason = "healthy correction — protect / manage";
+         x.reason = "healthy correction — protect / do not close";
       }
       return x;
    }
 
    if(hold.action == HOLD_MANAGE)
    {
-      x.action = SX_TIGHTEN;
-      x.reason = "manage open risk";
+      x.action = SX_BE; // prefer BE over tighten-close path
+      x.reason = "manage open risk — breakeven protect";
    }
    return x;
 }
@@ -5631,8 +5673,8 @@ string UltraSupreme_Dashboard()
 #define HITMAN_ULTRA_MISSION_CONTROL_MQH
 //+------------------------------------------------------------------+
 //| HITMAN AI ULTRA X — LEVEL 8 ULTRA MISSION CONTROL                |
-//| Single authority — no other module may override                  |
-//| Approves: BUY · SELL · WAIT · HOLD · MANAGE · EXIT               |
+//| Single authority — BUY/SELL/WAIT/HOLD/MANAGE/EXIT                |
+//| EXIT only when Smart Exit confirms (never noise / soft hold-exit)|
 //+------------------------------------------------------------------+
 
 struct UltraMissionState
@@ -5643,7 +5685,7 @@ struct UltraMissionState
    int tradeScore;
    string grade;
    string thesis;
-   ulong ticket;   // for manage path
+   ulong ticket;
    datetime ts;
 };
 
@@ -5686,7 +5728,6 @@ void UltraMission_Set(const ENUM_SUPREME_DECISION c, const string reason,
    g_UltraMissionLast.ts = TimeCurrent();
 }
 
-// Entry path — sole approval authority for BUY/SELL/WAIT
 bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, string &why)
 {
    bool ok = UltraSupreme_FinalizeEntry(s, u, sig, why);
@@ -5704,7 +5745,8 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
    return ok;
 }
 
-// Open-position path — sole authority for HOLD/MANAGE/EXIT
+// Open-position path — EXIT only if SmartExit returns SX_CLOSE.
+// HoldScore HOLD_EXIT alone must NOT force a close (that was closing trades on noise).
 ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const string s,
                                                    const bool isBuy, const UltraSnap &u,
                                                    string &why)
@@ -5712,19 +5754,35 @@ ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const str
    why = "";
    ENUM_SMART_EXIT sx = UltraSupreme_ManagePosition(ticket, s, isBuy, u, why);
    ENUM_SUPREME_DECISION cmd = SUP_MANAGE;
-   if(sx == SX_CLOSE) cmd = SUP_EXIT;
-   else if(sx == SX_NONE && g_UltraHoldLast.action == HOLD_HOLD) cmd = SUP_HOLD;
-   else if(sx == SX_BE || sx == SX_TIGHTEN) cmd = SUP_MANAGE;
-   else if(g_UltraHoldLast.action == HOLD_EXIT) cmd = SUP_EXIT;
-   else if(g_UltraHoldLast.action == HOLD_HOLD) cmd = SUP_HOLD;
-   else cmd = SUP_MANAGE;
+
+   if(sx == SX_CLOSE)
+   {
+      cmd = SUP_EXIT;
+   }
+   else if(sx == SX_BE || sx == SX_TIGHTEN)
+   {
+      cmd = SUP_MANAGE;
+   }
+   else if(g_UltraHoldLast.action == HOLD_HOLD || sx == SX_NONE)
+   {
+      // Prefer HOLD; treat soft HOLD_EXIT as MANAGE (protect, do not close)
+      if(g_UltraHoldLast.action == HOLD_EXIT && !UltraUpgradeStrict)
+         cmd = SUP_MANAGE;
+      else if(g_UltraHoldLast.action == HOLD_HOLD)
+         cmd = SUP_HOLD;
+      else
+         cmd = SUP_MANAGE;
+   }
+   else
+   {
+      cmd = SUP_MANAGE;
+   }
 
    UltraMission_Set(cmd, why, u.score.confidence, g_UltraHoldLast.total,
                     g_UltraHoldLast.label, g_UltraBrainLast.thesis, ticket);
    return cmd;
 }
 
-// Map mission EXIT/MANAGE/HOLD → smart-exit actions for Shell
 ENUM_SMART_EXIT UltraMission_ToSmartExit(const ENUM_SUPREME_DECISION cmd)
 {
    if(cmd == SUP_EXIT) return SX_CLOSE;
@@ -9592,14 +9650,14 @@ input group "MARKET DEFENSE ENGINE"
 // Runs every tick in ManageOpenTrades — can lock BE, tighten SL, or close.
 
 input bool   EnableMarketDefense            = true;  // master defense switch
-input bool   DefenseCloseOnHardReversal     = true;  // opposite correct RevSniper stack → close
+input bool   DefenseCloseOnHardReversal     = false; // OFF — was closing runners on soft opposite stacks
 input bool   DefenseLockBEOnAdverseSweep    = true;  // wrong-side sweep vs our trade → lock BE
 input bool   DefenseTightenOnChop           = true;  // IMCE manipulation/chop while in profit → BE
-input bool   DefenseCloseOnTrapAgainst      = true;  // fake-breakout trap in our direction → close if pre-TP1
+input bool   DefenseCloseOnTrapAgainst      = false; // OFF — fake-breakout closes were too aggressive
 input bool   DefenseRetraceLockFromPeak     = true;  // retrace from MFE → lock portion of peak profit
 input double DefenseRetraceATR              = 0.70;  // ATR retrace from peak that triggers lock
 input double DefenseRetraceLockFraction     = 0.50;  // lock this fraction of peak favorable move
-input bool   DefenseRequireInProfitToClose  = false; // if true, hard-reversal close only when already green
+input bool   DefenseRequireInProfitToClose  = true;  // if hard-reversal re-enabled, only close when green
 input bool   DefenseLogActions              = true;  // print DEFEND actions to Experts
 
 // #7 mid-path BE before TP1 (lighter than full close)
@@ -9608,8 +9666,8 @@ input double DefensePreTP1AdverseATR        = 0.55;  // adverse ATR from entry t
 input bool   DefensePreTP1RequireProfitTiny = false; // if true, only BE when back near flat/green
 
 // #8 MAE hard cut before TP1
-input bool   DefenseMAE_StopEnabled         = true;  // close if floating loss exceeds MAE ATR
-input double DefenseMAE_ATR                 = 1.25;  // max adverse excursion in ATR before TP1 (0=off)
+input bool   DefenseMAE_StopEnabled         = false; // OFF — MAE hard-cut closed too many positions
+input double DefenseMAE_ATR                 = 2.50;  // only if MAE stop re-enabled (was 1.25)
 
 //================ TRADE STATE TRACKING (for TP1/TP2/TP3) ============//
 // MT5 positions only carry one SL and one TP natively - there's no built-in
@@ -11024,9 +11082,9 @@ input int    MaxHoldBars            = 800;   // hard cap (EntryTF bars) - closes
 input bool   EnableAdaptiveHoldTime = true;   // shortens the minimum hold requirement while the market is in a RANGING regime (Part 15) - a trade sitting through chop doesn't need the same patience as one riding a genuine trend
 input double RangingHoldTimeFactor  = 0.5;    // effectiveMinHoldBars is multiplied by this while GetMarketRegime() == REGIME_RANGING
 
-input bool   EnableStagnationExit      = true;
-input int    StagnationLookbackBars    = 150; // only checked once a trade has been open at least this many EntryTF bars
-input double StagnationProgressATRMultiple = 0.5; // if the position's favorable excursion hasn't reached this many ATRs by then, it's judged stagnant and closed
+input bool   EnableStagnationExit      = false; // OFF — was closing trades that were still developing
+input int    StagnationLookbackBars    = 250; // only checked once a trade has been open at least this many EntryTF bars
+input double StagnationProgressATRMultiple = 0.35; // if re-enabled: require less progress before judging stagnant
 
 // Forward — implemented with Market Defense Engine (after IMCE/trap helpers)
 bool MarketDefendOpenPosition(const ulong ticket, const long type, const double openPrice,
@@ -11221,23 +11279,37 @@ void ManageOpenTrades()
          string sxWhy = "";
          UltraSnap sxSnap = g_UltraLastSnap;
          bool sxCached = false;
+         bool snapOK = false;
          if(UltraFastSignalEnabled)
-         {
-            if(!UltraUFSE_BuildSnapshot(BrokerSymbol, sxSnap, sxCached))
-               sxSnap = g_UltraLastSnap;
-         }
-         else if(!UltraBuildSnapshot(BrokerSymbol, sxSnap))
+            snapOK = UltraUFSE_BuildSnapshot(BrokerSymbol, sxSnap, sxCached);
+         else
+            snapOK = UltraBuildSnapshot(BrokerSymbol, sxSnap);
+         if(!snapOK)
             sxSnap = g_UltraLastSnap;
 
          ENUM_SUPREME_DECISION mission = UltraMission_PositionCommand(ticket, BrokerSymbol, isBuyPos, sxSnap, sxWhy);
          ENUM_SMART_EXIT sx = UltraMission_ToSmartExit(mission);
-         if(mission == SUP_EXIT || sx == SX_CLOSE)
+
+         // Minimum hold before Mission EXIT can fire (protect fresh entries)
+         int minMissionExitBars = MinimumHoldBars;
+         if(minMissionExitBars < 3) minMissionExitBars = 3;
+         bool canMissionExit = (barsHeld >= minMissionExitBars);
+
+         if((mission == SUP_EXIT || sx == SX_CLOSE) && canMissionExit)
          {
             if(UltraUpgradeLog)
-               Print("MISSION EXIT ticket=", ticket, " ", sxWhy);
+               Print("MISSION EXIT ticket=", ticket, " bars=", barsHeld, " ", sxWhy);
             UltraThesis_Clear(ticket);
             g_Trade.PositionClose(ticket);
             continue;
+         }
+         if((mission == SUP_EXIT || sx == SX_CLOSE) && !canMissionExit)
+         {
+            // Too early to exit — protect with BE if possible instead
+            if(UltraUpgradeLog)
+               Print("MISSION EXIT blocked (min hold) ticket=", ticket, " bars=", barsHeld);
+            mission = SUP_MANAGE;
+            sx = SX_BE;
          }
          if(mission == SUP_MANAGE || sx == SX_BE || sx == SX_TIGHTEN)
          {

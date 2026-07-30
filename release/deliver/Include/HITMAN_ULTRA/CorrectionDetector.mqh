@@ -47,7 +47,15 @@ UltraCorrection UltraCorr_Detect(const UltraSnap &u, const bool isBuy)
    bool cont = u.st.continuation || (isBuy ? u.trend.bull : u.trend.bear);
    bool softMomLoss = u.mom.weakness && !adverseBos && !adverseCh;
 
-   if((adverseBos || adverseCh) && u.trend.exhaustion)
+   // True reversal = confirmed adverse BOS + major CHoCH + exhaustion (soft)
+   // Soft mode refuses to call REVERSAL on a single BOS flicker.
+   bool trueReversal = false;
+   if(UltraUpgradeStrict)
+      trueReversal = (adverseBos || adverseCh) && u.trend.exhaustion;
+   else
+      trueReversal = adverseBos && adverseCh && u.trend.exhaustion;
+
+   if(trueReversal)
    {
       c.state = CORR_REVERSAL;
       c.isHealthy = false;
@@ -60,10 +68,16 @@ UltraCorrection UltraCorr_Detect(const UltraSnap &u, const bool isBuy)
       c.state = CORR_CONTINUATION;
    else if(isBuy ? u.fib.atBuyZone : u.fib.atSellZone)
       c.state = CORR_RETEST;
+   else if(adverseBos || adverseCh)
+   {
+      // Single adverse break without full stack → treat as pullback, not exit
+      c.state = CORR_PULLBACK;
+      c.isHealthy = true;
+   }
    else
    {
       c.state = CORR_UNKNOWN;
-      c.isHealthy = true; // unknown → treat as healthy (do not exit)
+      c.isHealthy = true;
    }
    c.label = UltraCorr_Name(c.state);
    return c;
