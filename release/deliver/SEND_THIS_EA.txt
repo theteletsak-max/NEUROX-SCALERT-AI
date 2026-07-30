@@ -6,4 +6,4 @@ Same: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai
 
 BUILD_ID: HA_ULTRA_93
 Comment:  HITMAN AI
-MaxOpen:  3
+Fix: CTrade g_Trade (no 'trade hides global' warning)

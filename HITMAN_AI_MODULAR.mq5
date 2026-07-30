@@ -14,7 +14,7 @@
 
 #define BG_OBJECT_NAME "HitmanAI_ChartBackground"
 
-CTrade trade;
+CTrade g_Trade;
 
 #include <HITMAN_ULTRA/Shell_A_InputsGlobals.mqh>
 #include <HITMAN_ULTRA/HITMAN_ULTRA.mqh>

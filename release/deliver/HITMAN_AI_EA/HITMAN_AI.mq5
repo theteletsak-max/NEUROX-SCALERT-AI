@@ -14,7 +14,7 @@
 
 #define BG_OBJECT_NAME "HitmanAI_ChartBackground"
 
-CTrade trade;
+CTrade g_Trade;
 
 //==================== HITMAN AI — SINGLE-FILE MASTER =================//
 
@@ -3671,7 +3671,7 @@ bool UltraDefense_Line8_Position(const ulong ticket, const long type,
       bool atProfit = isBuy ? (price >= openPrice) : (price <= openPrice);
       if(needsBE && atProfit)
       {
-         if(trade.PositionModify(ticket, openPrice, currentTP))
+         if(g_Trade.PositionModify(ticket, openPrice, currentTP))
          {
             currentSL = openPrice;
             if(UltraDefenseLog)
@@ -3685,7 +3685,7 @@ bool UltraDefense_Line8_Position(const ulong ticket, const long type,
    {
       if(UltraDefenseLog)
          Print("DEFENSE L8 POSITION: CLOSE adverse flip ticket=", ticket);
-      trade.PositionClose(ticket);
+      g_Trade.PositionClose(ticket);
       return true;
    }
 
@@ -4653,10 +4653,10 @@ void UltraUSM2_Score(const string s, UltraSnap &u, const bool buySide, UltraUSM2
       out.session * 0.03 + out.news * 0.02 + out.precision * 0.07 + out.probability * 0.08;
    out.confidence = UltraUSM2_Clamp((int)MathRound(conf));
 
-   double trade =
+   double tradeBlend =
       out.confidence * 0.55 + out.precision * 0.20 + out.probability * 0.15 +
       out.execution * 0.05 + out.risk * 0.05;
-   out.tradeScore = UltraUSM2_Clamp((int)MathRound(trade));
+   out.tradeScore = UltraUSM2_Clamp((int)MathRound(tradeBlend));
    out.grade = UltraUSM2_Grade((double)out.tradeScore);
 
    // Write back into snap scores (USM2 owns final confidence when enabled)
@@ -7340,7 +7340,7 @@ int OnInit()
       return(INIT_PARAMETERS_INCORRECT);
    }
 
-   trade.SetExpertMagicNumber(MagicNumber);
+   g_Trade.SetExpertMagicNumber(MagicNumber);
 
    BrokerSymbol = DetectBrokerSymbol(_Symbol);
    PrimarySymbol = BrokerSymbol;
@@ -8898,10 +8898,10 @@ void CloseAllEAPositions()
       if(PositionGetInteger(POSITION_MAGIC) != MagicNumber)
          continue;
 
-      if(trade.PositionClose(ticket))
+      if(g_Trade.PositionClose(ticket))
          Print("Emergency close: closed ticket ", ticket);
       else
-         Print("Emergency close FAILED on ticket ", ticket, ": ", trade.ResultRetcodeDescription());
+         Print("Emergency close FAILED on ticket ", ticket, ": ", g_Trade.ResultRetcodeDescription());
    }
 }
 
@@ -9372,7 +9372,7 @@ double CalculateLotSize(double slDistance = 0.0)
 // entirely on the broker rejecting it after the fact. This uses
 // OrderCalcMargin() to work out the margin the trade would actually
 // require and compares it against ACCOUNT_MARGIN_FREE (with a small
-// safety buffer) before ever calling trade.Buy()/trade.Sell(), so a
+// safety buffer) before ever calling g_Trade.Buy()/g_Trade.Sell(), so a
 // margin shortfall is caught and logged cleanly instead of surfacing as a
 // generic broker-side rejection.
 
@@ -9835,7 +9835,7 @@ input double TP2_ClosePercent = 50.0;   // % of the REMAINING (post-TP1) positio
 input double TP3_RR_Ratio     = 4.0;    // TP3 distance = SL distance x this - used as the runner's target when trailing is off
 input bool   EnableTP3Runner  = true;   // if false, TP2 behaves like a normal final target (old behavior) instead of releasing a runner
 
-// Works out the SL/TP1/TP2/TP3 price distances for a new trade. Falls back
+// Works out the SL/TP1/TP2/TP3 price distances for a new g_Trade. Falls back
 // to the original fixed-points behavior if UseDynamicStops is off, so
 // nothing changes for anyone who preferred the old behavior.
 void GetTradeDistances(double &slDistance, double &tp1Distance, double &tp2Distance, double &tp3Distance)
@@ -10040,7 +10040,7 @@ bool CheckTradeStops(double entry,double &sl,double &tp)
 
 //================ POSITION TICKET RESOLUTION =========================//
 // FIX: RegisterTradeState()/RecordSignalSnapshot() used to be called with
-// trade.ResultOrder() - the ORDER ticket. On many account/broker setups
+// g_Trade.ResultOrder() - the ORDER ticket. On many account/broker setups
 // the POSITION ticket (what PositionSelectByTicket/PruneTradeStates/
 // FindTradeState actually look up by) is not guaranteed to equal the order
 // ticket. The officially correct way to resolve "which position did this
@@ -10075,7 +10075,7 @@ ulong ResolvePositionTicket(ulong orderTicket)
 // executed, and recalculated CalculateTradeScore()/every signal flag fresh
 // at that point - by which time price/indicators may have already ticked
 // forward from the moment StrongBuySetup()/StrongSellSetup() actually
-// approved the trade. That meant the score saved for post-trade signal
+// approved the g_Trade. That meant the score saved for post-trade signal
 // review could quietly differ from the score that actually triggered the
 // entry. StrongBuySetup()/StrongSellSetup() now capture the exact snapshot
 // at the moment of the decision (Part 15) into this pending slot;
@@ -10167,11 +10167,11 @@ void ConfigureFillingMode(string symbol)
    long fillingModes = UltraSymFillingMode(symbol);
 
    if((fillingModes & SYMBOL_FILLING_FOK) != 0)
-      trade.SetTypeFilling(ORDER_FILLING_FOK);
+      g_Trade.SetTypeFilling(ORDER_FILLING_FOK);
    else if((fillingModes & SYMBOL_FILLING_IOC) != 0)
-      trade.SetTypeFilling(ORDER_FILLING_IOC);
+      g_Trade.SetTypeFilling(ORDER_FILLING_IOC);
    else
-      trade.SetTypeFilling(ORDER_FILLING_RETURN); // safest fallback - supported almost everywhere
+      g_Trade.SetTypeFilling(ORDER_FILLING_RETURN); // safest fallback - supported almost everywhere
 }
 
 // BROKER RESPONSE CLASSIFICATION (this pass): the retry loop below already
@@ -10342,8 +10342,8 @@ bool ExecuteBuy()
 
    LastAttemptTimeArr[symIdx] = TimeCurrent();
 
-   trade.SetExpertMagicNumber(MagicNumber);
-   trade.SetDeviationInPoints(GetEffectiveSlippagePoints());
+   g_Trade.SetExpertMagicNumber(MagicNumber);
+   g_Trade.SetDeviationInPoints(GetEffectiveSlippagePoints());
 
    // FIX #8: no retry existed for transient execution errors like requotes
    // or the price moving between our snapshot above and the send. This
@@ -10364,12 +10364,12 @@ bool ExecuteBuy()
       // function.
       ResetLastError();
 
-      result = trade.Buy(lot, BrokerSymbol, 0.0, sl, tp, TradeComment);
+      result = g_Trade.Buy(lot, BrokerSymbol, 0.0, sl, tp, TradeComment);
 
       if(result)
          break;
 
-      uint retcode = trade.ResultRetcode();
+      uint retcode = g_Trade.ResultRetcode();
 
       if(IsTransientOrderRetcode(retcode))
       {
@@ -10395,7 +10395,7 @@ bool ExecuteBuy()
 
       if(IsFatalOrderRetcode(retcode))
       {
-         Print("BUY FAILED (fatal) | Retcode: ", retcode, " | ", DescribeOrderRetcode(retcode, trade.ResultRetcodeDescription()));
+         Print("BUY FAILED (fatal) | Retcode: ", retcode, " | ", DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
          return false; // no point trying the no-stops fallback either - the order itself is unplaceable right now
       }
 
@@ -10405,7 +10405,7 @@ bool ExecuteBuy()
    if(result)
    {
       Print("BUY executed successfully.");
-      ulong posTicket = ResolvePositionTicket(trade.ResultOrder());
+      ulong posTicket = ResolvePositionTicket(g_Trade.ResultOrder());
       LastTradeTimeArr[symIdx] = TimeCurrent();
       MarkContFallbackFillIfNeeded();
       RegisterTradeState(posTicket, tp1Price, tp2Price, tp3Price, true);
@@ -10417,18 +10417,18 @@ bool ExecuteBuy()
    // attached to a market order outright, even when the prices themselves
    // are valid. Retry with no stops, then attach them via PositionModify
    // once the position exists.
-   if(trade.ResultRetcode() == TRADE_RETCODE_INVALID_STOPS)
+   if(g_Trade.ResultRetcode() == TRADE_RETCODE_INVALID_STOPS)
    {
       if(EnableVerboseLogging)
          Print("BUY retry: opening without stops, will attach SL/TP after fill.");
 
       ResetLastError();
 
-      bool openedNoStops = trade.Buy(lot, BrokerSymbol, 0.0, 0.0, 0.0, TradeComment);
+      bool openedNoStops = g_Trade.Buy(lot, BrokerSymbol, 0.0, 0.0, 0.0, TradeComment);
 
       if(openedNoStops)
       {
-         ulong newTicket = ResolvePositionTicket(trade.ResultOrder());
+         ulong newTicket = ResolvePositionTicket(g_Trade.ResultOrder());
          bool stopsAttached = false;
 
          if(newTicket == 0)
@@ -10439,7 +10439,7 @@ bool ExecuteBuy()
 
          if(PositionSelectByTicket(newTicket))
          {
-            if(trade.PositionModify(newTicket, sl, tp))
+            if(g_Trade.PositionModify(newTicket, sl, tp))
             {
                stopsAttached = true;
             }
@@ -10453,7 +10453,7 @@ bool ExecuteBuy()
                // fails, close the position immediately rather than leave
                // risk unmanaged.
                Print("BUY opened without stops, first attach attempt failed: ",
-                     trade.ResultRetcodeDescription(), " - retrying with recalculated stops.");
+                     g_Trade.ResultRetcodeDescription(), " - retrying with recalculated stops.");
 
                double curPrice = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
                double retrySL = curPrice - slDistance;
@@ -10465,7 +10465,7 @@ bool ExecuteBuy()
                                                slDistance * TP3_RR_Ratio, retryTP2, retryTP3);
                CheckTradeStops(curPrice, retrySL, retryTP);
 
-               if(trade.PositionModify(newTicket, retrySL, retryTP))
+               if(g_Trade.PositionModify(newTicket, retrySL, retryTP))
                {
                   stopsAttached = true;
                   sl = retrySL; tp = retryTP;
@@ -10477,7 +10477,7 @@ bool ExecuteBuy()
          if(!stopsAttached)
          {
             Print("BUY: could not attach SL/TP after fallback - closing the unprotected position for safety (ticket ", newTicket, ").");
-            trade.PositionClose(newTicket);
+            g_Trade.PositionClose(newTicket);
             return false;
          }
 
@@ -10492,9 +10492,9 @@ bool ExecuteBuy()
 
    Print(
       "BUY FAILED | Retcode: ",
-      trade.ResultRetcode(),
+      g_Trade.ResultRetcode(),
       " | ",
-      trade.ResultRetcodeDescription()
+      g_Trade.ResultRetcodeDescription()
    );
 
    return false;
@@ -10614,8 +10614,8 @@ bool ExecuteSell()
 
    LastAttemptTimeArr[symIdx] = TimeCurrent();
 
-   trade.SetExpertMagicNumber(MagicNumber);
-   trade.SetDeviationInPoints(GetEffectiveSlippagePoints());
+   g_Trade.SetExpertMagicNumber(MagicNumber);
+   g_Trade.SetDeviationInPoints(GetEffectiveSlippagePoints());
 
    const int MAX_SEND_RETRIES = 3;
    bool result = false;
@@ -10624,12 +10624,12 @@ bool ExecuteSell()
    {
       ResetLastError();
 
-      result = trade.Sell(lot, BrokerSymbol, 0.0, sl, tp, TradeComment);
+      result = g_Trade.Sell(lot, BrokerSymbol, 0.0, sl, tp, TradeComment);
 
       if(result)
          break;
 
-      uint retcode = trade.ResultRetcode();
+      uint retcode = g_Trade.ResultRetcode();
 
       if(IsTransientOrderRetcode(retcode))
       {
@@ -10655,7 +10655,7 @@ bool ExecuteSell()
 
       if(IsFatalOrderRetcode(retcode))
       {
-         Print("SELL FAILED (fatal) | Retcode: ", retcode, " | ", DescribeOrderRetcode(retcode, trade.ResultRetcodeDescription()));
+         Print("SELL FAILED (fatal) | Retcode: ", retcode, " | ", DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
          return false;
       }
 
@@ -10665,7 +10665,7 @@ bool ExecuteSell()
    if(result)
    {
       Print("SELL executed successfully.");
-      ulong posTicket = ResolvePositionTicket(trade.ResultOrder());
+      ulong posTicket = ResolvePositionTicket(g_Trade.ResultOrder());
       LastTradeTimeArr[symIdx] = TimeCurrent();
       MarkContFallbackFillIfNeeded();
       RegisterTradeState(posTicket, tp1Price, tp2Price, tp3Price, false);
@@ -10674,18 +10674,18 @@ bool ExecuteSell()
    }
 
    // Same no-stops fallback as ExecuteBuy() - see comments there.
-   if(trade.ResultRetcode() == TRADE_RETCODE_INVALID_STOPS)
+   if(g_Trade.ResultRetcode() == TRADE_RETCODE_INVALID_STOPS)
    {
       if(EnableVerboseLogging)
          Print("SELL retry: opening without stops, will attach SL/TP after fill.");
 
       ResetLastError();
 
-      bool openedNoStops = trade.Sell(lot, BrokerSymbol, 0.0, 0.0, 0.0, TradeComment);
+      bool openedNoStops = g_Trade.Sell(lot, BrokerSymbol, 0.0, 0.0, 0.0, TradeComment);
 
       if(openedNoStops)
       {
-         ulong newTicket = ResolvePositionTicket(trade.ResultOrder());
+         ulong newTicket = ResolvePositionTicket(g_Trade.ResultOrder());
          bool stopsAttached = false;
 
          if(newTicket == 0)
@@ -10696,14 +10696,14 @@ bool ExecuteSell()
 
          if(PositionSelectByTicket(newTicket))
          {
-            if(trade.PositionModify(newTicket, sl, tp))
+            if(g_Trade.PositionModify(newTicket, sl, tp))
             {
                stopsAttached = true;
             }
             else
             {
                Print("SELL opened without stops, first attach attempt failed: ",
-                     trade.ResultRetcodeDescription(), " - retrying with recalculated stops.");
+                     g_Trade.ResultRetcodeDescription(), " - retrying with recalculated stops.");
 
                double curPrice = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
                double retrySL = curPrice + slDistance;
@@ -10715,7 +10715,7 @@ bool ExecuteSell()
                                                slDistance * TP3_RR_Ratio, retryTP2, retryTP3);
                CheckTradeStops(curPrice, retrySL, retryTP);
 
-               if(trade.PositionModify(newTicket, retrySL, retryTP))
+               if(g_Trade.PositionModify(newTicket, retrySL, retryTP))
                {
                   stopsAttached = true;
                   sl = retrySL; tp = retryTP;
@@ -10727,7 +10727,7 @@ bool ExecuteSell()
          if(!stopsAttached)
          {
             Print("SELL: could not attach SL/TP after fallback - closing the unprotected position for safety (ticket ", newTicket, ").");
-            trade.PositionClose(newTicket);
+            g_Trade.PositionClose(newTicket);
             return false;
          }
 
@@ -10742,9 +10742,9 @@ bool ExecuteSell()
 
    Print(
       "SELL FAILED | Retcode: ",
-      trade.ResultRetcode(),
+      g_Trade.ResultRetcode(),
       " | ",
-      trade.ResultRetcodeDescription()
+      g_Trade.ResultRetcodeDescription()
    );
 
    return false;
@@ -10997,14 +10997,14 @@ bool ApplyProfitLockSL(const ulong ticket,
       MathAbs(newTP - curTP) < SymbolInfoDouble(BrokerSymbol, SYMBOL_POINT))
       return true;
 
-   bool ok = trade.PositionModify(ticket, newSL, newTP);
+   bool ok = g_Trade.PositionModify(ticket, newSL, newTP);
    if(ok)
       Print("PROFIT LOCK: ticket ", ticket,
             " SL→", DoubleToString(newSL, UltraSymDigits(BrokerSymbol)),
             " TP→", DoubleToString(newTP, UltraSymDigits(BrokerSymbol)),
             " (secured after TP hit)");
    else
-      Print("PROFIT LOCK failed on ticket ", ticket, ": ", trade.ResultRetcodeDescription());
+      Print("PROFIT LOCK failed on ticket ", ticket, ": ", g_Trade.ResultRetcodeDescription());
    return ok;
 }
 
@@ -11185,7 +11185,7 @@ void ManageOpenTrades()
       if(EnableMaxHoldBars && barsHeld >= MaxHoldBars)
       {
          Print("Max hold time reached (", barsHeld, " bars) - closing ticket ", ticket);
-         trade.PositionClose(ticket);
+         g_Trade.PositionClose(ticket);
          continue;
       }
 
@@ -11236,7 +11236,7 @@ void ManageOpenTrades()
             if(UltraUpgradeLog)
                Print("MISSION EXIT ticket=", ticket, " ", sxWhy);
             UltraThesis_Clear(ticket);
-            trade.PositionClose(ticket);
+            g_Trade.PositionClose(ticket);
             continue;
          }
          if(mission == SUP_MANAGE || sx == SX_BE || sx == SX_TIGHTEN)
@@ -11245,7 +11245,7 @@ void ManageOpenTrades()
             bool atProfit = isBuyPos ? (price >= openPrice) : (price <= openPrice);
             if(needsBE && atProfit)
             {
-               if(trade.PositionModify(ticket, openPrice, currentTP))
+               if(g_Trade.PositionModify(ticket, openPrice, currentTP))
                {
                   currentSL = openPrice;
                   if(UltraUpgradeLog)
@@ -11278,7 +11278,7 @@ void ManageOpenTrades()
 
                if(currentSL < openPrice)
                {
-                  if(trade.PositionModify(ticket, openPrice, currentTP))
+                  if(g_Trade.PositionModify(ticket, openPrice, currentTP))
                      currentSL = openPrice;
                }
 
@@ -11296,7 +11296,7 @@ void ManageOpenTrades()
 
                if(currentSL > openPrice || currentSL == 0)
                {
-                  if(trade.PositionModify(ticket, openPrice, currentTP))
+                  if(g_Trade.PositionModify(ticket, openPrice, currentTP))
                      currentSL = openPrice;
                }
 
@@ -11341,7 +11341,7 @@ void ManageOpenTrades()
 
             if(closeVolume >= minVolume && remainder >= minVolume)
             {
-               if(trade.PositionClosePartial(ticket, closeVolume))
+               if(g_Trade.PositionClosePartial(ticket, closeVolume))
                {
                   Print("TP1 hit: closed ", DoubleToString(closeVolume,2),
                         " lots of ticket ", ticket, " — locking profit, remainder → TP2");
@@ -11351,12 +11351,12 @@ void ManageOpenTrades()
                else
                {
                   Print("TP1 partial close failed on ticket ", ticket, ": ",
-                        trade.ResultRetcodeDescription(), " — will retry next tick");
+                        g_Trade.ResultRetcodeDescription(), " — will retry next tick");
                }
             }
             else if(remainder < minVolume && currentVolume >= minVolume && closeVolume >= minVolume)
             {
-               if(trade.PositionClose(ticket))
+               if(g_Trade.PositionClose(ticket))
                {
                   Print("TP1 hit but position too small to split - closed in full: ", ticket);
                   TradeStates[stateIndex].tp1Taken = true;
@@ -11461,7 +11461,7 @@ void ManageOpenTrades()
 
             if(closeVolume2 >= minVolume2 && remainder2 >= minVolume2)
             {
-               if(trade.PositionClosePartial(ticket, closeVolume2))
+               if(g_Trade.PositionClosePartial(ticket, closeVolume2))
                {
                   Print("TP2 hit: closed ", DoubleToString(closeVolume2,2),
                         " lots of ticket ", ticket, " — locking more profit, runner → TP3/trail");
@@ -11471,13 +11471,13 @@ void ManageOpenTrades()
                else
                {
                   Print("TP2 partial close failed on ticket ", ticket, ": ",
-                        trade.ResultRetcodeDescription(), " — will retry next tick");
+                        g_Trade.ResultRetcodeDescription(), " — will retry next tick");
                }
             }
             else if(remainder2 < minVolume2 && currentVolume2 >= minVolume2 && closeVolume2 >= minVolume2)
             {
                // BUGFIX40: mirror TP1 — can't leave dust remainder
-               if(trade.PositionClose(ticket))
+               if(g_Trade.PositionClose(ticket))
                {
                   Print("TP2 hit but position too small to split - closed in full: ", ticket);
                   TradeStates[stateIndex].tp2Taken = true;
@@ -11526,14 +11526,14 @@ void ManageOpenTrades()
                            : (curSL2 == 0.0 || curSL2 > tp1Lock);
                         if(needRaise)
                         {
-                           if(trade.PositionModify(ticket, tp1Lock, 0.0))
+                           if(g_Trade.PositionModify(ticket, tp1Lock, 0.0))
                               lockOK = true;
                         }
                         else
                         {
                            double curTP2 = PositionGetDouble(POSITION_TP);
                            if(curTP2 > 0.0)
-                              trade.PositionModify(ticket, curSL2, 0.0);
+                              g_Trade.PositionModify(ticket, curSL2, 0.0);
                            lockOK = true; // SL already at/above TP1
                         }
                      }
@@ -11559,7 +11559,7 @@ void ManageOpenTrades()
                            ? (curSL2 < tp1Lock)
                            : (curSL2 == 0.0 || curSL2 > tp1Lock);
                         if(needRaise)
-                           trade.PositionModify(ticket, tp1Lock, curTP2);
+                           g_Trade.PositionModify(ticket, tp1Lock, curTP2);
                      }
                      if(lockOK)
                         Print("SURE LADDER: TP2 secured → hunting TP3 on ticket ", ticket);
@@ -11640,7 +11640,7 @@ void ManageOpenTrades()
             {
                Print("Stagnation exit: ticket ", ticket, " has made no real progress after ",
                      barsHeld, " bars - closing.");
-               trade.PositionClose(ticket);
+               g_Trade.PositionClose(ticket);
                continue;
             }
          }
@@ -11660,7 +11660,7 @@ void ManageOpenTrades()
          if(GetADX() < TrendExitADXLevel)
          {
             Print("Trend exit: ADX below ", TrendExitADXLevel, ", closing ticket ", ticket);
-            trade.PositionClose(ticket);
+            g_Trade.PositionClose(ticket);
             continue;
          }
       }
@@ -11726,7 +11726,7 @@ if((price - newSL) >= minimumDistance)
 
    if(newSL > currentSL)
    {
-      if(trade.PositionModify(ticket, newSL, currentTP))
+      if(g_Trade.PositionModify(ticket, newSL, currentTP))
          currentSL = newSL;
    }
 }
@@ -11756,7 +11756,7 @@ if((newSL - price) >= minimumDistance)
 
    if(newSL < currentSL || currentSL == 0)
    {
-      if(trade.PositionModify(ticket, newSL, currentTP))
+      if(g_Trade.PositionModify(ticket, newSL, currentTP))
          currentSL = newSL;
    }
 }
@@ -15507,7 +15507,7 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
             Print("DEFEND MAE: adverse ", DoubleToString(adverseMove / atr, 2),
                   " ATR ≥ ", DoubleToString(DefenseMAE_ATR, 2),
                   " — closing ticket ", ticket);
-         trade.PositionClose(ticket);
+         g_Trade.PositionClose(ticket);
          return true;
       }
    }
@@ -15524,7 +15524,7 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
       if(armed && atOrAboveEntry && profitOK)
       {
          bool needBE = isBuy ? (currentSL < openPrice) : (currentSL > openPrice || currentSL == 0.0);
-         if(needBE && trade.PositionModify(ticket, openPrice, currentTP))
+         if(needBE && g_Trade.PositionModify(ticket, openPrice, currentTP))
          {
             currentSL = openPrice;
             if(DefenseLogActions)
@@ -15544,7 +15544,7 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
          if(DefenseLogActions)
             Print("DEFEND CLOSE: hard opposite reversal vs ", (isBuy ? "BUY" : "SELL"),
                   " ticket ", ticket, " — ", detail);
-         trade.PositionClose(ticket);
+         g_Trade.PositionClose(ticket);
          return true;
       }
    }
@@ -15557,14 +15557,14 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
          if(DefenseLogActions)
             Print("DEFEND CLOSE: fake-breakout trap against ", (isBuy ? "BUY" : "SELL"),
                   " ticket ", ticket);
-         trade.PositionClose(ticket);
+         g_Trade.PositionClose(ticket);
          return true;
       }
       // After TP1: lock at least BE instead of full close
       if(inProfit)
       {
          bool needBE = isBuy ? (currentSL < openPrice) : (currentSL > openPrice || currentSL == 0.0);
-         if(needBE && trade.PositionModify(ticket, openPrice, currentTP))
+         if(needBE && g_Trade.PositionModify(ticket, openPrice, currentTP))
          {
             currentSL = openPrice;
             if(DefenseLogActions)
@@ -15582,7 +15582,7 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
       if(wrongBar > 0 && (correctBar == 0 || wrongBar < correctBar))
       {
          bool needBE = isBuy ? (currentSL < openPrice) : (currentSL > openPrice || currentSL == 0.0);
-         if(needBE && trade.PositionModify(ticket, openPrice, currentTP))
+         if(needBE && g_Trade.PositionModify(ticket, openPrice, currentTP))
          {
             currentSL = openPrice;
             if(DefenseLogActions)
@@ -15599,7 +15599,7 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
       if(ctx == IMCE_MANIPULATION_CHOP)
       {
          bool needBE = isBuy ? (currentSL < openPrice) : (currentSL > openPrice || currentSL == 0.0);
-         if(needBE && trade.PositionModify(ticket, openPrice, currentTP))
+         if(needBE && g_Trade.PositionModify(ticket, openPrice, currentTP))
          {
             currentSL = openPrice;
             if(DefenseLogActions)
@@ -15624,7 +15624,7 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
             bool better = isBuy
                ? (lockSL > currentSL && lockSL < price)
                : ((currentSL == 0.0 || lockSL < currentSL) && lockSL > price);
-            if(better && trade.PositionModify(ticket, lockSL, currentTP))
+            if(better && g_Trade.PositionModify(ticket, lockSL, currentTP))
             {
                currentSL = lockSL;
                if(DefenseLogActions)
@@ -18878,7 +18878,7 @@ bool FinalTradeCheck()
 // impossible to diagnose from the Journal alone. This prints a one-line
 // breakdown of every gate for both directions, once per new bar PER
 // SYMBOL (not every tick, to avoid flooding the log), so it's immediately
-// visible which specific condition is holding back a trade.
+// visible which specific condition is holding back a g_Trade.
 
 
 //================ CLEAN LIVE MARKET ANALYSIS (OK70) =================//

@@ -496,7 +496,7 @@ bool UltraDefense_Line8_Position(const ulong ticket, const long type,
       bool atProfit = isBuy ? (price >= openPrice) : (price <= openPrice);
       if(needsBE && atProfit)
       {
-         if(trade.PositionModify(ticket, openPrice, currentTP))
+         if(g_Trade.PositionModify(ticket, openPrice, currentTP))
          {
             currentSL = openPrice;
             if(UltraDefenseLog)
@@ -510,7 +510,7 @@ bool UltraDefense_Line8_Position(const ulong ticket, const long type,
    {
       if(UltraDefenseLog)
          Print("DEFENSE L8 POSITION: CLOSE adverse flip ticket=", ticket);
-      trade.PositionClose(ticket);
+      g_Trade.PositionClose(ticket);
       return true;
    }
 

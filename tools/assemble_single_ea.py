@@ -44,7 +44,7 @@ header = '''//+-----------------------------------------------------------------
 
 #define BG_OBJECT_NAME "HitmanAI_ChartBackground"
 
-CTrade trade;
+CTrade g_Trade;
 
 //==================== HITMAN AI — SINGLE-FILE MASTER =================//
 '''
