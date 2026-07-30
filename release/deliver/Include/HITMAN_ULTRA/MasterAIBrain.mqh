@@ -36,7 +36,10 @@ void UltraBrain_Publish(const bool approved, const bool buySide, const UltraSnap
 {
    UltraBrain_Clear();
    g_UltraBrainLast.confidence = u.score.confidence;
-   g_UltraBrainLast.tradeScore = g_UltraUSM2Last.tradeScore > 0 ? g_UltraUSM2Last.tradeScore : u.score.confidence;
+   if(g_UltraUSM2Last.tradeScore > 0)
+      g_UltraBrainLast.tradeScore = g_UltraUSM2Last.tradeScore;
+   else
+      g_UltraBrainLast.tradeScore = u.score.confidence;
    g_UltraBrainLast.grade = g_UltraUSM2Last.grade;
    g_UltraBrainLast.thesis = thesis;
    g_UltraBrainLast.explainable = (StringLen(thesis) > 0 || StringLen(why) > 0);

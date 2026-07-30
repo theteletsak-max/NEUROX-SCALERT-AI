@@ -6,7 +6,7 @@
 void UltraEngVolatility(const string s, UltraSnap &u)
 {
    ENUM_TIMEFRAMES tf = UltraETF();
-   u.vol.atr = UltraATR(s, ATR_Period);
+   u.vol.atr = UltraATR(s, IDP_ATR_Period);
    if(u.vol.atr <= 0) return;
    double avg = 0.0;
    for(int i = 2; i <= 21; i++) avg += (iHigh(s, tf, i) - iLow(s, tf, i));

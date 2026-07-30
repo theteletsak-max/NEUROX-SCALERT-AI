@@ -71,22 +71,33 @@ void UltraThesis_Store(const ulong ticket, const string s, const bool isBuy,
       g_Thesis[idx].marketState += u.st.cycleName;
    }
    if(isBuy)
-      g_Thesis[idx].structureState = u.st.externalBull ? "EXT_BULL" : (u.st.internalBull ? "INT_BULL" : "MIXED");
+   {
+      if(u.st.externalBull) g_Thesis[idx].structureState = "EXT_BULL";
+      else if(u.st.internalBull) g_Thesis[idx].structureState = "INT_BULL";
+      else g_Thesis[idx].structureState = "MIXED";
+      if(u.trend.bull || u.trend.htfBull) g_Thesis[idx].trendState = "BULL";
+      else g_Thesis[idx].trendState = "WEAK";
+      if(u.liq.sweepBuy || u.liq.grabBuy) g_Thesis[idx].liquidityState = "SWEEP/GRAB";
+      else g_Thesis[idx].liquidityState = "NONE";
+      if(u.mom.momBuy || u.mom.impulse) g_Thesis[idx].momentumState = "IMPULSE";
+      else if(u.mom.weakness) g_Thesis[idx].momentumState = "WEAK";
+      else g_Thesis[idx].momentumState = "NEUTRAL";
+   }
    else
-      g_Thesis[idx].structureState = u.st.externalBear ? "EXT_BEAR" : (u.st.internalBear ? "INT_BEAR" : "MIXED");
-   if(isBuy)
-      g_Thesis[idx].trendState = u.trend.bull || u.trend.htfBull ? "BULL" : "WEAK";
-   else
-      g_Thesis[idx].trendState = u.trend.bear || u.trend.htfBear ? "BEAR" : "WEAK";
-   if(isBuy)
-      g_Thesis[idx].liquidityState = (u.liq.sweepBuy || u.liq.grabBuy) ? "SWEEP/GRAB" : "NONE";
-   else
-      g_Thesis[idx].liquidityState = (u.liq.sweepSell || u.liq.grabSell) ? "SWEEP/GRAB" : "NONE";
-   if(isBuy)
-      g_Thesis[idx].momentumState = (u.mom.momBuy || u.mom.impulse) ? "IMPULSE" : (u.mom.weakness ? "WEAK" : "NEUTRAL");
-   else
-      g_Thesis[idx].momentumState = (u.mom.momSell || u.mom.impulse) ? "IMPULSE" : (u.mom.weakness ? "WEAK" : "NEUTRAL");
-   g_Thesis[idx].riskState = (u.score.riskProb >= 70) ? "HIGH" : "OK";
+   {
+      if(u.st.externalBear) g_Thesis[idx].structureState = "EXT_BEAR";
+      else if(u.st.internalBear) g_Thesis[idx].structureState = "INT_BEAR";
+      else g_Thesis[idx].structureState = "MIXED";
+      if(u.trend.bear || u.trend.htfBear) g_Thesis[idx].trendState = "BEAR";
+      else g_Thesis[idx].trendState = "WEAK";
+      if(u.liq.sweepSell || u.liq.grabSell) g_Thesis[idx].liquidityState = "SWEEP/GRAB";
+      else g_Thesis[idx].liquidityState = "NONE";
+      if(u.mom.momSell || u.mom.impulse) g_Thesis[idx].momentumState = "IMPULSE";
+      else if(u.mom.weakness) g_Thesis[idx].momentumState = "WEAK";
+      else g_Thesis[idx].momentumState = "NEUTRAL";
+   }
+   if(u.score.riskProb >= 70) g_Thesis[idx].riskState = "HIGH";
+   else g_Thesis[idx].riskState = "OK";
    g_Thesis[idx].confidenceState = IntegerToString(u.score.confidence);
    g_Thesis[idx].conf = u.score.confidence;
    g_Thesis[idx].prec = u.score.precision;

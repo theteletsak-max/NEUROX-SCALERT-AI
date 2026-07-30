@@ -248,18 +248,29 @@ string UltraBuildExplanation(const UltraSnap &u, const bool buySide, const bool 
 
 void UltraClearSnap(UltraSnap &u)
 {
-   UltraStructure st; UltraBOS bos; UltraCHoCH choch; UltraLiquidity liq;
+   // Never ZeroMemory structs that contain string fields (MQL5 unsafe).
+   UltraBOS bos; UltraCHoCH choch; UltraLiquidity liq;
    UltraFib fib; UltraInst ict; UltraTrend trend; UltraMomentum mom; UltraVolatility vol;
    UltraIndicators ind; UltraScores score;
-   ZeroMemory(st); ZeroMemory(bos); ZeroMemory(choch); ZeroMemory(liq);
+   ZeroMemory(bos); ZeroMemory(choch); ZeroMemory(liq);
    ZeroMemory(fib); ZeroMemory(ict); ZeroMemory(trend); ZeroMemory(mom); ZeroMemory(vol);
    ZeroMemory(ind); ZeroMemory(score);
-   u.st = st; u.bos = bos; u.choch = choch; u.liq = liq;
+
+   // UltraStructure has string cycleName — clear manually
+   u.st.hh = u.st.hl = u.st.lh = u.st.ll = false;
+   u.st.swingHighOK = u.st.swingLowOK = false;
+   u.st.internalBull = u.st.internalBear = false;
+   u.st.externalBull = u.st.externalBear = false;
+   u.st.continuation = u.st.reversal = false;
+   u.st.strength = 0; u.st.quality = 0;
+   u.st.swingHigh = 0; u.st.swingLow = 0;
+   u.st.cycle = 4;
+   u.st.cycleName = "UNKNOWN";
+
+   u.bos = bos; u.choch = choch; u.liq = liq;
    u.fib = fib; u.ict = ict; u.trend = trend; u.mom = mom; u.vol = vol;
    u.ind = ind; u.score = score;
    u.regime = UREG_RANGE;
-   u.st.cycle = 4; // CYCLE_UNKNOWN
-   u.st.cycleName = "UNKNOWN";
    u.buyBias = false; u.sellBias = false;
    u.ctx.session = "OFF";
    u.ctx.asia = u.ctx.london = u.ctx.newyork = u.ctx.overlap = false;
@@ -287,8 +298,17 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
 
    // LEVEL 1 — Market Input + LEVEL 2 — Data Core refresh
    UltraMarketInput in;
-   if(!UltraInput_Process(s, in)){ UltraSetError("market input invalid"); return false; }
-   if(!UltraData_Refresh(s)){ UltraSetError("data integrity fail"); return false; }
+   if(!UltraInput_Process(s, in))
+   {
+      UltraSetError("market input invalid");
+      return false;
+   }
+   UltraData_Refresh(s);
+   if(!g_UltraDataCache.valid)
+   {
+      UltraSetError("data/price invalid");
+      return false;
+   }
 
    UltraEngVolatility(s, u);
    UltraEngStructure(s, u);

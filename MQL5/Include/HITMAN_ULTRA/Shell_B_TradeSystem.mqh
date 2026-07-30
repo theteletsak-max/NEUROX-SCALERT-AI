@@ -66,6 +66,7 @@ int OnInit()
    UltraSystemController_Boot();
    UltraEvent_OnBoot();
    UltraOpt_OnTickStart();
+   UltraMission_Init();
    {
       ENUM_TIMEFRAMES etf = (EntryTF == PERIOD_CURRENT) ? (ENUM_TIMEFRAMES)Period() : EntryTF;
       Print("OK93 ENTRY TF=", EnumToString(etf),

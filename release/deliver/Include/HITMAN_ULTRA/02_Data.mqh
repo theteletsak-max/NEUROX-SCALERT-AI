@@ -60,7 +60,7 @@ bool UltraData_Refresh(const string s)
    g_UltraDataCache.spreadPts = (double)spr;
    g_UltraDataCache.barTime = iTime(s, UltraETF(), 0);
    g_UltraDataCache.tickTime = TimeCurrent();
-   g_UltraDataCache.atr = UltraATR(s, ATR_Period);
+   g_UltraDataCache.atr = UltraATR(s, IDP_ATR_Period);
    g_UltraDataCache.tickVol = iTickVolume(s, UltraETF(), 0);
    if(g_UltraDataCache.tickVol <= 0)
       g_UltraDataCache.tickVol = iVolume(s, UltraETF(), 0);
@@ -69,7 +69,8 @@ bool UltraData_Refresh(const string s)
 
    int m = UltraData_MSymAlloc(s);
    g_UltraMSymCache[m] = g_UltraDataCache;
-   return g_UltraDataCache.valid && g_UltraDataCache.integrityOK;
+   // Soft: allow snapshot on valid prices even if integrity advisory fails
+   return g_UltraDataCache.valid;
 }
 
 // Smart cache: reuse same-bar snapshot fields when still fresh

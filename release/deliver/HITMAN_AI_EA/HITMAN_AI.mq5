@@ -1307,7 +1307,7 @@ bool UltraData_Refresh(const string s)
    g_UltraDataCache.spreadPts = (double)spr;
    g_UltraDataCache.barTime = iTime(s, UltraETF(), 0);
    g_UltraDataCache.tickTime = TimeCurrent();
-   g_UltraDataCache.atr = UltraATR(s, ATR_Period);
+   g_UltraDataCache.atr = UltraATR(s, IDP_ATR_Period);
    g_UltraDataCache.tickVol = iTickVolume(s, UltraETF(), 0);
    if(g_UltraDataCache.tickVol <= 0)
       g_UltraDataCache.tickVol = iVolume(s, UltraETF(), 0);
@@ -1316,7 +1316,8 @@ bool UltraData_Refresh(const string s)
 
    int m = UltraData_MSymAlloc(s);
    g_UltraMSymCache[m] = g_UltraDataCache;
-   return g_UltraDataCache.valid && g_UltraDataCache.integrityOK;
+   // Soft: allow snapshot on valid prices even if integrity advisory fails
+   return g_UltraDataCache.valid;
 }
 
 // Smart cache: reuse same-bar snapshot fields when still fresh
@@ -1374,7 +1375,7 @@ string UltraData_Dashboard()
 void UltraEngVolatility(const string s, UltraSnap &u)
 {
    ENUM_TIMEFRAMES tf = UltraETF();
-   u.vol.atr = UltraATR(s, ATR_Period);
+   u.vol.atr = UltraATR(s, IDP_ATR_Period);
    if(u.vol.atr <= 0) return;
    double avg = 0.0;
    for(int i = 2; i <= 21; i++) avg += (iHigh(s, tf, i) - iLow(s, tf, i));
@@ -3074,18 +3075,29 @@ string UltraBuildExplanation(const UltraSnap &u, const bool buySide, const bool 
 
 void UltraClearSnap(UltraSnap &u)
 {
-   UltraStructure st; UltraBOS bos; UltraCHoCH choch; UltraLiquidity liq;
+   // Never ZeroMemory structs that contain string fields (MQL5 unsafe).
+   UltraBOS bos; UltraCHoCH choch; UltraLiquidity liq;
    UltraFib fib; UltraInst ict; UltraTrend trend; UltraMomentum mom; UltraVolatility vol;
    UltraIndicators ind; UltraScores score;
-   ZeroMemory(st); ZeroMemory(bos); ZeroMemory(choch); ZeroMemory(liq);
+   ZeroMemory(bos); ZeroMemory(choch); ZeroMemory(liq);
    ZeroMemory(fib); ZeroMemory(ict); ZeroMemory(trend); ZeroMemory(mom); ZeroMemory(vol);
    ZeroMemory(ind); ZeroMemory(score);
-   u.st = st; u.bos = bos; u.choch = choch; u.liq = liq;
+
+   // UltraStructure has string cycleName — clear manually
+   u.st.hh = u.st.hl = u.st.lh = u.st.ll = false;
+   u.st.swingHighOK = u.st.swingLowOK = false;
+   u.st.internalBull = u.st.internalBear = false;
+   u.st.externalBull = u.st.externalBear = false;
+   u.st.continuation = u.st.reversal = false;
+   u.st.strength = 0; u.st.quality = 0;
+   u.st.swingHigh = 0; u.st.swingLow = 0;
+   u.st.cycle = 4;
+   u.st.cycleName = "UNKNOWN";
+
+   u.bos = bos; u.choch = choch; u.liq = liq;
    u.fib = fib; u.ict = ict; u.trend = trend; u.mom = mom; u.vol = vol;
    u.ind = ind; u.score = score;
    u.regime = UREG_RANGE;
-   u.st.cycle = 4; // CYCLE_UNKNOWN
-   u.st.cycleName = "UNKNOWN";
    u.buyBias = false; u.sellBias = false;
    u.ctx.session = "OFF";
    u.ctx.asia = u.ctx.london = u.ctx.newyork = u.ctx.overlap = false;
@@ -3113,8 +3125,17 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
 
    // LEVEL 1 — Market Input + LEVEL 2 — Data Core refresh
    UltraMarketInput in;
-   if(!UltraInput_Process(s, in)){ UltraSetError("market input invalid"); return false; }
-   if(!UltraData_Refresh(s)){ UltraSetError("data integrity fail"); return false; }
+   if(!UltraInput_Process(s, in))
+   {
+      UltraSetError("market input invalid");
+      return false;
+   }
+   UltraData_Refresh(s);
+   if(!g_UltraDataCache.valid)
+   {
+      UltraSetError("data/price invalid");
+      return false;
+   }
 
    UltraEngVolatility(s, u);
    UltraEngStructure(s, u);
@@ -4835,22 +4856,33 @@ void UltraThesis_Store(const ulong ticket, const string s, const bool isBuy,
       g_Thesis[idx].marketState += u.st.cycleName;
    }
    if(isBuy)
-      g_Thesis[idx].structureState = u.st.externalBull ? "EXT_BULL" : (u.st.internalBull ? "INT_BULL" : "MIXED");
+   {
+      if(u.st.externalBull) g_Thesis[idx].structureState = "EXT_BULL";
+      else if(u.st.internalBull) g_Thesis[idx].structureState = "INT_BULL";
+      else g_Thesis[idx].structureState = "MIXED";
+      if(u.trend.bull || u.trend.htfBull) g_Thesis[idx].trendState = "BULL";
+      else g_Thesis[idx].trendState = "WEAK";
+      if(u.liq.sweepBuy || u.liq.grabBuy) g_Thesis[idx].liquidityState = "SWEEP/GRAB";
+      else g_Thesis[idx].liquidityState = "NONE";
+      if(u.mom.momBuy || u.mom.impulse) g_Thesis[idx].momentumState = "IMPULSE";
+      else if(u.mom.weakness) g_Thesis[idx].momentumState = "WEAK";
+      else g_Thesis[idx].momentumState = "NEUTRAL";
+   }
    else
-      g_Thesis[idx].structureState = u.st.externalBear ? "EXT_BEAR" : (u.st.internalBear ? "INT_BEAR" : "MIXED");
-   if(isBuy)
-      g_Thesis[idx].trendState = u.trend.bull || u.trend.htfBull ? "BULL" : "WEAK";
-   else
-      g_Thesis[idx].trendState = u.trend.bear || u.trend.htfBear ? "BEAR" : "WEAK";
-   if(isBuy)
-      g_Thesis[idx].liquidityState = (u.liq.sweepBuy || u.liq.grabBuy) ? "SWEEP/GRAB" : "NONE";
-   else
-      g_Thesis[idx].liquidityState = (u.liq.sweepSell || u.liq.grabSell) ? "SWEEP/GRAB" : "NONE";
-   if(isBuy)
-      g_Thesis[idx].momentumState = (u.mom.momBuy || u.mom.impulse) ? "IMPULSE" : (u.mom.weakness ? "WEAK" : "NEUTRAL");
-   else
-      g_Thesis[idx].momentumState = (u.mom.momSell || u.mom.impulse) ? "IMPULSE" : (u.mom.weakness ? "WEAK" : "NEUTRAL");
-   g_Thesis[idx].riskState = (u.score.riskProb >= 70) ? "HIGH" : "OK";
+   {
+      if(u.st.externalBear) g_Thesis[idx].structureState = "EXT_BEAR";
+      else if(u.st.internalBear) g_Thesis[idx].structureState = "INT_BEAR";
+      else g_Thesis[idx].structureState = "MIXED";
+      if(u.trend.bear || u.trend.htfBear) g_Thesis[idx].trendState = "BEAR";
+      else g_Thesis[idx].trendState = "WEAK";
+      if(u.liq.sweepSell || u.liq.grabSell) g_Thesis[idx].liquidityState = "SWEEP/GRAB";
+      else g_Thesis[idx].liquidityState = "NONE";
+      if(u.mom.momSell || u.mom.impulse) g_Thesis[idx].momentumState = "IMPULSE";
+      else if(u.mom.weakness) g_Thesis[idx].momentumState = "WEAK";
+      else g_Thesis[idx].momentumState = "NEUTRAL";
+   }
+   if(u.score.riskProb >= 70) g_Thesis[idx].riskState = "HIGH";
+   else g_Thesis[idx].riskState = "OK";
    g_Thesis[idx].confidenceState = IntegerToString(u.score.confidence);
    g_Thesis[idx].conf = u.score.confidence;
    g_Thesis[idx].prec = u.score.precision;
@@ -5333,7 +5365,10 @@ void UltraBrain_Publish(const bool approved, const bool buySide, const UltraSnap
 {
    UltraBrain_Clear();
    g_UltraBrainLast.confidence = u.score.confidence;
-   g_UltraBrainLast.tradeScore = g_UltraUSM2Last.tradeScore > 0 ? g_UltraUSM2Last.tradeScore : u.score.confidence;
+   if(g_UltraUSM2Last.tradeScore > 0)
+      g_UltraBrainLast.tradeScore = g_UltraUSM2Last.tradeScore;
+   else
+      g_UltraBrainLast.tradeScore = u.score.confidence;
    g_UltraBrainLast.grade = g_UltraUSM2Last.grade;
    g_UltraBrainLast.thesis = thesis;
    g_UltraBrainLast.explainable = (StringLen(thesis) > 0 || StringLen(why) > 0);
@@ -5459,14 +5494,15 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
 
    bool buySide = sig.buy;
 
-   // One signal = one trade thesis (per symbol)
+   // One trade = one thesis (same symbol + same direction only; MaxOpen may allow more)
    if(UltraThesisEnabled)
    {
       for(int ti = 0; ti < g_ThesisN; ti++)
       {
          if(!g_Thesis[ti].valid) continue;
          if(g_Thesis[ti].symbol != s) continue;
-         why = "SUPREME: one thesis already active on symbol";
+         if(g_Thesis[ti].isBuy != buySide) continue;
+         why = "SUPREME: thesis already active same direction";
          d.reason = why;
          g_UltraSupremeLast = d;
          UltraBrain_Publish(false, buySide, u, "", why);
@@ -5612,6 +5648,18 @@ struct UltraMissionState
 };
 
 UltraMissionState g_UltraMissionLast;
+
+void UltraMission_Init()
+{
+   g_UltraMissionLast.command = SUP_WAIT;
+   g_UltraMissionLast.reason = "INIT";
+   g_UltraMissionLast.confidence = 0;
+   g_UltraMissionLast.tradeScore = 0;
+   g_UltraMissionLast.grade = "";
+   g_UltraMissionLast.thesis = "";
+   g_UltraMissionLast.ticket = 0;
+   g_UltraMissionLast.ts = 0;
+}
 
 string UltraMission_Name(const ENUM_SUPREME_DECISION c)
 {
@@ -7346,6 +7394,7 @@ int OnInit()
    UltraSystemController_Boot();
    UltraEvent_OnBoot();
    UltraOpt_OnTickStart();
+   UltraMission_Init();
    {
       ENUM_TIMEFRAMES etf = (EntryTF == PERIOD_CURRENT) ? (ENUM_TIMEFRAMES)Period() : EntryTF;
       Print("OK93 ENTRY TF=", EnumToString(etf),

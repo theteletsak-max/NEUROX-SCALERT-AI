@@ -76,14 +76,15 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
 
    bool buySide = sig.buy;
 
-   // One signal = one trade thesis (per symbol)
+   // One trade = one thesis (same symbol + same direction only; MaxOpen may allow more)
    if(UltraThesisEnabled)
    {
       for(int ti = 0; ti < g_ThesisN; ti++)
       {
          if(!g_Thesis[ti].valid) continue;
          if(g_Thesis[ti].symbol != s) continue;
-         why = "SUPREME: one thesis already active on symbol";
+         if(g_Thesis[ti].isBuy != buySide) continue;
+         why = "SUPREME: thesis already active same direction";
          d.reason = why;
          g_UltraSupremeLast = d;
          UltraBrain_Publish(false, buySide, u, "", why);

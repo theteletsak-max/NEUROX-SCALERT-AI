@@ -20,6 +20,18 @@ struct UltraMissionState
 
 UltraMissionState g_UltraMissionLast;
 
+void UltraMission_Init()
+{
+   g_UltraMissionLast.command = SUP_WAIT;
+   g_UltraMissionLast.reason = "INIT";
+   g_UltraMissionLast.confidence = 0;
+   g_UltraMissionLast.tradeScore = 0;
+   g_UltraMissionLast.grade = "";
+   g_UltraMissionLast.thesis = "";
+   g_UltraMissionLast.ticket = 0;
+   g_UltraMissionLast.ts = 0;
+}
+
 string UltraMission_Name(const ENUM_SUPREME_DECISION c)
 {
    if(c == SUP_BUY) return "BUY";
