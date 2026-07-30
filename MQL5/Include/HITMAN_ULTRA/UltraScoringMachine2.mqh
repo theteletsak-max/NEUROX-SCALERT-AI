@@ -249,10 +249,10 @@ void UltraUSM2_Score(const string s, UltraSnap &u, const bool buySide, UltraUSM2
       out.session * 0.03 + out.news * 0.02 + out.precision * 0.07 + out.probability * 0.08;
    out.confidence = UltraUSM2_Clamp((int)MathRound(conf));
 
-   double trade =
+   double tradeBlend =
       out.confidence * 0.55 + out.precision * 0.20 + out.probability * 0.15 +
       out.execution * 0.05 + out.risk * 0.05;
-   out.tradeScore = UltraUSM2_Clamp((int)MathRound(trade));
+   out.tradeScore = UltraUSM2_Clamp((int)MathRound(tradeBlend));
    out.grade = UltraUSM2_Grade((double)out.tradeScore);
 
    // Write back into snap scores (USM2 owns final confidence when enabled)
