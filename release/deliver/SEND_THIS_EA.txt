@@ -1,15 +1,14 @@
-HITMAN AI — SEND THIS ZIP (Expert Advisor)
+HITMAN AI — SEND THIS EA (not zip)
 
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/release/deliver/HITMAN_AI.zip
+Direct .mq5 file:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI.mq5
 
-Also:
-https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI.zip
+Same:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/sniper-ai-compile-fix-b12d/release/deliver/HITMAN_AI.mq5
 
-Inside zip:
-  HITMAN_AI.mq5                         ← copy to MQL5/Experts/
-  MQL5/Experts/HITMAN_AI.mq5            ← same file
-  INSTALL.txt
-  README.txt
-  HITMAN_AI_ULTRA_X_ARCHITECTURE.txt
+Browse:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI.mq5
+
+Copy HITMAN_AI.mq5 → MQL5/Experts/ → F7 Compile → attach to chart.
 
 BUILD_ID: HA_ULTRA_93 | Comment: HITMAN AI

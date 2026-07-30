@@ -1,6 +1,6 @@
-HITMAN AI ULTRA X
-ZIP: HITMAN_AI.zip
-EA: HITMAN_AI.mq5
+HITMAN AI — Expert Advisor (.mq5)
+
+EA:       HITMAN_AI.mq5
 BUILD_ID: HA_ULTRA_93
-SPEC: HITMAN_AI_ULTRA_X_ARCHITECTURE.txt (Levels 1-15)
-MISSION: BUY · SELL · WAIT · HOLD · MANAGE · EXIT
+Comment:  HITMAN AI
+Format:   single-file .mq5 (not zip)
