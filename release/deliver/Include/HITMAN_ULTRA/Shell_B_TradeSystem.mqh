@@ -3885,12 +3885,11 @@ void ManageOpenTrades()
          currentTP = PositionGetDouble(POSITION_TP);
       }
 
-      //================ ULTRA UPGRADE — HOLD / CORRECTION / SMART EXIT ========//
+      //================ ULTRA X — LEVEL 8 MISSION CONTROL (HOLD/MANAGE/EXIT) ===//
       if(UltraUpgradeEnabled && UltraSmartExitEnabled)
       {
          bool isBuyPos = (type == POSITION_TYPE_BUY);
          string sxWhy = "";
-         // Prefer fresh/cached snap for THIS symbol (g_UltraLastSnap can be stale)
          UltraSnap sxSnap = g_UltraLastSnap;
          bool sxCached = false;
          if(UltraFastSignalEnabled)
@@ -3901,17 +3900,17 @@ void ManageOpenTrades()
          else if(!UltraBuildSnapshot(BrokerSymbol, sxSnap))
             sxSnap = g_UltraLastSnap;
 
-         ENUM_SMART_EXIT sx = UltraSupreme_ManagePosition(ticket, BrokerSymbol, isBuyPos, sxSnap, sxWhy);
-         if(sx == SX_CLOSE)
+         ENUM_SUPREME_DECISION mission = UltraMission_PositionCommand(ticket, BrokerSymbol, isBuyPos, sxSnap, sxWhy);
+         ENUM_SMART_EXIT sx = UltraMission_ToSmartExit(mission);
+         if(mission == SUP_EXIT || sx == SX_CLOSE)
          {
             if(UltraUpgradeLog)
-               Print("SMART EXIT CLOSE ticket=", ticket, " ", sxWhy);
+               Print("MISSION EXIT ticket=", ticket, " ", sxWhy);
             UltraThesis_Clear(ticket);
             trade.PositionClose(ticket);
             continue;
          }
-         // SX_BE and SX_TIGHTEN: protect at BE when in profit (TIGHTEN has no separate SL ladder here)
-         if(sx == SX_BE || sx == SX_TIGHTEN)
+         if(mission == SUP_MANAGE || sx == SX_BE || sx == SX_TIGHTEN)
          {
             bool needsBE = isBuyPos ? (currentSL < openPrice) : (currentSL > openPrice || currentSL <= 0.0);
             bool atProfit = isBuyPos ? (price >= openPrice) : (price <= openPrice);
@@ -3921,10 +3920,11 @@ void ManageOpenTrades()
                {
                   currentSL = openPrice;
                   if(UltraUpgradeLog)
-                     Print("SMART EXIT BE ticket=", ticket, " ", sxWhy);
+                     Print("MISSION MANAGE/BE ticket=", ticket, " ", sxWhy);
                }
             }
          }
+         // SUP_HOLD → no exit, thesis still valid
          if(!PositionSelectByTicket(ticket))
             continue;
          currentSL = PositionGetDouble(POSITION_SL);

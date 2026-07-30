@@ -1,2 +1,2 @@
-HITMAN AI (HA_ULTRA_93)
-Full Architecture Blueprint — Supreme · Brain · Defense · Discipline · USM2 · Hold
+HITMAN AI ULTRA X (HA_ULTRA_93)
+Levels 1-15 Ultra Architecture · Mission Control single authority

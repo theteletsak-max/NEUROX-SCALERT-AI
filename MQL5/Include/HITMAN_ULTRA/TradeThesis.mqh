@@ -13,7 +13,14 @@ struct UltraTradeThesis
    string   symbol;
    bool     isBuy;
    string   tag;
-   string   reason;
+   string   reason;          // Complete Entry Reason
+   string   marketState;     // Market State
+   string   structureState;  // Structure State
+   string   trendState;      // Trend State
+   string   liquidityState;  // Liquidity State
+   string   momentumState;   // Momentum State
+   string   riskState;       // Risk State
+   string   confidenceState; // Confidence State
    int      conf, prec, prob;
    int      trendStr, structQ, bosScore, chochConf;
    bool     hadLiq, hadFib, hadMom;
@@ -56,6 +63,31 @@ void UltraThesis_Store(const ulong ticket, const string s, const bool isBuy,
    g_Thesis[idx].isBuy = isBuy;
    g_Thesis[idx].tag = tag;
    g_Thesis[idx].reason = reason;
+   // Complete thesis state snapshot (Level 5 ULTRA TRADE THESIS)
+   g_Thesis[idx].marketState = UltraRegimeName(u.regime);
+   if(StringLen(u.st.cycleName) > 0)
+   {
+      g_Thesis[idx].marketState += "/";
+      g_Thesis[idx].marketState += u.st.cycleName;
+   }
+   if(isBuy)
+      g_Thesis[idx].structureState = u.st.externalBull ? "EXT_BULL" : (u.st.internalBull ? "INT_BULL" : "MIXED");
+   else
+      g_Thesis[idx].structureState = u.st.externalBear ? "EXT_BEAR" : (u.st.internalBear ? "INT_BEAR" : "MIXED");
+   if(isBuy)
+      g_Thesis[idx].trendState = u.trend.bull || u.trend.htfBull ? "BULL" : "WEAK";
+   else
+      g_Thesis[idx].trendState = u.trend.bear || u.trend.htfBear ? "BEAR" : "WEAK";
+   if(isBuy)
+      g_Thesis[idx].liquidityState = (u.liq.sweepBuy || u.liq.grabBuy) ? "SWEEP/GRAB" : "NONE";
+   else
+      g_Thesis[idx].liquidityState = (u.liq.sweepSell || u.liq.grabSell) ? "SWEEP/GRAB" : "NONE";
+   if(isBuy)
+      g_Thesis[idx].momentumState = (u.mom.momBuy || u.mom.impulse) ? "IMPULSE" : (u.mom.weakness ? "WEAK" : "NEUTRAL");
+   else
+      g_Thesis[idx].momentumState = (u.mom.momSell || u.mom.impulse) ? "IMPULSE" : (u.mom.weakness ? "WEAK" : "NEUTRAL");
+   g_Thesis[idx].riskState = (u.score.riskProb >= 70) ? "HIGH" : "OK";
+   g_Thesis[idx].confidenceState = IntegerToString(u.score.confidence);
    g_Thesis[idx].conf = u.score.confidence;
    g_Thesis[idx].prec = u.score.precision;
    g_Thesis[idx].prob = u.score.probability;

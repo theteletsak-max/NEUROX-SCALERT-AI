@@ -285,6 +285,11 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
    if(!UltraConfigOK()){ UltraSetError("config invalid"); return false; }
    if(UltraDataEngineEnabled && !UltraValidateSymbol(s)){ UltraSetError("data/symbol invalid"); return false; }
 
+   // LEVEL 1 — Market Input + LEVEL 2 — Data Core refresh
+   UltraMarketInput in;
+   if(!UltraInput_Process(s, in)){ UltraSetError("market input invalid"); return false; }
+   if(!UltraData_Refresh(s)){ UltraSetError("data integrity fail"); return false; }
+
    UltraEngVolatility(s, u);
    UltraEngStructure(s, u);
    UltraEngBOS(s, u);
@@ -302,6 +307,10 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
    UltraMemoryUpdateFromStats();
    UltraEngScoresBest(u);          // always fill conf/prec/prob for dashboard + wait logs
    UltraEvent_NoteMarket(u);       // event-driven market edges
+
+   // propagate session/news context into input surface
+   g_UltraMarketInput.session = u.ctx.session;
+   g_UltraMarketInput.newsPhase = u.ctx.newsPhase;
 
    g_UltraCore.lastLatencyMs = (long)GetTickCount() - t0;
    g_UltraCore.lastCycleMs = (long)GetTickCount();

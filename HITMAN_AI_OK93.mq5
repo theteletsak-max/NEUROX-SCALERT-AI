@@ -865,13 +865,16 @@ struct UltraDefenseReport
 UltraDefenseReport g_UltraDefenseLast;
 
 //--------------------------------------------------------------------//
-// FINAL AI DECISION — BUY / SELL / WAIT only
+// MISSION CONTROL — BUY / SELL / WAIT / HOLD / MANAGE / EXIT
 //--------------------------------------------------------------------//
 enum ENUM_SUPREME_DECISION
 {
    SUP_BUY = 0,
    SUP_SELL,
-   SUP_WAIT
+   SUP_WAIT,
+   SUP_HOLD,
+   SUP_MANAGE,
+   SUP_EXIT
 };
 
 //--------------------------------------------------------------------//
@@ -1245,20 +1248,55 @@ void UltraSystemController_Boot()
 #ifndef HITMAN_ULTRA_02_DATA_MQH
 #define HITMAN_ULTRA_02_DATA_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — 02_DATA — Tick · Candle · Symbol · Broker · Spread · Cache
+//| HITMAN AI ULTRA X — LEVEL 2 ULTRA DATA CORE                      |
+//| Tick cache · Smart cache · Memory · Integrity · Multi-symbol     |
 //+------------------------------------------------------------------+
 
 struct UltraDataCache
 {
    string   symbol;
    datetime barTime;
+   datetime tickTime;
    double   bid, ask;
    double   spreadPts;
    double   atr;
+   long     tickVol;
    bool     valid;
+   bool     integrityOK;
 };
 
+#define ULTRA_MSYM_CACHE_MAX 32
 UltraDataCache g_UltraDataCache;
+UltraDataCache g_UltraMSymCache[ULTRA_MSYM_CACHE_MAX];
+int            g_UltraMSymCacheN = 0;
+
+int UltraData_MSymFind(const string s)
+{
+   for(int i = 0; i < g_UltraMSymCacheN; i++)
+      if(g_UltraMSymCache[i].symbol == s) return i;
+   return -1;
+}
+
+int UltraData_MSymAlloc(const string s)
+{
+   int idx = UltraData_MSymFind(s);
+   if(idx >= 0) return idx;
+   if(g_UltraMSymCacheN >= ULTRA_MSYM_CACHE_MAX) return 0;
+   idx = g_UltraMSymCacheN++;
+   g_UltraMSymCache[idx].symbol = s;
+   return idx;
+}
+
+bool UltraData_Integrity(const string s, const UltraDataCache &c)
+{
+   if(!c.valid) return false;
+   if(c.bid <= 0.0 || c.ask < c.bid) return false;
+   if(c.spreadPts < 0.0) return false;
+   if(c.barTime <= 0) return false;
+   long tm = 0;
+   if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm)) return false;
+   return true;
+}
 
 bool UltraData_Refresh(const string s)
 {
@@ -1268,9 +1306,26 @@ bool UltraData_Refresh(const string s)
    long spr = 0; SymbolInfoInteger(s, SYMBOL_SPREAD, spr);
    g_UltraDataCache.spreadPts = (double)spr;
    g_UltraDataCache.barTime = iTime(s, UltraETF(), 0);
+   g_UltraDataCache.tickTime = TimeCurrent();
    g_UltraDataCache.atr = UltraATR(s, ATR_Period);
+   g_UltraDataCache.tickVol = iTickVolume(s, UltraETF(), 0);
+   if(g_UltraDataCache.tickVol <= 0)
+      g_UltraDataCache.tickVol = iVolume(s, UltraETF(), 0);
    g_UltraDataCache.valid = (g_UltraDataCache.bid > 0 && g_UltraDataCache.ask > 0);
-   return g_UltraDataCache.valid;
+   g_UltraDataCache.integrityOK = UltraData_Integrity(s, g_UltraDataCache);
+
+   int m = UltraData_MSymAlloc(s);
+   g_UltraMSymCache[m] = g_UltraDataCache;
+   return g_UltraDataCache.valid && g_UltraDataCache.integrityOK;
+}
+
+// Smart cache: reuse same-bar snapshot fields when still fresh
+bool UltraData_SmartCacheHit(const string s)
+{
+   if(g_UltraDataCache.symbol != s) return false;
+   if(!g_UltraDataCache.valid || !g_UltraDataCache.integrityOK) return false;
+   datetime bar = iTime(s, UltraETF(), 0);
+   return (bar > 0 && bar == g_UltraDataCache.barTime);
 }
 
 double UltraData_Bid(const string s){ return SymbolInfoDouble(s, SYMBOL_BID); }
@@ -1278,6 +1333,12 @@ double UltraData_Ask(const string s){ return SymbolInfoDouble(s, SYMBOL_ASK); }
 double UltraData_Spread(const string s){ long v=0; SymbolInfoInteger(s, SYMBOL_SPREAD, v); return (double)v; }
 int    UltraData_Digits(const string s){ long v=0; SymbolInfoInteger(s, SYMBOL_DIGITS, v); return (int)v; }
 double UltraData_Point(const string s){ return SymbolInfoDouble(s, SYMBOL_POINT); }
+long   UltraData_Volume(const string s)
+{
+   long v = iTickVolume(s, UltraETF(), 0);
+   if(v <= 0) v = iVolume(s, UltraETF(), 0);
+   return v;
+}
 
 double UltraData_Open(const string s, const int shift){ return iOpen(s, UltraETF(), shift); }
 double UltraData_High(const string s, const int shift){ return iHigh(s, UltraETF(), shift); }
@@ -1289,6 +1350,16 @@ bool UltraData_BrokerInfo(string &company, long &login)
    company = AccountInfoString(ACCOUNT_COMPANY);
    login = AccountInfoInteger(ACCOUNT_LOGIN);
    return (login != 0);
+}
+
+string UltraData_Dashboard()
+{
+   string t = "DATA: ";
+   if(g_UltraDataCache.integrityOK) t += "OK"; else t += "BAD";
+   t += " msym=";
+   t += IntegerToString(g_UltraMSymCacheN);
+   if(UltraData_SmartCacheHit(g_UltraDataCache.symbol)) t += " CACHE";
+   return t;
 }
 
 #endif // HITMAN_ULTRA_02_DATA_MQH
@@ -2510,6 +2581,79 @@ int UltraExec_OpenCountMagic()
 #endif // HITMAN_ULTRA_19_EXECUTION_MQH
 //===== END 19_Execution.mqh =====
 
+//===== BEGIN UltraMarketInput.mqh =====
+#ifndef HITMAN_ULTRA_MARKET_INPUT_MQH
+#define HITMAN_ULTRA_MARKET_INPUT_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI ULTRA X — LEVEL 1 ULTRA MARKET INPUT ENGINE            |
+//| Tick · Price · Spread · Volume · Context · Session · News · Broker
+//+------------------------------------------------------------------+
+
+struct UltraMarketInput
+{
+   bool tickOK;
+   bool priceOK;
+   bool spreadOK;
+   bool volumeOK;
+   bool contextOK;
+   bool sessionOK;
+   bool newsOK;
+   bool brokerOK;
+   bool symbolOK;
+   double bid, ask, spreadPts;
+   long   tickVol;
+   string session;
+   string newsPhase;
+   string broker;
+   string detail;
+};
+
+UltraMarketInput g_UltraMarketInput;
+
+bool UltraInput_Process(const string s, UltraMarketInput &in)
+{
+   in.tickOK = in.priceOK = in.spreadOK = in.volumeOK = false;
+   in.contextOK = in.sessionOK = in.newsOK = in.brokerOK = in.symbolOK = false;
+   in.bid = SymbolInfoDouble(s, SYMBOL_BID);
+   in.ask = SymbolInfoDouble(s, SYMBOL_ASK);
+   long spr = 0; SymbolInfoInteger(s, SYMBOL_SPREAD, spr);
+   in.spreadPts = (double)spr;
+   in.tickVol = iTickVolume(s, UltraETF(), 0);
+   if(in.tickVol <= 0) in.tickVol = iVolume(s, UltraETF(), 0);
+   in.session = "";
+   in.newsPhase = "";
+   in.broker = AccountInfoString(ACCOUNT_COMPANY);
+   in.detail = "OK";
+
+   long sel = 0;
+   in.symbolOK = (s != "" && SymbolInfoInteger(s, SYMBOL_SELECT, sel) && sel != 0);
+   in.priceOK = (in.bid > 0.0 && in.ask >= in.bid);
+   in.tickOK = in.priceOK && (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
+   in.spreadOK = (in.spreadPts >= 0.0);
+   in.volumeOK = (in.tickVol >= 0);
+   in.brokerOK = (AccountInfoInteger(ACCOUNT_LOGIN) != 0) &&
+                 (TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) != 0);
+   in.sessionOK = true;  // context only — never hard-block
+   in.newsOK = true;     // context only — never hard-block
+   in.contextOK = in.tickOK && in.priceOK && in.symbolOK;
+   g_UltraMarketInput = in;
+   return in.contextOK;
+}
+
+string UltraInput_Dashboard()
+{
+   string t = "INPUT: ";
+   if(g_UltraMarketInput.contextOK) t += "OK"; else t += "FAIL";
+   t += " spr=";
+   t += DoubleToString(g_UltraMarketInput.spreadPts, 0);
+   t += " vol=";
+   t += IntegerToString((int)g_UltraMarketInput.tickVol);
+   return t;
+}
+
+#endif
+//===== END UltraMarketInput.mqh =====
+
 //===== BEGIN 23_MultiTimeframe.mqh =====
 #ifndef HITMAN_ULTRA_23_MULTITIMEFRAME_MQH
 #define HITMAN_ULTRA_23_MULTITIMEFRAME_MQH
@@ -2967,6 +3111,11 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
    if(!UltraConfigOK()){ UltraSetError("config invalid"); return false; }
    if(UltraDataEngineEnabled && !UltraValidateSymbol(s)){ UltraSetError("data/symbol invalid"); return false; }
 
+   // LEVEL 1 — Market Input + LEVEL 2 — Data Core refresh
+   UltraMarketInput in;
+   if(!UltraInput_Process(s, in)){ UltraSetError("market input invalid"); return false; }
+   if(!UltraData_Refresh(s)){ UltraSetError("data integrity fail"); return false; }
+
    UltraEngVolatility(s, u);
    UltraEngStructure(s, u);
    UltraEngBOS(s, u);
@@ -2984,6 +3133,10 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
    UltraMemoryUpdateFromStats();
    UltraEngScoresBest(u);          // always fill conf/prec/prob for dashboard + wait logs
    UltraEvent_NoteMarket(u);       // event-driven market edges
+
+   // propagate session/news context into input surface
+   g_UltraMarketInput.session = u.ctx.session;
+   g_UltraMarketInput.newsPhase = u.ctx.newsPhase;
 
    g_UltraCore.lastLatencyMs = (long)GetTickCount() - t0;
    g_UltraCore.lastCycleMs = (long)GetTickCount();
@@ -4624,7 +4777,14 @@ struct UltraTradeThesis
    string   symbol;
    bool     isBuy;
    string   tag;
-   string   reason;
+   string   reason;          // Complete Entry Reason
+   string   marketState;     // Market State
+   string   structureState;  // Structure State
+   string   trendState;      // Trend State
+   string   liquidityState;  // Liquidity State
+   string   momentumState;   // Momentum State
+   string   riskState;       // Risk State
+   string   confidenceState; // Confidence State
    int      conf, prec, prob;
    int      trendStr, structQ, bosScore, chochConf;
    bool     hadLiq, hadFib, hadMom;
@@ -4667,6 +4827,31 @@ void UltraThesis_Store(const ulong ticket, const string s, const bool isBuy,
    g_Thesis[idx].isBuy = isBuy;
    g_Thesis[idx].tag = tag;
    g_Thesis[idx].reason = reason;
+   // Complete thesis state snapshot (Level 5 ULTRA TRADE THESIS)
+   g_Thesis[idx].marketState = UltraRegimeName(u.regime);
+   if(StringLen(u.st.cycleName) > 0)
+   {
+      g_Thesis[idx].marketState += "/";
+      g_Thesis[idx].marketState += u.st.cycleName;
+   }
+   if(isBuy)
+      g_Thesis[idx].structureState = u.st.externalBull ? "EXT_BULL" : (u.st.internalBull ? "INT_BULL" : "MIXED");
+   else
+      g_Thesis[idx].structureState = u.st.externalBear ? "EXT_BEAR" : (u.st.internalBear ? "INT_BEAR" : "MIXED");
+   if(isBuy)
+      g_Thesis[idx].trendState = u.trend.bull || u.trend.htfBull ? "BULL" : "WEAK";
+   else
+      g_Thesis[idx].trendState = u.trend.bear || u.trend.htfBear ? "BEAR" : "WEAK";
+   if(isBuy)
+      g_Thesis[idx].liquidityState = (u.liq.sweepBuy || u.liq.grabBuy) ? "SWEEP/GRAB" : "NONE";
+   else
+      g_Thesis[idx].liquidityState = (u.liq.sweepSell || u.liq.grabSell) ? "SWEEP/GRAB" : "NONE";
+   if(isBuy)
+      g_Thesis[idx].momentumState = (u.mom.momBuy || u.mom.impulse) ? "IMPULSE" : (u.mom.weakness ? "WEAK" : "NEUTRAL");
+   else
+      g_Thesis[idx].momentumState = (u.mom.momSell || u.mom.impulse) ? "IMPULSE" : (u.mom.weakness ? "WEAK" : "NEUTRAL");
+   g_Thesis[idx].riskState = (u.score.riskProb >= 70) ? "HIGH" : "OK";
+   g_Thesis[idx].confidenceState = IntegerToString(u.score.confidence);
    g_Thesis[idx].conf = u.score.confidence;
    g_Thesis[idx].prec = u.score.precision;
    g_Thesis[idx].prob = u.score.probability;
@@ -5170,6 +5355,9 @@ string UltraBrain_Name()
 {
    if(g_UltraBrainLast.decision == SUP_BUY) return "BUY";
    if(g_UltraBrainLast.decision == SUP_SELL) return "SELL";
+   if(g_UltraBrainLast.decision == SUP_HOLD) return "HOLD";
+   if(g_UltraBrainLast.decision == SUP_MANAGE) return "MANAGE";
+   if(g_UltraBrainLast.decision == SUP_EXIT) return "EXIT";
    return "WAIT";
 }
 
@@ -5218,6 +5406,9 @@ string UltraSupreme_Name(const ENUM_SUPREME_DECISION d)
 {
    if(d == SUP_BUY) return "BUY";
    if(d == SUP_SELL) return "SELL";
+   if(d == SUP_HOLD) return "HOLD";
+   if(d == SUP_MANAGE) return "MANAGE";
+   if(d == SUP_EXIT) return "EXIT";
    return "WAIT";
 }
 
@@ -5398,6 +5589,112 @@ string UltraSupreme_Dashboard()
 
 #endif
 //===== END SupremeCommand.mqh =====
+
+//===== BEGIN MissionControl.mqh =====
+#ifndef HITMAN_ULTRA_MISSION_CONTROL_MQH
+#define HITMAN_ULTRA_MISSION_CONTROL_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI ULTRA X — LEVEL 8 ULTRA MISSION CONTROL                |
+//| Single authority — no other module may override                  |
+//| Approves: BUY · SELL · WAIT · HOLD · MANAGE · EXIT               |
+//+------------------------------------------------------------------+
+
+struct UltraMissionState
+{
+   ENUM_SUPREME_DECISION command;
+   string reason;
+   int confidence;
+   int tradeScore;
+   string grade;
+   string thesis;
+   ulong ticket;   // for manage path
+   datetime ts;
+};
+
+UltraMissionState g_UltraMissionLast;
+
+string UltraMission_Name(const ENUM_SUPREME_DECISION c)
+{
+   if(c == SUP_BUY) return "BUY";
+   if(c == SUP_SELL) return "SELL";
+   if(c == SUP_WAIT) return "WAIT";
+   if(c == SUP_HOLD) return "HOLD";
+   if(c == SUP_MANAGE) return "MANAGE";
+   if(c == SUP_EXIT) return "EXIT";
+   return "WAIT";
+}
+
+void UltraMission_Set(const ENUM_SUPREME_DECISION c, const string reason,
+                      const int conf, const int score, const string grade,
+                      const string thesis, const ulong ticket)
+{
+   g_UltraMissionLast.command = c;
+   g_UltraMissionLast.reason = reason;
+   g_UltraMissionLast.confidence = conf;
+   g_UltraMissionLast.tradeScore = score;
+   g_UltraMissionLast.grade = grade;
+   g_UltraMissionLast.thesis = thesis;
+   g_UltraMissionLast.ticket = ticket;
+   g_UltraMissionLast.ts = TimeCurrent();
+}
+
+// Entry path — sole approval authority for BUY/SELL/WAIT
+bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, string &why)
+{
+   bool ok = UltraSupreme_FinalizeEntry(s, u, sig, why);
+   if(ok)
+   {
+      ENUM_SUPREME_DECISION c = sig.buy ? SUP_BUY : SUP_SELL;
+      UltraMission_Set(c, g_UltraSupremeLast.reason, g_UltraSupremeLast.confidence,
+                       g_UltraSupremeLast.tradeScore, g_UltraSupremeLast.grade,
+                       g_UltraSupremeLast.thesis, 0);
+   }
+   else
+   {
+      UltraMission_Set(SUP_WAIT, why, u.score.confidence, u.score.confidence, "IGNORE", "", 0);
+   }
+   return ok;
+}
+
+// Open-position path — sole authority for HOLD/MANAGE/EXIT
+ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const string s,
+                                                   const bool isBuy, const UltraSnap &u,
+                                                   string &why)
+{
+   why = "";
+   ENUM_SMART_EXIT sx = UltraSupreme_ManagePosition(ticket, s, isBuy, u, why);
+   ENUM_SUPREME_DECISION cmd = SUP_MANAGE;
+   if(sx == SX_CLOSE) cmd = SUP_EXIT;
+   else if(sx == SX_NONE && g_UltraHoldLast.action == HOLD_HOLD) cmd = SUP_HOLD;
+   else if(sx == SX_BE || sx == SX_TIGHTEN) cmd = SUP_MANAGE;
+   else if(g_UltraHoldLast.action == HOLD_EXIT) cmd = SUP_EXIT;
+   else if(g_UltraHoldLast.action == HOLD_HOLD) cmd = SUP_HOLD;
+   else cmd = SUP_MANAGE;
+
+   UltraMission_Set(cmd, why, u.score.confidence, g_UltraHoldLast.total,
+                    g_UltraHoldLast.label, g_UltraBrainLast.thesis, ticket);
+   return cmd;
+}
+
+// Map mission EXIT/MANAGE/HOLD → smart-exit actions for Shell
+ENUM_SMART_EXIT UltraMission_ToSmartExit(const ENUM_SUPREME_DECISION cmd)
+{
+   if(cmd == SUP_EXIT) return SX_CLOSE;
+   if(cmd == SUP_MANAGE) return SX_BE;
+   return SX_NONE; // HOLD
+}
+
+string UltraMission_Dashboard()
+{
+   string t = "MISSION: ";
+   t += UltraMission_Name(g_UltraMissionLast.command);
+   t += " ";
+   t += g_UltraMissionLast.reason;
+   return t;
+}
+
+#endif
+//===== END MissionControl.mqh =====
 
 //===== BEGIN UFSE_FastSignalEngine.mqh =====
 #ifndef HITMAN_ULTRA_UFSE_MQH
@@ -5978,14 +6275,14 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       }
    }
 
-   // ULTRA UPGRADE PACK — Supreme Command final approval (L1/L20)
+   // ULTRA X — LEVEL 8 MISSION CONTROL (sole entry authority)
    if(UltraUpgradeEnabled && UltraSupremeEnabled)
    {
       string supWhy = "";
-      if(!UltraSupreme_FinalizeEntry(s, u, sig, supWhy))
+      if(!UltraMission_ApproveEntry(s, u, sig, supWhy))
       {
          if(StringLen(supWhy) > 0) why = supWhy;
-         else why = "SUPREME WAIT";
+         else why = "MISSION WAIT";
          return false;
       }
    }
@@ -6333,6 +6630,9 @@ string UltraDashboardText(const string s)
    t += "Symbol: "; t += s;
    t += " | TF: "; t += EnumToString(UltraETF());
    t += "\n"; t += UltraBrain_Dashboard();
+   t += "\n"; t += UltraMission_Dashboard();
+   t += "\n"; t += UltraInput_Dashboard();
+   t += " | "; t += UltraData_Dashboard();
    t += "\nMaster Trend: "; t += master;
    t += " | Regime: "; t += UltraRegimeName(u.regime);
    t += " | Cycle: "; t += u.st.cycleName;
@@ -10865,12 +11165,11 @@ void ManageOpenTrades()
          currentTP = PositionGetDouble(POSITION_TP);
       }
 
-      //================ ULTRA UPGRADE — HOLD / CORRECTION / SMART EXIT ========//
+      //================ ULTRA X — LEVEL 8 MISSION CONTROL (HOLD/MANAGE/EXIT) ===//
       if(UltraUpgradeEnabled && UltraSmartExitEnabled)
       {
          bool isBuyPos = (type == POSITION_TYPE_BUY);
          string sxWhy = "";
-         // Prefer fresh/cached snap for THIS symbol (g_UltraLastSnap can be stale)
          UltraSnap sxSnap = g_UltraLastSnap;
          bool sxCached = false;
          if(UltraFastSignalEnabled)
@@ -10881,17 +11180,17 @@ void ManageOpenTrades()
          else if(!UltraBuildSnapshot(BrokerSymbol, sxSnap))
             sxSnap = g_UltraLastSnap;
 
-         ENUM_SMART_EXIT sx = UltraSupreme_ManagePosition(ticket, BrokerSymbol, isBuyPos, sxSnap, sxWhy);
-         if(sx == SX_CLOSE)
+         ENUM_SUPREME_DECISION mission = UltraMission_PositionCommand(ticket, BrokerSymbol, isBuyPos, sxSnap, sxWhy);
+         ENUM_SMART_EXIT sx = UltraMission_ToSmartExit(mission);
+         if(mission == SUP_EXIT || sx == SX_CLOSE)
          {
             if(UltraUpgradeLog)
-               Print("SMART EXIT CLOSE ticket=", ticket, " ", sxWhy);
+               Print("MISSION EXIT ticket=", ticket, " ", sxWhy);
             UltraThesis_Clear(ticket);
             trade.PositionClose(ticket);
             continue;
          }
-         // SX_BE and SX_TIGHTEN: protect at BE when in profit (TIGHTEN has no separate SL ladder here)
-         if(sx == SX_BE || sx == SX_TIGHTEN)
+         if(mission == SUP_MANAGE || sx == SX_BE || sx == SX_TIGHTEN)
          {
             bool needsBE = isBuyPos ? (currentSL < openPrice) : (currentSL > openPrice || currentSL <= 0.0);
             bool atProfit = isBuyPos ? (price >= openPrice) : (price <= openPrice);
@@ -10901,10 +11200,11 @@ void ManageOpenTrades()
                {
                   currentSL = openPrice;
                   if(UltraUpgradeLog)
-                     Print("SMART EXIT BE ticket=", ticket, " ", sxWhy);
+                     Print("MISSION MANAGE/BE ticket=", ticket, " ", sxWhy);
                }
             }
          }
+         // SUP_HOLD → no exit, thesis still valid
          if(!PositionSelectByTicket(ticket))
             continue;
          currentSL = PositionGetDouble(POSITION_SL);

@@ -51,6 +51,9 @@ string UltraDashboardText(const string s)
    t += "Symbol: "; t += s;
    t += " | TF: "; t += EnumToString(UltraETF());
    t += "\n"; t += UltraBrain_Dashboard();
+   t += "\n"; t += UltraMission_Dashboard();
+   t += "\n"; t += UltraInput_Dashboard();
+   t += " | "; t += UltraData_Dashboard();
    t += "\nMaster Trend: "; t += master;
    t += " | Regime: "; t += UltraRegimeName(u.regime);
    t += " | Cycle: "; t += u.st.cycleName;

@@ -259,13 +259,16 @@ struct UltraDefenseReport
 UltraDefenseReport g_UltraDefenseLast;
 
 //--------------------------------------------------------------------//
-// FINAL AI DECISION — BUY / SELL / WAIT only
+// MISSION CONTROL — BUY / SELL / WAIT / HOLD / MANAGE / EXIT
 //--------------------------------------------------------------------//
 enum ENUM_SUPREME_DECISION
 {
    SUP_BUY = 0,
    SUP_SELL,
-   SUP_WAIT
+   SUP_WAIT,
+   SUP_HOLD,
+   SUP_MANAGE,
+   SUP_EXIT
 };
 
 //--------------------------------------------------------------------//

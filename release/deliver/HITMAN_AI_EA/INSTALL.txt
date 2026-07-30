@@ -1,12 +1,8 @@
-HITMAN AI — Expert Advisor install
+HITMAN AI ULTRA X — install
 
-BUILD_ID: HA_ULTRA_93
-Comment:  HITMAN AI
+1. Copy HITMAN_AI.mq5 → MQL5/Experts/
+2. MetaEditor F7 Compile
+3. Attach to chart · Algo Trading ON
 
-1. Extract HITMAN_AI.mq5
-2. Copy to MetaTrader 5 Data Folder → MQL5/Experts/
-3. MetaEditor → open HITMAN_AI.mq5 → F7 Compile
-4. Attach HITMAN_AI to chart · enable Algo Trading
-
-Single-file EA — no Include folder required.
-See HITMAN_AI_ARCHITECTURE.txt for full engine checklist.
+BUILD: HA_ULTRA_93 | Mission Control: BUY/SELL/WAIT/HOLD/MANAGE/EXIT
+See HITMAN_AI_ULTRA_X_ARCHITECTURE.txt

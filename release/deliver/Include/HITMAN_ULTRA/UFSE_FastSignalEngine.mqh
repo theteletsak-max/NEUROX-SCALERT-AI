@@ -576,14 +576,14 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       }
    }
 
-   // ULTRA UPGRADE PACK — Supreme Command final approval (L1/L20)
+   // ULTRA X — LEVEL 8 MISSION CONTROL (sole entry authority)
    if(UltraUpgradeEnabled && UltraSupremeEnabled)
    {
       string supWhy = "";
-      if(!UltraSupreme_FinalizeEntry(s, u, sig, supWhy))
+      if(!UltraMission_ApproveEntry(s, u, sig, supWhy))
       {
          if(StringLen(supWhy) > 0) why = supWhy;
-         else why = "SUPREME WAIT";
+         else why = "MISSION WAIT";
          return false;
       }
    }

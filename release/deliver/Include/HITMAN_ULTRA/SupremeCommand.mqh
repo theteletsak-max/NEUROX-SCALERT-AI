@@ -23,6 +23,9 @@ string UltraSupreme_Name(const ENUM_SUPREME_DECISION d)
 {
    if(d == SUP_BUY) return "BUY";
    if(d == SUP_SELL) return "SELL";
+   if(d == SUP_HOLD) return "HOLD";
+   if(d == SUP_MANAGE) return "MANAGE";
+   if(d == SUP_EXIT) return "EXIT";
    return "WAIT";
 }
 

@@ -34,6 +34,7 @@
 #include "39_EventEngine.mqh"
 #include "20_CapitalProtection.mqh"
 #include "19_Execution.mqh"
+#include "UltraMarketInput.mqh"
 #include "23_MultiTimeframe.mqh"
 #include "16_AI_Core.mqh"
 #include "DefenseLineEngine.mqh"

@@ -58,6 +58,9 @@ string UltraBrain_Name()
 {
    if(g_UltraBrainLast.decision == SUP_BUY) return "BUY";
    if(g_UltraBrainLast.decision == SUP_SELL) return "SELL";
+   if(g_UltraBrainLast.decision == SUP_HOLD) return "HOLD";
+   if(g_UltraBrainLast.decision == SUP_MANAGE) return "MANAGE";
+   if(g_UltraBrainLast.decision == SUP_EXIT) return "EXIT";
    return "WAIT";
 }
 
