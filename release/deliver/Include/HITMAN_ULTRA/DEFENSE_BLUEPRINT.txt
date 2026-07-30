@@ -1,0 +1,33 @@
+HITMAN AI — DEFENSE LINE ENGINE v1.0
+====================================
+
+Mission
+- Protect the AI from poor-quality entries
+- Block invalid trades
+- Protect open positions
+- Detect abnormal market behaviour
+- Preserve capital during uncertainty
+
+Levels
+- GREEN  = Trade Allowed
+- YELLOW = Wait for Confirmation
+- RED    = Block Trade
+
+Lines
+1 STRUCTURE   → fail NO TRADE (RED)
+2 TREND       → fail NO TRADE (RED)
+3 LIQUIDITY   → fail WAIT (YELLOW)
+4 BOS/CHoCH   → fail NO TRADE (RED)
+5 PRECISION   → fail WAIT (YELLOW)
+6 PROBABILITY → fail NO TRADE (RED)
+7 EXECUTION   → fail DO NOT EXECUTE (RED)
+8 POSITION    → open-trade BE / optional flip close
+9 EMERGENCY   → connection / data / symbol auto-recover
+10 AI         → final required checklist → EXECUTE
+
+Module: DefenseLineEngine.mqh
+Inputs: 31 · DEFENSE LINE ENGINE v1.0
+Hooks: UltraAIDecide (entry+exec), ManageOpenTrades (L8), RunTradingCycle (L9)
+
+Soft mode: UltraDefenseStrict=false (default) aligns with InstantQualityMode
+so defense strengthens quality without freezing the live path.

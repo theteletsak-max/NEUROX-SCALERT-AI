@@ -1,14 +1,10 @@
-# SNIPER AI (MT5)
+# Legacy modular SniperAI (do not use for live)
 
-**Production build is the single-file EA:**
+This folder is an **older experiment**.
 
-[`../../release/deliver/SNIPER_AI.mq5`](../../release/deliver/SNIPER_AI.mq5)  
-`BUILD_ID: SA_INSTITUTIONAL_V3`
+**Live product is the single-file EA at repo root:**
 
-The `Include/SniperAI/` modules are legacy reference only. Do not compile the modular `SniperAI.mq5` for live use — use the deliverable single file.
+- [`../../SNIPER_AI_OK68.mq5`](../../SNIPER_AI_OK68.mq5)
+- `BUILD_ID: SA_STRUCT_BEST_68`
 
-## Install
-
-1. Copy `release/deliver/SNIPER_AI.mq5` → `MQL5/Experts/`
-2. Delete any older Sniper EA filenames in that folder
-3. Compile (F7) → attach chart → Algo Trading on
+Do not attach `SniperAI.mq5` from this folder for live trading.

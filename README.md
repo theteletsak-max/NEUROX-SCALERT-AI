@@ -1,56 +1,14 @@
-# SNIPER AI
+# SNIPER AI OK90 — Prime Full Stack
 
-Aggressive institutional forex sniper robot for **MetaTrader 5**.
+Rebuilt **from scratch**: own engines and strategies (not stripped single-path, not old OK83 junk).
 
-Instant execution · 24/7 · trades through events · watermark + HUD · H4/H1/M5 kill-chain.
+### Engines
+Structure · Trend (MTF) · Liquidity · ICT · Fibonacci · Volume · Momentum
 
-> Not financial advice. Demo-test before live. Forex can lose capital quickly.
+### Strategies
+FlashSweep · ContSniper · RevSniper · FibSniper · BreakImpulse
 
-## Primary product — MT5 EA
+### Always on
+Instant execution · TP1/TP2/TP3 · BE/trail · Max 3 · No buy+sell together · Session/news aware (no hard-block) · Account margin check · Comment `SNIPER AI`
 
-Full robot lives in [`mt5/SniperAI/`](mt5/SniperAI/):
-
-| Piece | Role |
-|-------|------|
-| `SniperAI.mq5` | Main Expert Advisor |
-| `Include/SniperAI/SA_Signal.mqh` | Continuation + reversal kill-chain |
-| `Include/SniperAI/SA_Structure.mqh` | Swings, BOS, CHoCH, H4 bias |
-| `Include/SniperAI/SA_Liquidity.mqh` | Sweeps / equal highs-lows |
-| `Include/SniperAI/SA_Zones.mqh` | Displacement, FVG, order blocks |
-| `Include/SniperAI/SA_Risk.mqh` | Lot / ATR SL / 2R / BE / max 3 |
-| `Include/SniperAI/SA_Trade.mqh` | Instant market orders |
-| `Include/SniperAI/SA_Watermark.mqh` | Background watermark (candles on top) |
-| `Include/SniperAI/SA_Dashboard.mqh` | Right-corner HUD |
-| `Images/SniperAI_Watermark.bmp` | SNIPER AI branded artwork |
-
-### Install (MT5) — single file (institutional V3)
-
-Use **[`release/deliver/SNIPER_AI.mq5`](release/deliver/SNIPER_AI.mq5)**  
-`BUILD_ID: SA_INSTITUTIONAL_V3`
-
-1. **File → Open Data Folder** → `MQL5/Experts/`
-2. **Delete** any old `SniperAI*.mq5` / `SNIPER_AI*.mq5` files there
-3. Copy **`SNIPER_AI.mq5`**
-4. MetaEditor → Compile **(F7)** — expect 0 errors / 0 warnings
-5. Attach to chart → enable **Algo Trading**
-
-Also mirrored at repo root: [`SNIPER_AI.mq5`](SNIPER_AI.mq5)
-
-Engineering: [`docs/SNIPER_AI_V3_AUDIT.md`](docs/SNIPER_AI_V3_AUDIT.md) · [`docs/SNIPER_AI_COMPILE_FIXES.md`](docs/SNIPER_AI_COMPILE_FIXES.md)
-
-
-### Locked behaviour
-
-- Chart symbol by default (or all forex if you disable “Trade attached chart only”)
-- Max **3** open trades · lot **0.01** (input) · SL **1.5×ATR(H1)** · TP **2R** · BE **+1R**
-- **No session filter** · **no volatility block** · runs in news
-- Watermark behind candles · dashboard top-right
-
-## Strategy docs
-
-- [`docs/SNIPER_AI_STRATEGY.md`](docs/SNIPER_AI_STRATEGY.md)
-- [`docs/SNIPER_AI_BUILD_PLAN.md`](docs/SNIPER_AI_BUILD_PLAN.md)
-
-## Optional Python research toolkit
-
-`neurox_scalper/` — offline backtests (`neurox backtest`). Not required for the MT5 robot.
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/SNIPER_AI_OK90.mq5

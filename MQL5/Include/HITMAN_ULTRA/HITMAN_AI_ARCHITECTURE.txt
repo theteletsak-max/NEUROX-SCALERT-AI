@@ -1,0 +1,276 @@
+══════════════════════════════════════════════
+HITMAN AI — CORE ARCHITECTURE
+BUILD_ID: HA_ULTRA_93 | Comment: HITMAN AI
+══════════════════════════════════════════════
+
+══════════════════════════════════════════════
+CORE ARCHITECTURE
+══════════════════════════════════════════════
+
+✓ Supreme Command Engine
+✓ Master AI Brain
+✓ Trade Thesis Engine
+✓ Market Memory Engine
+✓ Signal Evolution Engine
+✓ Decision Engine
+✓ Market Regime Engine
+✓ Event-Driven Processing Engine
+
+══════════════════════════════════════════════
+MULTI-TIMEFRAME ENGINE
+══════════════════════════════════════════════
+
+✓ Monthly Bias
+✓ Weekly Bias
+✓ Daily Bias
+✓ H4 Master Trend
+✓ H1 Setup
+✓ M30 Confirmation
+✓ M15 Entry Zone
+✓ M5 Sniper Trigger
+✓ M1 Execution
+
+✓ Timeframe Synchronization
+✓ Master Trend Lock
+✓ No Timeframe Conflicts
+
+══════════════════════════════════════════════
+MARKET STRUCTURE ENGINE
+══════════════════════════════════════════════
+
+✓ Market Structure Detection
+✓ Swing Detection
+✓ Internal Structure
+✓ External Structure
+✓ BOS Detection
+✓ CHoCH Detection
+✓ Market Cycle Detection
+✓ Trend Detection
+✓ Momentum Detection
+✓ Volatility Detection
+
+══════════════════════════════════════════════
+SMART MONEY ENGINE
+══════════════════════════════════════════════
+
+✓ Liquidity Detection
+✓ Liquidity Sweep
+✓ Stop Hunt Detection
+✓ Institutional Liquidity
+✓ Order Blocks
+✓ Breaker Blocks
+✓ Mitigation Blocks
+✓ Fair Value Gaps
+✓ Imbalance Detection
+✓ Dynamic Fibonacci Engine
+
+══════════════════════════════════════════════
+SIGNAL ENGINE
+══════════════════════════════════════════════
+
+✓ Ultra Fast Signal Detection
+✓ Signal Validation
+✓ Signal Stability
+✓ Signal Correction Detection
+✓ Signal Evolution
+✓ Signal Lock
+✓ Duplicate Signal Protection
+✓ Multi-Timeframe Confirmation
+
+══════════════════════════════════════════════
+ULTRA SCORING MACHINE
+══════════════════════════════════════════════
+
+✓ Structure Score
+✓ Trend Score
+✓ BOS Score
+✓ CHoCH Score
+✓ Liquidity Score
+✓ Fibonacci Score
+✓ Institutional Score
+✓ Momentum Score
+✓ Volatility Score
+✓ Session Score
+✓ News Context Score
+✓ Precision Score
+✓ Probability Score
+✓ Risk Score
+✓ Execution Readiness Score
+✓ AI Confidence Score
+✓ Final Trade Score
+
+✓ Adaptive Weighting by Market Regime
+
+══════════════════════════════════════════════
+TRADE ENTRY DISCIPLINE
+══════════════════════════════════════════════
+
+✓ No Random Trades
+✓ No Duplicate Trades
+✓ No Same-Candle Entries
+✓ No Same-Tick Entries
+✓ No Opposite Entries Against Master Trend
+✓ One Signal = One Trade
+✓ One Trade = One Trade Thesis
+✓ Full Validation Before Entry
+✓ Instant Execution After Validation
+
+══════════════════════════════════════════════
+EXECUTION ENGINE
+══════════════════════════════════════════════
+
+✓ Ultra Instant Execution
+✓ Broker Detection
+✓ Fill Mode Detection
+✓ Execution Mode Detection
+✓ Stop Level Detection
+✓ Freeze Level Detection
+✓ Tick Size Detection
+✓ Lot Step Detection
+✓ Margin Validation
+✓ Price Validation
+✓ Smart Retry
+✓ Position Verification
+✓ Connection Recovery
+
+══════════════════════════════════════════════
+DEFENSE LINE ENGINE
+══════════════════════════════════════════════
+
+✓ Structure Defense
+✓ Trend Defense
+✓ BOS Defense
+✓ CHoCH Defense
+✓ Liquidity Defense
+✓ Momentum Defense
+✓ Fibonacci Defense
+✓ Precision Defense
+✓ Probability Defense
+✓ Risk Defense
+✓ Execution Defense
+✓ Position Defense
+✓ Emergency Recovery
+
+══════════════════════════════════════════════
+HOLDING ENGINE
+══════════════════════════════════════════════
+
+✓ Ultra Long Holding
+✓ Hold Score
+✓ Trade Thesis Memory
+✓ Signal Correction Detection
+✓ Healthy Pullback Detection
+✓ True Reversal Detection
+✓ Trend Protection
+✓ Structure Protection
+✓ Adaptive Trailing Stop
+✓ Break-even Logic
+✓ Smart Exit Validation
+
+Never Close Because
+
+✗ One Candle
+✗ Small Pullback
+✗ Temporary Momentum Loss
+✗ Temporary Spread Increase
+
+══════════════════════════════════════════════
+SESSION ENGINE
+══════════════════════════════════════════════
+
+✓ Proprietary Session Filter
+✓ Trades All Sessions
+✓ Session Liquidity Analysis
+✓ Session Quality Score
+✓ Session Context
+
+══════════════════════════════════════════════
+NEWS ENGINE
+══════════════════════════════════════════════
+
+✓ Proprietary News Filter
+✓ News Context Analysis
+✓ Volatility Analysis
+✓ Spread Monitoring
+✓ Market Behaviour Analysis
+
+Designed to evaluate market conditions during news rather than relying solely on a simple "trade/no trade" time block.
+
+══════════════════════════════════════════════
+CAPITAL PROTECTION
+══════════════════════════════════════════════
+
+✓ Dynamic Risk
+✓ Position Size Validation
+✓ Portfolio Exposure
+✓ Margin Monitoring
+✓ Equity Protection
+✓ Capital Preservation
+
+══════════════════════════════════════════════
+PERFORMANCE ENGINE
+══════════════════════════════════════════════
+
+✓ Cached Calculations
+✓ Event-Driven Updates
+✓ Efficient Memory Usage
+✓ Lightweight Processing
+✓ Multi-Symbol Scheduler
+✓ Resource Monitoring
+
+══════════════════════════════════════════════
+SELF-DIAGNOSTICS
+══════════════════════════════════════════════
+
+✓ Indicator Error Detection
+✓ Broker Error Detection
+✓ Data Validation
+✓ Execution Error Detection
+✓ Position Validation
+✓ Recovery Procedures
+✓ System Health Monitoring
+
+══════════════════════════════════════════════
+LOGGER & DASHBOARD
+══════════════════════════════════════════════
+
+✓ Master Trend
+✓ Market Regime
+✓ AI Confidence
+✓ Trade Thesis
+✓ Hold Score
+✓ Open Trades
+✓ Execution Status
+✓ Risk Status
+✓ Capital Status
+✓ System Health
+
+✓ Signal Logging
+✓ Trade Logging
+✓ Error Logging
+✓ Recovery Logging
+
+══════════════════════════════════════════════
+FINAL AI DECISION
+══════════════════════════════════════════════
+
+Only Three Outputs
+
+✓ BUY
+
+✓ SELL
+
+✓ WAIT
+
+Every decision must
+
+✓ Follow Master Trend
+✓ Match Trade Thesis
+✓ Pass Defense Lines
+✓ Pass Scoring Engine
+✓ Pass Risk Validation
+✓ Pass Execution Validation
+✓ Be Explainable
+✓ Be Consistent
+✓ Avoid Irregular Entries
+✓ Avoid Irregular Exits

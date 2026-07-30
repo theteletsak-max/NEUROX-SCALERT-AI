@@ -1,0 +1,12 @@
+HITMAN AI — MASTER + ULTRA FAST SIGNAL ENGINE v1.0
+
+EA: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI.mq5
+
+Same: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI_OK93.mq5
+
+ZIP: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/HITMAN_AI.zip
+
+Same ZIP: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI.zip
+
+BUILD_ID: HA_ULTRA_93
+Comment:  HITMAN AI

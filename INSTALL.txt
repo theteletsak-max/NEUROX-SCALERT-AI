@@ -1,0 +1,4 @@
+[ ] Remove OK89 from chart
+[ ] SNIPER_AI_OK90.mq5 → Experts → F7
+[ ] Journal: SA_PRIME_90 — FULL FROM-SCRATCH PRIME STACK
+[ ] Comment must be SNIPER AI
