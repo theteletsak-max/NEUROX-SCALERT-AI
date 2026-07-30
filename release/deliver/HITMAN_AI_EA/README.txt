@@ -1,2 +1,2 @@
 HITMAN AI ULTRA X (HA_ULTRA_93)
-Mission Control: BUY · SELL · WAIT · HOLD · MANAGE · EXIT
+Mission Control sole close authority · Exit & Hold Fix List
