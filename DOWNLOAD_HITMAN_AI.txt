@@ -10,3 +10,6 @@ EA PACKAGE:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/hitman-master-audit-b12d/HITMAN_AI_EA.zip
 
 Open any link → browser downloads the file.
+
+CHART SKIN: Hitman watermark + dark theme included in the ZIP (Images/HITMAN_Watermark.bmp).
+Copy BMP to MT5 → MQL5/Images/ then recompile. See HITMAN_CHART_SKIN.txt inside the zip.
