@@ -1,12 +1,33 @@
-HITMAN AI — MASTER + ULTRA FAST SIGNAL ENGINE v1.0
+HITMAN AI — DOWNLOAD (MASTER AUDIT / HA_ULTRA_93)
 
-EA: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI.mq5
+ONE-CLICK DOWNLOAD (right-click → Save As, or open and click Download):
 
-Same: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI_OK93.mq5
+ZIP (recommended — single-file EA ready for MT5):
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/hitman-master-audit-b12d/HITMAN_AI.zip
 
-ZIP: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/release/deliver/HITMAN_AI.zip
+Same ZIP (release folder):
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/hitman-master-audit-b12d/release/deliver/HITMAN_AI.zip
 
-Same ZIP: https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/sniper-ai-compile-fix-b12d/HITMAN_AI.zip
+EA package (folder layout + install notes):
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/hitman-master-audit-b12d/HITMAN_AI_EA.zip
+
+SINGLE FILE .mq5 (compile-ready, no Include needed):
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/hitman-master-audit-b12d/HITMAN_AI.mq5
+
+Same as OK93:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/hitman-master-audit-b12d/HITMAN_AI_OK93.mq5
+
+GitHub page (Download button):
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/blob/cursor/hitman-master-audit-b12d/HITMAN_AI.zip
+
+INSTALL
+1) Download HITMAN_AI.zip
+2) Extract HITMAN_AI.mq5
+3) Copy into MetaTrader 5 → MQL5/Experts/
+4) Compile in MetaEditor
+5) Attach to chart — comment must be: HITMAN AI
 
 BUILD_ID: HA_ULTRA_93
 Comment:  HITMAN AI
+Branch:  cursor/hitman-master-audit-b12d
+PR:      https://github.com/theteletsak-max/NEUROX-SCALERT-AI/pull/5
