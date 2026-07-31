@@ -189,16 +189,18 @@ bool UltraUFSE_CacheFresh(const int idx)
 //--------------------------------------------------------------------//
 int UltraUFSE_CalcMasterTrend(const UltraSnap &u)
 {
+   // ROADMAP P10 — HTF votes first; align with UltraMTF hysteresis when tied
    int score = 0;
    if(u.trend.monthBull) score++; if(u.trend.monthBear) score--;
    if(u.trend.weekBull)  score++; if(u.trend.weekBear)  score--;
    if(u.trend.macroBull) score++; if(u.trend.macroBear) score--;
    if(u.trend.htfBull)   score++; if(u.trend.htfBear)   score--;
+   if(score > 1) return 1;   // require clear majority (anti-flicker)
+   if(score < -1) return -1;
    if(score > 0) return 1;
    if(score < 0) return -1;
-   // fallback to votes
-   if(u.trend.mtfVotesBuy > u.trend.mtfVotesSell) return 1;
-   if(u.trend.mtfVotesSell > u.trend.mtfVotesBuy) return -1;
+   if(u.trend.mtfVotesBuy > u.trend.mtfVotesSell + 1) return 1;
+   if(u.trend.mtfVotesSell > u.trend.mtfVotesBuy + 1) return -1;
    return 0;
 }
 
@@ -286,11 +288,17 @@ bool UltraUFSE_MasterAllows(const int idx, const bool wantBuy, string &why)
 {
    why = "";
    if(!UltraMasterTrendLock) return true;
-   // InstantQuality: chart TF Cont/Fib can run against mild HTF mix
-   if(InstantQualityMode) return true;
+   // ROADMAP P4/P10 — HTF master always authoritative when lock enabled
+   // (InstantQuality must NOT bypass higher-timeframe direction)
    if(idx < 0 || idx >= g_UFSE_N) return true;
    int mt = g_UFSE[idx].masterTrend;
-   if(mt == 0) return true; // no clear master — allow (InstantQuality)
+   if(mt == 0)
+   {
+      // Prefer MTF hysteresis master when UFSE master is flat
+      string sym = g_UFSE[idx].symbol;
+      mt = UltraMTF_MasterDir(sym);
+      if(mt == 0) return true;
+   }
    if(wantBuy && mt < 0){ why = "master trend SELL lock"; return false; }
    if(!wantBuy && mt > 0){ why = "master trend BUY lock"; return false; }
    return true;
@@ -328,6 +336,9 @@ bool UltraUFSE_EntryTrigger(const UltraSnap &u, const bool buySide, string &why)
       ? (u.st.hh || u.st.hl || u.st.externalBull || u.st.internalBull || u.st.continuation)
       : (u.st.lh || u.st.ll || u.st.externalBear || u.st.internalBear || u.st.continuation);
    bool bosCh = buySide ? (u.bos.buy || u.choch.buy) : (u.bos.sell || u.choch.sell);
+   bool bosStrong = buySide
+      ? ((u.bos.buy && (u.bos.confirmed || u.bos.strong)) || (u.choch.buy && u.choch.majorC))
+      : ((u.bos.sell && (u.bos.confirmed || u.bos.strong)) || (u.choch.sell && u.choch.majorC));
    bool liq   = buySide ? (u.liq.sweepBuy || u.liq.stopHuntBuy || u.liq.grabBuy || u.liq.equalLows)
                         : (u.liq.sweepSell || u.liq.stopHuntSell || u.liq.grabSell || u.liq.equalHighs);
    bool mom   = buySide ? (u.mom.momBuy || u.mom.impulse || u.ict.dispBuy || u.ind.smi > 0)
@@ -335,11 +346,29 @@ bool UltraUFSE_EntryTrigger(const UltraSnap &u, const bool buySide, string &why)
    bool trend = buySide ? (u.trend.bull || u.trend.htfBull || u.trend.macroBull)
                         : (u.trend.bear || u.trend.htfBear || u.trend.macroBear);
 
+   // ROADMAP P5 — reject fake sweeps on live path
+   if(UltraLiq_IsFakeSweep(u, buySide) && !UltraLiq_IsGenuine(u, buySide))
+   {
+      why = "fake sweep rejected";
+      return false;
+   }
+
+   // ROADMAP P6/P7 — ignore weak OB/FVG as sole institutional proof
+   bool weakOnlyInst = UltraICT_WeakOB(u, buySide) && UltraICT_WeakFVG(u, buySide) &&
+                       !UltraICT_StrongOB(u, buySide) && !UltraLiq_IsGenuine(u, buySide) && !bosStrong;
+   if(weakOnlyInst && u.score.confidence < UltraInstantFireConf)
+   {
+      why = "weak OB/FVG rejected";
+      return false;
+   }
+
    if(InstantQualityMode)
    {
       int n = (structure?1:0)+(bosCh?1:0)+(liq?1:0)+(mom?1:0)+(trend?1:0);
-      // ContSniper InstantQuality is 2-of-3 — match that here (was 3/5 WAIT spam)
-      if(n < 2){ why = "entry trigger soft fail "+IntegerToString(n)+"/5"; return false; }
+      // Prefer 3/5; allow 2/5 only when genuine liquidity OR strong BOS present
+      int need = 3;
+      if(UltraLiq_IsGenuine(u, buySide) || bosStrong) need = 2;
+      if(n < need){ why = "entry trigger soft fail "+IntegerToString(n)+"/5 need "+IntegerToString(need); return false; }
    }
    else
    {
@@ -349,6 +378,18 @@ bool UltraUFSE_EntryTrigger(const UltraSnap &u, const bool buySide, string &why)
       if(!liq){ why = "liquidity fail"; return false; }
       if(!mom){ why = "momentum fail"; return false; }
    }
+
+   // ROADMAP P16 — during major events: never block on spread alone,
+   // but REQUIRE genuine liquidity OR strong structure (tighten quality).
+   if(u.ctx.duringNews || u.ctx.highImpactProxy)
+   {
+      if(!UltraLiq_IsGenuine(u, buySide) && !bosStrong)
+      {
+         why = "event quality: need genuine liq or strong BOS/CHoCH";
+         return false;
+      }
+   }
+
    if(u.score.precision < UltraMinPrecision && u.score.confidence < UltraInstantFireConf)
    { why = "precision threshold"; return false; }
    if(u.score.probability < UltraMinProbability && u.score.confidence < UltraInstantFireConf)

@@ -1,7 +1,8 @@
 #ifndef HITMAN_ULTRA_06_LIQUIDITY_MQH
 #define HITMAN_ULTRA_06_LIQUIDITY_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — 06_LIQUIDITY — Sweeps · Pools · Stop Hunts
+//| HITMAN AI — 06_LIQUIDITY — Sweeps · Pools · Stop Hunts · Fake    |
+//| ROADMAP P5 — genuine institutional liquidity, ignore fake sweeps |
 //+------------------------------------------------------------------+
 void UltraEngLiquidity(const string s, UltraSnap &u)
 {
@@ -28,10 +29,10 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
    if(u.liq.poolLow <= 0) u.liq.poolLow = lo;
    if(u.liq.poolHigh <= 0) u.liq.poolHigh = hi;
 
-   double minD = u.vol.atr * UltraSweepDepthATR * 0.85;
+   double minD = u.vol.atr * UltraSweepDepthATR;
    int swlb = MathMax(UltraSweepLookback, 8);
    double bestDepth = 0;
-   double wickMin = UltraSweepWickMin * 0.85;
+   double wickMin = UltraSweepWickMin;
    for(int i = 1; i <= swlb; i++)
    {
       double h = iHigh(s, tf, i), l = iLow(s, tf, i), c = iClose(s, tf, i), o = iOpen(s, tf, i);
@@ -43,7 +44,7 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
          {
             u.liq.sweepBuy = true; u.liq.grabBuy = true; u.liq.sweepExtBuy = l;
             bestDepth = MathMax(bestDepth, (u.liq.poolLow - l) / u.vol.atr);
-            u.liq.confirmedBuy = (c > o);
+            u.liq.confirmedBuy = (c > o); // close must reclaim in candle direction
          }
       }
       if(!u.liq.sweepSell && u.liq.poolHigh > 0 && h > u.liq.poolHigh + minD && c < u.liq.poolHigh)
@@ -68,8 +69,31 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
    if(u.liq.confirmedBuy || u.liq.confirmedSell) u.liq.quality += 25;
    if(u.liq.stopHuntBuy || u.liq.stopHuntSell) u.liq.quality += 15;
    if(u.liq.poolBuy || u.liq.poolSell) u.liq.quality += 10;
+   if(bestDepth >= UltraSweepDepthATR * 1.5) u.liq.quality += 10;
    if(u.liq.quality > 100) u.liq.quality = 100;
    u.liq.rejectionScore = (int)MathRound(u.liq.quality);
+
+   // ROADMAP P5 — classify fake vs genuine
+   int qFloor = UltraLiqMinQuality;
+   if(qFloor < 40) qFloor = 40;
+   u.liq.fakeBuy = (u.liq.sweepBuy || u.liq.stopHuntBuy) &&
+                   (!u.liq.confirmedBuy || bestDepth < UltraSweepDepthATR * 0.6 || u.liq.quality < qFloor);
+   u.liq.fakeSell = (u.liq.sweepSell || u.liq.stopHuntSell) &&
+                    (!u.liq.confirmedSell || bestDepth < UltraSweepDepthATR * 0.6 || u.liq.quality < qFloor);
+   u.liq.genuineBuy = (u.liq.sweepBuy || u.liq.stopHuntBuy) && u.liq.confirmedBuy &&
+                      !u.liq.fakeBuy && u.liq.quality >= qFloor;
+   u.liq.genuineSell = (u.liq.sweepSell || u.liq.stopHuntSell) && u.liq.confirmedSell &&
+                       !u.liq.fakeSell && u.liq.quality >= qFloor;
+}
+
+bool UltraLiq_IsFakeSweep(const UltraSnap &u, const bool buySide)
+{
+   return buySide ? u.liq.fakeBuy : u.liq.fakeSell;
+}
+
+bool UltraLiq_IsGenuine(const UltraSnap &u, const bool buySide)
+{
+   return buySide ? u.liq.genuineBuy : u.liq.genuineSell;
 }
 
 #endif // HITMAN_ULTRA_06_LIQUIDITY_MQH

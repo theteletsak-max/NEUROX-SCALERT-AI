@@ -1,0 +1,38 @@
+══════════════════════════════════════════════════════════════════════
+                HITMAN AI ULTRA ∞
+        MASTER REFINEMENT & AUDIT ROADMAP — APPLIED
+        BUILD: HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen=3
+══════════════════════════════════════════════════════════════════════
+
+PHASE 1  CORE ENGINE              [REFINED] faster boot log · config locks
+PHASE 2  MARKET DATA              [REFINED] bar/history validation gates
+PHASE 3  MARKET STRUCTURE         [KEPT]    swing/BOS/CHoCH engines
+PHASE 4  MASTER TREND             [REFINED] HTF majority + hysteresis · no InstantQuality bypass
+PHASE 5  LIQUIDITY                [REFINED] genuine vs fake sweep classification
+PHASE 6  ORDER BLOCKS             [REFINED] weak/mitigated OB rejected · strong OB preferred
+PHASE 7  FAIR VALUE GAPS          [REFINED] ATR floor 0.18 · weak FVG without displacement
+PHASE 8  FIBONACCI                [KEPT]    dynamic anchors / zones
+PHASE 9  MOMENTUM                 [KEPT]    strength / exhaustion
+PHASE 10 MULTI-TIMEFRAME          [REFINED] MN/W1/D1/H4 authority · LTF times entries
+PHASE 11 SIGNAL ENGINE            [REFINED] entry trigger quality + fake/weak rejects
+PHASE 12 TRADE THESIS             [KEPT]    store + revalidate
+PHASE 13 SCORING MACHINE          [REFINED] fake-sweep / weak OB/FVG penalties
+PHASE 14 MISSION CONTROL          [REFINED] sole BUY/SELL/HOLD/WAIT/CLOSE/REPLACE
+PHASE 15 EXECUTION                [KEPT]    ExecuteBuy/Sell · Mission-only closes
+PHASE 16 EVENT TRADING            [REFINED] never spread-only reject · tighten quality in news
+PHASE 17 POSITION EVOLUTION       [REFINED] softInvalid→L3→close→forced opposite replace
+PHASE 18 POSITION MANAGEMENT      [KEPT]    hold while thesis valid
+PHASE 19 EXIT ENGINE              [REFINED] thesis OR risk OR structural invalidation
+PHASE 20 LOGGER                   [REFINED] UltraLogDecision structured fields
+PHASE 21 PERFORMANCE              [KEPT]    UFSE cache / dirty flags
+PHASE 22 SAFE CLEANUP             [PARTIAL] no watermark/legacy skin reintroduced
+
+FINAL PATH
+Market Data → Structure → Master Trend → Liquidity → OB → FVG → Fib → Momentum
+→ MTF Sync → UFSE Signal → Thesis → USM2 Score → Mission Control → Execution
+→ Event Context → Position Evolution → Management → Exit (Mission) → Logger → Dashboard
+
+LOCKS
+TradeComment=HITMAN AI · BUILD_ID=HA_ULTRA_93 · MaxOpen=3 · EntryTF=PERIOD_CURRENT
+CTrade g_Trade · Mission-only PositionClose* · classic chart_background.bmp watermark
+══════════════════════════════════════════════════════════════════════

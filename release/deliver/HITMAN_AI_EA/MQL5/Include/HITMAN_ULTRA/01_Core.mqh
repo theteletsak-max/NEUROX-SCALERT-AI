@@ -45,7 +45,9 @@ void UltraCoreInit()
    g_UltraCore.healthy = g_UltraCore.configOK;
    string cfg = "N";
    if(g_UltraCore.configOK) cfg = "Y";
-   UltraLog("CORE loaded configOK=" + cfg);
+   UltraLog("CORE loaded configOK=" + cfg +
+            " BUILD=HA_ULTRA_93 Comment=HITMAN AI MaxOpen=" + IntegerToString(MaxOpenTrades) +
+            " | ROADMAP refined core");
 }
 
 void UltraSystemController_Boot()

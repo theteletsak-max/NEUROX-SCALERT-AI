@@ -74,6 +74,8 @@ struct UltraLiquidity
    bool stopHuntBuy, stopHuntSell;
    bool sweepBuy, sweepSell;
    bool confirmedBuy, confirmedSell;
+   bool fakeBuy, fakeSell;       // ROADMAP P5 — wick reclaim without institutional confirm
+   bool genuineBuy, genuineSell; // ROADMAP P5 — confirmed + depth + quality
    double poolLow, poolHigh;
    double sweepExtBuy, sweepExtSell;
    double depthATR, speed, strength, quality;
@@ -103,6 +105,9 @@ struct UltraInst
    bool smConfluence;
    bool dispBuy, dispSell;
    bool inDiscount, inPremium;
+   bool weakOBBuy, weakOBSell;           // ROADMAP P6 — mitigated / no displacement
+   bool weakFVGBuy, weakFVGSell;         // ROADMAP P7 — tiny / no displacement gap
+   bool strongOBBuy, strongOBSell;       // fresh OB + displacement
 };
 
 struct UltraTrend

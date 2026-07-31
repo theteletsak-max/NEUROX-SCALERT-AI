@@ -76,12 +76,71 @@ double UltraMTF_WeightBias(const int votesBuy, const int votesSell)
    return MathMax(-1.0, MathMin(1.0, d / 6.0));
 }
 
-// Master trend from H4 (bias TF). Returns +1 buy, -1 sell, 0 unknown.
+// ROADMAP P4/P10 — HTF majority (MN/W1/D1/H4) + hysteresis (no flicker)
+string   g_UltraMTF_HystSym = "";
+int      g_UltraMTF_HystDir = 0;
+int      g_UltraMTF_HystCount = 0;
+datetime g_UltraMTF_HystBar = 0;
+
+int UltraMTF_MasterDirRaw(const string s)
+{
+   int score = 0;
+   ENUM_TIMEFRAMES htf[4];
+   htf[0] = PERIOD_MN1; htf[1] = PERIOD_W1; htf[2] = PERIOD_D1; htf[3] = UltraTF_Bias;
+   for(int i = 0; i < 4; i++)
+   {
+      if(UltraMTF_Bull(s, htf[i])) score++;
+      if(UltraMTF_Bear(s, htf[i])) score--;
+   }
+   if(score > 0) return 1;
+   if(score < 0) return -1;
+   return 0;
+}
+
+// Master trend. Returns +1 buy, -1 sell, 0 unknown.
+// Higher timeframe decides direction; hysteresis prevents bar-to-bar flicker.
 int UltraMTF_MasterDir(const string s)
 {
-   if(UltraMTF_Bull(s, UltraTF_Bias)) return 1;
-   if(UltraMTF_Bear(s, UltraTF_Bias)) return -1;
-   return 0;
+   int raw = UltraMTF_MasterDirRaw(s);
+   int need = UltraMasterHysteresisBars;
+   if(need < 1) need = 1;
+
+   datetime bar = iTime(s, UltraTF_Bias, 0);
+   if(g_UltraMTF_HystSym != s)
+   {
+      g_UltraMTF_HystSym = s;
+      g_UltraMTF_HystDir = raw;
+      g_UltraMTF_HystCount = need;
+      g_UltraMTF_HystBar = bar;
+      return raw;
+   }
+
+   if(raw == 0)
+      return g_UltraMTF_HystDir; // keep last known master when stack is mixed
+
+   if(raw == g_UltraMTF_HystDir)
+   {
+      g_UltraMTF_HystCount = need;
+      g_UltraMTF_HystBar = bar;
+      return raw;
+   }
+
+   // opposing vote — require N bars before flip
+   if(bar > 0 && bar != g_UltraMTF_HystBar)
+   {
+      g_UltraMTF_HystCount++;
+      g_UltraMTF_HystBar = bar;
+   }
+   else if(g_UltraMTF_HystCount == 0)
+      g_UltraMTF_HystCount = 1;
+
+   if(g_UltraMTF_HystCount >= need)
+   {
+      g_UltraMTF_HystDir = raw;
+      g_UltraMTF_HystCount = 0;
+      return raw;
+   }
+   return g_UltraMTF_HystDir;
 }
 
 // Timeframe synchronization: count agreement across MN→M5 ladder for side.

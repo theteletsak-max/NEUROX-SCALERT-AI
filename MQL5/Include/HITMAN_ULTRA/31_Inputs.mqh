@@ -27,11 +27,13 @@ input int    UltraStructLookback         = 48;
 input int    UltraBOS_ConfirmBars        = 14;
 input int    UltraSweepLookback          = 24;
 input double UltraEqualTolATR            = 0.12;
-input double UltraSweepWickMin           = 0.28;
-input double UltraSweepDepthATR          = 0.06;
-input double UltraDispBodyMin            = 0.48;
-input double UltraDispATRMin             = 0.35;
-input double UltraFVG_MinATR             = 0.12;
+input double UltraSweepWickMin           = 0.35;  // ROADMAP P5 — ignore shallow fake wicks
+input double UltraSweepDepthATR          = 0.08;
+input double UltraDispBodyMin            = 0.55;  // ROADMAP P6/P7 — institutional displacement
+input double UltraDispATRMin             = 0.40;
+input double UltraFVG_MinATR             = 0.18;  // ROADMAP P7 — ignore weak gaps
+input int    UltraLiqMinQuality          = 55;    // genuine sweep quality floor
+input int    UltraMasterHysteresisBars   = 2;     // ROADMAP P4/P10 — no master flicker
 input double UltraVolExpandMult          = 1.20;
 input int    UltraMomentumBars           = 3;
 input double UltraFibBuyLow              = 0.50;
@@ -130,7 +132,7 @@ input int    UltraPosEvoMinHoldConf      = 35;    // below → L2 MANAGE (not au
 input bool   UltraPosEvoReplaceEnabled   = true;  // Ultra Reversal / Signal Replacement
 input bool   UltraPosEvoReplaceNextBarOnly = true; // never same-bar flip (anti-whipsaw)
 input int    UltraPosEvoReplaceMinConf   = 62;    // replacement confidence floor
-input int    UltraPosEvoReplaceMinHits   = 3;     // structure/BOS/liq/zone/mom hits needed
+input int    UltraPosEvoReplaceMinHits   = 4;     // ROADMAP P17 — high-confidence replace only
 input int    UltraPosEvoReplaceMaxBars   = 5;     // expire unused replace arm
 
 input group "31 · DASHBOARD INPUTS"

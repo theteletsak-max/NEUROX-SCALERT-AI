@@ -104,15 +104,21 @@ int UltraUSM2_ComponentLiquidity(const UltraSnap &u, const bool buySide)
    int sc = 10;
    if(buySide)
    {
-      if(u.liq.sweepBuy) sc += 30; if(u.liq.stopHuntBuy) sc += 15;
-      if(u.liq.grabBuy) sc += 15; if(u.liq.equalLows) sc += 10;
+      if(u.liq.genuineBuy) sc += 40;
+      else if(u.liq.sweepBuy) sc += 20;
+      if(u.liq.stopHuntBuy) sc += 12;
+      if(u.liq.grabBuy) sc += 12; if(u.liq.equalLows) sc += 10;
       if(u.liq.confirmedBuy) sc += 10;
+      if(u.liq.fakeBuy) sc -= 25; // ROADMAP P5/P13 — penalize fake sweeps
    }
    else
    {
-      if(u.liq.sweepSell) sc += 30; if(u.liq.stopHuntSell) sc += 15;
-      if(u.liq.grabSell) sc += 15; if(u.liq.equalHighs) sc += 10;
+      if(u.liq.genuineSell) sc += 40;
+      else if(u.liq.sweepSell) sc += 20;
+      if(u.liq.stopHuntSell) sc += 12;
+      if(u.liq.grabSell) sc += 12; if(u.liq.equalHighs) sc += 10;
       if(u.liq.confirmedSell) sc += 10;
+      if(u.liq.fakeSell) sc -= 25;
    }
    sc += (int)(u.liq.quality / 4.0);
    return UltraUSM2_Clamp(sc);
@@ -134,15 +140,27 @@ int UltraUSM2_ComponentInst(const UltraSnap &u, const bool buySide)
    int sc = 10;
    if(buySide)
    {
-      if(u.ict.obBuy) sc += 18; if(u.ict.breakerBuy) sc += 12;
-      if(u.ict.fvgBuy) sc += 15; if(u.ict.instZoneBuy) sc += 18;
+      if(u.ict.strongOBBuy) sc += 25;
+      else if(u.ict.obBuy && !u.ict.weakOBBuy) sc += 14;
+      if(u.ict.weakOBBuy) sc -= 20; // ROADMAP P6 — ignore weak OB
+      if(u.ict.breakerBuy) sc += 12;
+      if(u.ict.fvgBuy && !u.ict.weakFVGBuy) sc += 18;
+      if(u.ict.weakFVGBuy) sc -= 15; // ROADMAP P7
+      if(u.ict.instZoneBuy) sc += 18;
       if(u.ict.inDiscount) sc += 12; if(u.ict.dispBuy) sc += 15;
+      if(u.ict.mitigationBuy) sc -= 10;
    }
    else
    {
-      if(u.ict.obSell) sc += 18; if(u.ict.breakerSell) sc += 12;
-      if(u.ict.fvgSell) sc += 15; if(u.ict.instZoneSell) sc += 18;
+      if(u.ict.strongOBSell) sc += 25;
+      else if(u.ict.obSell && !u.ict.weakOBSell) sc += 14;
+      if(u.ict.weakOBSell) sc -= 20;
+      if(u.ict.breakerSell) sc += 12;
+      if(u.ict.fvgSell && !u.ict.weakFVGSell) sc += 18;
+      if(u.ict.weakFVGSell) sc -= 15;
+      if(u.ict.instZoneSell) sc += 18;
       if(u.ict.inPremium) sc += 12; if(u.ict.dispSell) sc += 15;
+      if(u.ict.mitigationSell) sc -= 10;
    }
    if(u.ict.smConfluence) sc += 10;
    return UltraUSM2_Clamp(sc);
@@ -193,10 +211,11 @@ int UltraUSM2_ComponentSession(const UltraSnap &u)
 int UltraUSM2_ComponentNews(const UltraSnap &u)
 {
    int sc = 55;
-   // context only — never hard-block; mild adjustment
+   // ROADMAP P16 — context only; NEVER reject solely because spread is high
    if(u.ctx.newsVol) sc += 10;
-   if(u.ctx.duringNews) sc -= 8;
-   if(u.ctx.spreadPts > 30) sc -= 10;
+   if(u.ctx.duringNews) sc -= 5; // mild — quality gates tighten elsewhere
+   // spread is informational only (no hard reject); tiny soft weight
+   if(u.ctx.spreadPts > 40) sc -= 4;
    return UltraUSM2_Clamp(sc);
 }
 

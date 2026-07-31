@@ -134,23 +134,50 @@ bool UltraDefense_Line2_Trend(const UltraSnap &u, const bool buySide, string &wh
 bool UltraDefense_Line3_Liquidity(const UltraSnap &u, const bool buySide, string &why)
 {
    why = "";
+   // ROADMAP P5 — prefer genuine; reject pure fake sweeps
+   if(UltraLiq_IsFakeSweep(u, buySide) && !UltraLiq_IsGenuine(u, buySide))
+   {
+      // During events still require genuine or strong BOS — never fake alone
+      bool bosStrong = buySide
+         ? ((u.bos.buy && (u.bos.confirmed || u.bos.strong)) || (u.choch.buy && u.choch.majorC))
+         : ((u.bos.sell && (u.bos.confirmed || u.bos.strong)) || (u.choch.sell && u.choch.majorC));
+      if(!bosStrong)
+      {
+         why = "fake sweep rejected";
+         return false;
+      }
+   }
+   if(UltraLiq_IsGenuine(u, buySide)) return true;
+
    bool sweep = buySide ? (u.liq.sweepBuy || u.liq.equalLows) : (u.liq.sweepSell || u.liq.equalHighs);
    bool hunt  = buySide ? u.liq.stopHuntBuy : u.liq.stopHuntSell;
    bool grab  = buySide ? (u.liq.grabBuy || u.liq.poolBuy || u.liq.confirmedBuy)
                         : (u.liq.grabSell || u.liq.poolSell || u.liq.confirmedSell);
+
+   // ROADMAP P16 — during news tighten: require genuine/confirmed or strong BOS
+   if(u.ctx.duringNews || u.ctx.highImpactProxy)
+   {
+      bool bosStrong = buySide
+         ? ((u.bos.buy && (u.bos.confirmed || u.bos.strong)) || (u.choch.buy && u.choch.majorC))
+         : ((u.bos.sell && (u.bos.confirmed || u.bos.strong)) || (u.choch.sell && u.choch.majorC));
+      if(UltraLiq_IsGenuine(u, buySide) || (sweep && (buySide ? u.liq.confirmedBuy : u.liq.confirmedSell)) || bosStrong)
+         return true;
+      why = "event liquidity not institutional";
+      return false;
+   }
+
    if(sweep || hunt || grab) return true;
-   if(UltraDefense_SoftMode() && (u.liq.quality >= 20 || u.ict.dispBuy || u.ict.dispSell))
+   if(UltraDefense_SoftMode() && (u.liq.quality >= 35 || u.ict.dispBuy || u.ict.dispSell))
       return true;
-   // InstantQuality Cont/Fib/Inst paths often pass without a fresh sweep —
-   // do not WAIT-block once confluence already selected a strategy.
    if(InstantQualityMode && UltraDefense_SoftMode())
    {
       bool zone = buySide
-         ? (u.ict.obBuy || u.ict.fvgBuy || u.ict.instZoneBuy || u.fib.atBuyZone || u.ict.inDiscount)
-         : (u.ict.obSell || u.ict.fvgSell || u.ict.instZoneSell || u.fib.atSellZone || u.ict.inPremium);
+         ? (UltraICT_StrongOB(u, true) || (u.ict.fvgBuy && !u.ict.weakFVGBuy) || u.ict.instZoneBuy || u.fib.atBuyZone)
+         : (UltraICT_StrongOB(u, false) || (u.ict.fvgSell && !u.ict.weakFVGSell) || u.ict.instZoneSell || u.fib.atSellZone);
       bool mom = buySide ? (u.mom.momBuy || u.mom.impulse) : (u.mom.momSell || u.mom.impulse);
-      if(zone || mom || u.st.continuation || u.bos.buy || u.bos.sell ||
-         u.score.confidence >= UltraFireFloor() - 5)
+      if(zone || mom || u.st.continuation ||
+         (buySide ? (u.bos.buy && u.bos.confirmed) : (u.bos.sell && u.bos.confirmed)) ||
+         u.score.confidence >= UltraFireFloor())
          return true;
    }
    why = "liquidity not confirmed";

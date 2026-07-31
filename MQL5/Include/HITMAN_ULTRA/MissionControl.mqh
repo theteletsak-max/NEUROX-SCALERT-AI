@@ -117,6 +117,14 @@ void UltraMission_Log(const string action, const ulong ticket, const string why)
    t += " | ";
    t += why;
    UltraLogTrade(t);
+   // ROADMAP P20 — structured fields
+   string side = "-";
+   if(action == "OPEN" || action == "BUY") side = "BUY";
+   else if(action == "SELL") side = "SELL";
+   else if(ticket > 0 && PositionSelectByTicket(ticket))
+      side = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) ? "BUY" : "SELL";
+   UltraLogDecisionFromSnap(action, ticket, side, g_UltraMissionLast.grade,
+                            g_UltraLastSnap, why);
    if(UltraUpgradeLog || EnableVerboseLogging)
       Print(t);
 }
@@ -224,33 +232,38 @@ UltraExitValidation UltraMission_ValidateExit(const ulong ticket, const string s
       return v;
    }
 
-   // Rule #10: Thesis Invalid AND Structure Changed AND Master Trend Changed
-   if(v.thesisBroken && v.structureChanged && v.masterTrendChanged && v.trueReversal)
+   // ROADMAP P19 — Exit ONLY if:
+   //   thesis invalidated OR risk (handled) OR confirmed structural invalidation
+   // Never exit on one candle / one indicator / temp spread / temp vol / news alone.
+
+   // Confirmed structural invalidation (BOS/CHoCH + reversal + master flip)
+   if(v.structureChanged && v.trueReversal && v.masterTrendChanged)
    {
       v.allowClose = true;
-      v.reason = "EXIT CONFIRMED — thesis+structure+master trend+reversal";
+      v.reason = "EXIT CONFIRMED — structural invalidation + reversal + master";
       return v;
    }
 
-   // Soft InstantQuality: still require at least thesis broken + true reversal + structure
-   if(!UltraUpgradeStrict)
+   // Thesis invalidated with structure or master confirmation
+   if(v.thesisBroken && v.structureChanged && (v.trueReversal || v.masterTrendChanged))
    {
-      if(v.thesisBroken && v.trueReversal && v.structureChanged)
-      {
-         v.allowClose = true;
-         v.reason = "EXIT CONFIRMED — thesis invalid + structure + reversal";
-         return v;
-      }
-      v.allowClose = false;
-      v.reason = "KEEP HOLDING — exit confirmations incomplete";
+      v.allowClose = true;
+      v.reason = "EXIT CONFIRMED — thesis invalid + structure confirm";
       return v;
    }
 
-   // Strict: thesis broken + (structure or master) + reversal
-   if(v.thesisBroken && v.trueReversal && (v.structureChanged || v.masterTrendChanged))
+   if(v.thesisBroken && v.trueReversal && v.masterTrendChanged)
    {
       v.allowClose = true;
-      v.reason = "EXIT CONFIRMED (strict)";
+      v.reason = "EXIT CONFIRMED — thesis invalid + master + reversal";
+      return v;
+   }
+
+   // Soft path: thesis + structure + reversal (anti-whipsaw still needs PosEvo streak)
+   if(!UltraUpgradeStrict && v.thesisBroken && v.trueReversal && v.structureChanged)
+   {
+      v.allowClose = true;
+      v.reason = "EXIT CONFIRMED — thesis invalid + structure + reversal";
       return v;
    }
 
@@ -284,6 +297,17 @@ bool UltraMission_ClosePosition(const ulong ticket, const string whyIn, const bo
    UltraBuildSnapshot(s, u);
 
    UltraExitValidation v = UltraMission_ValidateExit(ticket, s, isBuy, u, riskForced);
+   // ROADMAP P17 — honor PosEvo L3 multi-bar soft invalidation confirmed for this ticket
+   if(!v.allowClose && !riskForced && UltraPosEvoEnabled && UltraPosEvoCloseOnL3 &&
+      g_UltraPosEvoLast.allowClose && g_UltraPosEvoLast.command == SUP_EXIT &&
+      g_UltraPosEvoL3Ticket == ticket)
+   {
+      v.allowClose = true;
+      if(StringLen(g_UltraPosEvoLast.exitReason) > 0)
+         v.reason = g_UltraPosEvoLast.exitReason;
+      else
+         v.reason = "POSEVO L3 soft invalidation confirmed";
+   }
    if(!v.allowClose)
    {
       UltraMission_Set(SUP_HOLD, v.reason, u.score.confidence, g_UltraHoldLast.total, "HOLD", "", ticket);
@@ -417,10 +441,10 @@ ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const str
       cmd = evo.command;
       why = evo.reason;
 
-      // Hard gate: L3 EXIT only if ValidateExit allows AND CloseOnL3 enabled
+      // ROADMAP P17 — L3 EXIT when ValidateExit OR PosEvo multi-bar soft invalidation confirms
       if(cmd == SUP_EXIT)
       {
-         if(!UltraPosEvoCloseOnL3 || !v.allowClose)
+         if(!UltraPosEvoCloseOnL3 || !(v.allowClose || evo.allowClose))
          {
             cmd = SUP_MANAGE;
             why = "L2 MANAGE — invalidation not fully confirmed for Mission close";
@@ -429,7 +453,9 @@ ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const str
          {
             why = "EXIT: " + evo.exitReason;
             if(evo.wantReplace)
-               why += " | replace armed if checklist passes";
+               why += " | REPLACE armed if checklist passes";
+            UltraLogDecisionFromSnap(evo.wantReplace ? "REPLACE" : "EXIT", ticket,
+                                     isBuy ? "BUY" : "SELL", "POSEVO", u, why);
          }
       }
       else if(cmd == SUP_MANAGE && StringLen(why) == 0)

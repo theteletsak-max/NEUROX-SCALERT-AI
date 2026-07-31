@@ -11,9 +11,12 @@
 #property description "BUILD=HA_ULTRA_93 Comment=HITMAN AI MaxOpen=3"
 
 #include <Trade/Trade.mqh>
-#resource "\\Images\\chart_background.bmp"
 
 #define BG_OBJECT_NAME "HitmanAI_ChartBackground"
+
+// Hitman chart watermark — same resource name as classic HITMAN_AI.mq5
+// Place chart_background.bmp in Data Folder MQL5/Images before compile
+#resource "\\Images\\chart_background.bmp"
 
 CTrade g_Trade;
 
@@ -681,6 +684,8 @@ struct UltraLiquidity
    bool stopHuntBuy, stopHuntSell;
    bool sweepBuy, sweepSell;
    bool confirmedBuy, confirmedSell;
+   bool fakeBuy, fakeSell;       // ROADMAP P5 — wick reclaim without institutional confirm
+   bool genuineBuy, genuineSell; // ROADMAP P5 — confirmed + depth + quality
    double poolLow, poolHigh;
    double sweepExtBuy, sweepExtSell;
    double depthATR, speed, strength, quality;
@@ -710,6 +715,9 @@ struct UltraInst
    bool smConfluence;
    bool dispBuy, dispSell;
    bool inDiscount, inPremium;
+   bool weakOBBuy, weakOBSell;           // ROADMAP P6 — mitigated / no displacement
+   bool weakFVGBuy, weakFVGSell;         // ROADMAP P7 — tiny / no displacement gap
+   bool strongOBBuy, strongOBSell;       // fresh OB + displacement
 };
 
 struct UltraTrend
@@ -921,11 +929,13 @@ input int    UltraStructLookback         = 48;
 input int    UltraBOS_ConfirmBars        = 14;
 input int    UltraSweepLookback          = 24;
 input double UltraEqualTolATR            = 0.12;
-input double UltraSweepWickMin           = 0.28;
-input double UltraSweepDepthATR          = 0.06;
-input double UltraDispBodyMin            = 0.48;
-input double UltraDispATRMin             = 0.35;
-input double UltraFVG_MinATR             = 0.12;
+input double UltraSweepWickMin           = 0.35;  // ROADMAP P5 — ignore shallow fake wicks
+input double UltraSweepDepthATR          = 0.08;
+input double UltraDispBodyMin            = 0.55;  // ROADMAP P6/P7 — institutional displacement
+input double UltraDispATRMin             = 0.40;
+input double UltraFVG_MinATR             = 0.18;  // ROADMAP P7 — ignore weak gaps
+input int    UltraLiqMinQuality          = 55;    // genuine sweep quality floor
+input int    UltraMasterHysteresisBars   = 2;     // ROADMAP P4/P10 — no master flicker
 input double UltraVolExpandMult          = 1.20;
 input int    UltraMomentumBars           = 3;
 input double UltraFibBuyLow              = 0.50;
@@ -1024,7 +1034,7 @@ input int    UltraPosEvoMinHoldConf      = 35;    // below → L2 MANAGE (not au
 input bool   UltraPosEvoReplaceEnabled   = true;  // Ultra Reversal / Signal Replacement
 input bool   UltraPosEvoReplaceNextBarOnly = true; // never same-bar flip (anti-whipsaw)
 input int    UltraPosEvoReplaceMinConf   = 62;    // replacement confidence floor
-input int    UltraPosEvoReplaceMinHits   = 3;     // structure/BOS/liq/zone/mom hits needed
+input int    UltraPosEvoReplaceMinHits   = 4;     // ROADMAP P17 — high-confidence replace only
 input int    UltraPosEvoReplaceMaxBars   = 5;     // expire unused replace arm
 
 input group "31 · DASHBOARD INPUTS"
@@ -1150,7 +1160,8 @@ long UltraSymFillingMode(const string s)
 #ifndef HITMAN_ULTRA_27_LOGGER_MQH
 #define HITMAN_ULTRA_27_LOGGER_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — 27_LOGGER — Error · Trade · AI · Execution · System logs
+//| HITMAN AI — 27_LOGGER — Error · Trade · AI · Execution · System  |
+//| ROADMAP P20 — structured decision fields                         |
 //+------------------------------------------------------------------+
 void UltraLog(const string msg)
 {
@@ -1169,6 +1180,55 @@ void UltraLogTrade(const string msg){ UltraLog("TRADE| " + msg); }
 void UltraLogAI(const string msg){ UltraLog("AI| " + msg); }
 void UltraLogExec(const string msg){ UltraLog("EXEC| " + msg); }
 void UltraLogPerf(const string msg){ UltraLog("PERF| " + msg); }
+
+// Structured decision log: entry / exit / replace / hold / wait
+void UltraLogDecision(const string action,
+                      const ulong ticket,
+                      const string side,
+                      const string tag,
+                      const int conf,
+                      const int score,
+                      const string thesis,
+                      const string newsPhase,
+                      const double spread,
+                      const double slip,
+                      const string why)
+{
+   string t = "DECISION action=";
+   t += action;
+   t += " ticket=";
+   t += IntegerToString((int)ticket);
+   t += " side=";
+   t += side;
+   t += " tag=";
+   t += tag;
+   t += " conf=";
+   t += IntegerToString(conf);
+   t += " score=";
+   t += IntegerToString(score);
+   t += " thesis=";
+   t += thesis;
+   t += " news=";
+   t += newsPhase;
+   t += " spread=";
+   t += DoubleToString(spread, 1);
+   t += " slip=";
+   t += DoubleToString(slip, 1);
+   t += " | ";
+   t += why;
+   UltraLog(t);
+}
+
+void UltraLogDecisionFromSnap(const string action, const ulong ticket,
+                              const string side, const string tag,
+                              const UltraSnap &u, const string why)
+{
+   UltraLogDecision(action, ticket, side, tag,
+                    u.score.confidence, u.score.confluence,
+                    (StringLen(u.st.cycleName) > 0 ? u.st.cycleName : "THESIS"),
+                    (StringLen(u.ctx.newsPhase) > 0 ? u.ctx.newsPhase : "NONE"),
+                    u.ctx.spreadPts, u.ctx.slipProxy, why);
+}
 
 #endif // HITMAN_ULTRA_27_LOGGER_MQH
 //===== END 27_Logger.mqh =====
@@ -1255,7 +1315,9 @@ void UltraCoreInit()
    g_UltraCore.healthy = g_UltraCore.configOK;
    string cfg = "N";
    if(g_UltraCore.configOK) cfg = "Y";
-   UltraLog("CORE loaded configOK=" + cfg);
+   UltraLog("CORE loaded configOK=" + cfg +
+            " BUILD=HA_ULTRA_93 Comment=HITMAN AI MaxOpen=" + IntegerToString(MaxOpenTrades) +
+            " | ROADMAP refined core");
 }
 
 void UltraSystemController_Boot()
@@ -1576,7 +1638,8 @@ void UltraEngCHoCH(const string s, UltraSnap &u)
 #ifndef HITMAN_ULTRA_06_LIQUIDITY_MQH
 #define HITMAN_ULTRA_06_LIQUIDITY_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — 06_LIQUIDITY — Sweeps · Pools · Stop Hunts
+//| HITMAN AI — 06_LIQUIDITY — Sweeps · Pools · Stop Hunts · Fake    |
+//| ROADMAP P5 — genuine institutional liquidity, ignore fake sweeps |
 //+------------------------------------------------------------------+
 void UltraEngLiquidity(const string s, UltraSnap &u)
 {
@@ -1603,10 +1666,10 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
    if(u.liq.poolLow <= 0) u.liq.poolLow = lo;
    if(u.liq.poolHigh <= 0) u.liq.poolHigh = hi;
 
-   double minD = u.vol.atr * UltraSweepDepthATR * 0.85;
+   double minD = u.vol.atr * UltraSweepDepthATR;
    int swlb = MathMax(UltraSweepLookback, 8);
    double bestDepth = 0;
-   double wickMin = UltraSweepWickMin * 0.85;
+   double wickMin = UltraSweepWickMin;
    for(int i = 1; i <= swlb; i++)
    {
       double h = iHigh(s, tf, i), l = iLow(s, tf, i), c = iClose(s, tf, i), o = iOpen(s, tf, i);
@@ -1618,7 +1681,7 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
          {
             u.liq.sweepBuy = true; u.liq.grabBuy = true; u.liq.sweepExtBuy = l;
             bestDepth = MathMax(bestDepth, (u.liq.poolLow - l) / u.vol.atr);
-            u.liq.confirmedBuy = (c > o);
+            u.liq.confirmedBuy = (c > o); // close must reclaim in candle direction
          }
       }
       if(!u.liq.sweepSell && u.liq.poolHigh > 0 && h > u.liq.poolHigh + minD && c < u.liq.poolHigh)
@@ -1643,8 +1706,31 @@ void UltraEngLiquidity(const string s, UltraSnap &u)
    if(u.liq.confirmedBuy || u.liq.confirmedSell) u.liq.quality += 25;
    if(u.liq.stopHuntBuy || u.liq.stopHuntSell) u.liq.quality += 15;
    if(u.liq.poolBuy || u.liq.poolSell) u.liq.quality += 10;
+   if(bestDepth >= UltraSweepDepthATR * 1.5) u.liq.quality += 10;
    if(u.liq.quality > 100) u.liq.quality = 100;
    u.liq.rejectionScore = (int)MathRound(u.liq.quality);
+
+   // ROADMAP P5 — classify fake vs genuine
+   int qFloor = UltraLiqMinQuality;
+   if(qFloor < 40) qFloor = 40;
+   u.liq.fakeBuy = (u.liq.sweepBuy || u.liq.stopHuntBuy) &&
+                   (!u.liq.confirmedBuy || bestDepth < UltraSweepDepthATR * 0.6 || u.liq.quality < qFloor);
+   u.liq.fakeSell = (u.liq.sweepSell || u.liq.stopHuntSell) &&
+                    (!u.liq.confirmedSell || bestDepth < UltraSweepDepthATR * 0.6 || u.liq.quality < qFloor);
+   u.liq.genuineBuy = (u.liq.sweepBuy || u.liq.stopHuntBuy) && u.liq.confirmedBuy &&
+                      !u.liq.fakeBuy && u.liq.quality >= qFloor;
+   u.liq.genuineSell = (u.liq.sweepSell || u.liq.stopHuntSell) && u.liq.confirmedSell &&
+                       !u.liq.fakeSell && u.liq.quality >= qFloor;
+}
+
+bool UltraLiq_IsFakeSweep(const UltraSnap &u, const bool buySide)
+{
+   return buySide ? u.liq.fakeBuy : u.liq.fakeSell;
+}
+
+bool UltraLiq_IsGenuine(const UltraSnap &u, const bool buySide)
+{
+   return buySide ? u.liq.genuineBuy : u.liq.genuineSell;
 }
 
 #endif // HITMAN_ULTRA_06_LIQUIDITY_MQH
@@ -1701,13 +1787,14 @@ void UltraEngFib(const string s, UltraSnap &u)
 #ifndef HITMAN_ULTRA_08_INSTITUTIONAL_MQH
 #define HITMAN_ULTRA_08_INSTITUTIONAL_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — 08_INSTITUTIONAL — OB · Breaker · FVG · Smart Money
+//| HITMAN AI — 08_INSTITUTIONAL — OB · Breaker · FVG · Smart Money  |
+//| ROADMAP P6/P7 — institutional quality; ignore weak OB / weak FVG |
 //+------------------------------------------------------------------+
 void UltraEngInstitutional(const string s, UltraSnap &u)
 {
    ENUM_TIMEFRAMES tf = UltraETF();
 
-   // Displacement: any strong body in last 3 closed bars
+   // Displacement: strong body in last 3 closed bars
    for(int i = 1; i <= 3; i++)
    {
       double o = iOpen(s, tf, i), c = iClose(s, tf, i);
@@ -1715,15 +1802,15 @@ void UltraEngInstitutional(const string s, UltraSnap &u)
       double r = h - l;
       if(r <= 0) continue;
       double br = MathAbs(c - o) / r;
-      bool atrOK = (u.vol.atr <= 0) || (r >= u.vol.atr * UltraDispATRMin * 0.85);
-      if(br >= UltraDispBodyMin * 0.90 && atrOK)
+      bool atrOK = (u.vol.atr <= 0) || (r >= u.vol.atr * UltraDispATRMin);
+      if(br >= UltraDispBodyMin && atrOK)
       {
          if(c > o) u.ict.dispBuy = true;
          if(c < o) u.ict.dispSell = true;
       }
    }
 
-   // FVG + raw imbalance lookback across recent bars
+   // FVG + raw imbalance — require ATR-sized gap for true FVG
    for(int g = 1; g <= 5; g++)
    {
       double gapB = iLow(s, tf, g) - iHigh(s, tf, g + 2);
@@ -1731,13 +1818,13 @@ void UltraEngInstitutional(const string s, UltraSnap &u)
       if(gapB > 0)
       {
          u.ict.imbalanceBuy = true;
-         if(u.vol.atr <= 0 || gapB >= u.vol.atr * UltraFVG_MinATR * 0.8)
+         if(u.vol.atr <= 0 || gapB >= u.vol.atr * UltraFVG_MinATR)
             u.ict.fvgBuy = true;
       }
       if(gapS > 0)
       {
          u.ict.imbalanceSell = true;
-         if(u.vol.atr <= 0 || gapS >= u.vol.atr * UltraFVG_MinATR * 0.8)
+         if(u.vol.atr <= 0 || gapS >= u.vol.atr * UltraFVG_MinATR)
             u.ict.fvgSell = true;
       }
    }
@@ -1745,7 +1832,7 @@ void UltraEngInstitutional(const string s, UltraSnap &u)
    double o2 = iOpen(s, tf, 2), c2 = iClose(s, tf, 2);
    if(u.ict.dispBuy && c2 < o2) u.ict.obBuy = true;
    if(u.ict.dispSell && c2 > o2) u.ict.obSell = true;
-   // Soft OB: opposite candle before displacement in last 4 bars
+   // Soft OB only when displacement already present (never invent OB from noise)
    if(!u.ict.obBuy && u.ict.dispBuy)
    {
       for(int i = 2; i <= 4; i++)
@@ -1768,21 +1855,51 @@ void UltraEngInstitutional(const string s, UltraSnap &u)
       double mid = (u.st.swingHigh + u.st.swingLow) * 0.5;
       u.ict.inDiscount = (px <= mid); u.ict.inPremium = (px >= mid);
    }
-   u.ict.instZoneBuy = (u.ict.obBuy || u.ict.fvgBuy || u.ict.breakerBuy) && (u.ict.inDiscount || u.fib.atBuyZone);
-   u.ict.instZoneSell = (u.ict.obSell || u.ict.fvgSell || u.ict.breakerSell) && (u.ict.inPremium || u.fib.atSellZone);
+
+   // ROADMAP P6/P7 — weak vs strong institutional zones
+   u.ict.weakOBBuy  = u.ict.obBuy  && (u.ict.mitigationBuy  || !u.ict.dispBuy);
+   u.ict.weakOBSell = u.ict.obSell && (u.ict.mitigationSell || !u.ict.dispSell);
+   u.ict.weakFVGBuy  = u.ict.fvgBuy  && !u.ict.dispBuy;
+   u.ict.weakFVGSell = u.ict.fvgSell && !u.ict.dispSell;
+   u.ict.strongOBBuy  = u.ict.obBuy  && u.ict.dispBuy  && !u.ict.mitigationBuy;
+   u.ict.strongOBSell = u.ict.obSell && u.ict.dispSell && !u.ict.mitigationSell;
+
+   // Prefer strong OB/FVG for institutional zone flags
+   bool zoneBuyOB  = u.ict.strongOBBuy  || (u.ict.obBuy  && !u.ict.weakOBBuy);
+   bool zoneSellOB = u.ict.strongOBSell || (u.ict.obSell && !u.ict.weakOBSell);
+   bool zoneBuyFVG  = u.ict.fvgBuy  && !u.ict.weakFVGBuy;
+   bool zoneSellFVG = u.ict.fvgSell && !u.ict.weakFVGSell;
+
+   u.ict.instZoneBuy = (zoneBuyOB || zoneBuyFVG || u.ict.breakerBuy) && (u.ict.inDiscount || u.fib.atBuyZone);
+   u.ict.instZoneSell = (zoneSellOB || zoneSellFVG || u.ict.breakerSell) && (u.ict.inPremium || u.fib.atSellZone);
    u.ict.rejectZoneBuy = u.liq.stopHuntBuy && u.ict.inDiscount;
    u.ict.rejectZoneSell = u.liq.stopHuntSell && u.ict.inPremium;
-   // Institutional liquidity = pools / equal HL + displacement / OB confluence
-   u.ict.institutionalLiqBuy =
-      (u.liq.poolBuy || u.liq.equalLows || u.liq.sweepBuy) &&
-      (u.ict.obBuy || u.ict.fvgBuy || u.ict.dispBuy || u.ict.imbalanceBuy);
-   u.ict.institutionalLiqSell =
-      (u.liq.poolSell || u.liq.equalHighs || u.liq.sweepSell) &&
-      (u.ict.obSell || u.ict.fvgSell || u.ict.dispSell || u.ict.imbalanceSell);
 
-   u.ict.smConfluence = ((u.ict.obBuy || u.ict.fvgBuy) && (u.liq.sweepBuy || u.ict.dispBuy)) ||
-                        ((u.ict.obSell || u.ict.fvgSell) && (u.liq.sweepSell || u.ict.dispSell)) ||
+   u.ict.institutionalLiqBuy =
+      (u.liq.genuineBuy || u.liq.poolBuy || u.liq.equalLows) &&
+      (u.ict.strongOBBuy || zoneBuyFVG || u.ict.dispBuy);
+   u.ict.institutionalLiqSell =
+      (u.liq.genuineSell || u.liq.poolSell || u.liq.equalHighs) &&
+      (u.ict.strongOBSell || zoneSellFVG || u.ict.dispSell);
+
+   u.ict.smConfluence = ((u.ict.strongOBBuy || zoneBuyFVG) && (u.liq.genuineBuy || u.ict.dispBuy)) ||
+                        ((u.ict.strongOBSell || zoneSellFVG) && (u.liq.genuineSell || u.ict.dispSell)) ||
                         u.ict.institutionalLiqBuy || u.ict.institutionalLiqSell;
+}
+
+bool UltraICT_WeakOB(const UltraSnap &u, const bool buySide)
+{
+   return buySide ? u.ict.weakOBBuy : u.ict.weakOBSell;
+}
+
+bool UltraICT_WeakFVG(const UltraSnap &u, const bool buySide)
+{
+   return buySide ? u.ict.weakFVGBuy : u.ict.weakFVGSell;
+}
+
+bool UltraICT_StrongOB(const UltraSnap &u, const bool buySide)
+{
+   return buySide ? u.ict.strongOBBuy : u.ict.strongOBSell;
 }
 
 #endif // HITMAN_ULTRA_08_INSTITUTIONAL_MQH
@@ -2758,12 +2875,71 @@ double UltraMTF_WeightBias(const int votesBuy, const int votesSell)
    return MathMax(-1.0, MathMin(1.0, d / 6.0));
 }
 
-// Master trend from H4 (bias TF). Returns +1 buy, -1 sell, 0 unknown.
+// ROADMAP P4/P10 — HTF majority (MN/W1/D1/H4) + hysteresis (no flicker)
+string   g_UltraMTF_HystSym = "";
+int      g_UltraMTF_HystDir = 0;
+int      g_UltraMTF_HystCount = 0;
+datetime g_UltraMTF_HystBar = 0;
+
+int UltraMTF_MasterDirRaw(const string s)
+{
+   int score = 0;
+   ENUM_TIMEFRAMES htf[4];
+   htf[0] = PERIOD_MN1; htf[1] = PERIOD_W1; htf[2] = PERIOD_D1; htf[3] = UltraTF_Bias;
+   for(int i = 0; i < 4; i++)
+   {
+      if(UltraMTF_Bull(s, htf[i])) score++;
+      if(UltraMTF_Bear(s, htf[i])) score--;
+   }
+   if(score > 0) return 1;
+   if(score < 0) return -1;
+   return 0;
+}
+
+// Master trend. Returns +1 buy, -1 sell, 0 unknown.
+// Higher timeframe decides direction; hysteresis prevents bar-to-bar flicker.
 int UltraMTF_MasterDir(const string s)
 {
-   if(UltraMTF_Bull(s, UltraTF_Bias)) return 1;
-   if(UltraMTF_Bear(s, UltraTF_Bias)) return -1;
-   return 0;
+   int raw = UltraMTF_MasterDirRaw(s);
+   int need = UltraMasterHysteresisBars;
+   if(need < 1) need = 1;
+
+   datetime bar = iTime(s, UltraTF_Bias, 0);
+   if(g_UltraMTF_HystSym != s)
+   {
+      g_UltraMTF_HystSym = s;
+      g_UltraMTF_HystDir = raw;
+      g_UltraMTF_HystCount = need;
+      g_UltraMTF_HystBar = bar;
+      return raw;
+   }
+
+   if(raw == 0)
+      return g_UltraMTF_HystDir; // keep last known master when stack is mixed
+
+   if(raw == g_UltraMTF_HystDir)
+   {
+      g_UltraMTF_HystCount = need;
+      g_UltraMTF_HystBar = bar;
+      return raw;
+   }
+
+   // opposing vote — require N bars before flip
+   if(bar > 0 && bar != g_UltraMTF_HystBar)
+   {
+      g_UltraMTF_HystCount++;
+      g_UltraMTF_HystBar = bar;
+   }
+   else if(g_UltraMTF_HystCount == 0)
+      g_UltraMTF_HystCount = 1;
+
+   if(g_UltraMTF_HystCount >= need)
+   {
+      g_UltraMTF_HystDir = raw;
+      g_UltraMTF_HystCount = 0;
+      return raw;
+   }
+   return g_UltraMTF_HystDir;
 }
 
 // Timeframe synchronization: count agreement across MN→M5 ladder for side.
@@ -3160,6 +3336,17 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
       UltraSetError("data/price invalid");
       return false;
    }
+   // ROADMAP P2 — missing / thin history recovery gate
+   if(Bars(s, UltraETF()) < 60)
+   {
+      UltraSetError("insufficient candle history");
+      return false;
+   }
+   if(iTime(s, UltraETF(), 1) <= 0 || iClose(s, UltraETF(), 1) <= 0.0)
+   {
+      UltraSetError("missing closed bar data");
+      return false;
+   }
 
    UltraEngVolatility(s, u);
    UltraEngStructure(s, u);
@@ -3333,23 +3520,50 @@ bool UltraDefense_Line2_Trend(const UltraSnap &u, const bool buySide, string &wh
 bool UltraDefense_Line3_Liquidity(const UltraSnap &u, const bool buySide, string &why)
 {
    why = "";
+   // ROADMAP P5 — prefer genuine; reject pure fake sweeps
+   if(UltraLiq_IsFakeSweep(u, buySide) && !UltraLiq_IsGenuine(u, buySide))
+   {
+      // During events still require genuine or strong BOS — never fake alone
+      bool bosStrong = buySide
+         ? ((u.bos.buy && (u.bos.confirmed || u.bos.strong)) || (u.choch.buy && u.choch.majorC))
+         : ((u.bos.sell && (u.bos.confirmed || u.bos.strong)) || (u.choch.sell && u.choch.majorC));
+      if(!bosStrong)
+      {
+         why = "fake sweep rejected";
+         return false;
+      }
+   }
+   if(UltraLiq_IsGenuine(u, buySide)) return true;
+
    bool sweep = buySide ? (u.liq.sweepBuy || u.liq.equalLows) : (u.liq.sweepSell || u.liq.equalHighs);
    bool hunt  = buySide ? u.liq.stopHuntBuy : u.liq.stopHuntSell;
    bool grab  = buySide ? (u.liq.grabBuy || u.liq.poolBuy || u.liq.confirmedBuy)
                         : (u.liq.grabSell || u.liq.poolSell || u.liq.confirmedSell);
+
+   // ROADMAP P16 — during news tighten: require genuine/confirmed or strong BOS
+   if(u.ctx.duringNews || u.ctx.highImpactProxy)
+   {
+      bool bosStrong = buySide
+         ? ((u.bos.buy && (u.bos.confirmed || u.bos.strong)) || (u.choch.buy && u.choch.majorC))
+         : ((u.bos.sell && (u.bos.confirmed || u.bos.strong)) || (u.choch.sell && u.choch.majorC));
+      if(UltraLiq_IsGenuine(u, buySide) || (sweep && (buySide ? u.liq.confirmedBuy : u.liq.confirmedSell)) || bosStrong)
+         return true;
+      why = "event liquidity not institutional";
+      return false;
+   }
+
    if(sweep || hunt || grab) return true;
-   if(UltraDefense_SoftMode() && (u.liq.quality >= 20 || u.ict.dispBuy || u.ict.dispSell))
+   if(UltraDefense_SoftMode() && (u.liq.quality >= 35 || u.ict.dispBuy || u.ict.dispSell))
       return true;
-   // InstantQuality Cont/Fib/Inst paths often pass without a fresh sweep —
-   // do not WAIT-block once confluence already selected a strategy.
    if(InstantQualityMode && UltraDefense_SoftMode())
    {
       bool zone = buySide
-         ? (u.ict.obBuy || u.ict.fvgBuy || u.ict.instZoneBuy || u.fib.atBuyZone || u.ict.inDiscount)
-         : (u.ict.obSell || u.ict.fvgSell || u.ict.instZoneSell || u.fib.atSellZone || u.ict.inPremium);
+         ? (UltraICT_StrongOB(u, true) || (u.ict.fvgBuy && !u.ict.weakFVGBuy) || u.ict.instZoneBuy || u.fib.atBuyZone)
+         : (UltraICT_StrongOB(u, false) || (u.ict.fvgSell && !u.ict.weakFVGSell) || u.ict.instZoneSell || u.fib.atSellZone);
       bool mom = buySide ? (u.mom.momBuy || u.mom.impulse) : (u.mom.momSell || u.mom.impulse);
-      if(zone || mom || u.st.continuation || u.bos.buy || u.bos.sell ||
-         u.score.confidence >= UltraFireFloor() - 5)
+      if(zone || mom || u.st.continuation ||
+         (buySide ? (u.bos.buy && u.bos.confirmed) : (u.bos.sell && u.bos.confirmed)) ||
+         u.score.confidence >= UltraFireFloor())
          return true;
    }
    why = "liquidity not confirmed";
@@ -4557,15 +4771,21 @@ int UltraUSM2_ComponentLiquidity(const UltraSnap &u, const bool buySide)
    int sc = 10;
    if(buySide)
    {
-      if(u.liq.sweepBuy) sc += 30; if(u.liq.stopHuntBuy) sc += 15;
-      if(u.liq.grabBuy) sc += 15; if(u.liq.equalLows) sc += 10;
+      if(u.liq.genuineBuy) sc += 40;
+      else if(u.liq.sweepBuy) sc += 20;
+      if(u.liq.stopHuntBuy) sc += 12;
+      if(u.liq.grabBuy) sc += 12; if(u.liq.equalLows) sc += 10;
       if(u.liq.confirmedBuy) sc += 10;
+      if(u.liq.fakeBuy) sc -= 25; // ROADMAP P5/P13 — penalize fake sweeps
    }
    else
    {
-      if(u.liq.sweepSell) sc += 30; if(u.liq.stopHuntSell) sc += 15;
-      if(u.liq.grabSell) sc += 15; if(u.liq.equalHighs) sc += 10;
+      if(u.liq.genuineSell) sc += 40;
+      else if(u.liq.sweepSell) sc += 20;
+      if(u.liq.stopHuntSell) sc += 12;
+      if(u.liq.grabSell) sc += 12; if(u.liq.equalHighs) sc += 10;
       if(u.liq.confirmedSell) sc += 10;
+      if(u.liq.fakeSell) sc -= 25;
    }
    sc += (int)(u.liq.quality / 4.0);
    return UltraUSM2_Clamp(sc);
@@ -4587,15 +4807,27 @@ int UltraUSM2_ComponentInst(const UltraSnap &u, const bool buySide)
    int sc = 10;
    if(buySide)
    {
-      if(u.ict.obBuy) sc += 18; if(u.ict.breakerBuy) sc += 12;
-      if(u.ict.fvgBuy) sc += 15; if(u.ict.instZoneBuy) sc += 18;
+      if(u.ict.strongOBBuy) sc += 25;
+      else if(u.ict.obBuy && !u.ict.weakOBBuy) sc += 14;
+      if(u.ict.weakOBBuy) sc -= 20; // ROADMAP P6 — ignore weak OB
+      if(u.ict.breakerBuy) sc += 12;
+      if(u.ict.fvgBuy && !u.ict.weakFVGBuy) sc += 18;
+      if(u.ict.weakFVGBuy) sc -= 15; // ROADMAP P7
+      if(u.ict.instZoneBuy) sc += 18;
       if(u.ict.inDiscount) sc += 12; if(u.ict.dispBuy) sc += 15;
+      if(u.ict.mitigationBuy) sc -= 10;
    }
    else
    {
-      if(u.ict.obSell) sc += 18; if(u.ict.breakerSell) sc += 12;
-      if(u.ict.fvgSell) sc += 15; if(u.ict.instZoneSell) sc += 18;
+      if(u.ict.strongOBSell) sc += 25;
+      else if(u.ict.obSell && !u.ict.weakOBSell) sc += 14;
+      if(u.ict.weakOBSell) sc -= 20;
+      if(u.ict.breakerSell) sc += 12;
+      if(u.ict.fvgSell && !u.ict.weakFVGSell) sc += 18;
+      if(u.ict.weakFVGSell) sc -= 15;
+      if(u.ict.instZoneSell) sc += 18;
       if(u.ict.inPremium) sc += 12; if(u.ict.dispSell) sc += 15;
+      if(u.ict.mitigationSell) sc -= 10;
    }
    if(u.ict.smConfluence) sc += 10;
    return UltraUSM2_Clamp(sc);
@@ -4646,10 +4878,11 @@ int UltraUSM2_ComponentSession(const UltraSnap &u)
 int UltraUSM2_ComponentNews(const UltraSnap &u)
 {
    int sc = 55;
-   // context only — never hard-block; mild adjustment
+   // ROADMAP P16 — context only; NEVER reject solely because spread is high
    if(u.ctx.newsVol) sc += 10;
-   if(u.ctx.duringNews) sc -= 8;
-   if(u.ctx.spreadPts > 30) sc -= 10;
+   if(u.ctx.duringNews) sc -= 5; // mild — quality gates tighten elsewhere
+   // spread is informational only (no hard reject); tiny soft weight
+   if(u.ctx.spreadPts > 40) sc -= 4;
    return UltraUSM2_Clamp(sc);
 }
 
@@ -5365,21 +5598,6 @@ enum ENUM_POS_EVO_LEVEL
    PEVO_INVALIDATE = 3
 };
 
-// Moved up from its original location further down in the file: this struct
-// is used as a parameter type by UltraPosEvo_Evaluate() below, so it must be
-// declared before that point, not after it.
-struct UltraExitValidation
-{
-   bool thesisBroken;
-   bool structureChanged;
-   bool masterTrendChanged;
-   bool riskRule;
-   bool healthyCorrection;
-   bool trueReversal;
-   bool allowClose;
-   string reason;
-};
-
 struct UltraPosEvoDecision
 {
    ENUM_POS_EVO_LEVEL level;
@@ -5647,18 +5865,15 @@ bool UltraPosEvo_TryArmReplace(const string s, const bool wasBuy, const UltraSna
    if(!UltraPosEvoEnabled || !UltraPosEvoReplaceEnabled)
       return false;
 
-   bool wantBuy = !wasBuy; // reverse direction candidate
+   // ROADMAP P17 — force opposite of closed trade; never re-arm same side
+   bool wantBuy = !wasBuy;
    UltraSignal cand = UltraPickBest(u);
-   // Prefer opposite of closed trade; if pickBest agrees, use it; else force direction check
    if(cand.buy || cand.sell)
    {
-      if(wantBuy && !cand.buy) { /* keep wantBuy — checklist may still fail */ }
-      if(!wantBuy && !cand.sell) { }
-      // Align with best signal if it is opposite
+      // Reject if best signal is still the closed direction
       if(wantBuy && cand.sell && !cand.buy) return false;
       if(!wantBuy && cand.buy && !cand.sell) return false;
-      if(cand.buy) wantBuy = true;
-      if(cand.sell) wantBuy = false;
+      // Keep forced opposite — do not let PickBest flip wantBuy back
    }
 
    string detail = "";
@@ -5787,18 +6002,21 @@ UltraPosEvoDecision UltraPosEvo_Evaluate(const ulong ticket, const string s, con
       int need = UltraPosEvoL3ConfirmBars;
       if(need < 1) need = 1;
 
-      if(d.l3Streak >= need && (hardInvalid || (softInvalid && v.allowClose)))
+      // ROADMAP P17 — softInvalid may escalate after confirm bars (rebuild → replace)
+      if(d.l3Streak >= need && (hardInvalid || softInvalid))
       {
          d.level = PEVO_INVALIDATE;
          d.command = SUP_EXIT;
          d.allowClose = true;
          d.exitReason = v.reason;
          if(StringLen(d.exitReason) == 0)
-            d.exitReason = "thesis+structure+reversal confirmed";
+            d.exitReason = softInvalid
+               ? "soft invalidation confirmed across bars"
+               : "thesis+structure+reversal confirmed";
          d.reason = "L3 INVALIDATION — " + d.exitReason;
          d.wantReplace = UltraPosEvoReplaceEnabled;
          if(d.wantReplace)
-            d.replaceReason = "scan for validated opposite after close";
+            d.replaceReason = "rebuild analysis → score → Mission REPLACE opposite";
          g_UltraPosEvoLast = d;
          return d;
       }
@@ -6294,6 +6512,18 @@ struct UltraPosLock
    bool     decidedThisCycle; // one decision per evaluation
 };
 
+struct UltraExitValidation
+{
+   bool thesisBroken;
+   bool structureChanged;
+   bool masterTrendChanged;
+   bool riskRule;
+   bool healthyCorrection;
+   bool trueReversal;
+   bool allowClose;
+   string reason;
+};
+
 UltraMissionState g_UltraMissionLast;
 UltraPosLock      g_UltraPosLock[ULTRA_POSLOCK_MAX];
 int               g_UltraPosLockN = 0;
@@ -6365,6 +6595,14 @@ void UltraMission_Log(const string action, const ulong ticket, const string why)
    t += " | ";
    t += why;
    UltraLogTrade(t);
+   // ROADMAP P20 — structured fields
+   string side = "-";
+   if(action == "OPEN" || action == "BUY") side = "BUY";
+   else if(action == "SELL") side = "SELL";
+   else if(ticket > 0 && PositionSelectByTicket(ticket))
+      side = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) ? "BUY" : "SELL";
+   UltraLogDecisionFromSnap(action, ticket, side, g_UltraMissionLast.grade,
+                            g_UltraLastSnap, why);
    if(UltraUpgradeLog || EnableVerboseLogging)
       Print(t);
 }
@@ -6472,33 +6710,38 @@ UltraExitValidation UltraMission_ValidateExit(const ulong ticket, const string s
       return v;
    }
 
-   // Rule #10: Thesis Invalid AND Structure Changed AND Master Trend Changed
-   if(v.thesisBroken && v.structureChanged && v.masterTrendChanged && v.trueReversal)
+   // ROADMAP P19 — Exit ONLY if:
+   //   thesis invalidated OR risk (handled) OR confirmed structural invalidation
+   // Never exit on one candle / one indicator / temp spread / temp vol / news alone.
+
+   // Confirmed structural invalidation (BOS/CHoCH + reversal + master flip)
+   if(v.structureChanged && v.trueReversal && v.masterTrendChanged)
    {
       v.allowClose = true;
-      v.reason = "EXIT CONFIRMED — thesis+structure+master trend+reversal";
+      v.reason = "EXIT CONFIRMED — structural invalidation + reversal + master";
       return v;
    }
 
-   // Soft InstantQuality: still require at least thesis broken + true reversal + structure
-   if(!UltraUpgradeStrict)
+   // Thesis invalidated with structure or master confirmation
+   if(v.thesisBroken && v.structureChanged && (v.trueReversal || v.masterTrendChanged))
    {
-      if(v.thesisBroken && v.trueReversal && v.structureChanged)
-      {
-         v.allowClose = true;
-         v.reason = "EXIT CONFIRMED — thesis invalid + structure + reversal";
-         return v;
-      }
-      v.allowClose = false;
-      v.reason = "KEEP HOLDING — exit confirmations incomplete";
+      v.allowClose = true;
+      v.reason = "EXIT CONFIRMED — thesis invalid + structure confirm";
       return v;
    }
 
-   // Strict: thesis broken + (structure or master) + reversal
-   if(v.thesisBroken && v.trueReversal && (v.structureChanged || v.masterTrendChanged))
+   if(v.thesisBroken && v.trueReversal && v.masterTrendChanged)
    {
       v.allowClose = true;
-      v.reason = "EXIT CONFIRMED (strict)";
+      v.reason = "EXIT CONFIRMED — thesis invalid + master + reversal";
+      return v;
+   }
+
+   // Soft path: thesis + structure + reversal (anti-whipsaw still needs PosEvo streak)
+   if(!UltraUpgradeStrict && v.thesisBroken && v.trueReversal && v.structureChanged)
+   {
+      v.allowClose = true;
+      v.reason = "EXIT CONFIRMED — thesis invalid + structure + reversal";
       return v;
    }
 
@@ -6532,6 +6775,17 @@ bool UltraMission_ClosePosition(const ulong ticket, const string whyIn, const bo
    UltraBuildSnapshot(s, u);
 
    UltraExitValidation v = UltraMission_ValidateExit(ticket, s, isBuy, u, riskForced);
+   // ROADMAP P17 — honor PosEvo L3 multi-bar soft invalidation confirmed for this ticket
+   if(!v.allowClose && !riskForced && UltraPosEvoEnabled && UltraPosEvoCloseOnL3 &&
+      g_UltraPosEvoLast.allowClose && g_UltraPosEvoLast.command == SUP_EXIT &&
+      g_UltraPosEvoL3Ticket == ticket)
+   {
+      v.allowClose = true;
+      if(StringLen(g_UltraPosEvoLast.exitReason) > 0)
+         v.reason = g_UltraPosEvoLast.exitReason;
+      else
+         v.reason = "POSEVO L3 soft invalidation confirmed";
+   }
    if(!v.allowClose)
    {
       UltraMission_Set(SUP_HOLD, v.reason, u.score.confidence, g_UltraHoldLast.total, "HOLD", "", ticket);
@@ -6665,10 +6919,10 @@ ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const str
       cmd = evo.command;
       why = evo.reason;
 
-      // Hard gate: L3 EXIT only if ValidateExit allows AND CloseOnL3 enabled
+      // ROADMAP P17 — L3 EXIT when ValidateExit OR PosEvo multi-bar soft invalidation confirms
       if(cmd == SUP_EXIT)
       {
-         if(!UltraPosEvoCloseOnL3 || !v.allowClose)
+         if(!UltraPosEvoCloseOnL3 || !(v.allowClose || evo.allowClose))
          {
             cmd = SUP_MANAGE;
             why = "L2 MANAGE — invalidation not fully confirmed for Mission close";
@@ -6677,7 +6931,9 @@ ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const str
          {
             why = "EXIT: " + evo.exitReason;
             if(evo.wantReplace)
-               why += " | replace armed if checklist passes";
+               why += " | REPLACE armed if checklist passes";
+            UltraLogDecisionFromSnap(evo.wantReplace ? "REPLACE" : "EXIT", ticket,
+                                     isBuy ? "BUY" : "SELL", "POSEVO", u, why);
          }
       }
       else if(cmd == SUP_MANAGE && StringLen(why) == 0)
@@ -6923,16 +7179,18 @@ bool UltraUFSE_CacheFresh(const int idx)
 //--------------------------------------------------------------------//
 int UltraUFSE_CalcMasterTrend(const UltraSnap &u)
 {
+   // ROADMAP P10 — HTF votes first; align with UltraMTF hysteresis when tied
    int score = 0;
    if(u.trend.monthBull) score++; if(u.trend.monthBear) score--;
    if(u.trend.weekBull)  score++; if(u.trend.weekBear)  score--;
    if(u.trend.macroBull) score++; if(u.trend.macroBear) score--;
    if(u.trend.htfBull)   score++; if(u.trend.htfBear)   score--;
+   if(score > 1) return 1;   // require clear majority (anti-flicker)
+   if(score < -1) return -1;
    if(score > 0) return 1;
    if(score < 0) return -1;
-   // fallback to votes
-   if(u.trend.mtfVotesBuy > u.trend.mtfVotesSell) return 1;
-   if(u.trend.mtfVotesSell > u.trend.mtfVotesBuy) return -1;
+   if(u.trend.mtfVotesBuy > u.trend.mtfVotesSell + 1) return 1;
+   if(u.trend.mtfVotesSell > u.trend.mtfVotesBuy + 1) return -1;
    return 0;
 }
 
@@ -7020,11 +7278,17 @@ bool UltraUFSE_MasterAllows(const int idx, const bool wantBuy, string &why)
 {
    why = "";
    if(!UltraMasterTrendLock) return true;
-   // InstantQuality: chart TF Cont/Fib can run against mild HTF mix
-   if(InstantQualityMode) return true;
+   // ROADMAP P4/P10 — HTF master always authoritative when lock enabled
+   // (InstantQuality must NOT bypass higher-timeframe direction)
    if(idx < 0 || idx >= g_UFSE_N) return true;
    int mt = g_UFSE[idx].masterTrend;
-   if(mt == 0) return true; // no clear master — allow (InstantQuality)
+   if(mt == 0)
+   {
+      // Prefer MTF hysteresis master when UFSE master is flat
+      string sym = g_UFSE[idx].symbol;
+      mt = UltraMTF_MasterDir(sym);
+      if(mt == 0) return true;
+   }
    if(wantBuy && mt < 0){ why = "master trend SELL lock"; return false; }
    if(!wantBuy && mt > 0){ why = "master trend BUY lock"; return false; }
    return true;
@@ -7062,6 +7326,9 @@ bool UltraUFSE_EntryTrigger(const UltraSnap &u, const bool buySide, string &why)
       ? (u.st.hh || u.st.hl || u.st.externalBull || u.st.internalBull || u.st.continuation)
       : (u.st.lh || u.st.ll || u.st.externalBear || u.st.internalBear || u.st.continuation);
    bool bosCh = buySide ? (u.bos.buy || u.choch.buy) : (u.bos.sell || u.choch.sell);
+   bool bosStrong = buySide
+      ? ((u.bos.buy && (u.bos.confirmed || u.bos.strong)) || (u.choch.buy && u.choch.majorC))
+      : ((u.bos.sell && (u.bos.confirmed || u.bos.strong)) || (u.choch.sell && u.choch.majorC));
    bool liq   = buySide ? (u.liq.sweepBuy || u.liq.stopHuntBuy || u.liq.grabBuy || u.liq.equalLows)
                         : (u.liq.sweepSell || u.liq.stopHuntSell || u.liq.grabSell || u.liq.equalHighs);
    bool mom   = buySide ? (u.mom.momBuy || u.mom.impulse || u.ict.dispBuy || u.ind.smi > 0)
@@ -7069,11 +7336,29 @@ bool UltraUFSE_EntryTrigger(const UltraSnap &u, const bool buySide, string &why)
    bool trend = buySide ? (u.trend.bull || u.trend.htfBull || u.trend.macroBull)
                         : (u.trend.bear || u.trend.htfBear || u.trend.macroBear);
 
+   // ROADMAP P5 — reject fake sweeps on live path
+   if(UltraLiq_IsFakeSweep(u, buySide) && !UltraLiq_IsGenuine(u, buySide))
+   {
+      why = "fake sweep rejected";
+      return false;
+   }
+
+   // ROADMAP P6/P7 — ignore weak OB/FVG as sole institutional proof
+   bool weakOnlyInst = UltraICT_WeakOB(u, buySide) && UltraICT_WeakFVG(u, buySide) &&
+                       !UltraICT_StrongOB(u, buySide) && !UltraLiq_IsGenuine(u, buySide) && !bosStrong;
+   if(weakOnlyInst && u.score.confidence < UltraInstantFireConf)
+   {
+      why = "weak OB/FVG rejected";
+      return false;
+   }
+
    if(InstantQualityMode)
    {
       int n = (structure?1:0)+(bosCh?1:0)+(liq?1:0)+(mom?1:0)+(trend?1:0);
-      // ContSniper InstantQuality is 2-of-3 — match that here (was 3/5 WAIT spam)
-      if(n < 2){ why = "entry trigger soft fail "+IntegerToString(n)+"/5"; return false; }
+      // Prefer 3/5; allow 2/5 only when genuine liquidity OR strong BOS present
+      int need = 3;
+      if(UltraLiq_IsGenuine(u, buySide) || bosStrong) need = 2;
+      if(n < need){ why = "entry trigger soft fail "+IntegerToString(n)+"/5 need "+IntegerToString(need); return false; }
    }
    else
    {
@@ -7083,6 +7368,18 @@ bool UltraUFSE_EntryTrigger(const UltraSnap &u, const bool buySide, string &why)
       if(!liq){ why = "liquidity fail"; return false; }
       if(!mom){ why = "momentum fail"; return false; }
    }
+
+   // ROADMAP P16 — during major events: never block on spread alone,
+   // but REQUIRE genuine liquidity OR strong structure (tighten quality).
+   if(u.ctx.duringNews || u.ctx.highImpactProxy)
+   {
+      if(!UltraLiq_IsGenuine(u, buySide) && !bosStrong)
+      {
+         why = "event quality: need genuine liq or strong BOS/CHoCH";
+         return false;
+      }
+   }
+
    if(u.score.precision < UltraMinPrecision && u.score.confidence < UltraInstantFireConf)
    { why = "precision threshold"; return false; }
    if(u.score.probability < UltraMinProbability && u.score.confidence < UltraInstantFireConf)
@@ -8637,6 +8934,7 @@ input group "WATERMARK"
 
 // FIX: the first version of this watermark used a hand-built 32-bit BMP
 // with a real per-pixel alpha channel. In theory MT5 supports that for
+// OBJ_BITMAP_LABEL, but in practice on this build/platform the native
 // bitmap loader did not render that hand-built alpha data at all (the
 // object showed up completely invisible on your chart, not just faint).
 // Rather than keep chasing an unverified alpha format, the fade is now
@@ -8744,7 +9042,7 @@ void OnDeinit(const int reason)
    if(EnableMultiSymbolTrading)
       EventKillTimer();
 
-    ObjectDelete(0, BG_OBJECT_NAME);
+   ObjectDelete(0, BG_OBJECT_NAME);
 }
 
 //======================== TRADE TRANSACTION =========================//

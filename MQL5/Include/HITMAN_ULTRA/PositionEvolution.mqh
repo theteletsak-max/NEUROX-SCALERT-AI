@@ -281,18 +281,15 @@ bool UltraPosEvo_TryArmReplace(const string s, const bool wasBuy, const UltraSna
    if(!UltraPosEvoEnabled || !UltraPosEvoReplaceEnabled)
       return false;
 
-   bool wantBuy = !wasBuy; // reverse direction candidate
+   // ROADMAP P17 — force opposite of closed trade; never re-arm same side
+   bool wantBuy = !wasBuy;
    UltraSignal cand = UltraPickBest(u);
-   // Prefer opposite of closed trade; if pickBest agrees, use it; else force direction check
    if(cand.buy || cand.sell)
    {
-      if(wantBuy && !cand.buy) { /* keep wantBuy — checklist may still fail */ }
-      if(!wantBuy && !cand.sell) { }
-      // Align with best signal if it is opposite
+      // Reject if best signal is still the closed direction
       if(wantBuy && cand.sell && !cand.buy) return false;
       if(!wantBuy && cand.buy && !cand.sell) return false;
-      if(cand.buy) wantBuy = true;
-      if(cand.sell) wantBuy = false;
+      // Keep forced opposite — do not let PickBest flip wantBuy back
    }
 
    string detail = "";
@@ -421,18 +418,21 @@ UltraPosEvoDecision UltraPosEvo_Evaluate(const ulong ticket, const string s, con
       int need = UltraPosEvoL3ConfirmBars;
       if(need < 1) need = 1;
 
-      if(d.l3Streak >= need && (hardInvalid || (softInvalid && v.allowClose)))
+      // ROADMAP P17 — softInvalid may escalate after confirm bars (rebuild → replace)
+      if(d.l3Streak >= need && (hardInvalid || softInvalid))
       {
          d.level = PEVO_INVALIDATE;
          d.command = SUP_EXIT;
          d.allowClose = true;
          d.exitReason = v.reason;
          if(StringLen(d.exitReason) == 0)
-            d.exitReason = "thesis+structure+reversal confirmed";
+            d.exitReason = softInvalid
+               ? "soft invalidation confirmed across bars"
+               : "thesis+structure+reversal confirmed";
          d.reason = "L3 INVALIDATION — " + d.exitReason;
          d.wantReplace = UltraPosEvoReplaceEnabled;
          if(d.wantReplace)
-            d.replaceReason = "scan for validated opposite after close";
+            d.replaceReason = "rebuild analysis → score → Mission REPLACE opposite";
          g_UltraPosEvoLast = d;
          return d;
       }

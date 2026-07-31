@@ -309,6 +309,17 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
       UltraSetError("data/price invalid");
       return false;
    }
+   // ROADMAP P2 — missing / thin history recovery gate
+   if(Bars(s, UltraETF()) < 60)
+   {
+      UltraSetError("insufficient candle history");
+      return false;
+   }
+   if(iTime(s, UltraETF(), 1) <= 0 || iClose(s, UltraETF(), 1) <= 0.0)
+   {
+      UltraSetError("missing closed bar data");
+      return false;
+   }
 
    UltraEngVolatility(s, u);
    UltraEngStructure(s, u);
