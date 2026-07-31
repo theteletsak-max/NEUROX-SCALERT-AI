@@ -9,9 +9,10 @@ After attaching HITMAN_AI to a chart you should see:
 
 INSTALL IMAGE (required for watermark)
 1) Open MT5 → File → Open Data Folder
-2) Copy HITMAN_Watermark.bmp into:
-      MQL5\Images\HITMAN_Watermark.bmp
+2) Copy chart_background.bmp into:
+      MQL5\Images\chart_background.bmp
    (included in the zip under Images\ and HITMAN_AI_EA\MQL5\Images\)
+   Legacy name HITMAN_Watermark.bmp still works as fallback.
 3) Re-compile HITMAN_AI.mq5 in MetaEditor (embeds #resource)
 4) Re-attach EA to the chart
 
@@ -20,7 +21,7 @@ INPUTS (group "HITMAN CHART SKIN")
   EnableHitmanWatermark = true
   EnableHitmanBranding  = true
   EnableHitmanHudPanel  = true
-  WatermarkScalePercent = 70
+  WatermarkScalePercent = 55
 
 If the character does not show: confirm the BMP path above, compile again,
 and check Experts log for object errors. Branding/HUD still work without BMP.

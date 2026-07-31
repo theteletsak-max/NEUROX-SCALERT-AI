@@ -14,8 +14,9 @@
 
 #define BG_OBJECT_NAME "HitmanAI_ChartBackground"
 
-// Hitman chart watermark (place Images/HITMAN_Watermark.bmp next to EA or in MQL5/Images)
-#resource "\Images\HITMAN_Watermark.bmp"
+// Hitman chart watermark — same resource name as classic HITMAN_AI.mq5
+// Place chart_background.bmp in Data Folder MQL5/Images before compile
+#resource "\\Images\\chart_background.bmp"
 
 CTrade g_Trade;
 
@@ -8637,9 +8638,9 @@ input bool   EnableHitmanChartSkin   = true;   // Hitman watermark + branding + 
 input bool   EnableHitmanWatermark   = true;   // show Hitman character on chart
 input bool   EnableHitmanBranding    = true;   // HITMAN AI / ACTIVATED labels
 input bool   EnableHitmanHudPanel    = true;   // left red info panel (Scarlet-style)
-input double WatermarkScalePercent   = 70.0;   // % of chart height (aspect preserved)
+input double WatermarkScalePercent   = 55.0;   // % of chart height (aspect preserved) — classic HITMAN default
 input int    WatermarkOffsetX        = 0;      // +right / -left from center
-input int    WatermarkOffsetY        = -20;    // +down / -up from center
+input int    WatermarkOffsetY        = 0;      // +down / -up from center
 input int    BrandOffsetY            = 18;     // branding block from bottom (px)
 
 #define WATERMARK_IMG_W 520
@@ -8811,15 +8812,22 @@ void CreateChartBackground()
    ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_HIDDEN, true);
    ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_ZORDER, 0);
 
-   // Prefer embedded resource; fallback to terminal Images folder
-   string bmpRes = "::Images\\HITMAN_Watermark.bmp";
-   string bmpFile = "\\Images\\HITMAN_Watermark.bmp";
+   // Classic HITMAN resource name (chart_background.bmp) — Hitman character BMP
+   // Prefer embedded #resource; then MQL5\Images\; then legacy HITMAN_Watermark name
+   string bmpRes = "::Images\\chart_background.bmp";
+   string bmpFile = "\\Images\\chart_background.bmp";
+   string bmpLegacy = "\\Images\\HITMAN_Watermark.bmp";
    ResetLastError();
    ObjectSetString(0, BG_OBJECT_NAME, OBJPROP_BMPFILE, bmpRes);
    if(GetLastError() != 0)
    {
       ResetLastError();
       ObjectSetString(0, BG_OBJECT_NAME, OBJPROP_BMPFILE, bmpFile);
+   }
+   if(GetLastError() != 0)
+   {
+      ResetLastError();
+      ObjectSetString(0, BG_OBJECT_NAME, OBJPROP_BMPFILE, bmpLegacy);
    }
 
    CreateHitmanBranding();

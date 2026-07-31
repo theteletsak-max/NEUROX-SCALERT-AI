@@ -44,8 +44,9 @@ header = '''//+-----------------------------------------------------------------
 
 #define BG_OBJECT_NAME "HitmanAI_ChartBackground"
 
-// Hitman chart watermark (place Images/HITMAN_Watermark.bmp next to EA or in MQL5/Images)
-#resource "\\Images\\HITMAN_Watermark.bmp"
+// Hitman chart watermark — same resource name as classic HITMAN_AI.mq5
+// Place chart_background.bmp in Data Folder MQL5/Images before compile
+#resource "\\\\Images\\\\chart_background.bmp"
 
 CTrade g_Trade;
 

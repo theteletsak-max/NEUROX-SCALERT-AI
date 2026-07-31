@@ -1,12 +1,8 @@
-HITMAN AI — INSTALL AS EA
-=========================
+HITMAN AI EA — INSTALL
+1) Copy HITMAN_AI.mq5 → MT5 Data Folder\MQL5\Experts\
+2) Copy MQL5\Images\chart_background.bmp → MT5 Data Folder\MQL5\Images\
+3) Open MetaEditor → compile HITMAN_AI.mq5 (embeds #resource)
+4) Attach EA to chart. TradeComment must be exactly: HITMAN AI
+5) Inputs → HITMAN CHART SKIN → WatermarkScalePercent=55 (default)
 
-1) Download / extract this folder
-2) Copy HITMAN_AI.mq5  →  MT5 Data Folder\MQL5\Experts\
-3) Copy MQL5\Images\HITMAN_Watermark.bmp  →  MT5 Data Folder\MQL5\Images\
-4) Open MetaEditor → compile HITMAN_AI.mq5
-5) In MT5 Navigator → Expert Advisors → attach HITMAN_AI to chart
-6) Allow Algo Trading
-7) Trade comment must be: HITMAN AI
-
-BUILD: HA_ULTRA_93
+Watermark uses classic resource name chart_background.bmp (Hitman character).
