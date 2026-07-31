@@ -122,6 +122,17 @@ input bool   UltraSmartExitEnabled       = false; // L14 Smart Exit
 input bool   UltraMissionOnlyExits       = true;  // sole close path discipline
 input bool   UltraSystemHealthEnabled    = true;  // L15-17 System Health
 
+input group "31 · POSITION EVOLUTION ENGINE"
+input bool   UltraPosEvoEnabled          = true;  // Intelligent Position Evolution
+input bool   UltraPosEvoCloseOnL3        = true;  // Mission may close on L3 invalidation
+input int    UltraPosEvoL3ConfirmBars    = 2;     // anti-whipsaw: L3 must persist N bars
+input int    UltraPosEvoMinHoldConf      = 35;    // below → L2 MANAGE (not auto-close)
+input bool   UltraPosEvoReplaceEnabled   = true;  // Ultra Reversal / Signal Replacement
+input bool   UltraPosEvoReplaceNextBarOnly = true; // never same-bar flip (anti-whipsaw)
+input int    UltraPosEvoReplaceMinConf   = 62;    // replacement confidence floor
+input int    UltraPosEvoReplaceMinHits   = 3;     // structure/BOS/liq/zone/mom hits needed
+input int    UltraPosEvoReplaceMaxBars   = 5;     // expire unused replace arm
+
 input group "31 · DASHBOARD INPUTS"
 input bool   UltraDashboardEnabled       = true;
 input bool   UltraDiagnosticsEnabled     = true;

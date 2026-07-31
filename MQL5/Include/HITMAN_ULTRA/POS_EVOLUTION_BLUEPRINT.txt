@@ -1,0 +1,27 @@
+HITMAN AI — INTELLIGENT POSITION EVOLUTION ENGINE
+================================================
+
+Flow
+  Market Update → Thesis → Structure → Liquidity → Master Trend
+  → Signal / AI Confidence → Mission Control → Decision
+
+Levels
+  L1 KEEP HOLDING  — thesis/structure/trend/confidence intact
+  L2 MANAGE        — healthy pullback / temp vol / soft confidence
+                    → BE / trail / protect (never panic close)
+  L3 INVALIDATION  — thesis broken + structure broken + true reversal
+                    + ValidateExit allow + N confirm bars (anti-whipsaw)
+                    → Mission Close only
+
+Ultra Reversal / Replacement
+  After L3 close → scan market → checklist → Mission approve
+  Requires: master + structure + BOS/CHoCH + liquidity + zone + momentum
+            + confidence floor + risk/exec OK
+  Default: next-bar only (never same-bar flip)
+
+Anti-whipsaw
+  Never reverse on one candle / indicator flip / small correction /
+  temp volatility / temp spread / minor liquidity sweep alone.
+
+Authority
+  Only Mission Control opens / closes / replaces / holds / manages.

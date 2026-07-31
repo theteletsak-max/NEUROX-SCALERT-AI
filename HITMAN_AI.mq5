@@ -1015,6 +1015,17 @@ input bool   UltraSmartExitEnabled       = false; // L14 Smart Exit
 input bool   UltraMissionOnlyExits       = true;  // sole close path discipline
 input bool   UltraSystemHealthEnabled    = true;  // L15-17 System Health
 
+input group "31 · POSITION EVOLUTION ENGINE"
+input bool   UltraPosEvoEnabled          = true;  // Intelligent Position Evolution
+input bool   UltraPosEvoCloseOnL3        = true;  // Mission may close on L3 invalidation
+input int    UltraPosEvoL3ConfirmBars    = 2;     // anti-whipsaw: L3 must persist N bars
+input int    UltraPosEvoMinHoldConf      = 35;    // below → L2 MANAGE (not auto-close)
+input bool   UltraPosEvoReplaceEnabled   = true;  // Ultra Reversal / Signal Replacement
+input bool   UltraPosEvoReplaceNextBarOnly = true; // never same-bar flip (anti-whipsaw)
+input int    UltraPosEvoReplaceMinConf   = 62;    // replacement confidence floor
+input int    UltraPosEvoReplaceMinHits   = 3;     // structure/BOS/liq/zone/mom hits needed
+input int    UltraPosEvoReplaceMaxBars   = 5;     // expire unused replace arm
+
 input group "31 · DASHBOARD INPUTS"
 input bool   UltraDashboardEnabled       = true;
 input bool   UltraDiagnosticsEnabled     = true;
@@ -5336,6 +5347,505 @@ UltraSmartExit UltraSmartExit_Decide(const UltraHoldScore &hold, const UltraCorr
 #endif
 //===== END SmartExit.mqh =====
 
+//===== BEGIN PositionEvolution.mqh =====
+#ifndef HITMAN_ULTRA_POSITION_EVOLUTION_MQH
+#define HITMAN_ULTRA_POSITION_EVOLUTION_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — INTELLIGENT POSITION EVOLUTION ENGINE                |
+//| Evolve with the market — never panic, never random reverse       |
+//| L1 KEEP HOLDING · L2 MANAGE · L3 INVALIDATION (+ optional replace)|
+//| Decision authority remains Mission Control only                  |
+//+------------------------------------------------------------------+
+
+enum ENUM_POS_EVO_LEVEL
+{
+   PEVO_HOLD = 1,
+   PEVO_MANAGE = 2,
+   PEVO_INVALIDATE = 3
+};
+
+struct UltraPosEvoDecision
+{
+   ENUM_POS_EVO_LEVEL level;
+   ENUM_SUPREME_DECISION command; // HOLD / MANAGE / EXIT
+   string reason;
+   string exitReason;
+   string replaceReason;
+   bool   thesisValid;
+   bool   structureValid;
+   bool   liquidityOk;
+   bool   masterTrendValid;
+   bool   confidenceOk;
+   bool   healthyNoise;
+   bool   trueReversal;
+   bool   allowClose;
+   bool   wantReplace;
+   int    confidence;
+   int    holdScore;
+   int    l3Streak;
+};
+
+struct UltraPosEvoReplace
+{
+   bool     pending;
+   string   symbol;
+   bool     wantBuy;          // new direction after invalidation
+   string   reason;
+   string   exitReason;
+   datetime armBar;
+   datetime armTime;
+   int      minConf;
+};
+
+UltraPosEvoDecision g_UltraPosEvoLast;
+UltraPosEvoReplace  g_UltraPosEvoReplace;
+int                 g_UltraPosEvoL3Streak = 0;
+datetime            g_UltraPosEvoL3Bar = 0;
+ulong               g_UltraPosEvoL3Ticket = 0;
+
+//--------------------------------------------------------------------//
+void UltraPosEvo_Init()
+{
+   g_UltraPosEvoLast.level = PEVO_HOLD;
+   g_UltraPosEvoLast.command = SUP_HOLD;
+   g_UltraPosEvoLast.reason = "INIT";
+   g_UltraPosEvoLast.exitReason = "";
+   g_UltraPosEvoLast.replaceReason = "";
+   g_UltraPosEvoLast.thesisValid = true;
+   g_UltraPosEvoLast.structureValid = true;
+   g_UltraPosEvoLast.liquidityOk = true;
+   g_UltraPosEvoLast.masterTrendValid = true;
+   g_UltraPosEvoLast.confidenceOk = true;
+   g_UltraPosEvoLast.healthyNoise = false;
+   g_UltraPosEvoLast.trueReversal = false;
+   g_UltraPosEvoLast.allowClose = false;
+   g_UltraPosEvoLast.wantReplace = false;
+   g_UltraPosEvoLast.confidence = 0;
+   g_UltraPosEvoLast.holdScore = 0;
+   g_UltraPosEvoLast.l3Streak = 0;
+
+   g_UltraPosEvoReplace.pending = false;
+   g_UltraPosEvoReplace.symbol = "";
+   g_UltraPosEvoReplace.wantBuy = false;
+   g_UltraPosEvoReplace.reason = "";
+   g_UltraPosEvoReplace.exitReason = "";
+   g_UltraPosEvoReplace.armBar = 0;
+   g_UltraPosEvoReplace.armTime = 0;
+   g_UltraPosEvoReplace.minConf = 0;
+
+   g_UltraPosEvoL3Streak = 0;
+   g_UltraPosEvoL3Bar = 0;
+   g_UltraPosEvoL3Ticket = 0;
+}
+
+string UltraPosEvo_LevelName(const ENUM_POS_EVO_LEVEL lv)
+{
+   if(lv == PEVO_HOLD) return "L1 HOLD";
+   if(lv == PEVO_MANAGE) return "L2 MANAGE";
+   return "L3 INVALIDATE";
+}
+
+void UltraPosEvo_ClearReplace()
+{
+   g_UltraPosEvoReplace.pending = false;
+   g_UltraPosEvoReplace.symbol = "";
+   g_UltraPosEvoReplace.wantBuy = false;
+   g_UltraPosEvoReplace.reason = "";
+   g_UltraPosEvoReplace.exitReason = "";
+   g_UltraPosEvoReplace.armBar = 0;
+   g_UltraPosEvoReplace.armTime = 0;
+   g_UltraPosEvoReplace.minConf = 0;
+}
+
+bool UltraPosEvo_ReplacePending(const string s)
+{
+   if(!g_UltraPosEvoReplace.pending) return false;
+   if(StringLen(s) > 0 && g_UltraPosEvoReplace.symbol != s) return false;
+   return true;
+}
+
+bool UltraPosEvo_ReplaceAllowsEntry(const string s, const bool wantBuy, string &why)
+{
+   why = "";
+   if(!UltraPosEvoEnabled || !UltraPosEvoReplaceEnabled) return false;
+   if(!UltraPosEvo_ReplacePending(s)) return false;
+   if(g_UltraPosEvoReplace.wantBuy != wantBuy)
+   {
+      why = "REPLACE: direction mismatch";
+      return false;
+   }
+
+   datetime bar = iTime(s, UltraETF(), 0);
+   if(UltraPosEvoReplaceNextBarOnly)
+   {
+      if(bar <= 0 || g_UltraPosEvoReplace.armBar <= 0 || bar <= g_UltraPosEvoReplace.armBar)
+      {
+         why = "REPLACE: wait next bar (anti-whipsaw)";
+         return false;
+      }
+   }
+
+   // Expire stale replace arms
+   int maxAge = UltraPosEvoReplaceMaxBars;
+   if(maxAge < 1) maxAge = 1;
+   if(bar > 0 && g_UltraPosEvoReplace.armBar > 0)
+   {
+      // approximate age: if arm was N bars ago beyond max → expire
+      // use time delta as robust fallback
+      int ageSec = (int)(TimeCurrent() - g_UltraPosEvoReplace.armTime);
+      int barSec = PeriodSeconds(UltraETF());
+      if(barSec <= 0) barSec = 60;
+      int ageBars = ageSec / barSec;
+      if(ageBars > maxAge)
+      {
+         UltraPosEvo_ClearReplace();
+         why = "REPLACE: arm expired";
+         return false;
+      }
+   }
+
+   why = g_UltraPosEvoReplace.reason;
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// Structure / liquidity / master / confidence helpers
+//--------------------------------------------------------------------//
+bool UltraPosEvo_StructureValid(const UltraSnap &u, const bool isBuy)
+{
+   // Valid if structure still supports position (not strongly against)
+   bool against = isBuy
+      ? ((u.bos.sell && u.bos.confirmed && u.bos.strong) || (u.choch.sell && u.choch.majorC) || u.st.externalBear)
+      : ((u.bos.buy && u.bos.confirmed && u.bos.strong) || (u.choch.buy && u.choch.majorC) || u.st.externalBull);
+   if(against) return false;
+
+   bool with = isBuy
+      ? (u.st.hh || u.st.hl || u.st.externalBull || u.st.internalBull || u.st.continuation || u.bos.buy || u.choch.buy)
+      : (u.st.lh || u.st.ll || u.st.externalBear || u.st.internalBear || u.st.continuation || u.bos.sell || u.choch.sell);
+   return with || !against;
+}
+
+bool UltraPosEvo_LiquidityHostile(const UltraSnap &u, const bool isBuy)
+{
+   // Major adverse sweep/hunt against us — soft unless combined with structure death
+   return isBuy
+      ? (u.liq.sweepSell && u.liq.stopHuntSell)
+      : (u.liq.sweepBuy && u.liq.stopHuntBuy);
+}
+
+bool UltraPosEvo_MasterValid(const string s, const bool isBuy)
+{
+   int master = UltraMTF_MasterDir(s);
+   if(master == 0) return true; // flat = do not invalidate alone
+   return isBuy ? (master > 0) : (master < 0);
+}
+
+bool UltraPosEvo_TempNoise(const UltraSnap &u, const UltraCorrection &corr)
+{
+   if(corr.isHealthy &&
+      (corr.state == CORR_PULLBACK || corr.state == CORR_CONTINUATION ||
+       corr.state == CORR_LIQ_GRAB || corr.state == CORR_RETEST || corr.state == CORR_UNKNOWN))
+      return true;
+   if(u.vol.compression) return true; // temporary compression ≠ invalidation
+   return false;
+}
+
+//--------------------------------------------------------------------//
+// Replacement checklist (opposite setup must fully validate)
+//--------------------------------------------------------------------//
+bool UltraPosEvo_ReplacementChecklist(const string s, const UltraSnap &u, const bool wantBuy,
+                                      string &detail, int &confOut)
+{
+   detail = "";
+   confOut = u.score.confidence;
+
+   int floor = UltraPosEvoReplaceMinConf;
+   if(floor < UltraFireFloor()) floor = UltraFireFloor();
+   if(u.score.confidence < floor)
+   {
+      detail = "confidence below replace floor";
+      return false;
+   }
+   if(u.score.precision < UltraMinPrecision && u.score.confidence < floor)
+   {
+      detail = "precision weak for replace";
+      return false;
+   }
+   if(u.score.probability < UltraMinProbability && u.score.confidence < floor)
+   {
+      detail = "probability weak for replace";
+      return false;
+   }
+
+   int master = UltraMTF_MasterDir(s);
+   if(master != 0)
+   {
+      if(wantBuy && master < 0){ detail = "master trend against BUY replace"; return false; }
+      if(!wantBuy && master > 0){ detail = "master trend against SELL replace"; return false; }
+   }
+
+   bool structure = wantBuy
+      ? (u.st.hh || u.st.hl || u.st.externalBull || u.st.internalBull || u.st.continuation)
+      : (u.st.lh || u.st.ll || u.st.externalBear || u.st.internalBear || u.st.continuation);
+   bool bos = wantBuy ? (u.bos.buy || (u.bos.buy && u.bos.confirmed)) : (u.bos.sell || (u.bos.sell && u.bos.confirmed));
+   bool choch = wantBuy ? u.choch.buy : u.choch.sell;
+   bool liq = wantBuy
+      ? (u.liq.sweepBuy || u.liq.stopHuntBuy || u.liq.grabBuy || u.liq.equalLows)
+      : (u.liq.sweepSell || u.liq.stopHuntSell || u.liq.grabSell || u.liq.equalHighs);
+   bool zone = wantBuy
+      ? (u.ict.obBuy || u.ict.fvgBuy || u.fib.atBuyZone || u.ict.institutionalLiqBuy)
+      : (u.ict.obSell || u.ict.fvgSell || u.fib.atSellZone || u.ict.institutionalLiqSell);
+   bool mom = wantBuy
+      ? (u.mom.momBuy || u.mom.impulse || u.ict.dispBuy)
+      : (u.mom.momSell || u.mom.impulse || u.ict.dispSell);
+
+   int hits = (structure?1:0) + ((bos||choch)?1:0) + (liq?1:0) + (zone?1:0) + (mom?1:0);
+   int need = UltraPosEvoReplaceMinHits;
+   if(need < 3) need = 3;
+   if(hits < need)
+   {
+      detail = StringFormat("replace stack %d/%d (need structure/BOS-CHoCH/liq/zone/mom)", hits, need);
+      return false;
+   }
+
+   // Risk / exec readiness (lightweight — full path still runs UltraAIDecide)
+   if(u.score.riskProb >= 85)
+   {
+      detail = "risk too high for replace";
+      return false;
+   }
+   string exWhy = "";
+   if(!UltraExecReady(s, exWhy))
+   {
+      detail = "exec: " + exWhy;
+      return false;
+   }
+
+   detail = StringFormat("replace OK hits=%d conf=%d master=%d", hits, u.score.confidence, master);
+   return true;
+}
+
+bool UltraPosEvo_TryArmReplace(const string s, const bool wasBuy, const UltraSnap &u,
+                               const string exitReason)
+{
+   if(!UltraPosEvoEnabled || !UltraPosEvoReplaceEnabled)
+      return false;
+
+   bool wantBuy = !wasBuy; // reverse direction candidate
+   UltraSignal cand = UltraPickBest(u);
+   // Prefer opposite of closed trade; if pickBest agrees, use it; else force direction check
+   if(cand.buy || cand.sell)
+   {
+      if(wantBuy && !cand.buy) { /* keep wantBuy — checklist may still fail */ }
+      if(!wantBuy && !cand.sell) { }
+      // Align with best signal if it is opposite
+      if(wantBuy && cand.sell && !cand.buy) return false;
+      if(!wantBuy && cand.buy && !cand.sell) return false;
+      if(cand.buy) wantBuy = true;
+      if(cand.sell) wantBuy = false;
+   }
+
+   string detail = "";
+   int conf = 0;
+   if(!UltraPosEvo_ReplacementChecklist(s, u, wantBuy, detail, conf))
+   {
+      if(UltraUpgradeLog || EnableVerboseLogging)
+         Print("POSEVO REPLACE WAIT: ", detail, " on ", s, " | exit=", exitReason);
+      UltraPosEvo_ClearReplace();
+      return false;
+   }
+
+   g_UltraPosEvoReplace.pending = true;
+   g_UltraPosEvoReplace.symbol = s;
+   g_UltraPosEvoReplace.wantBuy = wantBuy;
+   g_UltraPosEvoReplace.exitReason = exitReason;
+   g_UltraPosEvoReplace.reason = StringFormat("REPLACE after invalidation → %s | %s",
+                                             (wantBuy ? "BUY" : "SELL"), detail);
+   g_UltraPosEvoReplace.armBar = iTime(s, UltraETF(), 0);
+   g_UltraPosEvoReplace.armTime = TimeCurrent();
+   g_UltraPosEvoReplace.minConf = UltraPosEvoReplaceMinConf;
+   // UFSE unlock is performed by Shell after assemble (UFSE lives after Mission)
+
+   UltraLogTrade("POSEVO " + g_UltraPosEvoReplace.reason);
+   if(UltraUpgradeLog || EnableVerboseLogging)
+      Print("POSEVO ARM REPLACE: ", g_UltraPosEvoReplace.reason, " on ", s);
+   return true;
+}
+
+void UltraPosEvo_NoteReplacementFilled(const string s, const bool isBuy, const string tag)
+{
+   if(!UltraPosEvo_ReplacePending(s)) return;
+   string msg = "REPLACEMENT FILLED ";
+   msg += (isBuy ? "BUY" : "SELL");
+   msg += " [";
+   msg += tag;
+   msg += "] | ";
+   msg += g_UltraPosEvoReplace.reason;
+   msg += " | prior exit: ";
+   msg += g_UltraPosEvoReplace.exitReason;
+   UltraLogTrade(msg);
+   if(UltraUpgradeLog || EnableVerboseLogging)
+      Print("POSEVO ", msg, " on ", s);
+   UltraPosEvo_ClearReplace();
+}
+
+//--------------------------------------------------------------------//
+// CORE EVALUATE — Market → Thesis → Structure → Liq → Master → AI
+//--------------------------------------------------------------------//
+UltraPosEvoDecision UltraPosEvo_Evaluate(const ulong ticket, const string s, const bool isBuy,
+                                         const UltraSnap &u, const UltraExitValidation &v,
+                                         const UltraHoldScore &hold, const UltraCorrection &corr)
+{
+   UltraPosEvoDecision d;
+   d.level = PEVO_HOLD;
+   d.command = SUP_HOLD;
+   d.reason = "";
+   d.exitReason = "";
+   d.replaceReason = "";
+   d.thesisValid = !v.thesisBroken;
+   d.structureValid = !v.structureChanged && UltraPosEvo_StructureValid(u, isBuy);
+   d.liquidityOk = !UltraPosEvo_LiquidityHostile(u, isBuy);
+   d.masterTrendValid = UltraPosEvo_MasterValid(s, isBuy) && !v.masterTrendChanged;
+   d.confidenceOk = (u.score.confidence >= UltraPosEvoMinHoldConf) || (hold.total >= 50);
+   d.healthyNoise = UltraPosEvo_TempNoise(u, corr) || v.healthyCorrection;
+   d.trueReversal = v.trueReversal || (corr.state == CORR_REVERSAL);
+   d.allowClose = false;
+   d.wantReplace = false;
+   d.confidence = u.score.confidence;
+   d.holdScore = hold.total;
+   d.l3Streak = 0;
+
+   if(!UltraUpgradeEnabled || !UltraPosEvoEnabled)
+   {
+      d.level = PEVO_HOLD;
+      d.command = SUP_HOLD;
+      d.reason = "PosEvo off — defer";
+      g_UltraPosEvoLast = d;
+      return d;
+   }
+
+   //======== ANTI-WHIPSAW: never invalidate on noise ========//
+   // Never reverse because of one candle / indicator flip / small correction /
+   // temp volatility / temp spread / minor liquidity sweep alone.
+   if(d.healthyNoise && !v.riskRule)
+   {
+      d.level = (hold.action == HOLD_MANAGE || !d.confidenceOk) ? PEVO_MANAGE : PEVO_HOLD;
+      d.command = (d.level == PEVO_MANAGE) ? SUP_MANAGE : SUP_HOLD;
+      d.reason = (d.level == PEVO_MANAGE)
+         ? "L2 MANAGE — healthy pullback / temporary noise"
+         : "L1 HOLD — thesis valid through healthy correction";
+      // reset L3 streak on healthy noise
+      if(g_UltraPosEvoL3Ticket == ticket)
+      {
+         g_UltraPosEvoL3Streak = 0;
+         g_UltraPosEvoL3Bar = 0;
+      }
+      g_UltraPosEvoLast = d;
+      return d;
+   }
+
+   //======== LEVEL 3 candidate: multi-confirm invalidation ========//
+   bool hardInvalid = v.allowClose; // Mission ValidateExit already multi-confirms
+   bool softInvalid = (!d.thesisValid && !d.structureValid && d.trueReversal);
+   if(v.masterTrendChanged && !d.thesisValid && d.trueReversal)
+      softInvalid = true;
+
+   if(hardInvalid || softInvalid)
+   {
+      datetime bar = iTime(s, UltraETF(), 0);
+      if(g_UltraPosEvoL3Ticket != ticket)
+      {
+         g_UltraPosEvoL3Ticket = ticket;
+         g_UltraPosEvoL3Streak = 0;
+         g_UltraPosEvoL3Bar = 0;
+      }
+      if(bar > 0 && bar != g_UltraPosEvoL3Bar)
+      {
+         g_UltraPosEvoL3Streak++;
+         g_UltraPosEvoL3Bar = bar;
+      }
+      else if(g_UltraPosEvoL3Streak == 0)
+         g_UltraPosEvoL3Streak = 1;
+
+      d.l3Streak = g_UltraPosEvoL3Streak;
+      int need = UltraPosEvoL3ConfirmBars;
+      if(need < 1) need = 1;
+
+      if(d.l3Streak >= need && (hardInvalid || (softInvalid && v.allowClose)))
+      {
+         d.level = PEVO_INVALIDATE;
+         d.command = SUP_EXIT;
+         d.allowClose = true;
+         d.exitReason = v.reason;
+         if(StringLen(d.exitReason) == 0)
+            d.exitReason = "thesis+structure+reversal confirmed";
+         d.reason = "L3 INVALIDATION — " + d.exitReason;
+         d.wantReplace = UltraPosEvoReplaceEnabled;
+         if(d.wantReplace)
+            d.replaceReason = "scan for validated opposite after close";
+         g_UltraPosEvoLast = d;
+         return d;
+      }
+
+      // Not enough confirm bars — manage, do not panic close
+      d.level = PEVO_MANAGE;
+      d.command = SUP_MANAGE;
+      d.reason = StringFormat("L2 MANAGE — invalidation forming %d/%d bars (anti-whipsaw)",
+                              d.l3Streak, need);
+      g_UltraPosEvoLast = d;
+      return d;
+   }
+
+   // Reset streak when not invalidating
+   if(g_UltraPosEvoL3Ticket == ticket)
+   {
+      g_UltraPosEvoL3Streak = 0;
+      g_UltraPosEvoL3Bar = 0;
+   }
+
+   //======== LEVEL 2: manage / protect ========//
+   bool manage = (!d.confidenceOk) || (!d.liquidityOk && d.thesisValid) ||
+                 (hold.action == HOLD_MANAGE) || (!d.masterTrendValid && d.thesisValid) ||
+                 (u.vol.expansion && hold.total < 60);
+
+   if(manage)
+   {
+      d.level = PEVO_MANAGE;
+      d.command = SUP_MANAGE;
+      d.reason = "L2 MANAGE — protect through pullback/volatility (thesis still alive)";
+      if(!d.masterTrendValid) d.reason = "L2 MANAGE — master softening, protect profit";
+      if(!d.confidenceOk) d.reason = "L2 MANAGE — confidence soft, hold with protection";
+      g_UltraPosEvoLast = d;
+      return d;
+   }
+
+   //======== LEVEL 1: keep holding ========//
+   d.level = PEVO_HOLD;
+   d.command = SUP_HOLD;
+   d.reason = "L1 HOLD — thesis/structure/trend/confidence maintained";
+   if(d.thesisValid && d.structureValid && d.masterTrendValid && d.confidenceOk)
+      d.reason = "L1 HOLD — highest-probability path still intact";
+   g_UltraPosEvoLast = d;
+   return d;
+}
+
+string UltraPosEvo_Dashboard()
+{
+   string t = "POSEVO: ";
+   t += UltraPosEvo_LevelName(g_UltraPosEvoLast.level);
+   t += " ";
+   t += g_UltraPosEvoLast.reason;
+   if(g_UltraPosEvoReplace.pending)
+   {
+      t += " | REPLACE→";
+      t += (g_UltraPosEvoReplace.wantBuy ? "BUY" : "SELL");
+   }
+   return t;
+}
+
+#endif // HITMAN_ULTRA_POSITION_EVOLUTION_MQH
+//===== END PositionEvolution.mqh =====
+
 //===== BEGIN SystemHealth.mqh =====
 #ifndef HITMAN_ULTRA_SYSTEM_HEALTH_MQH
 #define HITMAN_ULTRA_SYSTEM_HEALTH_MQH
@@ -6072,9 +6582,29 @@ void UltraMission_NoteOpen(const ulong ticket, const string s, const bool isBuy,
 }
 
 // Block new entries if we already closed this cycle (anti flip-flop)
+// Exception: Position Evolution replace arm may open on a later bar only.
 bool UltraMission_AllowNewEntry(const string s)
 {
    UltraMission_NewCycle(s);
+
+   // Armed replacement: allow only when next-bar / checklist gate passes
+   if(UltraPosEvoEnabled && UltraPosEvoReplaceEnabled && UltraPosEvo_ReplacePending(s))
+   {
+      string rWhy = "";
+      // Direction checked later in UltraAIDecide; here only bar/expiry gate
+      if(UltraPosEvo_ReplaceAllowsEntry(s, g_UltraPosEvoReplace.wantBuy, rWhy))
+      {
+         UltraMission_Log("REPLACE_READY", 0, rWhy);
+         return true;
+      }
+      // Still waiting next bar — block impulsive same-cycle reopen
+      if(g_UltraMissionClosedThisCycle)
+      {
+         UltraMission_Log("WAIT", 0, rWhy);
+         return false;
+      }
+   }
+
    if(g_UltraMissionClosedThisCycle && !UltraUpgradeStrict)
    {
       UltraMission_Log("WAIT", 0, "one decision per cycle — open blocked after close");
@@ -6110,6 +6640,7 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
 }
 
 // Open-position command — never closes here; Shell must call UltraMission_ClosePosition
+// Position Evolution Engine drives L1 HOLD / L2 MANAGE / L3 INVALIDATE.
 ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const string s,
                                                    const bool isBuy, const UltraSnap &u,
                                                    string &why)
@@ -6118,25 +6649,57 @@ ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const str
    UltraMission_NewCycle(s);
 
    UltraExitValidation v = UltraMission_ValidateExit(ticket, s, isBuy, u, false);
-   UltraHoldScore hold = UltraHold_Evaluate(u, isBuy, !v.thesisBroken, UltraCorr_Detect(u, isBuy));
-   UltraSmartExit sx = UltraSmartExit_Decide(hold, UltraCorr_Detect(u, isBuy), !v.thesisBroken, false);
+   UltraCorrection corr = UltraCorr_Detect(u, isBuy);
+   UltraHoldScore hold = UltraHold_Evaluate(u, isBuy, !v.thesisBroken, corr);
+   UltraSmartExit sx = UltraSmartExit_Decide(hold, corr, !v.thesisBroken, false);
 
    ENUM_SUPREME_DECISION cmd = SUP_HOLD;
-   if(v.allowClose && sx.action == SX_CLOSE)
+
+   if(UltraPosEvoEnabled)
    {
-      cmd = SUP_EXIT;
-      why = v.reason;
-   }
-   else if(v.healthyCorrection || sx.action == SX_BE || sx.action == SX_TIGHTEN || hold.action == HOLD_MANAGE)
-   {
-      cmd = SUP_MANAGE;
-      why = v.healthyCorrection ? "healthy correction — manage/protect" : sx.reason;
-      if(StringLen(why) == 0) why = "MANAGE";
+      UltraPosEvoDecision evo = UltraPosEvo_Evaluate(ticket, s, isBuy, u, v, hold, corr);
+      cmd = evo.command;
+      why = evo.reason;
+
+      // Hard gate: L3 EXIT only if ValidateExit allows AND CloseOnL3 enabled
+      if(cmd == SUP_EXIT)
+      {
+         if(!UltraPosEvoCloseOnL3 || !v.allowClose)
+         {
+            cmd = SUP_MANAGE;
+            why = "L2 MANAGE — invalidation not fully confirmed for Mission close";
+         }
+         else if(StringLen(evo.exitReason) > 0)
+         {
+            why = "EXIT: " + evo.exitReason;
+            if(evo.wantReplace)
+               why += " | replace armed if checklist passes";
+         }
+      }
+      else if(cmd == SUP_MANAGE && StringLen(why) == 0)
+         why = "L2 MANAGE";
+      else if(cmd == SUP_HOLD && StringLen(why) == 0)
+         why = "L1 HOLD";
    }
    else
    {
-      cmd = SUP_HOLD;
-      why = "ULTRA HOLD — thesis/structure/trend valid";
+      // Legacy SmartExit path when PosEvo disabled
+      if(v.allowClose && sx.action == SX_CLOSE)
+      {
+         cmd = SUP_EXIT;
+         why = v.reason;
+      }
+      else if(v.healthyCorrection || sx.action == SX_BE || sx.action == SX_TIGHTEN || hold.action == HOLD_MANAGE)
+      {
+         cmd = SUP_MANAGE;
+         why = v.healthyCorrection ? "healthy correction — manage/protect" : sx.reason;
+         if(StringLen(why) == 0) why = "MANAGE";
+      }
+      else
+      {
+         cmd = SUP_HOLD;
+         why = "ULTRA HOLD — thesis/structure/trend valid";
+      }
    }
 
    UltraMission_Set(cmd, why, u.score.confidence, hold.total, hold.label, "", ticket);
@@ -6721,7 +7284,26 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       { why = fWhy; return false; }
    }
 
-   if(UltraBlockOppositeSameSym)
+   // Position Evolution replace arm: require matching direction + replace floor
+   bool replaceArm = (UltraPosEvoEnabled && UltraPosEvoReplaceEnabled && UltraPosEvo_ReplacePending(s));
+   if(replaceArm)
+   {
+      string rWhy = "";
+      bool wantBuy = g_UltraPosEvoReplace.wantBuy;
+      if((wantBuy && !sig.buy) || (!wantBuy && !sig.sell))
+      { why = "REPLACE: signal not opposite validated direction"; return false; }
+      if(!UltraPosEvo_ReplaceAllowsEntry(s, wantBuy, rWhy))
+      { why = rWhy; return false; }
+      if(u.score.confidence < g_UltraPosEvoReplace.minConf)
+      { why = "REPLACE: confidence below armed floor"; return false; }
+      // Unlock so lock does not block validated replacement
+      int ridx = UltraUFSE_Ensure(s);
+      if(ridx >= 0) UltraUFSE_Unlock(ridx);
+      if(StringLen(sig.reason) > 0) sig.reason = sig.reason + " | ";
+      sig.reason = sig.reason + g_UltraPosEvoReplace.reason;
+   }
+
+   if(UltraBlockOppositeSameSym && !replaceArm)
    {
       int d = UltraSymDir(s);
       if(sig.buy && d < 0){ why = "opposite SELL open"; return false; }
@@ -7102,6 +7684,7 @@ string UltraDashboardText(const string s)
    t += " | TF: "; t += EnumToString(UltraETF());
    t += "\n"; t += UltraBrain_Dashboard();
    t += "\n"; t += UltraMission_Dashboard();
+   t += "\n"; t += UltraPosEvo_Dashboard();
    t += "\n"; t += UltraInput_Dashboard();
    t += " | "; t += UltraData_Dashboard();
    t += "\nMaster Trend: "; t += master;
@@ -7828,6 +8411,13 @@ int OnInit()
    Print("ONE DECISION PATH: Market→Analysis→Structure→SMT→UFSE→Thesis→USM→Mission→Exec→Manage→Exit→Log");
    Print("ONE STRATEGY: UFSE only | MissionOnlyExits=", UltraYN(UltraMissionOnlyExits),
          " | PositionClose sole owner=MissionControl");
+   Print("POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
+         " L3Close=", UltraYN(UltraPosEvoCloseOnL3),
+         " L3Bars=", UltraPosEvoL3ConfirmBars,
+         " Replace=", UltraYN(UltraPosEvoReplaceEnabled),
+         " NextBarOnly=", UltraYN(UltraPosEvoReplaceNextBarOnly),
+         " ReplaceMinConf=", UltraPosEvoReplaceMinConf);
+   UltraPosEvo_Init();
    Print("UFSE: FastSignal=", UltraYN(UltraFastSignalEnabled),
          " MasterTrendLock=", UltraYN(UltraMasterTrendLock),
          " SignalLock=", UltraYN(UltraSignalLockEnabled),
@@ -11640,8 +12230,9 @@ void ManageOpenTrades()
          currentTP = PositionGetDouble(POSITION_TP);
       }
 
-      //================ ULTRA X — LEVEL 8 MISSION CONTROL (HOLD/MANAGE/EXIT) ===//
-      if(UltraUpgradeEnabled && UltraSmartExitEnabled)
+      //================ POSITION EVOLUTION + MISSION (HOLD/MANAGE/EXIT) ===//
+      // L1 KEEP HOLDING · L2 MANAGE · L3 INVALIDATION (+ optional replace)
+      if(UltraUpgradeEnabled && (UltraPosEvoEnabled || UltraSmartExitEnabled))
       {
          bool isBuyPos = (type == POSITION_TYPE_BUY);
          string sxWhy = "";
@@ -11661,20 +12252,36 @@ void ManageOpenTrades()
          // Minimum hold before Mission EXIT can fire (protect fresh entries)
          int minMissionExitBars = MinimumHoldBars;
          if(minMissionExitBars < 3) minMissionExitBars = 3;
+         if(UltraPosEvoEnabled && UltraPosEvoL3ConfirmBars > minMissionExitBars)
+            minMissionExitBars = UltraPosEvoL3ConfirmBars;
          bool canMissionExit = (barsHeld >= minMissionExitBars);
 
          if((mission == SUP_EXIT || sx == SX_CLOSE) && canMissionExit)
          {
             if(UltraUpgradeLog)
-               Print("MISSION EXIT request ticket=", ticket, " bars=", barsHeld, " ", sxWhy);
-            if(UltraMission_ClosePosition(ticket, sxWhy, false))
+               Print("MISSION EXIT / POSEVO L3 request ticket=", ticket, " bars=", barsHeld, " ", sxWhy);
+            string exitWhy = sxWhy;
+            if(StringFind(exitWhy, "EXIT:") < 0)
+               exitWhy = "EXIT: " + sxWhy;
+            if(UltraMission_ClosePosition(ticket, exitWhy, false))
+            {
+               // Ultra Reversal Engine: arm replace only after confirmed invalidation close
+               if(UltraPosEvoEnabled && UltraPosEvoReplaceEnabled)
+               {
+                  if(UltraPosEvo_TryArmReplace(BrokerSymbol, isBuyPos, sxSnap, exitWhy))
+                  {
+                     int uidx = UltraUFSE_Ensure(BrokerSymbol);
+                     if(uidx >= 0) UltraUFSE_Unlock(uidx);
+                  }
+               }
                continue;
+            }
          }
          if((mission == SUP_EXIT || sx == SX_CLOSE) && !canMissionExit)
          {
-            // Too early to exit — protect with BE if possible instead
+            // Too early to exit — protect with BE if possible instead (anti-whipsaw)
             if(UltraUpgradeLog)
-               Print("MISSION EXIT blocked (min hold) ticket=", ticket, " bars=", barsHeld);
+               Print("MISSION EXIT blocked (min hold/anti-whipsaw) ticket=", ticket, " bars=", barsHeld);
             mission = SUP_MANAGE;
             sx = SX_BE;
          }
@@ -11688,7 +12295,7 @@ void ManageOpenTrades()
                {
                   currentSL = openPrice;
                   if(UltraUpgradeLog)
-                     Print("MISSION MANAGE/BE ticket=", ticket, " ", sxWhy);
+                     Print("MISSION/POSEVO MANAGE/BE ticket=", ticket, " ", sxWhy);
                }
             }
          }
@@ -18579,6 +19186,7 @@ void InstantExecution()
       {
          UltraDiscipline_OnFill(BrokerSymbol, true, strategyTag, g_UltraLastSnap);
          UltraThesis_StoreLatest(BrokerSymbol, true, strategyTag, g_UltraLastSnap, g_UltraLastSignal.reason);
+         UltraPosEvo_NoteReplacementFilled(BrokerSymbol, true, strategyTag);
          // Position lock + decision log (Mission Control)
          {
             ulong tk = 0;
@@ -18623,6 +19231,7 @@ void InstantExecution()
       {
          UltraDiscipline_OnFill(BrokerSymbol, false, strategyTag, g_UltraLastSnap);
          UltraThesis_StoreLatest(BrokerSymbol, false, strategyTag, g_UltraLastSnap, g_UltraLastSignal.reason);
+         UltraPosEvo_NoteReplacementFilled(BrokerSymbol, false, strategyTag);
          // Position lock + decision log (Mission Control)
          {
             ulong tk = 0;

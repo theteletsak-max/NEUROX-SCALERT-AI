@@ -77,6 +77,13 @@ int OnInit()
    Print("ONE DECISION PATH: Market→Analysis→Structure→SMT→UFSE→Thesis→USM→Mission→Exec→Manage→Exit→Log");
    Print("ONE STRATEGY: UFSE only | MissionOnlyExits=", UltraYN(UltraMissionOnlyExits),
          " | PositionClose sole owner=MissionControl");
+   Print("POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
+         " L3Close=", UltraYN(UltraPosEvoCloseOnL3),
+         " L3Bars=", UltraPosEvoL3ConfirmBars,
+         " Replace=", UltraYN(UltraPosEvoReplaceEnabled),
+         " NextBarOnly=", UltraYN(UltraPosEvoReplaceNextBarOnly),
+         " ReplaceMinConf=", UltraPosEvoReplaceMinConf);
+   UltraPosEvo_Init();
    Print("UFSE: FastSignal=", UltraYN(UltraFastSignalEnabled),
          " MasterTrendLock=", UltraYN(UltraMasterTrendLock),
          " SignalLock=", UltraYN(UltraSignalLockEnabled),
@@ -3889,8 +3896,9 @@ void ManageOpenTrades()
          currentTP = PositionGetDouble(POSITION_TP);
       }
 
-      //================ ULTRA X — LEVEL 8 MISSION CONTROL (HOLD/MANAGE/EXIT) ===//
-      if(UltraUpgradeEnabled && UltraSmartExitEnabled)
+      //================ POSITION EVOLUTION + MISSION (HOLD/MANAGE/EXIT) ===//
+      // L1 KEEP HOLDING · L2 MANAGE · L3 INVALIDATION (+ optional replace)
+      if(UltraUpgradeEnabled && (UltraPosEvoEnabled || UltraSmartExitEnabled))
       {
          bool isBuyPos = (type == POSITION_TYPE_BUY);
          string sxWhy = "";
@@ -3910,20 +3918,36 @@ void ManageOpenTrades()
          // Minimum hold before Mission EXIT can fire (protect fresh entries)
          int minMissionExitBars = MinimumHoldBars;
          if(minMissionExitBars < 3) minMissionExitBars = 3;
+         if(UltraPosEvoEnabled && UltraPosEvoL3ConfirmBars > minMissionExitBars)
+            minMissionExitBars = UltraPosEvoL3ConfirmBars;
          bool canMissionExit = (barsHeld >= minMissionExitBars);
 
          if((mission == SUP_EXIT || sx == SX_CLOSE) && canMissionExit)
          {
             if(UltraUpgradeLog)
-               Print("MISSION EXIT request ticket=", ticket, " bars=", barsHeld, " ", sxWhy);
-            if(UltraMission_ClosePosition(ticket, sxWhy, false))
+               Print("MISSION EXIT / POSEVO L3 request ticket=", ticket, " bars=", barsHeld, " ", sxWhy);
+            string exitWhy = sxWhy;
+            if(StringFind(exitWhy, "EXIT:") < 0)
+               exitWhy = "EXIT: " + sxWhy;
+            if(UltraMission_ClosePosition(ticket, exitWhy, false))
+            {
+               // Ultra Reversal Engine: arm replace only after confirmed invalidation close
+               if(UltraPosEvoEnabled && UltraPosEvoReplaceEnabled)
+               {
+                  if(UltraPosEvo_TryArmReplace(BrokerSymbol, isBuyPos, sxSnap, exitWhy))
+                  {
+                     int uidx = UltraUFSE_Ensure(BrokerSymbol);
+                     if(uidx >= 0) UltraUFSE_Unlock(uidx);
+                  }
+               }
                continue;
+            }
          }
          if((mission == SUP_EXIT || sx == SX_CLOSE) && !canMissionExit)
          {
-            // Too early to exit — protect with BE if possible instead
+            // Too early to exit — protect with BE if possible instead (anti-whipsaw)
             if(UltraUpgradeLog)
-               Print("MISSION EXIT blocked (min hold) ticket=", ticket, " bars=", barsHeld);
+               Print("MISSION EXIT blocked (min hold/anti-whipsaw) ticket=", ticket, " bars=", barsHeld);
             mission = SUP_MANAGE;
             sx = SX_BE;
          }
@@ -3937,7 +3961,7 @@ void ManageOpenTrades()
                {
                   currentSL = openPrice;
                   if(UltraUpgradeLog)
-                     Print("MISSION MANAGE/BE ticket=", ticket, " ", sxWhy);
+                     Print("MISSION/POSEVO MANAGE/BE ticket=", ticket, " ", sxWhy);
                }
             }
          }
@@ -10828,6 +10852,7 @@ void InstantExecution()
       {
          UltraDiscipline_OnFill(BrokerSymbol, true, strategyTag, g_UltraLastSnap);
          UltraThesis_StoreLatest(BrokerSymbol, true, strategyTag, g_UltraLastSnap, g_UltraLastSignal.reason);
+         UltraPosEvo_NoteReplacementFilled(BrokerSymbol, true, strategyTag);
          // Position lock + decision log (Mission Control)
          {
             ulong tk = 0;
@@ -10872,6 +10897,7 @@ void InstantExecution()
       {
          UltraDiscipline_OnFill(BrokerSymbol, false, strategyTag, g_UltraLastSnap);
          UltraThesis_StoreLatest(BrokerSymbol, false, strategyTag, g_UltraLastSnap, g_UltraLastSignal.reason);
+         UltraPosEvo_NoteReplacementFilled(BrokerSymbol, false, strategyTag);
          // Position lock + decision log (Mission Control)
          {
             ulong tk = 0;

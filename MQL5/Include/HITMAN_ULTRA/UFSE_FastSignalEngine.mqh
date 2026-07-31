@@ -554,7 +554,26 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       { why = fWhy; return false; }
    }
 
-   if(UltraBlockOppositeSameSym)
+   // Position Evolution replace arm: require matching direction + replace floor
+   bool replaceArm = (UltraPosEvoEnabled && UltraPosEvoReplaceEnabled && UltraPosEvo_ReplacePending(s));
+   if(replaceArm)
+   {
+      string rWhy = "";
+      bool wantBuy = g_UltraPosEvoReplace.wantBuy;
+      if((wantBuy && !sig.buy) || (!wantBuy && !sig.sell))
+      { why = "REPLACE: signal not opposite validated direction"; return false; }
+      if(!UltraPosEvo_ReplaceAllowsEntry(s, wantBuy, rWhy))
+      { why = rWhy; return false; }
+      if(u.score.confidence < g_UltraPosEvoReplace.minConf)
+      { why = "REPLACE: confidence below armed floor"; return false; }
+      // Unlock so lock does not block validated replacement
+      int ridx = UltraUFSE_Ensure(s);
+      if(ridx >= 0) UltraUFSE_Unlock(ridx);
+      if(StringLen(sig.reason) > 0) sig.reason = sig.reason + " | ";
+      sig.reason = sig.reason + g_UltraPosEvoReplace.reason;
+   }
+
+   if(UltraBlockOppositeSameSym && !replaceArm)
    {
       int d = UltraSymDir(s);
       if(sig.buy && d < 0){ why = "opposite SELL open"; return false; }

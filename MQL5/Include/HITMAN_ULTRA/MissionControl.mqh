@@ -338,9 +338,29 @@ void UltraMission_NoteOpen(const ulong ticket, const string s, const bool isBuy,
 }
 
 // Block new entries if we already closed this cycle (anti flip-flop)
+// Exception: Position Evolution replace arm may open on a later bar only.
 bool UltraMission_AllowNewEntry(const string s)
 {
    UltraMission_NewCycle(s);
+
+   // Armed replacement: allow only when next-bar / checklist gate passes
+   if(UltraPosEvoEnabled && UltraPosEvoReplaceEnabled && UltraPosEvo_ReplacePending(s))
+   {
+      string rWhy = "";
+      // Direction checked later in UltraAIDecide; here only bar/expiry gate
+      if(UltraPosEvo_ReplaceAllowsEntry(s, g_UltraPosEvoReplace.wantBuy, rWhy))
+      {
+         UltraMission_Log("REPLACE_READY", 0, rWhy);
+         return true;
+      }
+      // Still waiting next bar — block impulsive same-cycle reopen
+      if(g_UltraMissionClosedThisCycle)
+      {
+         UltraMission_Log("WAIT", 0, rWhy);
+         return false;
+      }
+   }
+
    if(g_UltraMissionClosedThisCycle && !UltraUpgradeStrict)
    {
       UltraMission_Log("WAIT", 0, "one decision per cycle — open blocked after close");
@@ -376,6 +396,7 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
 }
 
 // Open-position command — never closes here; Shell must call UltraMission_ClosePosition
+// Position Evolution Engine drives L1 HOLD / L2 MANAGE / L3 INVALIDATE.
 ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const string s,
                                                    const bool isBuy, const UltraSnap &u,
                                                    string &why)
@@ -384,25 +405,57 @@ ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const str
    UltraMission_NewCycle(s);
 
    UltraExitValidation v = UltraMission_ValidateExit(ticket, s, isBuy, u, false);
-   UltraHoldScore hold = UltraHold_Evaluate(u, isBuy, !v.thesisBroken, UltraCorr_Detect(u, isBuy));
-   UltraSmartExit sx = UltraSmartExit_Decide(hold, UltraCorr_Detect(u, isBuy), !v.thesisBroken, false);
+   UltraCorrection corr = UltraCorr_Detect(u, isBuy);
+   UltraHoldScore hold = UltraHold_Evaluate(u, isBuy, !v.thesisBroken, corr);
+   UltraSmartExit sx = UltraSmartExit_Decide(hold, corr, !v.thesisBroken, false);
 
    ENUM_SUPREME_DECISION cmd = SUP_HOLD;
-   if(v.allowClose && sx.action == SX_CLOSE)
+
+   if(UltraPosEvoEnabled)
    {
-      cmd = SUP_EXIT;
-      why = v.reason;
-   }
-   else if(v.healthyCorrection || sx.action == SX_BE || sx.action == SX_TIGHTEN || hold.action == HOLD_MANAGE)
-   {
-      cmd = SUP_MANAGE;
-      why = v.healthyCorrection ? "healthy correction — manage/protect" : sx.reason;
-      if(StringLen(why) == 0) why = "MANAGE";
+      UltraPosEvoDecision evo = UltraPosEvo_Evaluate(ticket, s, isBuy, u, v, hold, corr);
+      cmd = evo.command;
+      why = evo.reason;
+
+      // Hard gate: L3 EXIT only if ValidateExit allows AND CloseOnL3 enabled
+      if(cmd == SUP_EXIT)
+      {
+         if(!UltraPosEvoCloseOnL3 || !v.allowClose)
+         {
+            cmd = SUP_MANAGE;
+            why = "L2 MANAGE — invalidation not fully confirmed for Mission close";
+         }
+         else if(StringLen(evo.exitReason) > 0)
+         {
+            why = "EXIT: " + evo.exitReason;
+            if(evo.wantReplace)
+               why += " | replace armed if checklist passes";
+         }
+      }
+      else if(cmd == SUP_MANAGE && StringLen(why) == 0)
+         why = "L2 MANAGE";
+      else if(cmd == SUP_HOLD && StringLen(why) == 0)
+         why = "L1 HOLD";
    }
    else
    {
-      cmd = SUP_HOLD;
-      why = "ULTRA HOLD — thesis/structure/trend valid";
+      // Legacy SmartExit path when PosEvo disabled
+      if(v.allowClose && sx.action == SX_CLOSE)
+      {
+         cmd = SUP_EXIT;
+         why = v.reason;
+      }
+      else if(v.healthyCorrection || sx.action == SX_BE || sx.action == SX_TIGHTEN || hold.action == HOLD_MANAGE)
+      {
+         cmd = SUP_MANAGE;
+         why = v.healthyCorrection ? "healthy correction — manage/protect" : sx.reason;
+         if(StringLen(why) == 0) why = "MANAGE";
+      }
+      else
+      {
+         cmd = SUP_HOLD;
+         why = "ULTRA HOLD — thesis/structure/trend valid";
+      }
    }
 
    UltraMission_Set(cmd, why, u.score.confidence, hold.total, hold.label, "", ticket);

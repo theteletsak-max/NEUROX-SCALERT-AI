@@ -52,6 +52,7 @@ string UltraDashboardText(const string s)
    t += " | TF: "; t += EnumToString(UltraETF());
    t += "\n"; t += UltraBrain_Dashboard();
    t += "\n"; t += UltraMission_Dashboard();
+   t += "\n"; t += UltraPosEvo_Dashboard();
    t += "\n"; t += UltraInput_Dashboard();
    t += " | "; t += UltraData_Dashboard();
    t += "\nMaster Trend: "; t += master;

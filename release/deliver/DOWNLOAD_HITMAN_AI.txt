@@ -1,4 +1,4 @@
-DOWNLOAD HITMAN AI HERE (Position Evolution Engine)
+DOWNLOAD HITMAN AI HERE
 
 ZIP:
 https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/hitman-master-audit-b12d/HITMAN_AI.zip
