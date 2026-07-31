@@ -10,6 +10,7 @@
 #include "CorrectionDetector.mqh"
 #include "HoldScore.mqh"
 #include "SmartExit.mqh"
+#include "PositionEvolution.mqh"
 #include "SystemHealth.mqh"
 #include "MasterAIBrain.mqh"
 #include "SupremeCommand.mqh"
