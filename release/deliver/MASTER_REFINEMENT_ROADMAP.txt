@@ -19,6 +19,7 @@ PHASE 12 TRADE THESIS             [KEPT]    store + revalidate
 PHASE 13 SCORING MACHINE          [REFINED] fake-sweep / weak OB/FVG penalties
 PHASE 14 MISSION CONTROL          [REFINED] sole BUY/SELL/HOLD/WAIT/CLOSE/REPLACE
 PHASE 15 EXECUTION                [KEPT]    ExecuteBuy/Sell · Mission-only closes
+PHASE 16.5 SESSION INTEL         [DONE]    24/7 awareness · London Open/Overlap bias · never blocks
 PHASE 16 EVENT TRADING            [DONE]    Event Engine ∞ — always active · full re-analysis · no news/spread-only block
 PHASE 17 POSITION EVOLUTION       [REFINED] softInvalid→L3→close→forced opposite replace
 PHASE 18 POSITION MANAGEMENT      [KEPT]    hold while thesis valid

@@ -595,6 +595,10 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       { why = fWhy; return false; }
    }
 
+   // PHASE 16.5 — Session Intelligence ∞ (never blocks / never forces)
+   if(!UltraSession_AllowTrade())
+   { why = "SESSION: blocked (should never happen)"; return false; }
+
    // PHASE 16 — Ultra Event Trading Engine ∞
    // Always active · never news-only / spread-only reject · full strategy required in event
    {

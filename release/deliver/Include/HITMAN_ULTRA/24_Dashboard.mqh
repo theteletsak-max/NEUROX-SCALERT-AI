@@ -67,10 +67,15 @@ string UltraDashboardText(const string s)
    t += " | "; t += UltraHold_Dashboard();
    t += "\n"; t += UltraMTF_Dashboard(s);
    t += "\nSession: "; t += u.ctx.session;
-   t += " | LiqWin: "; if(u.ctx.sessionLiquidity) t += "Y"; else t += "N";
-   t += " | Qual: "; t += IntegerToString(u.ctx.sessionQuality);
+   t += " ["; t += u.ctx.sessionRegion; t += "]";
+   t += " LH="; t += IntegerToString(u.ctx.londonHour);
+   t += " ★"; t += IntegerToString(u.ctx.sessionPriority);
+   t += " | bias="; t += IntegerToString(u.ctx.sessionBias);
+   t += " | Liq="; t += IntegerToString(u.ctx.sessionLiqScore);
+   t += " Tr="; t += IntegerToString(u.ctx.sessionTrendScore);
+   t += " | (24/7 never blocks)";
+   t += "\n"; t += UltraSession_Dashboard();
    t += " | News: "; t += u.ctx.newsPhase;
-   t += " | (never blocks)";
    t += "\nTrend votes B/S: "; t += IntegerToString(u.trend.mtfVotesBuy);
    t += "/"; t += IntegerToString(u.trend.mtfVotesSell);
    t += " | Str: "; t += IntegerToString(u.trend.strength);

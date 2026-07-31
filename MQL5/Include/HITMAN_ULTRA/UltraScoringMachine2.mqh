@@ -200,11 +200,17 @@ int UltraUSM2_ComponentRegime(const UltraSnap &u)
 
 int UltraUSM2_ComponentSession(const UltraSnap &u)
 {
-   int sc = 35;
-   if(u.ctx.sessionLiquidity) sc += 25;
-   if(u.ctx.killZone) sc += 15;
-   if(u.ctx.overlap) sc += 15;
-   sc += u.ctx.sessionQuality / 4;
+   // PHASE 16.5 — Session Intelligence ∞ (never a hard gate)
+   int sc = 30;
+   sc += u.ctx.sessionConfidence / 3;
+   if(u.ctx.londonOpen || u.ctx.overlap) sc += 18;
+   else if(u.ctx.londonCont || u.ctx.nyCont) sc += 10;
+   if(u.ctx.sessionLiquidity) sc += 12;
+   if(u.ctx.killZone) sc += 6;
+   sc += u.ctx.sessionLiqScore / 8;
+   sc += u.ctx.sessionTrendScore / 10;
+   if(u.ctx.sessionLiqScore < 40) sc -= 10; // weak liquidity reduces — never blocks
+   if(u.ctx.asia && u.ctx.sessionPriority <= 3) sc -= 4;
    return UltraUSM2_Clamp(sc);
 }
 
@@ -265,8 +271,10 @@ void UltraUSM2_Score(const string s, UltraSnap &u, const bool buySide, UltraUSM2
       out.structure * 0.10 + out.trend * 0.12 + out.bos * 0.10 + out.choch * 0.08 +
       out.liquidity * 0.10 + out.fibonacci * 0.06 + out.institutional * 0.08 +
       out.momentum * 0.08 + out.volatility * 0.04 + out.regime * 0.04 +
-      out.session * 0.03 + out.news * 0.02 + out.precision * 0.07 + out.probability * 0.08;
-   out.confidence = UltraUSM2_Clamp((int)MathRound(conf));
+      out.session * 0.05 + out.news * 0.02 + out.precision * 0.06 + out.probability * 0.07;
+   // Apply session intelligence bias (Mission path: strategy first, session second)
+   int sessBias = UltraSession_ConfidenceBias(u);
+   out.confidence = UltraUSM2_Clamp((int)MathRound(conf) + sessBias);
 
    double tradeBlend =
       out.confidence * 0.55 + out.precision * 0.20 + out.probability * 0.15 +

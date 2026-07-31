@@ -138,11 +138,23 @@ struct UltraVolatility
 
 struct UltraSessionNews
 {
-   string session;
-   bool   asia, london, newyork, overlap;
+   string session;                   // window name (LONDON_OPEN / OVERLAP / ...)
+   string sessionRegion;             // Sydney|Tokyo|London|NewYork|Overlap
+   bool   sydney, tokyo, asia, london, newyork, overlap;
+   bool   londonOpen, londonCont, nyCont;
    bool   killZone;
-   bool   sessionLiquidity;          // overlap / kill-zone liquidity window
+   bool   sessionLiquidity;          // institutional liquidity window
+   bool   sessionTransition;         // near window boundary
+   int    sessionPriority;           // 1..5 stars
    int    sessionConfidence, sessionQuality;
+   int    sessionLiqScore;           // 0..100
+   int    sessionVolScore;           // 0..100
+   int    sessionMomScore;           // 0..100
+   int    sessionTrendScore;         // 0..100
+   int    sessionSpreadScore;        // 0..100 (higher = healthier spread)
+   int    sessionExecScore;          // 0..100
+   int    sessionBias;               // soft confidence delta applied by USM2 (−8..+12)
+   int    londonHour;                // DST-adjusted London local hour
    bool   newsVol;
    bool   highImpactProxy, midImpactProxy, lowImpactProxy;
    bool   beforeNews, duringNews, afterNews; // context phases — NEVER block
@@ -153,7 +165,7 @@ struct UltraSessionNews
    double spreadPts, slipProxy;
    double tickSpeed;                 // ticks/sec proxy
    int    execQuality;               // 0..100 broker/exec assessment
-   // Session + News: CONTEXT ONLY · Trades 24/5 · never hard-block on news/spread alone
+   // Session + News: CONTEXT ONLY · Trades 24/7 · never hard-block
 };
 
 struct UltraIndicators
