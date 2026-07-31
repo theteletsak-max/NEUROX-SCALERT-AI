@@ -12,4 +12,4 @@ https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/hitman-master-au
 Open any link → browser downloads the file.
 
 CHART SKIN: Hitman watermark + dark theme included in the ZIP (Images/HITMAN_Watermark.bmp).
-Copy BMP to MT5 → MQL5/Images/ then recompile. See HITMAN_CHART_SKIN.txt inside the zip.
+Copy BMP to MT5 → MQL5/Images/ then recompile. Uses classic WATERMARK group + chart_background.bmp (compile-clean source).

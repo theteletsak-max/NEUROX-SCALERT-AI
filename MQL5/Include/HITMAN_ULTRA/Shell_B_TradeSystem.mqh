@@ -295,213 +295,77 @@ void ResizePerSymbolTrackingArrays()
    }
 }
 
-input group "HITMAN CHART SKIN"
-input bool   EnableHitmanChartSkin   = true;   // Hitman watermark + branding + dark skin
-input bool   EnableHitmanWatermark   = true;   // show Hitman character on chart
-input bool   EnableHitmanBranding    = true;   // HITMAN AI / ACTIVATED labels
-input bool   EnableHitmanHudPanel    = true;   // left red info panel (Scarlet-style)
-input double WatermarkScalePercent   = 55.0;   // % of chart height (aspect preserved) — classic HITMAN default
-input int    WatermarkOffsetX        = 0;      // +right / -left from center
-input int    WatermarkOffsetY        = 0;      // +down / -up from center
-input int    BrandOffsetY            = 18;     // branding block from bottom (px)
+input group "WATERMARK"
+
+// FIX: the first version of this watermark used a hand-built 32-bit BMP
+// with a real per-pixel alpha channel. In theory MT5 supports that for
+// OBJ_BITMAP_LABEL, but in practice on this build/platform the native
+// bitmap loader did not render that hand-built alpha data at all (the
+// object showed up completely invisible on your chart, not just faint).
+// Rather than keep chasing an unverified alpha format, the fade is now
+// baked directly into a plain, standard 24-bit BMP (blended against solid
+// white, since ApplyChartTheme() below fixes the chart background to
+// white anyway) - this is the well-supported, guaranteed-to-render path.
+// The visual result is identical to a true translucent watermark as long
+// as the chart background stays white; if you ever change
+// ChartThemeBackground away from white, this image would need
+// re-blending against the new color to keep looking faded rather than
+// showing a slightly mismatched box.
+//
+// Place chart_background.bmp in <Data Folder>\MQL5\Images\ before
+// compiling this .mq5 (File > Open Data Folder in MT5 to find it).
+//
+// Sizing fits the image's native 2:3 aspect ratio (520x780) into a box
+// scaled off chart height, so it's never stretched/squashed out of shape -
+// only scaled and (optionally) nudged from dead-center.
+
+input double WatermarkScalePercent = 55.0; // size of the watermark as a % of chart height, aspect-ratio preserved
+input int    WatermarkOffsetX      = 0;    // pixels to shift from dead-center horizontally (+right / -left)
+input int    WatermarkOffsetY      = 0;    // pixels to shift from dead-center vertically (+down / -up)
 
 #define WATERMARK_IMG_W 520
 #define WATERMARK_IMG_H 780
-#define HITMAN_BRAND_TITLE   "HitmanAI_BrandTitle"
-#define HITMAN_BRAND_SUB     "HitmanAI_BrandSub"
-#define HITMAN_BRAND_STATUS  "HitmanAI_BrandStatus"
-#define HITMAN_HUD_PREFIX    "HitmanAI_HUD_"
-
-void HitmanSkin_DeleteObjects()
-{
-   ObjectDelete(0, BG_OBJECT_NAME);
-   ObjectDelete(0, HITMAN_BRAND_TITLE);
-   ObjectDelete(0, HITMAN_BRAND_SUB);
-   ObjectDelete(0, HITMAN_BRAND_STATUS);
-   int total = ObjectsTotal(0, 0, -1);
-   for(int i = total - 1; i >= 0; i--)
-   {
-      string nm = ObjectName(0, i, 0, -1);
-      if(StringFind(nm, HITMAN_HUD_PREFIX) == 0)
-         ObjectDelete(0, nm);
-   }
-}
-
-void HitmanSkin_MakeLabel(const string name, const string text, const int x, const int y,
-                          const color clr, const int fontSize, const string font,
-                          const ENUM_BASE_CORNER corner, const ENUM_ANCHOR_POINT anchor)
-{
-   if(ObjectFind(0, name) < 0)
-      ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0);
-   ObjectSetInteger(0, name, OBJPROP_CORNER, corner);
-   ObjectSetInteger(0, name, OBJPROP_ANCHOR, anchor);
-   ObjectSetInteger(0, name, OBJPROP_XDISTANCE, x);
-   ObjectSetInteger(0, name, OBJPROP_YDISTANCE, y);
-   ObjectSetInteger(0, name, OBJPROP_COLOR, clr);
-   ObjectSetInteger(0, name, OBJPROP_FONTSIZE, fontSize);
-   ObjectSetString(0, name, OBJPROP_FONT, font);
-   ObjectSetString(0, name, OBJPROP_TEXT, text);
-   ObjectSetInteger(0, name, OBJPROP_BACK, false);
-   ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
-   ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
-   ObjectSetInteger(0, name, OBJPROP_ZORDER, 100);
-}
-
-void CreateHitmanBranding()
-{
-   if(!EnableHitmanChartSkin || !EnableHitmanBranding)
-   {
-      ObjectDelete(0, HITMAN_BRAND_TITLE);
-      ObjectDelete(0, HITMAN_BRAND_SUB);
-      ObjectDelete(0, HITMAN_BRAND_STATUS);
-      return;
-   }
-
-   int y = BrandOffsetY;
-   HitmanSkin_MakeLabel(HITMAN_BRAND_SUB, "HITMAN AI ULTRA", 0, y + 52,
-                        clrRed, 11, "Arial Bold", CORNER_LEFT_LOWER, ANCHOR_CENTER);
-   ObjectSetInteger(0, HITMAN_BRAND_SUB, OBJPROP_XDISTANCE, (int)ChartGetInteger(0, CHART_WIDTH_IN_PIXELS) / 2);
-
-   HitmanSkin_MakeLabel(HITMAN_BRAND_TITLE, "HITMAN AI", 0, y + 18,
-                        C'80,170,255', 28, "Arial Black", CORNER_LEFT_LOWER, ANCHOR_CENTER);
-   ObjectSetInteger(0, HITMAN_BRAND_TITLE, OBJPROP_XDISTANCE, (int)ChartGetInteger(0, CHART_WIDTH_IN_PIXELS) / 2);
-
-   HitmanSkin_MakeLabel(HITMAN_BRAND_STATUS, "*** ACTIVATED ***", 0, y,
-                        clrLime, 12, "Arial Bold", CORNER_LEFT_LOWER, ANCHOR_CENTER);
-   ObjectSetInteger(0, HITMAN_BRAND_STATUS, OBJPROP_XDISTANCE, (int)ChartGetInteger(0, CHART_WIDTH_IN_PIXELS) / 2);
-}
-
-void CreateHitmanHudPanel()
-{
-   if(!EnableHitmanChartSkin || !EnableHitmanHudPanel)
-      return;
-
-   // HUD uses only globals declared before this block (MQL5 input order)
-   double atr = 0.0;
-   int atrH = iATR(BrokerSymbol, PERIOD_CURRENT, 14);
-   if(atrH != INVALID_HANDLE)
-   {
-      double buf[];
-      ArraySetAsSeries(buf, true);
-      if(CopyBuffer(atrH, 0, 0, 1, buf) > 0)
-         atr = buf[0];
-      IndicatorRelease(atrH);
-   }
-   int openN = 0;
-   for(int p = PositionsTotal() - 1; p >= 0; p--)
-   {
-      ulong tix = PositionGetTicket(p);
-      if(tix == 0 || !PositionSelectByTicket(tix)) continue;
-      if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
-      openN++;
-   }
-   string broker = AccountInfoString(ACCOUNT_COMPANY);
-   long dig = SymbolInfoInteger(BrokerSymbol, SYMBOL_DIGITS);
-
-   string lines[];
-   ArrayResize(lines, 12);
-   lines[0]  = "SYMBOL: " + BrokerSymbol;
-   lines[1]  = "LOT SIZE: " + DoubleToString(LotSize, 2);
-   lines[2]  = "TRADE COUNT: " + IntegerToString(openN);
-   lines[3]  = "MAX TRADES: " + IntegerToString(MaxOpenTrades);
-   lines[4]  = "ATR VALUE: " + DoubleToString(atr, (int)dig);
-   lines[5]  = "POSEVO: " + (UltraPosEvoEnabled ? "ON" : "OFF");
-   lines[6]  = "MISSION EXITS: " + (UltraMissionOnlyExits ? "ON" : "OFF");
-   lines[7]  = "MASTER TREND LOCK: ON";
-   lines[8]  = "BUILD: HA_ULTRA_93";
-   lines[9]  = "COMMENT: HITMAN AI";
-   lines[10] = "STATUS: ACTIVATED";
-   lines[11] = "Broker: " + broker;
-
-   int x = 12;
-   int y0 = 28;
-   int step = 16;
-   for(int i = 0; i < ArraySize(lines); i++)
-   {
-      string nm = HITMAN_HUD_PREFIX + IntegerToString(i);
-      HitmanSkin_MakeLabel(nm, lines[i], x, y0 + i * step,
-                           clrOrangeRed, 10, "Consolas", CORNER_LEFT_UPPER, ANCHOR_LEFT_UPPER);
-   }
-}
 
 //+------------------------------------------------------------------+
-//| Create centered Hitman watermark (24-bit BMP resource / file)    |
+//| Create Centered Watermark (real alpha-channel 32-bit BMP)         |
 //+------------------------------------------------------------------+
 void CreateChartBackground()
 {
-   if(!EnableHitmanChartSkin || !EnableHitmanWatermark)
-   {
-      ObjectDelete(0, BG_OBJECT_NAME);
-      CreateHitmanBranding();
-      CreateHitmanHudPanel();
-      ChartRedraw();
-      return;
-   }
+// obtain chart width and height
+   long chartWidth  = ChartGetInteger(0, CHART_WIDTH_IN_PIXELS);
+   long chartHeight = ChartGetInteger(0, CHART_HEIGHT_IN_PIXELS);
 
-   int chartW = (int)ChartGetInteger(0, CHART_WIDTH_IN_PIXELS);
-   int chartH = (int)ChartGetInteger(0, CHART_HEIGHT_IN_PIXELS);
-   if(chartW <= 0 || chartH <= 0)
-      return;
+// calculate coordinates to center the image (scaled off chart height,
+// aspect-ratio preserved, then nudged by the offset inputs)
+   int imageHeight = (int)(chartHeight * (WatermarkScalePercent / 100.0));
+   int imageWidth  = (int)(imageHeight * ((double)WATERMARK_IMG_W / (double)WATERMARK_IMG_H));
+   int xPos = (int)((chartWidth  - imageWidth)  / 2) + WatermarkOffsetX;
+   int yPos = (int)((chartHeight - imageHeight) / 2) + WatermarkOffsetY;
 
-   double scale = WatermarkScalePercent / 100.0;
-   if(scale < 0.15) scale = 0.15;
-   if(scale > 1.20) scale = 1.20;
-
-   int drawH = (int)(chartH * scale);
-   int drawW = (int)((double)WATERMARK_IMG_W * drawH / (double)WATERMARK_IMG_H);
-   if(drawW > (int)(chartW * 0.85))
-   {
-      drawW = (int)(chartW * 0.85);
-      drawH = (int)((double)WATERMARK_IMG_H * drawW / (double)WATERMARK_IMG_W);
-   }
-
-   int x = (chartW - drawW) / 2 + WatermarkOffsetX;
-   int y = (chartH - drawH) / 2 + WatermarkOffsetY;
-   if(x < 0) x = 0;
-   if(y < 0) y = 0;
-
+// create bitmap label object
    if(ObjectFind(0, BG_OBJECT_NAME) < 0)
       ObjectCreate(0, BG_OBJECT_NAME, OBJ_BITMAP_LABEL, 0, 0, 0);
 
+   ObjectSetString(0, BG_OBJECT_NAME, OBJPROP_BMPFILE, "::Images\\chart_background.bmp");
+
+// set object properties
    ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-   ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_ANCHOR, ANCHOR_LEFT_UPPER);
-   ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_XDISTANCE, x);
-   ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_YDISTANCE, y);
-   ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_XSIZE, drawW);
-   ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_YSIZE, drawH);
-   ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_BACK, true);       // behind candles
+   ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_XDISTANCE, xPos);
+   ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_YDISTANCE, yPos);
+   ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_XSIZE, imageWidth);
+   ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_YSIZE, imageHeight);
    ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_SELECTABLE, false);
    ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_HIDDEN, true);
-   ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_ZORDER, 0);
+   ObjectSetInteger(0, BG_OBJECT_NAME, OBJPROP_BACK, true);
 
-   // Classic HITMAN resource name (chart_background.bmp) — Hitman character BMP
-   // Prefer embedded #resource; then MQL5\Images\; then legacy HITMAN_Watermark name
-   string bmpRes = "::Images\\chart_background.bmp";
-   string bmpFile = "\\Images\\chart_background.bmp";
-   string bmpLegacy = "\\Images\\HITMAN_Watermark.bmp";
-   ResetLastError();
-   ObjectSetString(0, BG_OBJECT_NAME, OBJPROP_BMPFILE, bmpRes);
-   if(GetLastError() != 0)
-   {
-      ResetLastError();
-      ObjectSetString(0, BG_OBJECT_NAME, OBJPROP_BMPFILE, bmpFile);
-   }
-   if(GetLastError() != 0)
-   {
-      ResetLastError();
-      ObjectSetString(0, BG_OBJECT_NAME, OBJPROP_BMPFILE, bmpLegacy);
-   }
-
-   CreateHitmanBranding();
-   CreateHitmanHudPanel();
-   ChartRedraw();
+   ChartRedraw(0);
 }
 
 //======================== CHART EVENT ==============================//
 
 void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
 {
-   // Keep the watermark / branding fitted when the window is resized.
+   // Keep the background image filling the chart if the window is resized.
    if(id == CHARTEVENT_CHART_CHANGE)
       CreateChartBackground();
 }
@@ -543,8 +407,7 @@ void OnDeinit(const int reason)
    if(EnableMultiSymbolTrading)
       EventKillTimer();
 
-   HitmanSkin_DeleteObjects();
-   Comment("");
+   ObjectDelete(0, BG_OBJECT_NAME);
 }
 
 //======================== TRADE TRANSACTION =========================//
@@ -10617,74 +10480,45 @@ void UpdateDashboard()
    g_LastDashboardUpdateMs = nowMs;
 
    CreateDashboard();
-   if(EnableHitmanChartSkin)
-   {
-      CreateHitmanHudPanel();
-      CreateHitmanBranding();
-   }
 }
 
 //================ CHART THEME (white background / pink candles) =====//
 
 input group "CHART THEME"
 
-input bool  EnableCustomChartTheme = true;   // on with Hitman skin (dark cyber look)
-input color ChartThemeBackground   = clrBlack;
-input color ChartThemeForeground   = clrSilver;
-input color ChartThemeGrid         = C'28,28,28';
-input color ChartThemeBullCandle   = clrDarkOrange; // up candle body
-input color ChartThemeBearCandle   = clrCrimson;     // down candle body
-input color ChartThemeCandleBorder = clrOrangeRed;
-input color ChartThemeBidLine      = clrDodgerBlue;
-input color ChartThemeAskLine      = clrOrange;
+input bool  EnableCustomChartTheme = false;
+input color ChartThemeBackground   = clrWhite;
+input color ChartThemeForeground   = clrBlack;
+input color ChartThemeGrid         = clrGainsboro;
+input color ChartThemeBullCandle   = clrDeepPink;   // up candle body
+input color ChartThemeBearCandle   = clrPink;        // down candle body - a lighter pink so bull/bear stay visually distinct while both reading as "pink"
+input color ChartThemeCandleBorder = clrMediumVioletRed;
+input color ChartThemeBidLine      = clrDeepPink;
+input color ChartThemeAskLine      = clrHotPink;
 
 void ApplyChartTheme()
 {
-   // Hitman skin forces dark theme when enabled
-   bool apply = EnableCustomChartTheme || EnableHitmanChartSkin;
-   if(!apply)
+   if(!EnableCustomChartTheme)
       return;
-
-   color bg = ChartThemeBackground;
-   color fg = ChartThemeForeground;
-   color grid = ChartThemeGrid;
-   color bull = ChartThemeBullCandle;
-   color bear = ChartThemeBearCandle;
-   color border = ChartThemeCandleBorder;
-   color bid = ChartThemeBidLine;
-   color ask = ChartThemeAskLine;
-
-   if(EnableHitmanChartSkin)
-   {
-      bg = clrBlack;
-      fg = clrSilver;
-      grid = C'24,24,24';
-      bull = clrDarkOrange;
-      bear = clrCrimson;
-      border = clrOrangeRed;
-      bid = clrDodgerBlue;
-      ask = clrOrange;
-   }
 
    ChartSetInteger(0, CHART_MODE, CHART_CANDLES);
 
-   ChartSetInteger(0, CHART_COLOR_BACKGROUND, bg);
-   ChartSetInteger(0, CHART_COLOR_FOREGROUND, fg);
-   ChartSetInteger(0, CHART_COLOR_GRID, grid);
+   ChartSetInteger(0, CHART_COLOR_BACKGROUND, ChartThemeBackground);
+   ChartSetInteger(0, CHART_COLOR_FOREGROUND, ChartThemeForeground);
+   ChartSetInteger(0, CHART_COLOR_GRID, ChartThemeGrid);
 
-   ChartSetInteger(0, CHART_COLOR_CANDLE_BULL, bull);
-   ChartSetInteger(0, CHART_COLOR_CANDLE_BEAR, bear);
-   ChartSetInteger(0, CHART_COLOR_CHART_UP,   border);
-   ChartSetInteger(0, CHART_COLOR_CHART_DOWN, border);
-   ChartSetInteger(0, CHART_COLOR_CHART_LINE, border);
+   ChartSetInteger(0, CHART_COLOR_CANDLE_BULL, ChartThemeBullCandle);
+   ChartSetInteger(0, CHART_COLOR_CANDLE_BEAR, ChartThemeBearCandle);
+   ChartSetInteger(0, CHART_COLOR_CHART_UP,   ChartThemeCandleBorder);
+   ChartSetInteger(0, CHART_COLOR_CHART_DOWN, ChartThemeCandleBorder);
+   ChartSetInteger(0, CHART_COLOR_CHART_LINE, ChartThemeCandleBorder);
 
-   ChartSetInteger(0, CHART_COLOR_VOLUME, border);
-   ChartSetInteger(0, CHART_COLOR_BID, bid);
-   ChartSetInteger(0, CHART_COLOR_ASK, ask);
+   ChartSetInteger(0, CHART_COLOR_VOLUME, ChartThemeCandleBorder);
+   ChartSetInteger(0, CHART_COLOR_BID, ChartThemeBidLine);
+   ChartSetInteger(0, CHART_COLOR_ASK, ChartThemeAskLine);
    ChartSetInteger(0, CHART_COLOR_STOP_LEVEL, clrGray);
 
-   ChartSetInteger(0, CHART_SHOW_GRID, false);
-   ChartSetInteger(0, CHART_SHOW_OHLC, false);
+   ChartSetInteger(0, CHART_SHOW_GRID, true);
 
    ChartRedraw();
 }

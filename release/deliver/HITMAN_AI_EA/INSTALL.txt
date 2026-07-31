@@ -3,6 +3,6 @@ HITMAN AI EA — INSTALL
 2) Copy MQL5\Images\chart_background.bmp → MT5 Data Folder\MQL5\Images\
 3) Open MetaEditor → compile HITMAN_AI.mq5 (embeds #resource)
 4) Attach EA to chart. TradeComment must be exactly: HITMAN AI
-5) Inputs → HITMAN CHART SKIN → WatermarkScalePercent=55 (default)
+5) Inputs → WATERMARK → WatermarkScalePercent=55 (default)
 
-Watermark uses classic resource name chart_background.bmp (Hitman character).
+Canonical source: your compile-clean classic chart_background.bmp watermark.

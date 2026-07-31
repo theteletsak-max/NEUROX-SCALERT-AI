@@ -1,27 +1,11 @@
-HITMAN AI — CHART SKIN INSTALL
-==============================
+HITMAN AI — WATERMARK (classic compile-clean)
+=============================================
+Uses #resource "\\Images\\chart_background.bmp"
+CreateChartBackground() centers the BMP at WatermarkScalePercent=55.
+Source of truth: the compile-clean HITMAN_AI.mq5 you provided (no errors/warnings).
+Place chart_background.bmp in MT5 Data Folder\MQL5\Images\ before compile.
 
-After attaching HITMAN_AI to a chart you should see:
-  • Dark chart (black background, orange/red candles)
-  • Semi-transparent Hitman character watermark (center)
-  • Bottom branding: HITMAN AI + *** ACTIVATED ***
-  • Left red HUD panel (symbol, lots, trades, ATR, PosEvo…)
-
-INSTALL IMAGE (required for watermark)
-1) Open MT5 → File → Open Data Folder
-2) Copy chart_background.bmp into:
-      MQL5\Images\chart_background.bmp
-   (included in the zip under Images\ and HITMAN_AI_EA\MQL5\Images\)
-   Legacy name HITMAN_Watermark.bmp still works as fallback.
-3) Re-compile HITMAN_AI.mq5 in MetaEditor (embeds #resource)
-4) Re-attach EA to the chart
-
-INPUTS (group "HITMAN CHART SKIN")
-  EnableHitmanChartSkin = true
-  EnableHitmanWatermark = true
-  EnableHitmanBranding  = true
-  EnableHitmanHudPanel  = true
-  WatermarkScalePercent = 55
-
-If the character does not show: confirm the BMP path above, compile again,
-and check Experts log for object errors. Branding/HUD still work without BMP.
+INPUTS (group "WATERMARK")
+  WatermarkScalePercent = 55.0
+  WatermarkOffsetX = 0
+  WatermarkOffsetY = 0
