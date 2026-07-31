@@ -972,6 +972,7 @@ void OnTimer()
 
 void OnTick()
 {
+   UltraEvent_OnTickPulse(); // Phase 16 — tick-speed intelligence
    RunTradingCycle(PrimarySymbol);
 
    UpdateDashboard();
@@ -11071,7 +11072,11 @@ void UpdateNewsAwareness()
 
 bool NewsTradingAllowed()
 {
-   return true; // OK66: hard news block retired — awareness only
+   // PHASE 16 — Ultra Event Engine ∞
+   // Never disable trading because high-impact news started.
+   // Never reject solely for elevated spread.
+   // Event quality is enforced inside UltraEvent_AllowTrade (full strategy path).
+   return true;
 }
 
 void DebugSignals()

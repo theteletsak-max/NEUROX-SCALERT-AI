@@ -64,6 +64,17 @@ input group "31 · NEWS INPUTS (context only — NEVER blocks)"
 input bool   UltraNewsIntelEnabled       = true;
 input bool   UltraBoostNewsVol           = true;
 
+input group "31 · ULTRA EVENT TRADING ENGINE ∞ (Phase 16)"
+input bool   UltraEventEngineEnabled     = true;   // institutional event path
+input bool   UltraEventAlwaysActive      = true;   // never news shutdown
+input bool   UltraEventNeverSpreadBlock  = true;   // never reject solely for elevated spread
+input bool   UltraEventNeverNewsBlock    = true;   // never reject solely because news is on
+input bool   UltraEventForceTrade        = false;  // never force a trade because of news
+input int    UltraEventMinConf           = 55;     // min confidence during active event
+input int    UltraEventExecQualityMin    = 40;     // min exec quality during event (soft)
+input double UltraEventSpreadWarnPts     = 40.0;   // warn/log only — not a hard block
+input bool   UltraEventLogDecisions      = true;   // EVENT audit log lines
+
 input group "31 · EXECUTION INPUTS"
 input bool   UltraExecQualityEnabled     = true;
 input ENUM_TIMEFRAMES UltraTF_Bias       = PERIOD_H4;

@@ -55,6 +55,11 @@ void UltraSystemController_Boot()
    UltraCoreInit();
    if(!UltraConfigOK())
       UltraSetError("config validation failed at boot");
+   // Foundation integrity — product locks
+   UltraLog("FOUNDATION integrity Comment=HITMAN AI BUILD=HA_ULTRA_93 MaxOpen=" +
+            IntegerToString(MaxOpenTrades) + " EventEngine=" +
+            (UltraEventEngineEnabled ? "ON" : "OFF") +
+            " AlwaysActive=" + (UltraEventAlwaysActive ? "Y" : "N"));
 }
 
 #endif // HITMAN_ULTRA_01_CORE_MQH

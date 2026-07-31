@@ -281,7 +281,12 @@ void UltraClearSnap(UltraSnap &u)
    u.ctx.highImpactProxy = u.ctx.midImpactProxy = u.ctx.lowImpactProxy = false;
    u.ctx.beforeNews = u.ctx.duringNews = u.ctx.afterNews = false;
    u.ctx.newsPhase = "NONE";
+   u.ctx.eventClass = "NONE";
+   u.ctx.eventImpact = 0;
+   u.ctx.eventConfidence = 0;
    u.ctx.spreadPts = 0; u.ctx.slipProxy = 0;
+   u.ctx.tickSpeed = 0;
+   u.ctx.execQuality = 100;
    u.diag.tickOK = u.diag.brokerOK = u.diag.connectionOK = false;
    u.diag.indicatorOK = u.diag.memoryOK = false;
    u.diag.processSpeedMs = 0;
@@ -338,6 +343,12 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
    UltraMemoryUpdateFromStats();
    UltraEngScoresBest(u);          // always fill conf/prec/prob for dashboard + wait logs
    UltraEvent_NoteMarket(u);       // event-driven market edges
+   // Propagate live tick/exec intelligence into snap (Phase 16)
+   u.ctx.tickSpeed = g_UltraEventStats.tickSpeed;
+   UltraEventAssessment eaTmp;
+   UltraEvent_AssessMarket(s, u, eaTmp);
+   u.ctx.execQuality = eaTmp.execQuality;
+   g_UltraEventLast = eaTmp;
 
    // propagate session/news context into input surface
    g_UltraMarketInput.session = u.ctx.session;

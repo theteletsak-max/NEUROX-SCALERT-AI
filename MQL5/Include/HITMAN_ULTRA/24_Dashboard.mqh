@@ -109,6 +109,10 @@ string UltraDashboardText(const string s)
    }
    t += "\nUFSE: "; t += UltraUFSE_Stats(s);
    t += "\n"; t += UltraEvent_Dashboard();
+   t += "\nEvent: "; t += u.ctx.eventClass;
+   t += " phase="; t += u.ctx.newsPhase;
+   t += " conf="; t += IntegerToString(u.ctx.eventConfidence);
+   t += " execQ="; t += IntegerToString(u.ctx.execQuality);
    t += "\n---- EXPLAIN ----\n"; t += explain;
    t += "\n===============================";
    return t;

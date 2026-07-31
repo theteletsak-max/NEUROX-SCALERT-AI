@@ -147,8 +147,13 @@ struct UltraSessionNews
    bool   highImpactProxy, midImpactProxy, lowImpactProxy;
    bool   beforeNews, duringNews, afterNews; // context phases — NEVER block
    string newsPhase;                 // "BEFORE" | "DURING" | "AFTER" | "NONE"
+   string eventClass;                // NFP|FOMC|CPI|GDP|PMI|RATES|SPEECH|MAJOR|NONE
+   int    eventImpact;               // 0=none 1=low 2=mid 3=high
+   int    eventConfidence;           // 0..100 event-context confidence
    double spreadPts, slipProxy;
-   // Session + News: CONTEXT ONLY · Trades 24/5 · never hard-block
+   double tickSpeed;                 // ticks/sec proxy
+   int    execQuality;               // 0..100 broker/exec assessment
+   // Session + News: CONTEXT ONLY · Trades 24/5 · never hard-block on news/spread alone
 };
 
 struct UltraIndicators

@@ -595,6 +595,14 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       { why = fWhy; return false; }
    }
 
+   // PHASE 16 — Ultra Event Trading Engine ∞
+   // Always active · never news-only / spread-only reject · full strategy required in event
+   {
+      string evWhy = "";
+      if(!UltraEvent_AllowTrade(s, u, sig.buy, evWhy))
+      { why = evWhy; return false; }
+   }
+
    // Position Evolution replace arm: require matching direction + replace floor
    bool replaceArm = (UltraPosEvoEnabled && UltraPosEvoReplaceEnabled && UltraPosEvo_ReplacePending(s));
    if(replaceArm)
