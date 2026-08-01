@@ -10,6 +10,7 @@ order = [
     "18_NewsIntelligence.mqh","17_SessionIntelligence.mqh",
     "13_Precision.mqh","14_Probability.mqh","15_Confluence.mqh","26_Diagnostics.mqh",
     "29_MarketMemory.mqh","39_EventEngine.mqh",
+    "UltraMarketIntelligence.mqh",
     "20_CapitalProtection.mqh","19_Execution.mqh",
     "UltraMarketInput.mqh",
     "23_MultiTimeframe.mqh",

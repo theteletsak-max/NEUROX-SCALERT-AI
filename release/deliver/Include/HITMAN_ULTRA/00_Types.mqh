@@ -29,6 +29,7 @@ struct UltraCoreState
    bool   validated;
    bool   healthy;
    bool   foundationOK;      // PHASE 1 — foundation engine pass
+   bool   marketOK;          // PHASE 2 — market intelligence approved
    long   lastCycleMs;
    long   lastLatencyMs;
    int    errorCount;

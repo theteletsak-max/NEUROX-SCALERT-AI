@@ -23,6 +23,27 @@ input int    UltraFoundationMaxObjects   = 400;    // chart object runaway guard
 input bool   UltraFoundationStrictConfig = true;   // enforce product locks at boot
 input bool   UltraFoundationLogBoot      = true;   // boot/shutdown foundation audit
 
+input group "31 · ULTRA MARKET INTELLIGENCE ENGINE (Phase 2)"
+input bool   UltraMarketIntelEnabled         = true;   // verified data gate before analysis
+input int    UltraMarketIntelIntervalMs      = 100;    // full validation throttle (ms)
+input bool   UltraMarketIntelLog             = true;   // MARKET_INTEL audit lines
+input bool   UltraMarketIntelAutoRecover     = true;   // recover on hard REJECT
+input bool   UltraMarketIntelRejectWeekend   = false;  // soft flag; hard only if session closed
+input bool   UltraMarketIntelRejectHoliday   = true;   // no analysis when trade mode closed
+input bool   UltraMarketIntelRejectBadGaps   = false;  // hard-reject extreme gaps (soft default)
+input bool   UltraMarketIntelStrictIndicators= false;  // hard-reject broken handles
+input double UltraMarketIntelSpreadWarnPts   = 50.0;   // wide-spread DEGRADED only — never sole reject
+input double UltraMarketIntelMinTickSpeed    = 0.0;    // soft warn floor (0=off)
+input double UltraMarketIntelMaxJumpATR      = 3.5;    // tick jump soft flag vs ATR
+input double UltraMarketIntelGapATR          = 1.25;   // gap vs ATR threshold
+input int    UltraMarketIntelMaxGaps         = 3;      // soft gap count in sample
+input int    UltraMarketIntelMaxQuoteAgeSec  = 120;    // hard stale-quote reject (0=off)
+input double UltraMarketIntelLiqSpreadATR    = 0.35;   // spread/ATR liquidity soft flag
+input double UltraMarketIntelHighVolRel      = 1.80;   // HIGH_VOLATILITY classifier
+input double UltraMarketIntelLowVolRel       = 0.55;   // LOW_VOLATILITY classifier
+input double UltraMarketIntelExpandRel       = 1.35;   // EXPANSION classifier
+input double UltraMarketIntelCompressRel     = 0.70;   // COMPRESSION classifier
+
 input group "31 · STRATEGY INPUTS"
 input bool   UltraEnable_FlashSweep      = true;
 input bool   UltraEnable_ContSniper      = true;

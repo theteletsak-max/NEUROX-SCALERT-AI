@@ -352,6 +352,18 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
    if(!UltraConfigOK()){ UltraSetError("config invalid"); return false; }
    if(UltraDataEngineEnabled && !UltraValidateSymbol(s)){ UltraSetError("data/symbol invalid"); return false; }
 
+   // PHASE 2 — no module analyses until Market Intelligence approves
+   if(UltraMarketIntelEnabled)
+   {
+      if(!UltraMarketIntel_Approved())
+         UltraMarketIntel_Validate(s);
+      if(!UltraMarketIntel_Approved())
+      {
+         UltraSetError("market intelligence rejected: " + g_UltraMarketIntel.detail);
+         return false;
+      }
+   }
+
    // LEVEL 1 — Market Input + LEVEL 2 — Data Core refresh
    UltraMarketInput in;
    if(!UltraInput_Process(s, in))

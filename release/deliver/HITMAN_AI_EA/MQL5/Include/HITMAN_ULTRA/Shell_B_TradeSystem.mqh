@@ -66,12 +66,17 @@ int OnInit()
    UltraSystemController_Boot();
    UltraFoundation_Boot(); // PHASE 1 — after indicators/symbols ready
    UltraEvent_OnBoot();
+   UltraMarketIntel_Boot(); // PHASE 2 — verified market data gate
    UltraOpt_OnTickStart();
    UltraMission_Init();
    Print("FOUNDATION ENGINE: Enabled=", UltraYN(UltraFoundationEnabled),
          " HealthTick=", UltraYN(UltraFoundationHealthTick),
          " Status=", g_UltraFoundation.status,
          " TF=", EnumToString(g_UltraFoundation.entryTF));
+   Print("MARKET INTEL ENGINE: Enabled=", UltraYN(UltraMarketIntelEnabled),
+         " Status=", g_UltraMarketIntel.status,
+         " State=", g_UltraMarketIntel.stateName,
+         " Detail=", g_UltraMarketIntel.detail);
    {
       ENUM_TIMEFRAMES etf = (EntryTF == PERIOD_CURRENT) ? (ENUM_TIMEFRAMES)Period() : EntryTF;
       Print("OK93 ENTRY TF=", EnumToString(etf),
@@ -944,6 +949,14 @@ void RunTradingCycle(string symbol)
    // PHASE 1 — Ultra Foundation Health Engine (throttled full verify)
    UltraFoundation_OnTick(symbol);
    if(UltraFoundationEnabled && g_UltraFoundation.status == "RED")
+   {
+      ManageOpenTrades(); // still protect open positions — never abandon risk
+      return;
+   }
+
+   // PHASE 2 — Ultra Market Intelligence (bad data = no analysis / no new trades)
+   UltraMarketIntel_OnTick(symbol);
+   if(UltraMarketIntelEnabled && !UltraMarketIntel_Approved())
    {
       ManageOpenTrades(); // still protect open positions — never abandon risk
       return;
@@ -10665,6 +10678,14 @@ void AnalyzeLiveMarket(const bool force)
 {
    if(!force && g_LiveMktCycle == g_CycleCounter && g_LiveMkt.valid)
       return;
+
+   // PHASE 2 — never analyse incomplete / unapproved market data
+   if(UltraMarketIntelEnabled && !UltraMarketIntel_Approved())
+   {
+      g_LiveMkt.valid = false;
+      g_LiveMkt.summary = "MARKET_INTEL REJECTED: " + g_UltraMarketIntel.detail;
+      return;
+   }
 
    g_LiveMktCycle = g_CycleCounter;
    LiveMarketAnalysis m;

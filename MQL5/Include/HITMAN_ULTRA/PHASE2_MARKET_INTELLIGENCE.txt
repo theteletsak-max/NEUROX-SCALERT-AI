@@ -1,0 +1,47 @@
+══════════════════════════════════════════════════════════════════════
+PHASE 2 — ULTRA MARKET INTELLIGENCE ENGINE — APPLIED
+BUILD: HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen=3
+══════════════════════════════════════════════════════════════════════
+
+MISSION
+Understand the market before making a trading decision.
+Never analyse incomplete information. Never trade on assumptions.
+Bad data = No trade. Verified data = Continue analysis.
+
+PIPELINE (before every analysis)
+Verify Tick → Candle → Buffers → Indicators → Symbol
+→ Spread (info) → Market State → Trading Permissions → Begin Analysis
+
+HARD REJECT (no new analysis / no new trades)
+✗ Missing / invalid prices
+✗ Corrupted OHLC / buffers
+✗ Incomplete closed candle / thin history
+✗ Invalid symbol properties
+✗ Trading disabled / disconnected
+✗ Weekend / holiday close (configurable)
+✗ Stale live quote (configurable)
+
+DEGRADED (analysis continues)
+• Wide spread (never sole hard-reject — product lock)
+• Slow ticks / tick jumps
+• Gap noise / thin liquidity proxy
+• Soft indicator warnings
+
+MARKET STATE CLASSIFIER
+STRONG_TREND · DEVELOPING_TREND · WEAK_TREND · CONSOLIDATION
+EXPANSION · COMPRESSION · HIGH_VOLATILITY · LOW_VOLATILITY · NORMAL
+
+RUNTIME RULES
+• REJECTED → ManageOpenTrades only (never abandon risk)
+• DEGRADED / APPROVED → full analysis path
+• UltraBuildSnapshot + AnalyzeLiveMarket gated on approval
+• Assembler inserts UltraMarketIntelligence.mqh after EventEngine
+
+FILE
+MQL5/Include/HITMAN_ULTRA/UltraMarketIntelligence.mqh
+
+LOCKS
+TradeComment=HITMAN AI · BUILD=HA_ULTRA_93 · MaxOpen=3
+EntryTF=PERIOD_CURRENT · Mission-only closes · classic watermark
+Spread/news alone NEVER hard-reject
+══════════════════════════════════════════════════════════════════════

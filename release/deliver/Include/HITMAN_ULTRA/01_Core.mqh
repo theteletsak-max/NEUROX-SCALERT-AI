@@ -27,6 +27,7 @@ void UltraCoreInit()
    g_UltraCore.validated = false;
    g_UltraCore.healthy = false;
    g_UltraCore.foundationOK = false;
+   g_UltraCore.marketOK = false;
    g_UltraCore.lastCycleMs = 0;
    g_UltraCore.lastLatencyMs = 0;
    g_UltraCore.errorCount = 0;
