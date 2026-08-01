@@ -15,6 +15,14 @@ input bool   UltraValidationEnabled      = true;
 input bool   UltraStateSyncEnabled       = true;
 input bool   UltraTrade24x5              = true; // always allow (24/5)
 
+input group "31 · ULTRA SYSTEM FOUNDATION ENGINE (Phase 1)"
+input bool   UltraFoundationEnabled      = true;   // institutional foundation backbone
+input bool   UltraFoundationHealthTick   = true;   // every-tick health path (throttled)
+input int    UltraFoundationHealthMs     = 250;    // full health interval (ms)
+input int    UltraFoundationMaxObjects   = 400;    // chart object runaway guard
+input bool   UltraFoundationStrictConfig = true;   // enforce product locks at boot
+input bool   UltraFoundationLogBoot      = true;   // boot/shutdown foundation audit
+
 input group "31 · STRATEGY INPUTS"
 input bool   UltraEnable_FlashSweep      = true;
 input bool   UltraEnable_ContSniper      = true;

@@ -1,0 +1,39 @@
+══════════════════════════════════════════════════════════════════════
+PHASE 1 — ULTRA SYSTEM FOUNDATION ENGINE — APPLIED
+BUILD: HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen=3
+══════════════════════════════════════════════════════════════════════
+
+MISSION
+Institutional-grade foundation every module depends on.
+No weak code. No duplicate logic. No unnecessary complexity.
+
+REFINEMENTS APPLIED
+✓ Modular UltraFoundation.mqh backbone
+✓ Safe init sequence (after symbols/indicators)
+✓ Audited shutdown sequence
+✓ Parameter / product-lock validation
+✓ Symbol + timeframe manager
+✓ Resource protection (chart objects / handles)
+✓ Memory + runtime verification
+✓ Throttled every-tick health engine
+✓ Automatic recovery on RED
+✓ Dashboard foundation line
+✓ Deterministic GREEN / YELLOW / RED status
+
+HEALTH PATH (every tick, full scan throttled)
+Verify Modules → Memory → Indicators/Handles → Objects
+→ Configuration → Dashboard → Logger → Runtime → Continue
+
+RULES
+• RED → manage open trades only (never abandon risk)
+• YELLOW → continue trading (soft degrade)
+• GREEN → full path
+• Foundation never soft-blocks for latency alone
+
+FILE
+MQL5/Include/HITMAN_ULTRA/UltraFoundation.mqh
+
+LOCKS
+TradeComment=HITMAN AI · BUILD=HA_ULTRA_93 · MaxOpen=3
+EntryTF=PERIOD_CURRENT · g_Trade · classic watermark
+══════════════════════════════════════════════════════════════════════

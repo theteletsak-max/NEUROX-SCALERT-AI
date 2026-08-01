@@ -64,9 +64,14 @@ int OnInit()
    Print("HITMAN AI Loaded BUILD_ID=HA_ULTRA_93 MaxOpen=", MaxOpenTrades);
    UltraCoreInit();
    UltraSystemController_Boot();
+   UltraFoundation_Boot(); // PHASE 1 — after indicators/symbols ready
    UltraEvent_OnBoot();
    UltraOpt_OnTickStart();
    UltraMission_Init();
+   Print("FOUNDATION ENGINE: Enabled=", UltraYN(UltraFoundationEnabled),
+         " HealthTick=", UltraYN(UltraFoundationHealthTick),
+         " Status=", g_UltraFoundation.status,
+         " TF=", EnumToString(g_UltraFoundation.entryTF));
    {
       ENUM_TIMEFRAMES etf = (EntryTF == PERIOD_CURRENT) ? (ENUM_TIMEFRAMES)Period() : EntryTF;
       Print("OK93 ENTRY TF=", EnumToString(etf),
@@ -408,6 +413,7 @@ void OnDeinit(const int reason)
       EventKillTimer();
 
    ObjectDelete(0, BG_OBJECT_NAME);
+   UltraFoundation_Shutdown(reason); // PHASE 1 — audited shutdown
 }
 
 //======================== TRADE TRANSACTION =========================//
@@ -934,6 +940,14 @@ void RunTradingCycle(string symbol)
       return;
 
    BrokerSymbol = symbol;
+
+   // PHASE 1 — Ultra Foundation Health Engine (throttled full verify)
+   UltraFoundation_OnTick(symbol);
+   if(UltraFoundationEnabled && g_UltraFoundation.status == "RED")
+   {
+      ManageOpenTrades(); // still protect open positions — never abandon risk
+      return;
+   }
 
    // DEFENSE LINE 9 — EMERGENCY (connection / data / symbol recover)
    UltraDefense_Line9_Emergency(symbol);

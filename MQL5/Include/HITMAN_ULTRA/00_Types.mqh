@@ -28,11 +28,14 @@ struct UltraCoreState
    bool   dataOK;
    bool   validated;
    bool   healthy;
+   bool   foundationOK;      // PHASE 1 — foundation engine pass
    long   lastCycleMs;
    long   lastLatencyMs;
    int    errorCount;
    int    recoveryCount;
+   int    healthTickCount;
    string lastError;
+   string buildId;           // HA_ULTRA_93
 };
 
 struct UltraStructure
