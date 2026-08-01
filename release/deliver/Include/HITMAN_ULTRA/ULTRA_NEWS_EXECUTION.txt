@@ -1,0 +1,36 @@
+══════════════════════════════════════════════════════════════════════
+ULTRA NEWS EXECUTION INTELLIGENCE ENGINE ∞ — APPLIED
+BUILD: HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen=3
+══════════════════════════════════════════════════════════════════════
+
+MISSION
+Operate during extreme market conditions with maximum execution
+quality and full strategy validation.
+
+ULTRA NEWS MODE (on major event detection)
+→ Increase Market Monitoring Frequency
+→ Increase Signal Validation Frequency
+→ Increase Execution Monitoring
+→ Continue Real-Time Analysis
+→ Force complete market re-analysis before every event trade
+
+10-POINT NEWS SIGNAL VALIDATION (never reduced)
+✓ Trend · Market Intelligence · Structure · Liquidity · Momentum
+✓ Multi-Timeframe · Trade Thesis · Confidence · Risk · Execution
+(+ optional Validation Chain Mission-ready)
+
+HIGH-VOLATILITY RULES
+✓ Continue trading during high volatility / major news / high spread
+✓ Never reduce validation because volatility is high
+✓ Never reject solely for news or elevated spread
+✓ Never force a trade because of news
+✓ Execute only if proprietary strategy remains fully validated
+✓ Log every event trade with event name + execution details
+
+FILE
+MQL5/Include/HITMAN_ULTRA/UltraNewsExecution.mqh
+
+LOCKS
+TradeComment=HITMAN AI · BUILD=HA_ULTRA_93 · MaxOpen=3
+Mission-only closes · classic watermark
+══════════════════════════════════════════════════════════════════════

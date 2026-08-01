@@ -68,11 +68,16 @@ int OnInit()
    UltraEvent_OnBoot();
    UltraMarketIntel_Boot(); // PHASE 2 — verified market data gate
    UltraVChain_Boot();      // VALIDATION CHAIN — VALID/INVALID/WAIT
+   UltraNewsExec_Boot();    // NEWS EXECUTION INTELLIGENCE ∞
    UltraOpt_OnTickStart();
    UltraMission_Init();
    Print("VALIDATION CHAIN: Enabled=", UltraYN(UltraVChainEnabled),
          " BlockInvalid=", UltraYN(UltraVChainBlockOnInvalid),
          " BlockWait=", UltraYN(UltraVChainBlockOnWait));
+   Print("NEWS EXEC ∞: Enabled=", UltraYN(UltraNewsExecEnabled),
+         " InstantPath=", UltraYN(UltraNewsExecInstantPath),
+         " ForceReanalyze=", UltraYN(UltraNewsExecForceReanalyze),
+         " MinConf=", UltraNewsExecMinConf);
    Print("FOUNDATION ENGINE: Enabled=", UltraYN(UltraFoundationEnabled),
          " HealthTick=", UltraYN(UltraFoundationHealthTick),
          " Status=", g_UltraFoundation.status,
@@ -1004,6 +1009,7 @@ void OnTimer()
 void OnTick()
 {
    UltraEvent_OnTickPulse(); // Phase 16 — tick-speed intelligence
+   UltraNewsExec_OnTick(PrimarySymbol); // News Mode high-frequency monitor
    RunTradingCycle(PrimarySymbol);
 
    UpdateDashboard();
@@ -3192,6 +3198,7 @@ bool ExecuteBuy()
                        "THESIS", g_UltraLastSnap.ctx.newsPhase,
                        g_UltraLastSnap.ctx.spreadPts, g_UltraLastSnap.ctx.slipProxy,
                        "fill verified");
+      UltraNewsExec_NoteFill(posTicket, BrokerSymbol, true, "BUY fill verified");
       return true;
    }
 
@@ -3479,6 +3486,7 @@ bool ExecuteSell()
                        "THESIS", g_UltraLastSnap.ctx.newsPhase,
                        g_UltraLastSnap.ctx.spreadPts, g_UltraLastSnap.ctx.slipProxy,
                        "fill verified");
+      UltraNewsExec_NoteFill(posTicket, BrokerSymbol, false, "SELL fill verified");
       return true;
    }
 
@@ -10922,7 +10930,8 @@ void InstantExecution()
    }
 
    // Ultra smart tick filter: same bid/ask + already decided this price → skip
-   if(EnableTickLevelSignalDetection && UltraSmartTickUnchanged())
+   // News Mode instant path: never skip — maximum execution speed under events
+   if(EnableTickLevelSignalDetection && UltraSmartTickUnchanged() && !UltraNewsExec_InstantPath())
       return;
 
    if(currentBarTime > 0)

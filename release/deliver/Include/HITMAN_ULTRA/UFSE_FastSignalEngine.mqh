@@ -475,7 +475,12 @@ bool UltraUFSE_BuildSnapshot(const string s, UltraSnap &u, bool &fromCache)
    if(!UltraFastSignalEnabled)
       return UltraBuildSnapshot(s, u);
 
-   if(UltraUFSE_CacheFresh(idx))
+   // News Mode: never serve stale cache — complete re-analysis required
+   bool newsForce = (UltraNewsExecEnabled && UltraNewsExec_ShouldForceRebuild());
+   if(!newsForce && UltraNewsExec_IsNewsMode() && UltraNewsExecForceReanalyze)
+      newsForce = true;
+
+   if(!newsForce && UltraUFSE_CacheFresh(idx))
    {
       u = g_UFSE[idx].snap;
       fromCache = true;
@@ -502,6 +507,8 @@ bool UltraUFSE_BuildSnapshot(const string s, UltraSnap &u, bool &fromCache)
    g_UFSE[idx].fullRebuilds++;
    UltraUFSE_EarlyEvent(idx, u);
    UltraUFSE_MaybeUnlock(idx, u);
+   if(newsForce)
+      UltraNewsExec_MarkRebuildDone();
    return true;
 }
 
@@ -625,11 +632,11 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
    if(!UltraSession_AllowTrade())
    { why = "SESSION: blocked (should never happen)"; return false; }
 
-   // PHASE 16 — Ultra Event Trading Engine ∞
-   // Always active · never news-only / spread-only reject · full strategy required in event
+   // NEWS EXECUTION INTELLIGENCE ∞ — News Mode + 10-point validation + re-analysis
+   // Wraps Event Engine: never news-only / spread-only reject · never force · never reduce validation
    {
       string evWhy = "";
-      if(!UltraEvent_AllowTrade(s, u, sig.buy, evWhy))
+      if(!UltraNewsExec_AllowTrade(s, u, sig.buy, evWhy))
       { why = evWhy; return false; }
    }
 
@@ -758,6 +765,7 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    }
    UltraExec_MarkFired(BrokerSymbol);
    UltraEvent_Note(UEV_FIRE);
+   UltraNewsExec_NoteFire(BrokerSymbol, best.buy, best.tag, snap);
 
    string sideTag = "SELL";
    if(best.buy) sideTag = "BUY";

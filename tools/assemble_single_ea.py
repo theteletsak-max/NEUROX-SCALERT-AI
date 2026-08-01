@@ -21,6 +21,7 @@ order = [
     "TradeThesis.mqh","CorrectionDetector.mqh","HoldScore.mqh",
     "SmartExit.mqh","PositionEvolution.mqh","SystemHealth.mqh","MasterAIBrain.mqh","SupremeCommand.mqh",
     "UltraValidationChain.mqh",
+    "UltraNewsExecution.mqh",
     "MissionControl.mqh",
     "UFSE_FastSignalEngine.mqh",
     "21_TradeManagement.mqh","22_MultiSymbol.mqh",
