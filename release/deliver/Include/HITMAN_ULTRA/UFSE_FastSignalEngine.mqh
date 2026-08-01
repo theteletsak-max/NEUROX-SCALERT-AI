@@ -537,6 +537,21 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
    why = "";
    sig.buy = sig.sell = false; sig.tag = "NONE"; sig.reason = ""; sig.score = 0; sig.explanation = "";
 
+   // ULTRA VALIDATION CHAIN — no guessing; stop on critical INVALID/WAIT
+   if(UltraVChainEnabled)
+   {
+      string vWhy = "";
+      ENUM_ULTRA_VSTATE vst = UltraVChain_Evaluate(s, u, vWhy);
+      if(!UltraVChain_MissionReady())
+      {
+         why = "VCHAIN ";
+         why += UltraV_Name(vst);
+         why += ": ";
+         why += vWhy;
+         return false;
+      }
+   }
+
    string capWhy = "";
    if(!UltraCapitalOK(capWhy)){ why = "capital: " + capWhy; return false; }
    string exWhy = "";

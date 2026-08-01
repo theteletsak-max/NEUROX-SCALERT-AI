@@ -97,6 +97,7 @@ string UltraDashboardText(const string s)
    t += " | Capital: "; if(g_UltraCore.healthy) t += "OK"; else t += "CHECK";
    t += "\n"; t += UltraFoundation_Dashboard();
    t += "\n"; t += UltraMarketIntel_Dashboard();
+   t += "\n"; t += UltraVChain_Dashboard();
    t += "\n"; t += UltraSystemHealth_Dashboard();
    t += " | "; t += UltraResource_Monitor();
    t += "\nWR: "; t += DoubleToString(g_UltraMem.winRate, 1); t += "%";

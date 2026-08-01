@@ -1,0 +1,36 @@
+══════════════════════════════════════════════════════════════════════
+ULTRA VALIDATION CHAIN — APPLIED
+BUILD: HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen=3
+══════════════════════════════════════════════════════════════════════
+
+RULE
+Every critical module returns exactly one of:
+  ✓ VALID
+  ✗ INVALID
+  … WAIT
+
+No guessing. No skipped validation.
+Mission Control receives ONLY validated (VALID) outputs.
+
+CRITICAL INVALID → decision process stops until resolved
+or market conditions change.
+
+CRITICAL WAIT → decision process stops (incomplete — do not guess).
+
+CHAIN ORDER
+FOUNDATION → MARKET → DATA → BROKER → SNAPSHOT → STRUCTURE
+→ SCORES → HEALTH → CAPITAL → EXEC → Mission Control
+
+WIRED INTO
+• UltraAIDecide (pre-decision)
+• UltraMission_ApproveEntry (Mission hand-off)
+• Dashboard VCHAIN line
+
+FILE
+MQL5/Include/HITMAN_ULTRA/UltraValidationChain.mqh
+
+LOCKS
+TradeComment=HITMAN AI · BUILD=HA_ULTRA_93 · MaxOpen=3
+Spread/news alone never sole INVALID
+Open-risk management never abandoned on chain stop
+══════════════════════════════════════════════════════════════════════

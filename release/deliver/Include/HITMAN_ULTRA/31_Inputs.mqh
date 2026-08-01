@@ -44,6 +44,13 @@ input double UltraMarketIntelLowVolRel       = 0.55;   // LOW_VOLATILITY classif
 input double UltraMarketIntelExpandRel       = 1.35;   // EXPANSION classifier
 input double UltraMarketIntelCompressRel     = 0.70;   // COMPRESSION classifier
 
+input group "31 · ULTRA VALIDATION CHAIN"
+input bool   UltraVChainEnabled              = true;   // VALID / INVALID / WAIT gate
+input bool   UltraVChainLog                  = true;   // VCHAIN audit lines
+input bool   UltraVChainStrictStructure      = false;  // structure undecided = WAIT (critical)
+input bool   UltraVChainBlockOnInvalid       = true;   // critical INVALID stops decision
+input bool   UltraVChainBlockOnWait          = true;   // critical WAIT stops decision (no guessing)
+
 input group "31 · STRATEGY INPUTS"
 input bool   UltraEnable_FlashSweep      = true;
 input bool   UltraEnable_ContSniper      = true;

@@ -67,8 +67,12 @@ int OnInit()
    UltraFoundation_Boot(); // PHASE 1 — after indicators/symbols ready
    UltraEvent_OnBoot();
    UltraMarketIntel_Boot(); // PHASE 2 — verified market data gate
+   UltraVChain_Boot();      // VALIDATION CHAIN — VALID/INVALID/WAIT
    UltraOpt_OnTickStart();
    UltraMission_Init();
+   Print("VALIDATION CHAIN: Enabled=", UltraYN(UltraVChainEnabled),
+         " BlockInvalid=", UltraYN(UltraVChainBlockOnInvalid),
+         " BlockWait=", UltraYN(UltraVChainBlockOnWait));
    Print("FOUNDATION ENGINE: Enabled=", UltraYN(UltraFoundationEnabled),
          " HealthTick=", UltraYN(UltraFoundationHealthTick),
          " Status=", g_UltraFoundation.status,

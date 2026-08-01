@@ -408,6 +408,23 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
       return false;
    }
 
+   // ULTRA VALIDATION CHAIN — Mission Control receives ONLY validated outputs
+   if(UltraVChainEnabled)
+   {
+      string vWhy = "";
+      ENUM_ULTRA_VSTATE vst = UltraVChain_EvaluateForMission(s, u, vWhy);
+      if(!UltraVChain_MissionReady())
+      {
+         why = "VCHAIN ";
+         why += UltraV_Name(vst);
+         why += ": ";
+         why += vWhy;
+         UltraMission_Set(SUP_WAIT, why, u.score.confidence, u.score.confidence, "WAIT", "", 0);
+         UltraMission_Log("WAIT", 0, why);
+         return false;
+      }
+   }
+
    bool ok = UltraSupreme_FinalizeEntry(s, u, sig, why);
    if(ok)
    {
