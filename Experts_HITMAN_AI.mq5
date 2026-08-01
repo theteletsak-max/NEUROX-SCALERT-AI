@@ -1276,14 +1276,57 @@ void UltraLogDecisionFromSnap(const string action, const ulong ticket,
 #ifndef HITMAN_ULTRA_30_RECOVERY_MQH
 #define HITMAN_ULTRA_30_RECOVERY_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — 30_RECOVERY — Restart · Connection · State · Position recovery
+//| HITMAN AI — 30_RECOVERY — Restart · Connection · State recovery  |
+//| LEVEL 7 — real recovery actions (not a no-op healthy=true)       |
 //+------------------------------------------------------------------+
 void UltraRecover(const string why)
 {
    if(!UltraRecoveryEnabled) return;
    g_UltraCore.recoveryCount++;
-   UltraLog("RECOVERY " + why);
-   g_UltraCore.healthy = true;
+
+   bool connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
+   bool tradeOK = (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) &&
+                  (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
+
+   string actions = "";
+   // Refresh tick / data surface
+   MqlTick tick;
+   string sym = BrokerSymbol;
+   if(StringLen(sym) == 0) sym = _Symbol;
+   if(SymbolInfoTick(sym, tick) && tick.bid > 0.0)
+   {
+      actions += "tickOK ";
+      g_UltraCore.dataOK = true;
+   }
+   else
+   {
+      actions += "tickFAIL ";
+      g_UltraCore.dataOK = false;
+   }
+
+   // Refresh deal/order history window
+   if(HistorySelect(TimeCurrent() - 86400, TimeCurrent() + 60))
+      actions += "historyOK ";
+   else
+      actions += "historyFAIL ";
+
+   // Invalidate UFSE cache so next eval rebuilds (declared later in assemble — use global if present)
+   // Soft: mark core state from measured data only
+   int bars = Bars(sym, PERIOD_CURRENT);
+   if(bars < 60)
+   {
+      actions += "thinBars ";
+      g_UltraCore.dataOK = false;
+   }
+
+   g_UltraCore.healthy = (connected && tradeOK && g_UltraCore.dataOK);
+   // Note: UltraConfigOK lives in 01_Core (assembled after Recovery) — do not call here
+
+   UltraLog("RECOVERY why=" + why +
+            " connected=" + (connected ? "Y" : "N") +
+            " trade=" + (tradeOK ? "Y" : "N") +
+            " healthy=" + (g_UltraCore.healthy ? "Y" : "N") +
+            " actions=" + actions);
 }
 
 bool UltraRecovery_ConnectionOK()
@@ -2363,11 +2406,13 @@ bool UltraSession_IsLondonDST(const datetime gmtNow)
    int startDay = UltraSession_LastSundayDay(y, 3);
    int endDay   = UltraSession_LastSundayDay(y, 10);
 
-   MqlDateTime sdt; sdt.year = y; sdt.mon = 3; sdt.day = startDay;
+   MqlDateTime sdt; ZeroMemory(sdt);
+   sdt.year = y; sdt.mon = 3; sdt.day = startDay;
    sdt.hour = 1; sdt.min = 0; sdt.sec = 0; // 01:00 GMT
    datetime start = StructToTime(sdt);
 
-   MqlDateTime edt; edt.year = y; edt.mon = 10; edt.day = endDay;
+   MqlDateTime edt; ZeroMemory(edt);
+   edt.year = y; edt.mon = 10; edt.day = endDay;
    edt.hour = 1; edt.min = 0; edt.sec = 0;
    datetime endt = StructToTime(edt);
 
@@ -3823,11 +3868,10 @@ void UltraResolveSides(UltraSignal &r, const int sb, const int ss)
 
 bool UltraPassScore(const int sc)
 {
+   // LEVEL 1 — single soft floor via UltraFireFloor() only (no stacked −8 passes)
    int floor = UltraFireFloor();
    if(sc >= floor) return true;
    if(sc >= UltraInstantFireConf) return true;
-   // Soft pass: close to floor in InstantQualityMode
-   if(InstantQualityMode && sc >= floor - 8) return true;
    return false;
 }
 
@@ -3857,12 +3901,13 @@ UltraSignal UltraStrat_ContSniper(const UltraSnap &u)
    bool impS  = (u.ict.dispSell || u.mom.momSell || u.liq.sweepSell || u.vol.expansion);
    bool b = biasB && zoneB && impB;
    bool s = biasS && zoneS && impS;
-   // Instant: 2-of-3 stack is enough
+   // LEVEL 1 — InstantQuality 2-of-3 must keep impulse OR zone+BOS (no bias+zone-only)
    if(InstantQualityMode)
    {
       int eb = (biasB ? 1 : 0) + (zoneB ? 1 : 0) + (impB ? 1 : 0);
       int es = (biasS ? 1 : 0) + (zoneS ? 1 : 0) + (impS ? 1 : 0);
-      b = (eb >= 2); s = (es >= 2);
+      b = (eb >= 2) && (impB || (zoneB && (u.bos.buy || u.choch.buy)));
+      s = (es >= 2) && (impS || (zoneS && (u.bos.sell || u.choch.sell)));
    }
    if(b && UltraPassScore(sb)){ r.buy = true; r.score = sb; r.reason = "UBOSE cont+zone+impulse"; }
    if(s && UltraPassScore(ss)){ r.sell = true; r.score = ss; r.reason = "UBOSE cont+zone+impulse"; }
@@ -3961,6 +4006,7 @@ int UltraSymDir(const string s)
 
 UltraSignal UltraPickBest(const UltraSnap &u)
 {
+   // LEVEL 1/2 — One proprietary strategy family · one best signal · no conflict
    UltraSignal best; best.buy = best.sell = false; best.score = -1; best.tag = "NONE";
    best.reason = "no setup"; best.explanation = "";
    UltraSignal arr[6];
@@ -3976,6 +4022,48 @@ UltraSignal UltraPickBest(const UltraSnap &u)
       if(!(arr[i].buy || arr[i].sell)) continue;
       if(arr[i].score > best.score) best = arr[i];
    }
+
+   // Reject / resolve cross-setup BUY vs SELL conflict (deterministic HTF authority)
+   if(best.score >= 0 && (best.buy || best.sell))
+   {
+      bool oppExists = false;
+      int oppScore = -1;
+      for(int i = 0; i < n; i++)
+      {
+         if(!(arr[i].buy || arr[i].sell)) continue;
+         if(arr[i].tag == best.tag) continue;
+         bool opp = (best.buy && arr[i].sell) || (best.sell && arr[i].buy);
+         if(opp && arr[i].score >= best.score - 6)
+         {
+            oppExists = true;
+            if(arr[i].score > oppScore) oppScore = arr[i].score;
+         }
+      }
+      if(oppExists)
+      {
+         bool htfBuy = (u.trend.htfBull || u.trend.macroBull);
+         bool htfSell = (u.trend.htfBear || u.trend.macroBear);
+         if(htfBuy && !htfSell && best.sell)
+         {
+            // Prefer HTF-aligned opposite candidate
+            for(int i = 0; i < n; i++)
+               if(arr[i].buy && arr[i].score >= best.score - 6) { best = arr[i]; break; }
+         }
+         else if(htfSell && !htfBuy && best.buy)
+         {
+            for(int i = 0; i < n; i++)
+               if(arr[i].sell && arr[i].score >= best.score - 6) { best = arr[i]; break; }
+         }
+         else if(!(htfBuy ^ htfSell))
+         {
+            best.buy = best.sell = false;
+            best.tag = "NONE";
+            best.score = -1;
+            best.reason = "conflicting setups";
+         }
+      }
+   }
+
    if(best.score >= 0 && !UltraPassScore(best.score))
    {
       best.buy = best.sell = false; best.tag = "NONE";
@@ -4932,8 +5020,8 @@ bool UltraDisc_R1_MultiConfirm(const UltraSnap &u, const bool buySide, string &w
 
    int n = (structure?1:0)+(trend?1:0)+(bosCh?1:0)+(liq?1:0)+(fib?1:0)+(mom?1:0);
    int need = UltraDisc_Soft() ? 3 : 4;
-   // InstantQuality ContSniper is 2-of-3 — do not re-demand 3/6 here
-   if(InstantQualityMode && UltraDisc_Soft()) need = 2;
+   // LEVEL 1 — InstantQuality soft still needs 3/6 (was 2 — too weak with Cont 2/3)
+   if(InstantQualityMode && UltraDisc_Soft()) need = 3;
    if(n >= need) return true;
    why = "R1 irregular: only " + IntegerToString(n) + "/" + IntegerToString(need) + " confirms";
    return false;
@@ -4945,22 +5033,13 @@ bool UltraDisc_R1_MultiConfirm(const UltraSnap &u, const bool buySide, string &w
 bool UltraDisc_R2_Thesis(const UltraSnap &u, const bool buySide, string &why)
 {
    why = "";
-   // Defense Lines already validate the stack; re-check score floors here
+   // LEVEL 2 — floors already applied by UltraAIDecide/USM2; R2 is thesis shape only
    if(u.score.confluence < UltraFireFloor() && u.score.confidence < UltraInstantFireConf)
-   {
-      if(!(InstantQualityMode && u.score.confidence >= UltraFireFloor() - 8))
-      { why = "R2 thesis: confluence fail"; return false; }
-   }
+   { why = "R2 thesis: confluence fail"; return false; }
    if(u.score.precision < UltraMinPrecision && u.score.confidence < UltraInstantFireConf)
-   {
-      if(!(InstantQualityMode && u.score.precision >= UltraMinPrecision - 8))
-      { why = "R2 thesis: precision fail"; return false; }
-   }
+   { why = "R2 thesis: precision fail"; return false; }
    if(u.score.probability < UltraMinProbability && u.score.confidence < UltraInstantFireConf)
-   {
-      if(!(InstantQualityMode && u.score.probability >= UltraMinProbability - 8))
-      { why = "R2 thesis: probability fail"; return false; }
-   }
+   { why = "R2 thesis: probability fail"; return false; }
    // directional thesis must exist
    bool sideBias = buySide ? (u.trend.bull || u.bos.buy || u.choch.buy || u.st.continuation)
                            : (u.trend.bear || u.bos.sell || u.choch.sell || u.st.continuation);
@@ -5042,8 +5121,7 @@ bool UltraDisc_R5_MasterTrend(const string s, const bool buySide, string &why)
 {
    why = "";
    if(!UltraMasterTrendLock) return true;
-   // InstantQuality: master trend is soft preference — Cont can fire on chart TF
-   if(InstantQualityMode && UltraDisc_Soft()) return true;
+   // LEVEL 2 — match UltraUFSE_MasterAllows (no InstantQuality bypass)
 
    // H4 bias + D1 macro as master (no UFSE dependency — this module loads before UFSE)
    bool bull = UltraDisc_TFBull(s, UltraTF_Bias) || UltraDisc_TFBull(s, UltraTF_Macro);
@@ -5156,14 +5234,16 @@ bool UltraDisc_R7_Duplicate(const int idx, const bool buySide, const string tag,
 bool UltraDisc_R8_Quality(const UltraSnap &u, const bool buySide, string &why)
 {
    why = "";
+   // LEVEL 1 — location/liq must be real; soft only for structure/trendAlign
    bool location = buySide
-      ? (u.fib.atBuyZone || u.ict.obBuy || u.ict.fvgBuy || u.ict.instZoneBuy || u.ict.inDiscount || UltraDisc_Soft())
-      : (u.fib.atSellZone || u.ict.obSell || u.ict.fvgSell || u.ict.instZoneSell || u.ict.inPremium || UltraDisc_Soft());
-   bool rr = (u.score.precision >= UltraMinPrecision || u.score.confidence >= UltraInstantFireConf ||
-              (InstantQualityMode && u.score.precision >= UltraMinPrecision - 8));
+      ? (u.fib.atBuyZone || u.ict.obBuy || u.ict.fvgBuy || u.ict.instZoneBuy || u.ict.inDiscount ||
+         UltraLiq_IsGenuine(u, true))
+      : (u.fib.atSellZone || u.ict.obSell || u.ict.fvgSell || u.ict.instZoneSell || u.ict.inPremium ||
+         UltraLiq_IsGenuine(u, false));
+   bool rr = (u.score.precision >= UltraMinPrecision || u.score.confidence >= UltraInstantFireConf);
    bool liqPos = buySide
-      ? (u.liq.sweepBuy || u.liq.grabBuy || u.liq.stopHuntBuy || u.liq.quality >= 15 || UltraDisc_Soft())
-      : (u.liq.sweepSell || u.liq.grabSell || u.liq.stopHuntSell || u.liq.quality >= 15 || UltraDisc_Soft());
+      ? (u.liq.sweepBuy || u.liq.grabBuy || u.liq.stopHuntBuy || u.liq.quality >= 35 || UltraLiq_IsGenuine(u, true))
+      : (u.liq.sweepSell || u.liq.grabSell || u.liq.stopHuntSell || u.liq.quality >= 35 || UltraLiq_IsGenuine(u, false));
    bool structure = (u.st.quality >= 20 || u.st.strength >= 20 || UltraDisc_Soft());
    bool trendAlign = buySide
       ? (u.trend.bull || u.trend.htfBull || u.trend.mtfVotesBuy >= u.trend.mtfVotesSell || UltraDisc_Soft())
@@ -6756,9 +6836,9 @@ UltraPosEvoDecision UltraPosEvo_Evaluate(const ulong ticket, const string s, con
 
    //======== LEVEL 3 candidate: multi-confirm invalidation ========//
    bool hardInvalid = v.allowClose; // Mission ValidateExit already multi-confirms
-   bool softInvalid = (!d.thesisValid && !d.structureValid && d.trueReversal);
-   if(v.masterTrendChanged && !d.thesisValid && d.trueReversal)
-      softInvalid = true;
+   // LEVEL 4 — soft invalidation requires structure break + master soften + reversal
+   bool softInvalid = (!d.thesisValid && !d.structureValid && d.trueReversal &&
+                       (v.masterTrendChanged || !d.masterTrendValid));
 
    if(hardInvalid || softInvalid)
    {
@@ -6903,7 +6983,8 @@ bool UltraSystemHealth_Update(const string s)
    g_UltraSysHealth.tradeAllowed =
       (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) &&
       (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
-   g_UltraSysHealth.dataOK = (Bars(s, UltraETF()) >= 50) && (SymbolInfoDouble(s, SYMBOL_BID) > 0.0);
+   // LEVEL 7 — same bar floor as UltraBuildSnapshot (60)
+   g_UltraSysHealth.dataOK = (Bars(s, UltraETF()) >= 60) && (SymbolInfoDouble(s, SYMBOL_BID) > 0.0);
 
    long tm = 0;
    bool modeOK = SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm);
@@ -7138,10 +7219,16 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
       }
    }
 
-   // USM2 scoring (Level 4) + dynamic weights (Level 5)
-   UltraUSM2Scores usm;
-   if(UltraUSM2Enabled)
+   // LEVEL 2 — One Confidence Engine: reuse USM2 from UltraAIDecide (no re-score)
+   if(UltraUSM2Enabled && g_UltraUSM2Last.tradeScore > 0)
    {
+      d.confidence = u.score.confidence > 0 ? u.score.confidence : g_UltraUSM2Last.confidence;
+      d.tradeScore = g_UltraUSM2Last.tradeScore;
+      d.grade = g_UltraUSM2Last.grade;
+   }
+   else if(UltraUSM2Enabled)
+   {
+      UltraUSM2Scores usm;
       UltraUSM2_Score(s, u, buySide, usm);
       g_UltraUSM2Last = usm;
       d.confidence = usm.confidence;
@@ -7167,20 +7254,16 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
       return false;
    }
 
-   // Soft floor on trade score
+   // Floor already applied in UltraAIDecide — soft verify only
    int floor = UltraFireFloor();
-   if(InstantQualityMode) floor = MathMin(floor, 45);
    if(d.tradeScore < floor && d.confidence < UltraInstantFireConf)
    {
-      if(!(InstantQualityMode && d.tradeScore >= floor - 8))
-      {
-         why = "SUPREME: trade score low ";
-         why += IntegerToString(d.tradeScore);
-         d.reason = why;
-         g_UltraSupremeLast = d;
-         UltraBrain_Publish(false, buySide, u, "", why);
-         return false;
-      }
+      why = "SUPREME: trade score low ";
+      why += IntegerToString(d.tradeScore);
+      d.reason = why;
+      g_UltraSupremeLast = d;
+      UltraBrain_Publish(false, buySide, u, "", why);
+      return false;
    }
 
    // Ignore grade only in strict mode
@@ -7516,13 +7599,8 @@ UltraExitValidation UltraMission_ValidateExit(const ulong ticket, const string s
       return v;
    }
 
-   // Soft path: thesis + structure + reversal (anti-whipsaw still needs PosEvo streak)
-   if(!UltraUpgradeStrict && v.thesisBroken && v.trueReversal && v.structureChanged)
-   {
-      v.allowClose = true;
-      v.reason = "EXIT CONFIRMED — thesis invalid + structure + reversal";
-      return v;
-   }
+   // LEVEL 5 — no soft InstantQuality exit shortcut
+   // Soft multi-bar invalidation belongs to PosEvo L3 streak only.
 
    v.allowClose = false;
    v.reason = "KEEP HOLDING — thesis still valid or noise";
@@ -7567,9 +7645,19 @@ bool UltraMission_ClosePosition(const ulong ticket, const string whyIn, const bo
    }
    if(!v.allowClose)
    {
-      UltraMission_Set(SUP_HOLD, v.reason, u.score.confidence, g_UltraHoldLast.total, "HOLD", "", ticket);
+      // LEVEL 5 — structured HOLD audit (why close was denied)
+      string holdWhy = v.reason;
+      holdWhy += " thesisBroken=";
+      holdWhy += (v.thesisBroken ? "Y" : "N");
+      holdWhy += " struct=";
+      holdWhy += (v.structureChanged ? "Y" : "N");
+      holdWhy += " master=";
+      holdWhy += (v.masterTrendChanged ? "Y" : "N");
+      holdWhy += " reversal=";
+      holdWhy += (v.trueReversal ? "Y" : "N");
+      UltraMission_Set(SUP_HOLD, holdWhy, u.score.confidence, g_UltraHoldLast.total, "HOLD", "", ticket);
       UltraPosLock_Update(ticket, "HOLD", g_UltraHoldLast.total);
-      UltraMission_Log("HOLD", ticket, v.reason);
+      UltraMission_Log("HOLD", ticket, holdWhy);
       if(lk >= 0) g_UltraPosLock[lk].decidedThisCycle = true;
       return false;
    }
@@ -7942,13 +8030,16 @@ void UltraUFSE_UpdateDirty(const int idx)
 
 bool UltraUFSE_CacheFresh(const int idx)
 {
+   // LEVEL 6 — same-bar micro-ticks reuse cache; only critical dirty forces rebuild
    if(idx < 0 || idx >= g_UFSE_N) return false;
    if(!g_UFSE[idx].snapValid) return false;
    if(g_UFSE[idx].dirtyCritical) return false;
-   // unchanged bid/ask + same bar → cache hit
-   if(!g_UFSE[idx].dirtyMedium &&
-      g_UFSE[idx].tick.bid == g_UFSE[idx].cacheBid &&
-      g_UFSE[idx].tick.ask == g_UFSE[idx].cacheAsk)
+   if(!g_UFSE[idx].dirtyMedium) return true;
+   // Medium dirty but small move on same bar → still fresh
+   string s = g_UFSE[idx].symbol;
+   double pt = SymbolInfoDouble(s, SYMBOL_POINT);
+   if(pt > 0.0 && g_UFSE[idx].cacheBid > 0.0 &&
+      MathAbs(g_UFSE[idx].tick.bid - g_UFSE[idx].cacheBid) < pt * 3.0)
       return true;
    return false;
 }
@@ -8134,9 +8225,9 @@ bool UltraUFSE_EntryTrigger(const UltraSnap &u, const bool buySide, string &why)
    if(InstantQualityMode)
    {
       int n = (structure?1:0)+(bosCh?1:0)+(liq?1:0)+(mom?1:0)+(trend?1:0);
-      // Prefer 3/5; allow 2/5 only when genuine liquidity OR strong BOS present
+      // LEVEL 1 — 2/5 only when genuine liquidity AND strong BOS (else 3/5)
       int need = 3;
-      if(UltraLiq_IsGenuine(u, buySide) || bosStrong) need = 2;
+      if(UltraLiq_IsGenuine(u, buySide) && bosStrong) need = 2;
       if(n < need){ why = "entry trigger soft fail "+IntegerToString(n)+"/5 need "+IntegerToString(need); return false; }
    }
    else
@@ -8322,10 +8413,18 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       return false;
    }
 
-   UltraEngScores(u, sig.buy);
+   // LEVEL 2 — One Confidence Engine (USM2) owns scores before all gates
+   if(UltraUSM2Enabled)
+   {
+      UltraUSM2Scores usm;
+      UltraUSM2_Score(s, u, sig.buy, usm);
+      g_UltraUSM2Last = usm;
+   }
+   else
+      UltraEngScores(u, sig.buy);
+
    int floor = UltraFireFloor();
-   if(u.score.confidence < floor && u.score.confidence < UltraInstantFireConf &&
-      !(InstantQualityMode && u.score.confidence >= floor - 8))
+   if(u.score.confidence < floor && u.score.confidence < UltraInstantFireConf)
    { why = "confidence low"; return false; }
    if(u.score.precision < UltraMinPrecision && u.score.confidence < UltraInstantFireConf)
    { why = "precision low"; return false; }
@@ -12195,7 +12294,7 @@ bool CheckTradeStops(double entry,double &sl,double &tp)
 
 ulong ResolvePositionTicket(ulong orderTicket)
 {
-   // AUDITFIX49: ensure history is loaded before HistoryOrderSelect
+   // LEVEL 3 — verify real position; never treat bare order ticket as filled
    if(orderTicket == 0)
       return 0;
 
@@ -12207,12 +12306,23 @@ ulong ResolvePositionTicket(ulong orderTicket)
    if(HistoryOrderSelect(orderTicket))
    {
       ulong posId = (ulong)HistoryOrderGetInteger(orderTicket, ORDER_POSITION_ID);
-
-      if(posId != 0)
+      if(posId != 0 && PositionSelectByTicket(posId))
          return posId;
    }
 
-   return orderTicket;
+   // Scan open positions for matching symbol+magic+comment opened recently
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong tix = PositionGetTicket(i);
+      if(tix == 0 || !PositionSelectByTicket(tix)) continue;
+      if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+      if(PositionGetString(POSITION_SYMBOL) != BrokerSymbol) continue;
+      if(PositionGetString(POSITION_COMMENT) != TradeComment) continue;
+      datetime ot = (datetime)PositionGetInteger(POSITION_TIME);
+      if(ot >= TimeCurrent() - 5)
+         return tix;
+   }
+   return 0;
 }
 
 //================ PENDING SIGNAL SNAPSHOT (fix #6) ===================//
@@ -12331,11 +12441,14 @@ void ConfigureFillingMode(string symbol)
 // "BUY FAILED".
 bool IsTransientOrderRetcode(uint retcode)
 {
+   // LEVEL 3 — include fill/price rejects that deserve a fresh retry
    return (retcode == TRADE_RETCODE_REQUOTE ||
            retcode == TRADE_RETCODE_PRICE_OFF ||
            retcode == TRADE_RETCODE_PRICE_CHANGED ||
            retcode == TRADE_RETCODE_TIMEOUT ||
-           retcode == TRADE_RETCODE_CONNECTION);
+           retcode == TRADE_RETCODE_CONNECTION ||
+           retcode == TRADE_RETCODE_INVALID_FILL ||
+           retcode == TRADE_RETCODE_INVALID_PRICE);
 }
 
 bool IsFatalOrderRetcode(uint retcode)
@@ -12521,6 +12634,9 @@ bool ExecuteBuy()
          if(EnableVerboseLogging)
             Print("BUY transient error (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES, " - refreshing price and retrying.");
 
+         if(retcode == TRADE_RETCODE_INVALID_FILL)
+            ConfigureFillingMode(BrokerSymbol);
+
          Sleep(200);
 
          ask = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
@@ -12549,12 +12665,36 @@ bool ExecuteBuy()
 
    if(result)
    {
-      Print("BUY executed successfully.");
       ulong posTicket = ResolvePositionTicket(g_Trade.ResultOrder());
+      if(posTicket == 0)
+      {
+         Sleep(50);
+         HistorySelect(TimeCurrent() - 60, TimeCurrent() + 60);
+         posTicket = ResolvePositionTicket(g_Trade.ResultOrder());
+      }
+      if(posTicket == 0 || !PositionSelectByTicket(posTicket))
+      {
+         Print("BUY fill unverified — no position for order ", g_Trade.ResultOrder());
+         UltraLogDecision("EXEC_FAIL", 0, "BUY", g_PendingStrategyTag, 0, 0, "FILL", "NONE",
+                          0, 0, "position not found after Buy");
+         return false;
+      }
+      if(PositionGetString(POSITION_SYMBOL) != BrokerSymbol ||
+         PositionGetInteger(POSITION_MAGIC) != MagicNumber)
+      {
+         Print("BUY fill verification mismatch symbol/magic");
+         return false;
+      }
+      Print("BUY executed successfully. ticket=", posTicket);
       LastTradeTimeArr[symIdx] = TimeCurrent();
       MarkContFallbackFillIfNeeded();
       RegisterTradeState(posTicket, tp1Price, tp2Price, tp3Price, true);
       RecordSignalSnapshot(posTicket, true);
+      UltraLogDecision("EXEC_OK", posTicket, "BUY", g_PendingStrategyTag,
+                       g_UltraLastSnap.score.confidence, g_UltraUSM2Last.tradeScore,
+                       "THESIS", g_UltraLastSnap.ctx.newsPhase,
+                       g_UltraLastSnap.ctx.spreadPts, g_UltraLastSnap.ctx.slipProxy,
+                       "fill verified");
       return true;
    }
 
@@ -12781,6 +12921,9 @@ bool ExecuteSell()
          if(EnableVerboseLogging)
             Print("SELL transient error (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES, " - refreshing price and retrying.");
 
+         if(retcode == TRADE_RETCODE_INVALID_FILL)
+            ConfigureFillingMode(BrokerSymbol);
+
          Sleep(200);
 
          bid = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
@@ -12809,12 +12952,36 @@ bool ExecuteSell()
 
    if(result)
    {
-      Print("SELL executed successfully.");
       ulong posTicket = ResolvePositionTicket(g_Trade.ResultOrder());
+      if(posTicket == 0)
+      {
+         Sleep(50);
+         HistorySelect(TimeCurrent() - 60, TimeCurrent() + 60);
+         posTicket = ResolvePositionTicket(g_Trade.ResultOrder());
+      }
+      if(posTicket == 0 || !PositionSelectByTicket(posTicket))
+      {
+         Print("SELL fill unverified — no position for order ", g_Trade.ResultOrder());
+         UltraLogDecision("EXEC_FAIL", 0, "SELL", g_PendingStrategyTag, 0, 0, "FILL", "NONE",
+                          0, 0, "position not found after Sell");
+         return false;
+      }
+      if(PositionGetString(POSITION_SYMBOL) != BrokerSymbol ||
+         PositionGetInteger(POSITION_MAGIC) != MagicNumber)
+      {
+         Print("SELL fill verification mismatch symbol/magic");
+         return false;
+      }
+      Print("SELL executed successfully. ticket=", posTicket);
       LastTradeTimeArr[symIdx] = TimeCurrent();
       MarkContFallbackFillIfNeeded();
       RegisterTradeState(posTicket, tp1Price, tp2Price, tp3Price, false);
       RecordSignalSnapshot(posTicket, false);
+      UltraLogDecision("EXEC_OK", posTicket, "SELL", g_PendingStrategyTag,
+                       g_UltraLastSnap.score.confidence, g_UltraUSM2Last.tradeScore,
+                       "THESIS", g_UltraLastSnap.ctx.newsPhase,
+                       g_UltraLastSnap.ctx.spreadPts, g_UltraLastSnap.ctx.slipProxy,
+                       "fill verified");
       return true;
    }
 
@@ -17887,11 +18054,9 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
       return false;
    }
 
-   // MASTER AUDIT: Ultra live tags already cleared UFSE → Defense → Discipline → Mission.
+   // LEVEL 2 — One decision path: live Ultra tags only (no retired APEX/ContFallback/LCS)
    // Do NOT re-run UltraSniperEntryOK (second veto after Mission approve).
-   // Duplicate-bar guard above is the only post-FIRE hard block for live tags.
-   if(Ultra_IsLiveTag(strategyTag) || PRIME_IsLiveTag(strategyTag) ||
-      strategyTag == "APEX" || strategyTag == "ContFallback" || strategyTag == "LCS")
+   if(Ultra_IsLiveTag(strategyTag) || PRIME_IsLiveTag(strategyTag))
    {
       UltraSetApprove(strategyTag, "A", 100, 100);
       if(EnableBeastMode && BeastCaptureSignalSnapshot)
@@ -20050,16 +20215,13 @@ void AnalyzeLiveMarket(const bool force)
 
    m.contBuyDetail = "";
    m.contSellDetail = "";
-   // OK93: live analysis from ULTRA only (old ContFallback/APEX probes removed)
+   // LEVEL 6 — reuse g_UltraLastSnap (no second full UltraBuildSnapshot per tick)
    {
-      UltraSnap us;
-      UltraBuildSnapshot(BrokerSymbol, us);
-      UltraSignal ub = UltraStrat_ContSniper(us);
-      UltraSignal usw = UltraStrat_FlashSweep(us);
-      m.contBuyOK = (ub.buy || usw.buy);
-      m.contSellOK = (ub.sell || usw.sell);
-      m.contBuyDetail  = m.contBuyOK  ? "ULTRA READY" : ("ULTRA confB=" + IntegerToString(UltraConfluenceBuy(us)));
-      m.contSellDetail = m.contSellOK ? "ULTRA READY" : ("ULTRA confS=" + IntegerToString(UltraConfluenceSell(us)));
+      UltraSnap us = g_UltraLastSnap;
+      m.contBuyOK  = (us.score.confidence >= UltraFireFloor() && (us.bos.buy || us.trend.bull || us.liq.genuineBuy));
+      m.contSellOK = (us.score.confidence >= UltraFireFloor() && (us.bos.sell || us.trend.bear || us.liq.genuineSell));
+      m.contBuyDetail  = m.contBuyOK  ? "ULTRA READY" : ("ULTRA confB=" + IntegerToString(us.score.confidence));
+      m.contSellDetail = m.contSellOK ? "ULTRA READY" : ("ULTRA confS=" + IntegerToString(us.score.confidence));
       g_APEX_LastBuyFail  = us.bos.buy  ? "" : "no ULTRA BOS buy";
       g_APEX_LastSellFail = us.bos.sell ? "" : "no ULTRA BOS sell";
    }

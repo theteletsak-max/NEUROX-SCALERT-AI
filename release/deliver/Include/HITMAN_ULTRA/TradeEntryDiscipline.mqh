@@ -124,8 +124,8 @@ bool UltraDisc_R1_MultiConfirm(const UltraSnap &u, const bool buySide, string &w
 
    int n = (structure?1:0)+(trend?1:0)+(bosCh?1:0)+(liq?1:0)+(fib?1:0)+(mom?1:0);
    int need = UltraDisc_Soft() ? 3 : 4;
-   // InstantQuality ContSniper is 2-of-3 — do not re-demand 3/6 here
-   if(InstantQualityMode && UltraDisc_Soft()) need = 2;
+   // LEVEL 1 — InstantQuality soft still needs 3/6 (was 2 — too weak with Cont 2/3)
+   if(InstantQualityMode && UltraDisc_Soft()) need = 3;
    if(n >= need) return true;
    why = "R1 irregular: only " + IntegerToString(n) + "/" + IntegerToString(need) + " confirms";
    return false;
@@ -137,22 +137,13 @@ bool UltraDisc_R1_MultiConfirm(const UltraSnap &u, const bool buySide, string &w
 bool UltraDisc_R2_Thesis(const UltraSnap &u, const bool buySide, string &why)
 {
    why = "";
-   // Defense Lines already validate the stack; re-check score floors here
+   // LEVEL 2 — floors already applied by UltraAIDecide/USM2; R2 is thesis shape only
    if(u.score.confluence < UltraFireFloor() && u.score.confidence < UltraInstantFireConf)
-   {
-      if(!(InstantQualityMode && u.score.confidence >= UltraFireFloor() - 8))
-      { why = "R2 thesis: confluence fail"; return false; }
-   }
+   { why = "R2 thesis: confluence fail"; return false; }
    if(u.score.precision < UltraMinPrecision && u.score.confidence < UltraInstantFireConf)
-   {
-      if(!(InstantQualityMode && u.score.precision >= UltraMinPrecision - 8))
-      { why = "R2 thesis: precision fail"; return false; }
-   }
+   { why = "R2 thesis: precision fail"; return false; }
    if(u.score.probability < UltraMinProbability && u.score.confidence < UltraInstantFireConf)
-   {
-      if(!(InstantQualityMode && u.score.probability >= UltraMinProbability - 8))
-      { why = "R2 thesis: probability fail"; return false; }
-   }
+   { why = "R2 thesis: probability fail"; return false; }
    // directional thesis must exist
    bool sideBias = buySide ? (u.trend.bull || u.bos.buy || u.choch.buy || u.st.continuation)
                            : (u.trend.bear || u.bos.sell || u.choch.sell || u.st.continuation);
@@ -234,8 +225,7 @@ bool UltraDisc_R5_MasterTrend(const string s, const bool buySide, string &why)
 {
    why = "";
    if(!UltraMasterTrendLock) return true;
-   // InstantQuality: master trend is soft preference — Cont can fire on chart TF
-   if(InstantQualityMode && UltraDisc_Soft()) return true;
+   // LEVEL 2 — match UltraUFSE_MasterAllows (no InstantQuality bypass)
 
    // H4 bias + D1 macro as master (no UFSE dependency — this module loads before UFSE)
    bool bull = UltraDisc_TFBull(s, UltraTF_Bias) || UltraDisc_TFBull(s, UltraTF_Macro);
@@ -348,14 +338,16 @@ bool UltraDisc_R7_Duplicate(const int idx, const bool buySide, const string tag,
 bool UltraDisc_R8_Quality(const UltraSnap &u, const bool buySide, string &why)
 {
    why = "";
+   // LEVEL 1 — location/liq must be real; soft only for structure/trendAlign
    bool location = buySide
-      ? (u.fib.atBuyZone || u.ict.obBuy || u.ict.fvgBuy || u.ict.instZoneBuy || u.ict.inDiscount || UltraDisc_Soft())
-      : (u.fib.atSellZone || u.ict.obSell || u.ict.fvgSell || u.ict.instZoneSell || u.ict.inPremium || UltraDisc_Soft());
-   bool rr = (u.score.precision >= UltraMinPrecision || u.score.confidence >= UltraInstantFireConf ||
-              (InstantQualityMode && u.score.precision >= UltraMinPrecision - 8));
+      ? (u.fib.atBuyZone || u.ict.obBuy || u.ict.fvgBuy || u.ict.instZoneBuy || u.ict.inDiscount ||
+         UltraLiq_IsGenuine(u, true))
+      : (u.fib.atSellZone || u.ict.obSell || u.ict.fvgSell || u.ict.instZoneSell || u.ict.inPremium ||
+         UltraLiq_IsGenuine(u, false));
+   bool rr = (u.score.precision >= UltraMinPrecision || u.score.confidence >= UltraInstantFireConf);
    bool liqPos = buySide
-      ? (u.liq.sweepBuy || u.liq.grabBuy || u.liq.stopHuntBuy || u.liq.quality >= 15 || UltraDisc_Soft())
-      : (u.liq.sweepSell || u.liq.grabSell || u.liq.stopHuntSell || u.liq.quality >= 15 || UltraDisc_Soft());
+      ? (u.liq.sweepBuy || u.liq.grabBuy || u.liq.stopHuntBuy || u.liq.quality >= 35 || UltraLiq_IsGenuine(u, true))
+      : (u.liq.sweepSell || u.liq.grabSell || u.liq.stopHuntSell || u.liq.quality >= 35 || UltraLiq_IsGenuine(u, false));
    bool structure = (u.st.quality >= 20 || u.st.strength >= 20 || UltraDisc_Soft());
    bool trendAlign = buySide
       ? (u.trend.bull || u.trend.htfBull || u.trend.mtfVotesBuy >= u.trend.mtfVotesSell || UltraDisc_Soft())

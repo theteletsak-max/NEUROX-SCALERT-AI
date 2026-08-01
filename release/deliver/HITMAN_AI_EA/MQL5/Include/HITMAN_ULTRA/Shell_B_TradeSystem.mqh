@@ -2760,7 +2760,7 @@ bool CheckTradeStops(double entry,double &sl,double &tp)
 
 ulong ResolvePositionTicket(ulong orderTicket)
 {
-   // AUDITFIX49: ensure history is loaded before HistoryOrderSelect
+   // LEVEL 3 — verify real position; never treat bare order ticket as filled
    if(orderTicket == 0)
       return 0;
 
@@ -2772,12 +2772,23 @@ ulong ResolvePositionTicket(ulong orderTicket)
    if(HistoryOrderSelect(orderTicket))
    {
       ulong posId = (ulong)HistoryOrderGetInteger(orderTicket, ORDER_POSITION_ID);
-
-      if(posId != 0)
+      if(posId != 0 && PositionSelectByTicket(posId))
          return posId;
    }
 
-   return orderTicket;
+   // Scan open positions for matching symbol+magic+comment opened recently
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong tix = PositionGetTicket(i);
+      if(tix == 0 || !PositionSelectByTicket(tix)) continue;
+      if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+      if(PositionGetString(POSITION_SYMBOL) != BrokerSymbol) continue;
+      if(PositionGetString(POSITION_COMMENT) != TradeComment) continue;
+      datetime ot = (datetime)PositionGetInteger(POSITION_TIME);
+      if(ot >= TimeCurrent() - 5)
+         return tix;
+   }
+   return 0;
 }
 
 //================ PENDING SIGNAL SNAPSHOT (fix #6) ===================//
@@ -2896,11 +2907,14 @@ void ConfigureFillingMode(string symbol)
 // "BUY FAILED".
 bool IsTransientOrderRetcode(uint retcode)
 {
+   // LEVEL 3 — include fill/price rejects that deserve a fresh retry
    return (retcode == TRADE_RETCODE_REQUOTE ||
            retcode == TRADE_RETCODE_PRICE_OFF ||
            retcode == TRADE_RETCODE_PRICE_CHANGED ||
            retcode == TRADE_RETCODE_TIMEOUT ||
-           retcode == TRADE_RETCODE_CONNECTION);
+           retcode == TRADE_RETCODE_CONNECTION ||
+           retcode == TRADE_RETCODE_INVALID_FILL ||
+           retcode == TRADE_RETCODE_INVALID_PRICE);
 }
 
 bool IsFatalOrderRetcode(uint retcode)
@@ -3086,6 +3100,9 @@ bool ExecuteBuy()
          if(EnableVerboseLogging)
             Print("BUY transient error (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES, " - refreshing price and retrying.");
 
+         if(retcode == TRADE_RETCODE_INVALID_FILL)
+            ConfigureFillingMode(BrokerSymbol);
+
          Sleep(200);
 
          ask = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
@@ -3114,12 +3131,36 @@ bool ExecuteBuy()
 
    if(result)
    {
-      Print("BUY executed successfully.");
       ulong posTicket = ResolvePositionTicket(g_Trade.ResultOrder());
+      if(posTicket == 0)
+      {
+         Sleep(50);
+         HistorySelect(TimeCurrent() - 60, TimeCurrent() + 60);
+         posTicket = ResolvePositionTicket(g_Trade.ResultOrder());
+      }
+      if(posTicket == 0 || !PositionSelectByTicket(posTicket))
+      {
+         Print("BUY fill unverified — no position for order ", g_Trade.ResultOrder());
+         UltraLogDecision("EXEC_FAIL", 0, "BUY", g_PendingStrategyTag, 0, 0, "FILL", "NONE",
+                          0, 0, "position not found after Buy");
+         return false;
+      }
+      if(PositionGetString(POSITION_SYMBOL) != BrokerSymbol ||
+         PositionGetInteger(POSITION_MAGIC) != MagicNumber)
+      {
+         Print("BUY fill verification mismatch symbol/magic");
+         return false;
+      }
+      Print("BUY executed successfully. ticket=", posTicket);
       LastTradeTimeArr[symIdx] = TimeCurrent();
       MarkContFallbackFillIfNeeded();
       RegisterTradeState(posTicket, tp1Price, tp2Price, tp3Price, true);
       RecordSignalSnapshot(posTicket, true);
+      UltraLogDecision("EXEC_OK", posTicket, "BUY", g_PendingStrategyTag,
+                       g_UltraLastSnap.score.confidence, g_UltraUSM2Last.tradeScore,
+                       "THESIS", g_UltraLastSnap.ctx.newsPhase,
+                       g_UltraLastSnap.ctx.spreadPts, g_UltraLastSnap.ctx.slipProxy,
+                       "fill verified");
       return true;
    }
 
@@ -3346,6 +3387,9 @@ bool ExecuteSell()
          if(EnableVerboseLogging)
             Print("SELL transient error (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES, " - refreshing price and retrying.");
 
+         if(retcode == TRADE_RETCODE_INVALID_FILL)
+            ConfigureFillingMode(BrokerSymbol);
+
          Sleep(200);
 
          bid = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
@@ -3374,12 +3418,36 @@ bool ExecuteSell()
 
    if(result)
    {
-      Print("SELL executed successfully.");
       ulong posTicket = ResolvePositionTicket(g_Trade.ResultOrder());
+      if(posTicket == 0)
+      {
+         Sleep(50);
+         HistorySelect(TimeCurrent() - 60, TimeCurrent() + 60);
+         posTicket = ResolvePositionTicket(g_Trade.ResultOrder());
+      }
+      if(posTicket == 0 || !PositionSelectByTicket(posTicket))
+      {
+         Print("SELL fill unverified — no position for order ", g_Trade.ResultOrder());
+         UltraLogDecision("EXEC_FAIL", 0, "SELL", g_PendingStrategyTag, 0, 0, "FILL", "NONE",
+                          0, 0, "position not found after Sell");
+         return false;
+      }
+      if(PositionGetString(POSITION_SYMBOL) != BrokerSymbol ||
+         PositionGetInteger(POSITION_MAGIC) != MagicNumber)
+      {
+         Print("SELL fill verification mismatch symbol/magic");
+         return false;
+      }
+      Print("SELL executed successfully. ticket=", posTicket);
       LastTradeTimeArr[symIdx] = TimeCurrent();
       MarkContFallbackFillIfNeeded();
       RegisterTradeState(posTicket, tp1Price, tp2Price, tp3Price, false);
       RecordSignalSnapshot(posTicket, false);
+      UltraLogDecision("EXEC_OK", posTicket, "SELL", g_PendingStrategyTag,
+                       g_UltraLastSnap.score.confidence, g_UltraUSM2Last.tradeScore,
+                       "THESIS", g_UltraLastSnap.ctx.newsPhase,
+                       g_UltraLastSnap.ctx.spreadPts, g_UltraLastSnap.ctx.slipProxy,
+                       "fill verified");
       return true;
    }
 
@@ -8452,11 +8520,9 @@ bool PRISMFinalizeApproval(bool buy, const string strategyTag)
       return false;
    }
 
-   // MASTER AUDIT: Ultra live tags already cleared UFSE → Defense → Discipline → Mission.
+   // LEVEL 2 — One decision path: live Ultra tags only (no retired APEX/ContFallback/LCS)
    // Do NOT re-run UltraSniperEntryOK (second veto after Mission approve).
-   // Duplicate-bar guard above is the only post-FIRE hard block for live tags.
-   if(Ultra_IsLiveTag(strategyTag) || PRIME_IsLiveTag(strategyTag) ||
-      strategyTag == "APEX" || strategyTag == "ContFallback" || strategyTag == "LCS")
+   if(Ultra_IsLiveTag(strategyTag) || PRIME_IsLiveTag(strategyTag))
    {
       UltraSetApprove(strategyTag, "A", 100, 100);
       if(EnableBeastMode && BeastCaptureSignalSnapshot)
@@ -10615,16 +10681,13 @@ void AnalyzeLiveMarket(const bool force)
 
    m.contBuyDetail = "";
    m.contSellDetail = "";
-   // OK93: live analysis from ULTRA only (old ContFallback/APEX probes removed)
+   // LEVEL 6 — reuse g_UltraLastSnap (no second full UltraBuildSnapshot per tick)
    {
-      UltraSnap us;
-      UltraBuildSnapshot(BrokerSymbol, us);
-      UltraSignal ub = UltraStrat_ContSniper(us);
-      UltraSignal usw = UltraStrat_FlashSweep(us);
-      m.contBuyOK = (ub.buy || usw.buy);
-      m.contSellOK = (ub.sell || usw.sell);
-      m.contBuyDetail  = m.contBuyOK  ? "ULTRA READY" : ("ULTRA confB=" + IntegerToString(UltraConfluenceBuy(us)));
-      m.contSellDetail = m.contSellOK ? "ULTRA READY" : ("ULTRA confS=" + IntegerToString(UltraConfluenceSell(us)));
+      UltraSnap us = g_UltraLastSnap;
+      m.contBuyOK  = (us.score.confidence >= UltraFireFloor() && (us.bos.buy || us.trend.bull || us.liq.genuineBuy));
+      m.contSellOK = (us.score.confidence >= UltraFireFloor() && (us.bos.sell || us.trend.bear || us.liq.genuineSell));
+      m.contBuyDetail  = m.contBuyOK  ? "ULTRA READY" : ("ULTRA confB=" + IntegerToString(us.score.confidence));
+      m.contSellDetail = m.contSellOK ? "ULTRA READY" : ("ULTRA confS=" + IntegerToString(us.score.confidence));
       g_APEX_LastBuyFail  = us.bos.buy  ? "" : "no ULTRA BOS buy";
       g_APEX_LastSellFail = us.bos.sell ? "" : "no ULTRA BOS sell";
    }

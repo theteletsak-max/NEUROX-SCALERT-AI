@@ -393,9 +393,9 @@ UltraPosEvoDecision UltraPosEvo_Evaluate(const ulong ticket, const string s, con
 
    //======== LEVEL 3 candidate: multi-confirm invalidation ========//
    bool hardInvalid = v.allowClose; // Mission ValidateExit already multi-confirms
-   bool softInvalid = (!d.thesisValid && !d.structureValid && d.trueReversal);
-   if(v.masterTrendChanged && !d.thesisValid && d.trueReversal)
-      softInvalid = true;
+   // LEVEL 4 — soft invalidation requires structure break + master soften + reversal
+   bool softInvalid = (!d.thesisValid && !d.structureValid && d.trueReversal &&
+                       (v.masterTrendChanged || !d.masterTrendValid));
 
    if(hardInvalid || softInvalid)
    {

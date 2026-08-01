@@ -259,13 +259,8 @@ UltraExitValidation UltraMission_ValidateExit(const ulong ticket, const string s
       return v;
    }
 
-   // Soft path: thesis + structure + reversal (anti-whipsaw still needs PosEvo streak)
-   if(!UltraUpgradeStrict && v.thesisBroken && v.trueReversal && v.structureChanged)
-   {
-      v.allowClose = true;
-      v.reason = "EXIT CONFIRMED — thesis invalid + structure + reversal";
-      return v;
-   }
+   // LEVEL 5 — no soft InstantQuality exit shortcut
+   // Soft multi-bar invalidation belongs to PosEvo L3 streak only.
 
    v.allowClose = false;
    v.reason = "KEEP HOLDING — thesis still valid or noise";
@@ -310,9 +305,19 @@ bool UltraMission_ClosePosition(const ulong ticket, const string whyIn, const bo
    }
    if(!v.allowClose)
    {
-      UltraMission_Set(SUP_HOLD, v.reason, u.score.confidence, g_UltraHoldLast.total, "HOLD", "", ticket);
+      // LEVEL 5 — structured HOLD audit (why close was denied)
+      string holdWhy = v.reason;
+      holdWhy += " thesisBroken=";
+      holdWhy += (v.thesisBroken ? "Y" : "N");
+      holdWhy += " struct=";
+      holdWhy += (v.structureChanged ? "Y" : "N");
+      holdWhy += " master=";
+      holdWhy += (v.masterTrendChanged ? "Y" : "N");
+      holdWhy += " reversal=";
+      holdWhy += (v.trueReversal ? "Y" : "N");
+      UltraMission_Set(SUP_HOLD, holdWhy, u.score.confidence, g_UltraHoldLast.total, "HOLD", "", ticket);
       UltraPosLock_Update(ticket, "HOLD", g_UltraHoldLast.total);
-      UltraMission_Log("HOLD", ticket, v.reason);
+      UltraMission_Log("HOLD", ticket, holdWhy);
       if(lk >= 0) g_UltraPosLock[lk].decidedThisCycle = true;
       return false;
    }

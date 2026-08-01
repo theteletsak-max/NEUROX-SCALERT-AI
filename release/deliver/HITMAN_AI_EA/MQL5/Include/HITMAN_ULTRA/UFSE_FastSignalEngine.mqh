@@ -173,13 +173,16 @@ void UltraUFSE_UpdateDirty(const int idx)
 
 bool UltraUFSE_CacheFresh(const int idx)
 {
+   // LEVEL 6 — same-bar micro-ticks reuse cache; only critical dirty forces rebuild
    if(idx < 0 || idx >= g_UFSE_N) return false;
    if(!g_UFSE[idx].snapValid) return false;
    if(g_UFSE[idx].dirtyCritical) return false;
-   // unchanged bid/ask + same bar → cache hit
-   if(!g_UFSE[idx].dirtyMedium &&
-      g_UFSE[idx].tick.bid == g_UFSE[idx].cacheBid &&
-      g_UFSE[idx].tick.ask == g_UFSE[idx].cacheAsk)
+   if(!g_UFSE[idx].dirtyMedium) return true;
+   // Medium dirty but small move on same bar → still fresh
+   string s = g_UFSE[idx].symbol;
+   double pt = SymbolInfoDouble(s, SYMBOL_POINT);
+   if(pt > 0.0 && g_UFSE[idx].cacheBid > 0.0 &&
+      MathAbs(g_UFSE[idx].tick.bid - g_UFSE[idx].cacheBid) < pt * 3.0)
       return true;
    return false;
 }
@@ -365,9 +368,9 @@ bool UltraUFSE_EntryTrigger(const UltraSnap &u, const bool buySide, string &why)
    if(InstantQualityMode)
    {
       int n = (structure?1:0)+(bosCh?1:0)+(liq?1:0)+(mom?1:0)+(trend?1:0);
-      // Prefer 3/5; allow 2/5 only when genuine liquidity OR strong BOS present
+      // LEVEL 1 — 2/5 only when genuine liquidity AND strong BOS (else 3/5)
       int need = 3;
-      if(UltraLiq_IsGenuine(u, buySide) || bosStrong) need = 2;
+      if(UltraLiq_IsGenuine(u, buySide) && bosStrong) need = 2;
       if(n < need){ why = "entry trigger soft fail "+IntegerToString(n)+"/5 need "+IntegerToString(need); return false; }
    }
    else
@@ -553,10 +556,18 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       return false;
    }
 
-   UltraEngScores(u, sig.buy);
+   // LEVEL 2 — One Confidence Engine (USM2) owns scores before all gates
+   if(UltraUSM2Enabled)
+   {
+      UltraUSM2Scores usm;
+      UltraUSM2_Score(s, u, sig.buy, usm);
+      g_UltraUSM2Last = usm;
+   }
+   else
+      UltraEngScores(u, sig.buy);
+
    int floor = UltraFireFloor();
-   if(u.score.confidence < floor && u.score.confidence < UltraInstantFireConf &&
-      !(InstantQualityMode && u.score.confidence >= floor - 8))
+   if(u.score.confidence < floor && u.score.confidence < UltraInstantFireConf)
    { why = "confidence low"; return false; }
    if(u.score.precision < UltraMinPrecision && u.score.confidence < UltraInstantFireConf)
    { why = "precision low"; return false; }

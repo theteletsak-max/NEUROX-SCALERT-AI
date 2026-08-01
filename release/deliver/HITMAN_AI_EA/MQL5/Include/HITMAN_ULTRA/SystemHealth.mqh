@@ -41,7 +41,8 @@ bool UltraSystemHealth_Update(const string s)
    g_UltraSysHealth.tradeAllowed =
       (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) &&
       (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
-   g_UltraSysHealth.dataOK = (Bars(s, UltraETF()) >= 50) && (SymbolInfoDouble(s, SYMBOL_BID) > 0.0);
+   // LEVEL 7 — same bar floor as UltraBuildSnapshot (60)
+   g_UltraSysHealth.dataOK = (Bars(s, UltraETF()) >= 60) && (SymbolInfoDouble(s, SYMBOL_BID) > 0.0);
 
    long tm = 0;
    bool modeOK = SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm);

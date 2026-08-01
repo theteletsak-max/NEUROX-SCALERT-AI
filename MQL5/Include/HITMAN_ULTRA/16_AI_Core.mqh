@@ -44,11 +44,10 @@ void UltraResolveSides(UltraSignal &r, const int sb, const int ss)
 
 bool UltraPassScore(const int sc)
 {
+   // LEVEL 1 — single soft floor via UltraFireFloor() only (no stacked −8 passes)
    int floor = UltraFireFloor();
    if(sc >= floor) return true;
    if(sc >= UltraInstantFireConf) return true;
-   // Soft pass: close to floor in InstantQualityMode
-   if(InstantQualityMode && sc >= floor - 8) return true;
    return false;
 }
 
@@ -78,12 +77,13 @@ UltraSignal UltraStrat_ContSniper(const UltraSnap &u)
    bool impS  = (u.ict.dispSell || u.mom.momSell || u.liq.sweepSell || u.vol.expansion);
    bool b = biasB && zoneB && impB;
    bool s = biasS && zoneS && impS;
-   // Instant: 2-of-3 stack is enough
+   // LEVEL 1 — InstantQuality 2-of-3 must keep impulse OR zone+BOS (no bias+zone-only)
    if(InstantQualityMode)
    {
       int eb = (biasB ? 1 : 0) + (zoneB ? 1 : 0) + (impB ? 1 : 0);
       int es = (biasS ? 1 : 0) + (zoneS ? 1 : 0) + (impS ? 1 : 0);
-      b = (eb >= 2); s = (es >= 2);
+      b = (eb >= 2) && (impB || (zoneB && (u.bos.buy || u.choch.buy)));
+      s = (es >= 2) && (impS || (zoneS && (u.bos.sell || u.choch.sell)));
    }
    if(b && UltraPassScore(sb)){ r.buy = true; r.score = sb; r.reason = "UBOSE cont+zone+impulse"; }
    if(s && UltraPassScore(ss)){ r.sell = true; r.score = ss; r.reason = "UBOSE cont+zone+impulse"; }
@@ -182,6 +182,7 @@ int UltraSymDir(const string s)
 
 UltraSignal UltraPickBest(const UltraSnap &u)
 {
+   // LEVEL 1/2 — One proprietary strategy family · one best signal · no conflict
    UltraSignal best; best.buy = best.sell = false; best.score = -1; best.tag = "NONE";
    best.reason = "no setup"; best.explanation = "";
    UltraSignal arr[6];
@@ -197,6 +198,48 @@ UltraSignal UltraPickBest(const UltraSnap &u)
       if(!(arr[i].buy || arr[i].sell)) continue;
       if(arr[i].score > best.score) best = arr[i];
    }
+
+   // Reject / resolve cross-setup BUY vs SELL conflict (deterministic HTF authority)
+   if(best.score >= 0 && (best.buy || best.sell))
+   {
+      bool oppExists = false;
+      int oppScore = -1;
+      for(int i = 0; i < n; i++)
+      {
+         if(!(arr[i].buy || arr[i].sell)) continue;
+         if(arr[i].tag == best.tag) continue;
+         bool opp = (best.buy && arr[i].sell) || (best.sell && arr[i].buy);
+         if(opp && arr[i].score >= best.score - 6)
+         {
+            oppExists = true;
+            if(arr[i].score > oppScore) oppScore = arr[i].score;
+         }
+      }
+      if(oppExists)
+      {
+         bool htfBuy = (u.trend.htfBull || u.trend.macroBull);
+         bool htfSell = (u.trend.htfBear || u.trend.macroBear);
+         if(htfBuy && !htfSell && best.sell)
+         {
+            // Prefer HTF-aligned opposite candidate
+            for(int i = 0; i < n; i++)
+               if(arr[i].buy && arr[i].score >= best.score - 6) { best = arr[i]; break; }
+         }
+         else if(htfSell && !htfBuy && best.buy)
+         {
+            for(int i = 0; i < n; i++)
+               if(arr[i].sell && arr[i].score >= best.score - 6) { best = arr[i]; break; }
+         }
+         else if(!(htfBuy ^ htfSell))
+         {
+            best.buy = best.sell = false;
+            best.tag = "NONE";
+            best.score = -1;
+            best.reason = "conflicting setups";
+         }
+      }
+   }
+
    if(best.score >= 0 && !UltraPassScore(best.score))
    {
       best.buy = best.sell = false; best.tag = "NONE";

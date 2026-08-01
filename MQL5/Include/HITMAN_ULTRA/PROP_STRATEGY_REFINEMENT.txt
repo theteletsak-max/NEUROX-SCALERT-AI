@@ -1,0 +1,49 @@
+══════════════════════════════════════════════════════════════════════
+HITMAN AI ULTRA ∞ — PROPRIETARY STRATEGY REFINEMENT (APPLIED)
+BUILD: HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen=3
+══════════════════════════════════════════════════════════════════════
+
+MISSION: One Strategy · One Brain · One Decision · One Mission
+Never mix external strategies. Refine only.
+
+LEVEL 1 Signal Precision          [DONE]
+  ✓ Removed stacked InstantQuality −8 soft passes
+  ✓ ContSniper 2/3 requires impulse OR zone+BOS
+  ✓ EntryTrigger 2/5 only genuine∧strong BOS
+  ✓ UltraPickBest rejects conflicting BUY/SELL
+  ✓ Discipline R1 need=3 · R8 real location/liq
+
+LEVEL 2 Decision Intelligence     [DONE]
+  ✓ USM2 scores once in UltraAIDecide (one confidence engine)
+  ✓ Supreme reuses USM2 (no re-score / no −8 soft)
+  ✓ Master trend lock not bypassed by InstantQuality
+  ✓ PRISMFinalizeApproval live Ultra tags only
+
+LEVEL 3 Execution Quality         [DONE]
+  ✓ Fill verification after Buy/Sell
+  ✓ ResolvePositionTicket scans real positions
+  ✓ INVALID_FILL / INVALID_PRICE retry + refill mode
+
+LEVEL 4 Trade Management          [DONE]
+  ✓ PosEvo softInvalid requires structure+master+reversal
+
+LEVEL 5 Exit Intelligence         [DONE]
+  ✓ Removed soft InstantQuality exit shortcut
+  ✓ Structured HOLD deny logging
+
+LEVEL 6 Performance               [DONE]
+  ✓ AnalyzeLiveMarket reuses g_UltraLastSnap
+  ✓ UFSE cache hit on same-bar micro moves
+
+LEVEL 7 Reliability               [DONE]
+  ✓ UltraRecover refreshes tick/history · measured healthy
+  ✓ SystemHealth Bars>=60 matches BuildSnapshot
+
+LEVEL 8 Maintainability           [DONE]
+  ✓ This checklist · modular Ultra includes
+
+LOCKS
+TradeComment=HITMAN AI · HA_ULTRA_93 · MaxOpen=3 · EntryTF=PERIOD_CURRENT
+g_Trade · Mission-only closes · chart_background.bmp watermark
+InstantQualityMode=true (single soft floor via UltraFireFloor only)
+══════════════════════════════════════════════════════════════════════

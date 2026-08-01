@@ -92,10 +92,16 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
       }
    }
 
-   // USM2 scoring (Level 4) + dynamic weights (Level 5)
-   UltraUSM2Scores usm;
-   if(UltraUSM2Enabled)
+   // LEVEL 2 — One Confidence Engine: reuse USM2 from UltraAIDecide (no re-score)
+   if(UltraUSM2Enabled && g_UltraUSM2Last.tradeScore > 0)
    {
+      d.confidence = u.score.confidence > 0 ? u.score.confidence : g_UltraUSM2Last.confidence;
+      d.tradeScore = g_UltraUSM2Last.tradeScore;
+      d.grade = g_UltraUSM2Last.grade;
+   }
+   else if(UltraUSM2Enabled)
+   {
+      UltraUSM2Scores usm;
       UltraUSM2_Score(s, u, buySide, usm);
       g_UltraUSM2Last = usm;
       d.confidence = usm.confidence;
@@ -121,20 +127,16 @@ bool UltraSupreme_FinalizeEntry(const string s, UltraSnap &u, UltraSignal &sig, 
       return false;
    }
 
-   // Soft floor on trade score
+   // Floor already applied in UltraAIDecide — soft verify only
    int floor = UltraFireFloor();
-   if(InstantQualityMode) floor = MathMin(floor, 45);
    if(d.tradeScore < floor && d.confidence < UltraInstantFireConf)
    {
-      if(!(InstantQualityMode && d.tradeScore >= floor - 8))
-      {
-         why = "SUPREME: trade score low ";
-         why += IntegerToString(d.tradeScore);
-         d.reason = why;
-         g_UltraSupremeLast = d;
-         UltraBrain_Publish(false, buySide, u, "", why);
-         return false;
-      }
+      why = "SUPREME: trade score low ";
+      why += IntegerToString(d.tradeScore);
+      d.reason = why;
+      g_UltraSupremeLast = d;
+      UltraBrain_Publish(false, buySide, u, "", why);
+      return false;
    }
 
    // Ignore grade only in strict mode
