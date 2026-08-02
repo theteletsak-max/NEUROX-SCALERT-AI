@@ -7,8 +7,9 @@
 //+------------------------------------------------------------------+
 
 // Forward — Phase 19 Bug Elimination assembled after Mission Control
+// (defaults already declared earlier in UltraBacktestCompat)
 void UltraBug_Explain(const string action, const string module, const string func,
-                      const string reason, const string side = "-", const ulong ticket = 0);
+                      const string reason, const string side, const ulong ticket);
 
 #define ULTRA_POSLOCK_MAX 64
 
