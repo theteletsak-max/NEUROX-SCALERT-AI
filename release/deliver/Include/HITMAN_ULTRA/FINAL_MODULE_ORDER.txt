@@ -1,0 +1,129 @@
+HITMAN AI ULTRA ∞ — FINAL MODULE ORDER
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+Canonical phase numbering for the live EA.
+Historical Phase 17–20 docs remain as design notes; this file is the
+authoritative order for Module Manager, OnInit, and tick/decide flow.
+
+============================================================
+PHASE 1 — ULTRA FOUNDATION ENGINE
+  Module: UltraFoundation.mqh (+ 01_Core)
+  Init · Memory · Resources · Configuration · Timer · Health · Integrity
+
+PHASE 2 — ULTRA MARKET INTELLIGENCE ENGINE
+  Module: UltraMarketIntelligence.mqh (+ ticks/candles/MTF/session layers)
+  Tick · Candle · Market State · Trend · Momentum · Liquidity · Volatility
+  Spread · Session · Multi-Timeframe
+
+PHASE 3 — ULTRA PROPRIETARY STRATEGY ENGINE
+  Modules: UFSE_FastSignalEngine · TradeThesis · 15_Confluence · MasterAIBrain
+  Proprietary Logic · Trade Thesis · Market Understanding · Confluence
+  Confidence Engine (USM2 scores feed confidence — sole confidence path)
+
+PHASE 4 — ULTRA SIGNAL INTELLIGENCE ENGINE
+  Modules: UFSE · SignalEvolution · UltraPickBest path in Shell_B
+  BUY Detection · SELL Detection · Signal Validation · False Signal Filter
+  Duplicate Prevention · Final Signal
+
+PHASE 5 — ULTRA NEWS INTELLIGENCE ENGINE
+  Modules: UltraNewsExecution.mqh · 18_NewsIntelligence.mqh · 39_EventEngine
+  Event Detection · News Awareness · High Volatility · High Spread
+  Dynamic Re-analysis · Event Logging
+  LOCK: news never forces trades; spread/news alone never hard-reject
+
+PHASE 6 — ULTRA MISSION CONTROL
+  Module: MissionControl.mqh
+  Strategy · Signal · Confidence · Risk · Execution validation → Final Decision
+  Decisions: BUY | SELL | WAIT | REPLACE
+  LOCK: only Mission may call g_Trade.PositionClose*
+
+PHASE 7 — ULTRA EXECUTION ENGINE
+  Modules: Shell_B ExecuteBuy/Sell · 19_Execution · 32/36 Broker
+  Instant Detection · Instant Execution · Broker Intelligence · Fill Verify
+  Retry · Slippage · Execution Recovery (with Zero-Fail assist)
+
+PHASE 8 — ULTRA TARGET INTELLIGENCE ENGINE
+  Module: UltraTargetIntelligence.mqh
+  Dynamic SL · TP1 · TP2 · TP3 · Risk:Reward Validation
+
+PHASE 9 — ULTRA POSITION EVOLUTION ENGINE
+  Module: PositionEvolution.mqh
+  Position Monitoring · Thesis Monitoring · Re-analysis · Replacement
+  Protection · Profit Management (L1/L2/L3)
+
+PHASE 10 — ULTRA EXIT INTELLIGENCE ENGINE
+  Modules: MissionControl EXIT · SmartExit · UltraExitValidation (00_Types)
+  Exit Validation · Thesis Invalidation · Exit Confirmation · Exit Logging
+  LOCK: Mission-only closes
+
+PHASE 11 — ULTRA RISK INTELLIGENCE ENGINE
+  Modules: 20_CapitalProtection · UltraTradeGate · risk path in Shell_B
+  Position Size · Exposure · Margin · Drawdown · Capital Protection
+  Portfolio Risk
+
+PHASE 12 — ULTRA BACKTEST COMPATIBILITY ENGINE
+  Module: UltraBacktestCompat.mqh
+  Tester Detection · Historical · Indicator · MTF · News Compat · Diagnostics
+
+PHASE 13 — ULTRA PERFORMANCE ANALYTICS ENGINE
+  Modules: UltraAdaptiveIntelligence (analytics/review) · 25_Statistics
+  Trade Journal · Entry/Exit Analysis · Session/News/Symbol Stats
+  Win Rate · Profit Factor · Expectancy
+  LOCK: Adaptive is soft decision-quality only — never mutates strategy tag
+
+PHASE 14 — ULTRA LOGGER ENGINE
+  Modules: 27_Logger · UltraBug_Explain · decision/entry/exit logs
+  Decision · Entry · Exit · Error · Event · Debug
+
+PHASE 15 — ULTRA DASHBOARD ENGINE
+  Module: 24_Dashboard.mqh
+  Market Status · Signal · Position · Event · Confidence · Risk · Health
+
+PHASE 16 — ULTRA ZERO-FAIL RECOVERY ENGINE
+  Module: UltraZeroFailRecovery.mqh  (was historical Phase 20)
+  Indicator · Handle · Buffer · Position · Execution · Connection recovery
+  Continuous Monitoring — never abort the cycle
+
+PHASE 17 — ULTRA MAINTENANCE ENGINE
+  Module: UltraMaintenance.mqh (orchestrates UltraBugElimination + Opt)
+  Bug Detection · Performance · Memory · CPU · Stability
+  Broker Updates · Version Management
+  LOCK: maintenance only — not a new strategy (Final Development Rule)
+
+============================================================
+MAIN EXECUTION FLOW
+
+OnInit()
+  → Foundation (1)
+  → Market Intelligence (2)
+  → Supporting boots: VChain · News (5) · Targets (8) · Adaptive/Analytics (13)
+  → Bug / Maintenance (17) · Zero-Fail (16) · TradeGate (11) · Module Manager
+  → Backtest Compat (12) · Mission (6)
+
+Every Tick (RunTradingCycle + Decide)
+  → Foundation (1)
+  → Zero-Fail monitor (16)
+  → Market Intelligence (2)
+  → Proprietary Strategy (3) + Signal (4)
+  → News Intelligence (5)
+  → Mission Control (6) → BUY / SELL / WAIT / REPLACE
+  → Execution (7)
+  → Target Intelligence (8)
+  → Position Evolution (9)
+  → Exit Intelligence (10)
+  → Risk Intelligence (11)
+  → Performance Analytics (13)
+  → Logger (14)
+  → Dashboard (15)
+  → Recovery (16) + Maintenance (17)
+  → Repeat Every Tick
+
+============================================================
+PRODUCT LOCKS (unchanged)
+  TradeComment = HITMAN AI
+  BUILD_ID     = HA_ULTRA_93
+  MaxOpen      = 3
+  EntryTF      = PERIOD_CURRENT
+  Global       = CTrade g_Trade
+  One proprietary strategy · one signal · one thesis · one mission · one exit

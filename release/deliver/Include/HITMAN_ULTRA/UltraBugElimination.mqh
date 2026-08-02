@@ -1,10 +1,11 @@
 #ifndef HITMAN_ULTRA_BUG_ELIMINATION_MQH
 #define HITMAN_ULTRA_BUG_ELIMINATION_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — ULTRA BUG ELIMINATION ENGINE ∞ (Phase 19)            |
+//| HITMAN AI — ULTRA BUG ELIMINATION ENGINE ∞                       |
+//| Final Module Order: Phase 17 MAINTENANCE (core detector)         |
+//| Historical design note: Phase 19                                 |
 //| Stability · reliability · no silent failures · explain every path|
 //| NOT a new strategy — audit + structured logging only             |
-//| Allowed under Final Development Rule: bug fix / stability        |
 //+------------------------------------------------------------------+
 
 struct UltraBugAudit

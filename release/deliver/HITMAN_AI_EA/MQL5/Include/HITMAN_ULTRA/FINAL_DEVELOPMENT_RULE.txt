@@ -2,7 +2,9 @@ HITMAN AI — FINAL DEVELOPMENT RULE
 BUILD_ID: HA_ULTRA_93
 ============================================================
 
-After Phase 18 (Ultra Adaptive Intelligence ∞ Final Evolution):
+Canonical architecture numbering: FINAL_MODULE_ORDER.txt (Phases 1–17).
+
+After Adaptive Final Evolution (now Final Order Phase 13 analytics):
 
 NO MORE NEW ENGINES
 NO MORE NEW STRATEGIES
@@ -20,6 +22,7 @@ Only allowed work going forward:
 ✓ Forward-Test Validation
 ✓ Live Performance Validation
 ✓ Continuous Professional Refinement
+✓ Maintenance (Final Order Phase 17) — bug/perf/memory/CPU/stability/version
 
 Architecture locks remain:
 

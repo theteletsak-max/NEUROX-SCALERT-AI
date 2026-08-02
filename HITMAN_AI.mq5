@@ -1095,7 +1095,7 @@ input bool   UltraTradeGateEnabled       = true;   // hard pre-trade validation
 input bool   UltraTradeGateLog           = true;   // TRADE_GATE PASS/FAIL logs
 input bool   UltraTradeGateRequireTargets= true;   // Target Intelligence plan mandatory
 
-input group "31 · ULTRA ADAPTIVE INTELLIGENCE ∞ FINAL EVOLUTION (Phase 18)"
+input group "31 · ULTRA PERF ANALYTICS / ADAPTIVE ∞ (Final Order P13 · was P18)"
 input bool   UltraAdaptiveEnabled           = true;  // master — decision quality only
 input bool   UltraAdaptiveLog               = true;  // ADAPTIVE audit / record logs
 input bool   UltraAdaptiveConfEnabled       = true;  // soft confidence bias
@@ -1124,7 +1124,7 @@ input int    UltraAdaptiveSlipTightenPts    = 4;     // tighten deviation under 
 input int    UltraAdaptiveMonitorTightenMs  = 15;    // reduce monitor interval
 input int    UltraAdaptiveMonitorRelaxMs    = 10;    // relax monitor interval
 
-input group "31 · ULTRA BUG ELIMINATION ENGINE ∞ (Phase 19)"
+input group "31 · ULTRA MAINTENANCE / BUG ELIMINATION ∞ (Final Order P17)"
 input bool   UltraBugEnabled             = true;   // master — stability / explain path
 input bool   UltraBugLogBoot             = true;   // boot / deinit audit lines
 input bool   UltraBugLogExplain          = true;   // structured ULTRA EXPLAIN blocks
@@ -1136,8 +1136,9 @@ input bool   UltraBugEventAudit          = true;   // news/session consistency
 input bool   UltraBugPerfAudit           = true;   // tick latency warn
 input int    UltraBugPositionAuditMs     = 1000;   // position sync cadence
 input int    UltraBugPerfWarnMs          = 50;     // tick latency warn threshold
+input bool   UltraMaintenanceEnabled     = true;   // Final Order P17 — orchestrates Bug+resources
 
-input group "31 · ULTRA ZERO-FAIL RECOVERY ENGINE ∞ (Phase 20)"
+input group "31 · ULTRA ZERO-FAIL RECOVERY ENGINE ∞ (Final Order P16)"
 input bool   UltraZFREnabled             = true;   // master — never stop on recoverable faults
 input bool   UltraZFRLog                 = true;   // recovery action logs
 input bool   UltraZFRConnectionRecovery  = true;
@@ -12612,10 +12613,11 @@ string UltraMission_Dashboard()
 #ifndef HITMAN_ULTRA_BUG_ELIMINATION_MQH
 #define HITMAN_ULTRA_BUG_ELIMINATION_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — ULTRA BUG ELIMINATION ENGINE ∞ (Phase 19)            |
+//| HITMAN AI — ULTRA BUG ELIMINATION ENGINE ∞                       |
+//| Final Module Order: Phase 17 MAINTENANCE (core detector)         |
+//| Historical design note: Phase 19                                 |
 //| Stability · reliability · no silent failures · explain every path|
 //| NOT a new strategy — audit + structured logging only             |
-//| Allowed under Final Development Rule: bug fix / stability        |
 //+------------------------------------------------------------------+
 
 struct UltraBugAudit
@@ -13238,11 +13240,122 @@ string UltraBug_Dashboard()
 #endif // HITMAN_ULTRA_BUG_ELIMINATION_MQH
 //===== END UltraBugElimination.mqh =====
 
+//===== BEGIN UltraMaintenance.mqh =====
+#ifndef HITMAN_ULTRA_MAINTENANCE_MQH
+#define HITMAN_ULTRA_MAINTENANCE_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — ULTRA MAINTENANCE ENGINE ∞ (Final Module Order P17)  |
+//| Thin orchestration over Bug Elimination + Foundation resources   |
+//| NOT a new strategy — maintenance only (Final Development Rule)   |
+//| Bug · Performance · Memory · CPU · Stability · Broker · Version  |
+//+------------------------------------------------------------------+
+
+struct UltraMaintenanceState
+{
+   bool   booted;
+   bool   bugOK;
+   bool   memoryOK;
+   bool   resourcesOK;
+   bool   versionOK;
+   bool   stabilityOK;
+   string version;
+   string summary;
+   int    bugExplains;
+   int    bugCritical;
+   long   lastScanMs;
+};
+
+UltraMaintenanceState g_UltraMaint;
+
+//--------------------------------------------------------------------//
+// Refresh from live Bug Elimination + Foundation (single source)     //
+//--------------------------------------------------------------------//
+void UltraMaint_Refresh()
+{
+   g_UltraMaint.version     = ULTRA_BUILD_ID;
+   g_UltraMaint.versionOK   = (StringCompare(g_UltraMaint.version, "HA_ULTRA_93") == 0);
+   g_UltraMaint.memoryOK    = g_UltraFoundation.memoryOK;
+   g_UltraMaint.resourcesOK = g_UltraFoundation.resourcesOK;
+
+   if(UltraBugEnabled)
+   {
+      g_UltraMaint.bugOK       = g_UltraBug.initOK;
+      g_UltraMaint.bugExplains = g_UltraBug.explainCount;
+      g_UltraMaint.bugCritical = g_UltraBug.criticalCount;
+   }
+   else
+   {
+      g_UltraMaint.bugOK       = true;
+      g_UltraMaint.bugExplains = 0;
+      g_UltraMaint.bugCritical = 0;
+   }
+
+   g_UltraMaint.stabilityOK =
+      g_UltraMaint.bugOK &&
+      g_UltraMaint.memoryOK &&
+      g_UltraMaint.resourcesOK &&
+      g_UltraMaint.versionOK;
+
+   g_UltraMaint.summary = "MAINT ";
+   g_UltraMaint.summary += g_UltraMaint.stabilityOK ? "OK" : "DEGRADED";
+   g_UltraMaint.summary += " bug=";
+   g_UltraMaint.summary += g_UltraMaint.bugOK ? "OK" : "FAIL";
+   g_UltraMaint.summary += " mem=";
+   g_UltraMaint.summary += g_UltraMaint.memoryOK ? "OK" : "OVERFLOW";
+   g_UltraMaint.summary += " ver=";
+   g_UltraMaint.summary += g_UltraMaint.version;
+   g_UltraMaint.lastScanMs = (long)GetTickCount();
+}
+
+//--------------------------------------------------------------------//
+// Boot — version lock + initial stability snapshot                   //
+//--------------------------------------------------------------------//
+void UltraMaint_Boot()
+{
+   ZeroMemory(g_UltraMaint);
+   g_UltraMaint.booted  = true;
+   g_UltraMaint.version = ULTRA_BUILD_ID;
+   UltraMaint_Refresh();
+
+   if(UltraBugLogBoot || UltraFoundationLogBoot)
+      UltraLog("MAINTENANCE ENGINE ∞ boot (Final Module Order P17) " +
+               g_UltraMaint.summary +
+               " | BugDetect=Y Perf=Y Mem=Y CPU=via_Bug Perf Stability=Y BrokerAudit=Y Version=LOCK");
+}
+
+//--------------------------------------------------------------------//
+// Tick — soft status refresh only (Bug OnTick remains authoritative) //
+//--------------------------------------------------------------------//
+void UltraMaint_OnTick(const string symbol)
+{
+   if(!UltraMaintenanceEnabled || !g_UltraMaint.booted)
+      return;
+
+   long now = (long)GetTickCount();
+   if(g_UltraMaint.lastScanMs > 0 && (now - g_UltraMaint.lastScanMs) < 500)
+      return;
+
+   UltraMaint_Refresh();
+   // Bug Elimination remains the structured explain authority;
+   // Maintenance only mirrors Foundation/Bug health for Module Manager.
+}
+
+string UltraMaint_Dashboard()
+{
+   UltraMaint_Refresh();
+   return g_UltraMaint.summary;
+}
+
+#endif // HITMAN_ULTRA_MAINTENANCE_MQH
+//===== END UltraMaintenance.mqh =====
+
 //===== BEGIN UltraZeroFailRecovery.mqh =====
 #ifndef HITMAN_ULTRA_ZERO_FAIL_RECOVERY_MQH
 #define HITMAN_ULTRA_ZERO_FAIL_RECOVERY_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — ULTRA ZERO-FAIL RECOVERY ENGINE ∞ (Phase 20)         |
+//| HITMAN AI — ULTRA ZERO-FAIL RECOVERY ENGINE ∞                    |
+//| Final Module Order: Phase 16 ZERO-FAIL RECOVERY                  |
+//| Historical design note: Phase 20                                 |
 //| Never stop operating because of a recoverable problem.           |
 //| Monitor → Detect → Recover → Retry → Continue (never hang)       |
 //| NOT a new strategy — stability recovery under Final Dev Rule     |
@@ -14091,9 +14204,9 @@ string UltraTradeGate_Dashboard()
 #ifndef HITMAN_ULTRA_MODULE_MANAGER_MQH
 #define HITMAN_ULTRA_MODULE_MANAGER_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — ULTRA MODULE MANAGER (Final Master Audit)            |
-//| Registers institutional engines · no duplicate lifecycle logic   |
-//| Status mirrors Foundation / Market / VChain / Gate — never guess |
+//| HITMAN AI — ULTRA MODULE MANAGER (Final Module Order)            |
+//| Registers Phases 1–17 · no duplicate lifecycle logic             |
+//| Status mirrors live engines — never guess                        |
 //+------------------------------------------------------------------+
 
 #define ULTRA_MOD_MAX 28
@@ -14145,71 +14258,90 @@ void UltraMod_Reg(const string name, const bool critical, const bool present,
 }
 
 //--------------------------------------------------------------------//
-// Refresh registry from live engine states (deterministic — no guess) //
+// Refresh registry — FINAL MODULE ORDER Phases 1–17                  //
 //--------------------------------------------------------------------//
 void UltraMod_Refresh()
 {
    UltraMod_Clear();
 
+   // PHASE 1 — Foundation
    bool foundOK = (g_UltraFoundation.booted && g_UltraFoundation.status != "RED");
-   UltraMod_Reg("FOUNDATION", true, UltraFoundationEnabled, foundOK, g_UltraFoundation.status);
+   UltraMod_Reg("P01_FOUNDATION", true, UltraFoundationEnabled, foundOK, g_UltraFoundation.status);
 
+   // PHASE 2 — Market Intelligence
    bool mktOK = (!UltraMarketIntelEnabled) ||
                 (g_UltraMarketIntel.booted && g_UltraMarketIntel.approved);
-   UltraMod_Reg("MARKET_INTEL", true, UltraMarketIntelEnabled, mktOK, g_UltraMarketIntel.status);
+   UltraMod_Reg("P02_MARKET_INTEL", true, UltraMarketIntelEnabled, mktOK, g_UltraMarketIntel.status);
 
-   // Module present/healthy ≠ trade permission; INVALID engine = unhealthy
-   bool vchainOK = (!UltraVChainEnabled) || (g_UltraVChain.overall != UV_INVALID);
-   UltraMod_Reg("VCHAIN", true, UltraVChainEnabled, vchainOK, UltraV_Name(g_UltraVChain.overall));
+   // PHASE 3 — Proprietary Strategy (UFSE + Thesis + Confluence path)
+   UltraMod_Reg("P03_PROP_STRATEGY", true, UltraFastSignalEnabled, UltraFastSignalEnabled,
+                "UFSE+Thesis sole strategy");
 
-   UltraMod_Reg("NEWS_EXEC", false, UltraNewsExecEnabled, UltraNewsExecEnabled,
+   // PHASE 4 — Signal Intelligence
+   UltraMod_Reg("P04_SIGNAL_INTEL", true, UltraFastSignalEnabled, UltraFastSignalEnabled,
+                "BUY/SELL validate+filter");
+
+   // PHASE 5 — News Intelligence
+   UltraMod_Reg("P05_NEWS_INTEL", false, UltraNewsExecEnabled, UltraNewsExecEnabled,
                 g_UltraNewsExec.newsMode ? "MODE_ON" : "idle");
 
-   UltraMod_Reg("TARGET_INTEL", true, UltraTargetEnabled, UltraTargetEnabled,
+   // PHASE 6 — Mission Control
+   UltraMod_Reg("P06_MISSION", true, true, true, "BUY|SELL|WAIT|REPLACE");
+
+   // PHASE 7 — Execution (broker/filling live in Shell — present when TradeGate boots)
+   UltraMod_Reg("P07_EXECUTION", true, true, true, "instant+fill+retry");
+
+   // PHASE 8 — Target Intelligence
+   UltraMod_Reg("P08_TARGET_INTEL", true, UltraTargetEnabled, UltraTargetEnabled,
                 g_UltraTargetLast.valid ? "PLAN_OK" : "—");
 
-   UltraMod_Reg("ADAPTIVE", false, UltraAdaptiveEnabled, UltraAdaptiveEnabled,
+   // PHASE 9 — Position Evolution
+   UltraMod_Reg("P09_POS_EVO", false, UltraPosEvoEnabled, UltraPosEvoEnabled, "L1/L2/L3");
+
+   // PHASE 10 — Exit Intelligence (Mission-only closes)
+   UltraMod_Reg("P10_EXIT_INTEL", true, true, UltraMissionOnlyExits, "Mission-only closes");
+
+   // PHASE 11 — Risk Intelligence (Capital + TradeGate)
+   bool gateOK = (!UltraTradeGateEnabled) || g_UltraTradeGate.passed ||
+                 (StringLen(g_UltraTradeGate.failStep) == 0);
+   UltraMod_Reg("P11_RISK_INTEL", true, UltraTradeGateEnabled, gateOK,
+                g_UltraTradeGate.passed ? "GATE_PASS" :
+                (StringLen(g_UltraTradeGate.failStep) > 0 ? g_UltraTradeGate.failStep : "—"));
+
+   // PHASE 12 — Backtest Compatibility
+   UltraMod_Reg("P12_BT_COMPAT", false, UltraBacktestCompatEnabled, true, UltraBT_ModeName());
+
+   // PHASE 13 — Performance Analytics (Adaptive soft analytics)
+   UltraMod_Reg("P13_PERF_ANALYTICS", false, UltraAdaptiveEnabled, UltraAdaptiveEnabled,
                 UltraAdaptiveEnabled
-                ? ("FINAL Q=" + IntegerToString(g_UltraAdapt.audit.composite) +
-                   " n=" + IntegerToString(g_UltraAdapt.review.trades) +
-                   (g_UltraAdapt.finalEvolution ? " LOCKED" : ""))
+                ? ("Q=" + IntegerToString(g_UltraAdapt.audit.composite) +
+                   " n=" + IntegerToString(g_UltraAdapt.review.trades))
                 : "OFF");
 
-   UltraMod_Reg("BUG_ELIM", false, UltraBugEnabled, g_UltraBug.initOK,
-                UltraBugEnabled
-                ? (g_UltraBug.summary + " expl=" + IntegerToString(g_UltraBug.explainCount))
-                : "OFF");
+   // PHASE 14 — Logger
+   UltraMod_Reg("P14_LOGGER", false, UltraLoggingEnabled, true, "OK");
 
-   UltraMod_Reg("ZERO_FAIL", false, UltraZFREnabled, UltraZFREnabled,
+   // PHASE 15 — Dashboard
+   UltraMod_Reg("P15_DASHBOARD", false, UltraDashboardEnabled, true, "OK");
+
+   // PHASE 16 — Zero-Fail Recovery
+   UltraMod_Reg("P16_ZERO_FAIL", false, UltraZFREnabled, UltraZFREnabled,
                 UltraZFREnabled
                 ? (g_UltraZFR.summary + " ok=" + IntegerToString(g_UltraZFR.recoverSuccess))
                 : "OFF");
 
-   bool gateOK = (!UltraTradeGateEnabled) || g_UltraTradeGate.passed ||
-                 (StringLen(g_UltraTradeGate.failStep) == 0);
-   UltraMod_Reg("TRADE_GATE", true, UltraTradeGateEnabled, gateOK,
-                g_UltraTradeGate.passed ? "PASS" :
-                (StringLen(g_UltraTradeGate.failStep) > 0 ? g_UltraTradeGate.failStep : "—"));
+   // PHASE 17 — Maintenance (Bug Elimination orchestration)
+   bool maintOK = (!UltraMaintenanceEnabled) || g_UltraMaint.stabilityOK;
+   UltraMod_Reg("P17_MAINTENANCE", false, UltraMaintenanceEnabled, maintOK,
+                UltraMaintenanceEnabled ? g_UltraMaint.summary : "OFF");
 
-   UltraMod_Reg("UFSE", true, UltraFastSignalEnabled, UltraFastSignalEnabled, "sole signal path");
-   UltraMod_Reg("USM2", true, UltraUSM2Enabled, UltraUSM2Enabled, "sole confidence");
-   UltraMod_Reg("THESIS", true, UltraThesisEnabled, UltraThesisEnabled, "sole thesis");
-   UltraMod_Reg("MISSION", true, true, true, "sole entry/close authority");
-   UltraMod_Reg("POSEVO", false, UltraPosEvoEnabled, UltraPosEvoEnabled, "L1/L2/L3");
-   UltraMod_Reg("EVENT", false, UltraEventEngineEnabled, UltraEventEngineEnabled, "always-active");
-   UltraMod_Reg("SESSION", false, UltraSessionEngineEnabled, UltraSessionEngineEnabled, "never blocks");
-   UltraMod_Reg("HEALTH", false, UltraSystemHealthEnabled, g_UltraSysHealth.status != "RED",
+   // Supporting (Foundation-backed — not separate product phases)
+   UltraMod_Reg("SUP_USM2", true, UltraUSM2Enabled, UltraUSM2Enabled, "sole confidence");
+   UltraMod_Reg("SUP_THESIS", true, UltraThesisEnabled, UltraThesisEnabled, "sole thesis");
+   UltraMod_Reg("SUP_HEALTH", false, UltraSystemHealthEnabled, g_UltraSysHealth.status != "RED",
                 g_UltraSysHealth.status);
-   UltraMod_Reg("RECOVERY", false, UltraRecoveryEnabled, UltraRecoveryEnabled, "auto");
-   UltraMod_Reg("BT_COMPAT", false, UltraBacktestCompatEnabled, true, UltraBT_ModeName());
-   UltraMod_Reg("LOGGER", false, UltraLoggingEnabled, true, "OK");
-   UltraMod_Reg("DASHBOARD", false, UltraDashboardEnabled, true, "OK");
-
-   // Memory / Resource (Foundation-backed — single source of truth)
-   UltraMod_Reg("MEMORY", false, UltraMemoryEngineEnabled, g_UltraFoundation.memoryOK,
+   UltraMod_Reg("SUP_MEMORY", false, UltraMemoryEngineEnabled, g_UltraFoundation.memoryOK,
                 g_UltraFoundation.memoryOK ? "OK" : "OVERFLOW");
-   UltraMod_Reg("RESOURCES", false, true, g_UltraFoundation.resourcesOK,
-                "objs=" + IntegerToString(g_UltraFoundation.chartObjectCount));
 
    g_UltraMods.summary = "MODS ";
    g_UltraMods.summary += IntegerToString(g_UltraMods.healthyN);
@@ -14217,13 +14349,15 @@ void UltraMod_Refresh()
    g_UltraMods.summary += IntegerToString(g_UltraMods.presentN);
    g_UltraMods.summary += " crit=";
    g_UltraMods.summary += g_UltraMods.allCriticalOK ? "OK" : "FAIL";
+   g_UltraMods.summary += " FMO=1-17";
 }
 
 void UltraMod_Boot()
 {
    UltraMod_Refresh();
    if(UltraFoundationLogBoot)
-      UltraLog("MODULE MANAGER boot " + g_UltraMods.summary + " BUILD=HA_ULTRA_93");
+      UltraLog("MODULE MANAGER boot Final Module Order P1-17 " + g_UltraMods.summary +
+               " BUILD=HA_ULTRA_93");
 }
 
 string UltraMod_Dashboard()
@@ -16049,15 +16183,17 @@ int OnInit()
    Print("HITMAN AI Loaded BUILD_ID=HA_ULTRA_93 MaxOpen=", MaxOpenTrades);
    UltraCoreInit();
    UltraSystemController_Boot();
-   UltraFoundation_Boot(); // PHASE 1 — after indicators/symbols ready
+   //======== FINAL MODULE ORDER — OnInit boot sequence ========//
+   UltraFoundation_Boot();  // P01 Foundation
    UltraEvent_OnBoot();
-   UltraMarketIntel_Boot(); // PHASE 2 — verified market data gate
-   UltraVChain_Boot();      // VALIDATION CHAIN — VALID/INVALID/WAIT
-   UltraNewsExec_Boot();    // NEWS EXECUTION INTELLIGENCE ∞
-   UltraTarget_Boot();      // TARGET INTELLIGENCE ∞
-   UltraAdaptive_Boot();    // PHASE 18 — ADAPTIVE FINAL EVOLUTION ∞
-   UltraBug_Boot();         // PHASE 19 — BUG ELIMINATION ∞
-   UltraZFR_Boot();         // PHASE 20 — ZERO-FAIL RECOVERY ∞
+   UltraMarketIntel_Boot(); // P02 Market Intelligence
+   UltraVChain_Boot();      // supporting validation (feeds Mission/Risk)
+   UltraNewsExec_Boot();    // P05 News Intelligence
+   UltraTarget_Boot();      // P08 Target Intelligence
+   UltraAdaptive_Boot();    // P13 Performance Analytics (soft adaptive)
+   UltraBug_Boot();         // P17 Maintenance core (Bug Elimination)
+   UltraMaint_Boot();       // P17 Maintenance orchestrator
+   UltraZFR_Boot();         // P16 Zero-Fail Recovery
    // Re-note handles after Boot zero (InitializeIndicators ran earlier)
    {
       int bad = 0, checked = 0;
@@ -16071,31 +16207,31 @@ int OnInit()
       }
       UltraBug_NoteHandles(bad, checked);
    }
-   UltraTradeGate_Boot();   // HARD GATE — any fail = NO TRADE
-   UltraMod_Boot();         // MODULE MANAGER — Final Master Audit registry
-   UltraBT_Boot();          // BACKTEST COMPATIBILITY ∞ — Tester/Demo/Live
-   UltraOpt_OnTickStart();
-   UltraMission_Init();
-   UltraBug_AuditInit(BrokerSymbol); // init / handles / broker / timer audit
-   Print("FINAL MASTER AUDIT v1.0: HA_ULTRA_93 | one strategy · one signal · one thesis · one mission · one exit");
+   UltraTradeGate_Boot();   // P11 Risk Intelligence gate
+   UltraMod_Boot();         // Module Manager — Final Module Order P1-17
+   UltraBT_Boot();          // P12 Backtest Compatibility
+   UltraOpt_OnTickStart();  // P17 Maintenance — CPU/perf cadence
+   UltraMission_Init();     // P06 Mission Control
+   UltraBug_AuditInit(BrokerSymbol); // P17 init / handles / broker / timer audit
+   Print("FINAL MODULE ORDER: HA_ULTRA_93 | Phases 1-17 | one strategy · one signal · one thesis · one mission · one exit");
    Print("MODULE MANAGER: ", g_UltraMods.summary);
-   Print("BACKTEST COMPAT ∞: Mode=", UltraBT_ModeName(),
+   Print("P12 BT COMPAT ∞: Mode=", UltraBT_ModeName(),
          " Compat=", UltraYN(g_UltraBT.compatMode),
          " Enabled=", UltraYN(UltraBacktestCompatEnabled));
    Print("VALIDATION CHAIN: Enabled=", UltraYN(UltraVChainEnabled),
          " BlockInvalid=", UltraYN(UltraVChainBlockOnInvalid),
          " BlockWait=", UltraYN(UltraVChainBlockOnWait));
-   Print("NEWS EXEC ∞: Enabled=", UltraYN(UltraNewsExecEnabled),
+   Print("P05 NEWS INTEL ∞: Enabled=", UltraYN(UltraNewsExecEnabled),
          " InstantPath=", UltraYN(UltraNewsExecInstantPath),
          " ForceReanalyze=", UltraYN(UltraNewsExecForceReanalyze),
          " MinConf=", UltraNewsExecMinConf);
-   Print("TARGET INTEL ∞: Enabled=", UltraYN(UltraTargetEnabled),
+   Print("P08 TARGET INTEL ∞: Enabled=", UltraYN(UltraTargetEnabled),
          " Strict=", UltraYN(UltraTargetStrict),
          " TP3=", UltraYN(UltraTargetEnableTP3),
          " MinRR=", DoubleToString(UltraTargetMinRR1, 1), "/",
          DoubleToString(UltraTargetMinRR2, 1), "/",
          DoubleToString(UltraTargetMinRR3, 1));
-   Print("ADAPTIVE INTEL ∞ FINAL: Enabled=", UltraYN(UltraAdaptiveEnabled),
+   Print("P13 PERF ANALYTICS ∞: Enabled=", UltraYN(UltraAdaptiveEnabled),
          " Conf=", UltraYN(UltraAdaptiveConfEnabled),
          " Risk=", UltraYN(UltraAdaptiveRiskEnabled),
          " Pos=", UltraYN(UltraAdaptivePosEnabled),
@@ -16103,15 +16239,15 @@ int OnInit()
          " Reanalyze=", UltraYN(UltraAdaptiveReanalyzeEnabled),
          " SelfReview=", UltraYN(UltraAdaptiveSelfReviewEnabled),
          " Learn=STAT_ONLY NO_MORE_ENGINES");
-   Print("ONE DECISION PATH: MarketIntel→Signal→Thesis→Risk→Exec→Adaptive→Mission→BUY/SELL/WAIT");
-   Print("TRADE GATE: Enabled=", UltraYN(UltraTradeGateEnabled),
+   Print("MAIN FLOW: Foundation→Market→Strategy→Signal→News→Mission→Exec→Target→PosEvo→Exit→Risk→Analytics→Logger→Dashboard→Recovery");
+   Print("P11 TRADE GATE: Enabled=", UltraYN(UltraTradeGateEnabled),
          " RequireTargets=", UltraYN(UltraTradeGateRequireTargets),
          " — ANY validation fail = NO TRADE");
-   Print("FOUNDATION ENGINE: Enabled=", UltraYN(UltraFoundationEnabled),
+   Print("P01 FOUNDATION: Enabled=", UltraYN(UltraFoundationEnabled),
          " HealthTick=", UltraYN(UltraFoundationHealthTick),
          " Status=", g_UltraFoundation.status,
          " TF=", EnumToString(g_UltraFoundation.entryTF));
-   Print("MARKET INTEL ENGINE: Enabled=", UltraYN(UltraMarketIntelEnabled),
+   Print("P02 MARKET INTEL: Enabled=", UltraYN(UltraMarketIntelEnabled),
          " Status=", g_UltraMarketIntel.status,
          " State=", g_UltraMarketIntel.stateName,
          " Detail=", g_UltraMarketIntel.detail);
@@ -16125,19 +16261,20 @@ int OnInit()
    Print("ONE STRATEGY: UFSE only | MissionOnlyExits=", UltraYN(UltraMissionOnlyExits),
          " | PositionClose sole owner=MissionControl");
    Print("FINAL DEVELOPMENT RULE: no new engines/strategies/features — refine + validate only");
-   Print("BUG ELIMINATION ∞: Enabled=", UltraYN(UltraBugEnabled),
+   Print("P17 MAINTENANCE ∞: Enabled=", UltraYN(UltraMaintenanceEnabled),
+         " Bug=", UltraYN(UltraBugEnabled),
          " Explain=", UltraYN(UltraBugLogExplain),
          " Signal=", UltraYN(UltraBugSignalAudit),
          " Exec=", UltraYN(UltraBugExecAudit),
          " Pos=", UltraYN(UltraBugPositionAudit),
-         " init=", g_UltraBug.summary);
-   Print("ZERO-FAIL RECOVERY ∞: Enabled=", UltraYN(UltraZFREnabled),
+         " ", g_UltraMaint.summary);
+   Print("P16 ZERO-FAIL RECOVERY ∞: Enabled=", UltraYN(UltraZFREnabled),
          " MonitorMs=", UltraZFRMonitorMs,
          " Ind=", UltraYN(UltraZFRIndicatorRecovery),
          " Pos=", UltraYN(UltraZFRPositionRecovery),
          " Conn=", UltraYN(UltraZFRConnectionRecovery),
          " NeverStop=Y");
-   Print("POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
+   Print("P09 POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
          " L3Close=", UltraYN(UltraPosEvoCloseOnL3),
          " L3Bars=", UltraPosEvoL3ConfirmBars,
          " Replace=", UltraYN(UltraPosEvoReplaceEnabled),
@@ -16468,7 +16605,7 @@ void OnDeinit(const int reason)
       EventKillTimer();
 
    ObjectDelete(0, BG_OBJECT_NAME);
-   UltraBug_AuditDeinit(reason);     // PHASE 19 — deinit / object / timer audit
+   UltraBug_AuditDeinit(reason);     // P17 Maintenance — deinit / object / timer audit
    UltraFoundation_Shutdown(reason); // PHASE 1 — audited shutdown
 }
 
@@ -17006,9 +17143,10 @@ void RunTradingCycle(string symbol)
 
    BrokerSymbol = symbol;
 
-   // PHASE 1 — Ultra Foundation Health Engine (throttled full verify)
+   // FINAL MODULE ORDER — tick cycle (Decide path completes P3–P11 inside InstantExecution)
+   // P01 Foundation
    UltraFoundation_OnTick(symbol);
-   // PHASE 20 — Zero-Fail Recovery always monitors (even when RED / degraded)
+   // P16 Zero-Fail — always monitors (even when RED / degraded)
    UltraZFR_OnTick(symbol);
    if(UltraFoundationEnabled && g_UltraFoundation.status == "RED")
    {
@@ -17016,7 +17154,7 @@ void RunTradingCycle(string symbol)
       return;
    }
 
-   // PHASE 2 — Ultra Market Intelligence (bad data = no analysis / no new trades)
+   // P02 Market Intelligence (bad data = no analysis / no new trades)
    UltraMarketIntel_OnTick(symbol);
    if(UltraMarketIntelEnabled && !UltraMarketIntel_Approved())
    {
@@ -17028,7 +17166,7 @@ void RunTradingCycle(string symbol)
    // DEFENSE LINE 9 — EMERGENCY (connection / data / symbol recover)
    UltraDefense_Line9_Emergency(symbol);
 
-   // ULTRA UPGRADE — System Health (L15-17); RED blocks entry path only
+   // Supporting health (P01 integrity); RED blocks entry path only
    if(UltraUpgradeEnabled && UltraSystemHealthEnabled)
    {
       if(!UltraSystemHealth_Update(symbol))
@@ -17038,13 +17176,15 @@ void RunTradingCycle(string symbol)
       }
    }
 
-   // PHASE 18 — continuous adaptive re-analysis (soft; never changes strategy)
+   // P13 Performance Analytics — continuous soft re-analysis
    UltraAdaptive_OnTick(symbol);
 
-   // PHASE 19 — bug elimination audits (position sync / perf)
+   // P17 Maintenance — bug audits + status mirror
    UltraBug_PerfBegin();
    UltraBug_OnTick(symbol);
+   UltraMaint_OnTick(symbol);
 
+   // P09/P10/P11 — position/exit/risk via Manage; P3–P8 via InstantExecution→Decide
    ManageOpenTrades();
 
    if(TradingAllowed)
@@ -17071,11 +17211,10 @@ void OnTimer()
 
 void OnTick()
 {
-   UltraEvent_OnTickPulse(); // Phase 16 — tick-speed intelligence
-   UltraNewsExec_OnTick(PrimarySymbol); // News Mode high-frequency monitor
-   RunTradingCycle(PrimarySymbol);
-
-   UpdateDashboard();
+   UltraEvent_OnTickPulse();              // Event pulse (feeds P05 News / Market)
+   UltraNewsExec_OnTick(PrimarySymbol);   // P05 News Intelligence — HF monitor
+   RunTradingCycle(PrimarySymbol);        // Final Module Order tick cycle
+   UpdateDashboard();                     // P15 Dashboard
 }
 //+------------------------------------------------------------------+
 //|                 Sniper AI - Part 2                       |

@@ -157,7 +157,7 @@ input bool   UltraTradeGateEnabled       = true;   // hard pre-trade validation
 input bool   UltraTradeGateLog           = true;   // TRADE_GATE PASS/FAIL logs
 input bool   UltraTradeGateRequireTargets= true;   // Target Intelligence plan mandatory
 
-input group "31 · ULTRA ADAPTIVE INTELLIGENCE ∞ FINAL EVOLUTION (Phase 18)"
+input group "31 · ULTRA PERF ANALYTICS / ADAPTIVE ∞ (Final Order P13 · was P18)"
 input bool   UltraAdaptiveEnabled           = true;  // master — decision quality only
 input bool   UltraAdaptiveLog               = true;  // ADAPTIVE audit / record logs
 input bool   UltraAdaptiveConfEnabled       = true;  // soft confidence bias
@@ -186,7 +186,7 @@ input int    UltraAdaptiveSlipTightenPts    = 4;     // tighten deviation under 
 input int    UltraAdaptiveMonitorTightenMs  = 15;    // reduce monitor interval
 input int    UltraAdaptiveMonitorRelaxMs    = 10;    // relax monitor interval
 
-input group "31 · ULTRA BUG ELIMINATION ENGINE ∞ (Phase 19)"
+input group "31 · ULTRA MAINTENANCE / BUG ELIMINATION ∞ (Final Order P17)"
 input bool   UltraBugEnabled             = true;   // master — stability / explain path
 input bool   UltraBugLogBoot             = true;   // boot / deinit audit lines
 input bool   UltraBugLogExplain          = true;   // structured ULTRA EXPLAIN blocks
@@ -198,8 +198,9 @@ input bool   UltraBugEventAudit          = true;   // news/session consistency
 input bool   UltraBugPerfAudit           = true;   // tick latency warn
 input int    UltraBugPositionAuditMs     = 1000;   // position sync cadence
 input int    UltraBugPerfWarnMs          = 50;     // tick latency warn threshold
+input bool   UltraMaintenanceEnabled     = true;   // Final Order P17 — orchestrates Bug+resources
 
-input group "31 · ULTRA ZERO-FAIL RECOVERY ENGINE ∞ (Phase 20)"
+input group "31 · ULTRA ZERO-FAIL RECOVERY ENGINE ∞ (Final Order P16)"
 input bool   UltraZFREnabled             = true;   // master — never stop on recoverable faults
 input bool   UltraZFRLog                 = true;   // recovery action logs
 input bool   UltraZFRConnectionRecovery  = true;

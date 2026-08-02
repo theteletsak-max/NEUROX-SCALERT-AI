@@ -1,7 +1,9 @@
 #ifndef HITMAN_ULTRA_ZERO_FAIL_RECOVERY_MQH
 #define HITMAN_ULTRA_ZERO_FAIL_RECOVERY_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — ULTRA ZERO-FAIL RECOVERY ENGINE ∞ (Phase 20)         |
+//| HITMAN AI — ULTRA ZERO-FAIL RECOVERY ENGINE ∞                    |
+//| Final Module Order: Phase 16 ZERO-FAIL RECOVERY                  |
+//| Historical design note: Phase 20                                 |
 //| Never stop operating because of a recoverable problem.           |
 //| Monitor → Detect → Recover → Retry → Continue (never hang)       |
 //| NOT a new strategy — stability recovery under Final Dev Rule     |
