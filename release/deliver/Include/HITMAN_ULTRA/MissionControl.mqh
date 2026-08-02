@@ -73,6 +73,10 @@ void UltraMission_Init()
    g_UltraMissionCycleBar = 0;
    g_UltraMissionClosedThisCycle = false;
    g_UltraMissionOpenedThisCycle = false;
+   g_UltraMissionEntryOK = false;
+   g_UltraMissionEntryBuy = false;
+   g_UltraMissionEntryTag = "";
+   g_UltraMissionEntryTs = 0;
 }
 
 void UltraMission_NewCycle(const string s)
@@ -369,6 +373,8 @@ void UltraMission_NoteOpen(const ulong ticket, const string s, const bool isBuy,
    g_UltraMissionOpenedThisCycle = true;
    UltraPosLock_Register(ticket, s, isBuy, tag);
    UltraMission_Log("OPEN", ticket, tag);
+   // PHASE 17 — analytics open record (strategy unchanged)
+   UltraAdaptive_RecordOpen(ticket, s, isBuy, tag);
 }
 
 // Block new entries if we already closed this cycle (anti flip-flop)
@@ -438,10 +444,15 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
                        g_UltraSupremeLast.tradeScore, g_UltraSupremeLast.grade,
                        g_UltraSupremeLast.thesis, 0);
       UltraMission_Log(UltraMission_Name(c), 0, g_UltraSupremeLast.reason);
+      g_UltraMissionEntryOK = true;
+      g_UltraMissionEntryBuy = sig.buy;
+      g_UltraMissionEntryTag = sig.tag;
+      g_UltraMissionEntryTs = TimeCurrent();
    }
    else
    {
       UltraMission_Set(SUP_WAIT, why, u.score.confidence, u.score.confidence, "IGNORE", "", 0);
+      g_UltraMissionEntryOK = false;
    }
    return ok;
 }

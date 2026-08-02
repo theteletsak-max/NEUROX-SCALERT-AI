@@ -7,6 +7,9 @@
 //| Never force a trade. Complete re-analysis before every event trade.|
 //+------------------------------------------------------------------+
 
+// Forward — Adaptive Intelligence assembled after this module
+int UltraAdaptive_MonitorMs(const int baseMs);
+
 #define ULTRA_NEWS_VAL_TREND     0x001
 #define ULTRA_NEWS_VAL_MKTINTEL  0x002
 #define ULTRA_NEWS_VAL_STRUCT    0x004
@@ -163,7 +166,8 @@ void UltraNewsExec_OnTick(const string s)
    if(!g_UltraNewsExec.newsMode) return;
 
    long now = (long)GetTickCount();
-   int monMs = UltraNewsExecMonitorMs;
+   // PHASE 17 — soft adaptive monitor cadence (never reduces validation)
+   int monMs = UltraAdaptive_MonitorMs(UltraNewsExecMonitorMs);
    if(monMs < 25) monMs = 25;
 
    // Increase Market Monitoring Frequency

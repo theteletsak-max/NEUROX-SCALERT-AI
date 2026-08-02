@@ -286,9 +286,23 @@ bool UltraBT_PreTradeReady(const string s, string &why)
 //--------------------------------------------------------------------//
 // STRUCTURED REJECT LOGGER                                           //
 //--------------------------------------------------------------------//
+string   g_UltraBT_LastRejectKey = "";
+datetime g_UltraBT_LastRejectBar = 0;
+
 void UltraBT_LogReject(const string module, const string func, const string reason)
 {
    g_UltraBT.rejectCount++;
+
+   // Throttle identical rejects to once per bar (avoid Experts flood)
+   datetime bar = iTime(_Symbol, UltraETF(), 0);
+   string key = module + "|" + func + "|" + reason;
+   bool skipPrint = (bar > 0 && bar == g_UltraBT_LastRejectBar && key == g_UltraBT_LastRejectKey);
+   if(!skipPrint)
+   {
+      g_UltraBT_LastRejectBar = bar;
+      g_UltraBT_LastRejectKey = key;
+   }
+
    UltraSnap u = g_UltraLastSnap;
    long spr = 0;
    SymbolInfoInteger(_Symbol, SYMBOL_SPREAD, spr);
@@ -306,33 +320,36 @@ void UltraBT_LogReject(const string module, const string func, const string reas
       news = (StringLen(u.ctx.newsPhase) > 0 ? u.ctx.newsPhase : "NONE");
 
    string mission = "n/a";
-   // Mission sticky entry (defined later in assemble — guarded via core flags)
    if(g_UltraCore.validated && g_UltraCore.chainOK) mission = "CHAIN_OK";
    if(!g_UltraCore.validated) mission = "NOT_VALIDATED";
 
    string execSt = UltraBT_TradeAllowed() ? "TRADE_OK" : "TRADE_BLOCKED";
    if(!UltraBT_ConnectedOK()) execSt = "NO_CONN";
 
-   string t = "";
-   t += "TRADE REJECTED\n";
-   t += "Module: "; t += module; t += "\n";
-   t += "Function: "; t += func; t += "\n";
-   t += "Reason: "; t += reason; t += "\n";
-   t += "Confidence: "; t += IntegerToString(u.score.confidence); t += "%\n";
-   t += "Spread: "; t += IntegerToString((int)spr); t += "\n";
-   t += "Trend: "; t += trend; t += "\n";
-   t += "Market State: "; t += mkt; t += "\n";
-   t += "News: "; t += news; t += "\n";
-   t += "Event: "; t += u.ctx.newsPhase; t += "\n";
-   t += "Mission Control: "; t += mission; t += "\n";
-   t += "Execution Status: "; t += execSt; t += "\n";
-   t += "Mode: "; t += UltraBT_ModeName();
-
-   if(UltraBacktestLogRejects || UltraLoggingEnabled)
+   if(!skipPrint && (UltraBacktestLogRejects || UltraLoggingEnabled))
+   {
+      string t = "";
+      t += "TRADE REJECTED\n";
+      t += "Module: "; t += module; t += "\n";
+      t += "Function: "; t += func; t += "\n";
+      t += "Reason: "; t += reason; t += "\n";
+      t += "Confidence: "; t += IntegerToString(u.score.confidence); t += "%\n";
+      t += "Spread: "; t += IntegerToString((int)spr); t += "\n";
+      t += "Trend: "; t += trend; t += "\n";
+      t += "Market State: "; t += mkt; t += "\n";
+      t += "News: "; t += news; t += "\n";
+      t += "Event: "; t += u.ctx.newsPhase; t += "\n";
+      t += "Mission Control: "; t += mission; t += "\n";
+      t += "Execution Status: "; t += execSt; t += "\n";
+      t += "Mode: "; t += UltraBT_ModeName();
       Print(t);
+   }
 
-   UltraLogDecision("TRADE_REJECTED", 0, "-", module, u.score.confidence, 0,
-                    func, news, (double)spr, u.ctx.slipProxy, reason);
+   if(!skipPrint)
+   {
+      UltraLogDecision("TRADE_REJECTED", 0, "-", module, u.score.confidence, 0,
+                       func, news, (double)spr, u.ctx.slipProxy, reason);
+   }
 }
 
 //--------------------------------------------------------------------//

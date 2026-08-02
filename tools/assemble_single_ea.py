@@ -25,6 +25,7 @@ order = [
     "UltraValidationChain.mqh",
     "UltraNewsExecution.mqh",
     "UltraTargetIntelligence.mqh",
+    "UltraAdaptiveIntelligence.mqh",
     "MissionControl.mqh",
     "UltraTradeGate.mqh",
     "UltraModuleManager.mqh",
@@ -77,8 +78,9 @@ for name in order:
         parts.append("\n")
     parts.append(f"//===== END {name} =====\n")
 out = "".join(parts)
-for dest in [Path("HITMAN_AI.mq5"), Path("HITMAN_AI_OK93.mq5"),
-             Path("release/deliver/HITMAN_AI.mq5"), Path("release/deliver/HITMAN_AI_OK93.mq5")]:
+for dest in [Path("HITMAN_AI.mq5"), Path("HITMAN_AI_OK93.mq5"), Path("Experts_HITMAN_AI.mq5"),
+             Path("release/deliver/HITMAN_AI.mq5"), Path("release/deliver/HITMAN_AI_OK93.mq5"),
+             Path("release/deliver/HITMAN_AI_EA/MQL5/Experts/HITMAN_AI.mq5")]:
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(out, encoding="utf-8")
     print(dest, dest.stat().st_size)

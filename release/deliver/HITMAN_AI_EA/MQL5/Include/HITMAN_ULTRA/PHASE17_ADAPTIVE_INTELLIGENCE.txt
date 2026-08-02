@@ -1,0 +1,60 @@
+HITMAN AI — PHASE 17
+ULTRA ADAPTIVE INTELLIGENCE ENGINE ∞
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Continuously optimize decision quality
+  without changing the proprietary strategy.
+
+  One Strategy. Adaptive Intelligence.
+
+LOCKED
+  - TradeComment = HITMAN AI
+  - Strategy selection (UltraPickBest / UFSE) never mutated
+  - No random optimization
+  - No hidden parameter changes
+  - Learning = statistical recording + soft bias only
+
+ULTRA ADAPTIVE AUDIT (0..100)
+  Market Regime · Trend Quality · Trend Strength · Trend Speed
+  Momentum Quality · Liquidity Quality · Volatility Quality
+  Execution Quality · Session Quality · Event Quality
+  Symbol Behaviour · Timeframe Behaviour
+  Trade Confidence · Risk Quality
+  → Composite Decision Quality
+
+ULTRA ADAPTIVE REFINEMENT (soft only)
+  Ultra Dynamic Confidence   (±MaxConfBoost/Penalty)
+  Ultra Dynamic Risk         (RiskMinScale..RiskMaxScale)
+  Ultra Dynamic Execution    (slippage bias pts)
+  Ultra Dynamic Target       (TP distance scale; SL unchanged)
+  Ultra Dynamic Monitoring   (monitor cadence bias)
+  Ultra Dynamic Market Reading / Decision Intelligence
+
+PATH
+  Market → Analysis → Trade Thesis → Confidence → Exec Quality
+  → Adaptive Intelligence → Mission Control → Execute
+
+ANALYTICS (auto record)
+  Entry/Exit reason · Thesis · Regime · Trend · Session · News
+  Spread · Slippage · Exec speed · Holding time
+  TP1/TP2/TP3 · SL · Profit/Loss · Confidence
+
+REVIEW (auto calculate)
+  Win Rate · Avg Win · Avg Loss · Risk:Reward
+  Profit Factor · Expectancy · Max Drawdown
+  Session / News / Symbol / Timeframe / Strategy performance
+
+MODULE
+  MQL5/Include/HITMAN_ULTRA/UltraAdaptiveIntelligence.mqh
+
+WIRES
+  UltraAIDecide → UltraAdaptive_Apply (before Mission)
+  UltraMission_NoteOpen → UltraAdaptive_RecordOpen
+  OnTradeTransaction OUT → UltraAdaptive_RecordClose
+  CalculateRiskBasedLot → UltraAdaptive_RiskScale
+  GetEffectiveSlippagePoints → UltraAdaptive_SlipBiasPts
+  ExecuteBuy/Sell → UltraAdaptive_ApplyTargetBias
+  UltraNewsExec_OnTick → UltraAdaptive_MonitorMs
+  Dashboard / Module Manager / OnInit boot

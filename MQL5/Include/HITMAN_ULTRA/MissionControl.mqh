@@ -373,6 +373,8 @@ void UltraMission_NoteOpen(const ulong ticket, const string s, const bool isBuy,
    g_UltraMissionOpenedThisCycle = true;
    UltraPosLock_Register(ticket, s, isBuy, tag);
    UltraMission_Log("OPEN", ticket, tag);
+   // PHASE 17 — analytics open record (strategy unchanged)
+   UltraAdaptive_RecordOpen(ticket, s, isBuy, tag);
 }
 
 // Block new entries if we already closed this cycle (anti flip-flop)

@@ -684,6 +684,19 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       }
    }
 
+   // PHASE 17 — ULTRA ADAPTIVE INTELLIGENCE ∞
+   // Soft decision-quality refinement ONLY — never changes strategy / never blocks
+   // Path: Confidence → Exec Quality → Adaptive → Mission → Execute
+   {
+      string adNote = "";
+      UltraAdaptive_Apply(s, u, sig, adNote);
+      if(StringLen(adNote) > 0)
+      {
+         if(StringLen(sig.reason) > 0) sig.reason = sig.reason + " | ";
+         sig.reason = sig.reason + adNote;
+      }
+   }
+
    // ULTRA X — LEVEL 8 MISSION CONTROL (sole entry authority)
    if(UltraUpgradeEnabled && UltraSupremeEnabled)
    {

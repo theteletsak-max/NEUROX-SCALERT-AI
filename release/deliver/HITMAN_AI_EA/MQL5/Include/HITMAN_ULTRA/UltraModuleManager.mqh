@@ -78,6 +78,12 @@ void UltraMod_Refresh()
    UltraMod_Reg("TARGET_INTEL", true, UltraTargetEnabled, UltraTargetEnabled,
                 g_UltraTargetLast.valid ? "PLAN_OK" : "—");
 
+   UltraMod_Reg("ADAPTIVE", false, UltraAdaptiveEnabled, UltraAdaptiveEnabled,
+                UltraAdaptiveEnabled
+                ? ("Q=" + IntegerToString(g_UltraAdapt.audit.composite) +
+                   " n=" + IntegerToString(g_UltraAdapt.review.trades))
+                : "OFF");
+
    bool gateOK = (!UltraTradeGateEnabled) || g_UltraTradeGate.passed ||
                  (StringLen(g_UltraTradeGate.failStep) == 0);
    UltraMod_Reg("TRADE_GATE", true, UltraTradeGateEnabled, gateOK,

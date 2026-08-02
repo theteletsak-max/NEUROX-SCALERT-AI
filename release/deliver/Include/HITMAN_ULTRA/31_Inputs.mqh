@@ -157,6 +157,28 @@ input bool   UltraTradeGateEnabled       = true;   // hard pre-trade validation
 input bool   UltraTradeGateLog           = true;   // TRADE_GATE PASS/FAIL logs
 input bool   UltraTradeGateRequireTargets= true;   // Target Intelligence plan mandatory
 
+input group "31 · ULTRA ADAPTIVE INTELLIGENCE ENGINE ∞ (Phase 17)"
+input bool   UltraAdaptiveEnabled           = true;  // master — decision quality only
+input bool   UltraAdaptiveLog               = true;  // ADAPTIVE audit / record logs
+input bool   UltraAdaptiveConfEnabled       = true;  // soft confidence bias
+input bool   UltraAdaptiveRiskEnabled       = true;  // soft risk scale (clamped)
+input bool   UltraAdaptiveExecEnabled       = true;  // soft slippage bias
+input bool   UltraAdaptiveTargetEnabled     = true;  // soft TP distance scale
+input bool   UltraAdaptiveMonitorEnabled    = true;  // soft monitor cadence
+input bool   UltraAdaptiveAnalyticsEnabled  = true;  // record + review stats
+input bool   UltraAdaptiveLearnEnabled      = true;  // statistical soft nudge only
+input int    UltraAdaptiveMaxConfBoost      = 6;     // max soft confidence boost
+input int    UltraAdaptiveMaxConfPenalty    = 6;     // max soft confidence penalty
+input int    UltraAdaptiveMinTradesLearn    = 8;     // min closed trades before hist nudge
+input double UltraAdaptiveRiskMinScale      = 0.85;  // floor risk multiplier
+input double UltraAdaptiveRiskMaxScale      = 1.15;  // ceiling risk multiplier
+input double UltraAdaptiveTargetMinScale    = 0.90;  // floor TP scale
+input double UltraAdaptiveTargetMaxScale    = 1.12;  // ceiling TP scale
+input int    UltraAdaptiveSlipExtraPts      = 8;     // extra deviation under weak exec
+input int    UltraAdaptiveSlipTightenPts    = 4;     // tighten deviation under strong exec
+input int    UltraAdaptiveMonitorTightenMs  = 15;    // reduce monitor interval
+input int    UltraAdaptiveMonitorRelaxMs    = 10;    // relax monitor interval
+
 input group "31 · ULTRA BACKTEST COMPATIBILITY ENGINE ∞"
 input bool   UltraBacktestCompatEnabled  = true;   // Strategy Tester compatibility mode
 input bool   UltraBacktestLogBoot        = true;   // boot mode line

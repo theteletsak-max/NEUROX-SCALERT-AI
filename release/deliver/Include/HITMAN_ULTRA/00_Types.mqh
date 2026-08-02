@@ -188,6 +188,7 @@ struct UltraScores
    int successProb;
    int riskProb;
    int confluence;
+   int adaptiveBias; // soft delta from Adaptive Intelligence (never strategy change)
 };
 
 struct UltraMemory

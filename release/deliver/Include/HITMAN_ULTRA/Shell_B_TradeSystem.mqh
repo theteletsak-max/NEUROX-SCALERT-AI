@@ -70,6 +70,7 @@ int OnInit()
    UltraVChain_Boot();      // VALIDATION CHAIN — VALID/INVALID/WAIT
    UltraNewsExec_Boot();    // NEWS EXECUTION INTELLIGENCE ∞
    UltraTarget_Boot();      // TARGET INTELLIGENCE ∞
+   UltraAdaptive_Boot();    // PHASE 17 — ADAPTIVE INTELLIGENCE ∞
    UltraTradeGate_Boot();   // HARD GATE — any fail = NO TRADE
    UltraMod_Boot();         // MODULE MANAGER — Final Master Audit registry
    UltraBT_Boot();          // BACKTEST COMPATIBILITY ∞ — Tester/Demo/Live
@@ -93,6 +94,13 @@ int OnInit()
          " MinRR=", DoubleToString(UltraTargetMinRR1, 1), "/",
          DoubleToString(UltraTargetMinRR2, 1), "/",
          DoubleToString(UltraTargetMinRR3, 1));
+   Print("ADAPTIVE INTEL ∞: Enabled=", UltraYN(UltraAdaptiveEnabled),
+         " Conf=", UltraYN(UltraAdaptiveConfEnabled),
+         " Risk=", UltraYN(UltraAdaptiveRiskEnabled),
+         " Exec=", UltraYN(UltraAdaptiveExecEnabled),
+         " Target=", UltraYN(UltraAdaptiveTargetEnabled),
+         " Analytics=", UltraYN(UltraAdaptiveAnalyticsEnabled),
+         " Learn=STAT_ONLY");
    Print("TRADE GATE: Enabled=", UltraYN(UltraTradeGateEnabled),
          " RequireTargets=", UltraYN(UltraTradeGateRequireTargets),
          " — ANY validation fail = NO TRADE");
@@ -111,7 +119,7 @@ int OnInit()
             ") — change the chart timeframe to change trading TF, or set EntryTF input");
    }
    Print("HITMAN MASTER BLUEPRINT: modules 00-40 + UFSE v1.0 + DEFENSE LINE v1.0 | HITMAN AI live path");
-   Print("ONE DECISION PATH: Market→Analysis→Structure→SMT→UFSE→Thesis→USM→Mission→Exec→Manage→Exit→Log");
+   Print("ONE DECISION PATH: Market→Analysis→Thesis→Confidence→ExecQuality→Adaptive→Mission→Execute");
    Print("ONE STRATEGY: UFSE only | MissionOnlyExits=", UltraYN(UltraMissionOnlyExits),
          " | PositionClose sole owner=MissionControl");
    Print("POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
@@ -950,6 +958,14 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
    RecordTradeStatistic(profit);
    ReportSignalOutcome(trans.position, profit >= 0, profit);
    RecordStrategyPerformance(trans.position, profit >= 0);
+
+   // PHASE 17 — Adaptive Intelligence analytics (statistical learning only)
+   {
+      string exitWhy = HistoryDealGetString(trans.deal, DEAL_COMMENT);
+      if(StringLen(exitWhy) == 0)
+         exitWhy = (profit >= 0.0) ? "CLOSE_WIN" : "CLOSE_LOSS";
+      UltraAdaptive_RecordClose(trans.position, profit, exitWhy);
+   }
 }
 
 // FIX: EventSetTimer() was being called in OnInit whenever
@@ -2062,7 +2078,9 @@ double CalculateRiskBasedLot(double slDistance)
          return LotSize; // can't price the risk on this symbol - fail safe
 
       double equity     = AccountInfoDouble(ACCOUNT_EQUITY);
-      double effectiveRiskPercent = RiskPercent * GetSymbolRiskMultiplier(BrokerSymbol);
+      // PHASE 17 — soft adaptive risk scale (clamped; never mutates RiskPercent input)
+      double effectiveRiskPercent = RiskPercent * GetSymbolRiskMultiplier(BrokerSymbol) *
+                                    UltraAdaptive_RiskScale();
       double riskMoney   = equity * (effectiveRiskPercent / 100.0);
       double lossPerLot  = (slDistance / tickSize) * tickValue;
 
@@ -2261,23 +2279,28 @@ input double NonScalpSlippageMultiplier = 5.0;    // fallback if profiles OFF (l
 
 int GetEffectiveSlippagePoints()
 {
+   int basePts = SlippagePoints;
    if(EnableSlippageProfiles)
    {
       if(IsNonScalpSymbol())
-         return MathMax(1, CryptoSlippagePoints);
-      string sym = BrokerSymbol;
-      StringToUpper(sym);
-      if(StringFind(sym, "XAU") >= 0 || StringFind(sym, "GOLD") >= 0 ||
-         StringFind(sym, "XAG") >= 0 || StringFind(sym, "SILVER") >= 0)
-         return MathMax(1, GoldSlippagePoints);
-      return MathMax(1, ForexSlippagePoints);
+         basePts = MathMax(1, CryptoSlippagePoints);
+      else
+      {
+         string sym = BrokerSymbol;
+         StringToUpper(sym);
+         if(StringFind(sym, "XAU") >= 0 || StringFind(sym, "GOLD") >= 0 ||
+            StringFind(sym, "XAG") >= 0 || StringFind(sym, "SILVER") >= 0)
+            basePts = MathMax(1, GoldSlippagePoints);
+         else
+            basePts = MathMax(1, ForexSlippagePoints);
+      }
    }
+   else if(IsNonScalpSymbol())
+      basePts = (int)MathRound(SlippagePoints * NonScalpSlippageMultiplier);
 
-   // Legacy path
-   if(IsNonScalpSymbol())
-      return (int)MathRound(SlippagePoints * NonScalpSlippageMultiplier);
-
-   return MathMax(1, SlippagePoints);
+   // PHASE 17 — soft adaptive execution bias (never hard-blocks)
+   basePts += UltraAdaptive_SlipBiasPts();
+   return MathMax(1, basePts);
 }
 
 input group "NON-SCALP SYMBOL OVERRIDE"
@@ -3142,6 +3165,17 @@ bool ExecuteBuy()
       CheckTradeStops(ask, sl, tp); // re-validate the adjusted tp against broker minimums too
    }
 
+   // PHASE 17 — soft TP scale only (SL / strategy unchanged); after final distances
+   {
+      tp1Distance = MathAbs(tp1Price - ask);
+      tp2Distance = MathAbs(tp2Price - ask);
+      tp3Distance = MathAbs(tp3Price - ask);
+      UltraAdaptive_ApplyTargetBias(true, ask, tp1Price, tp2Price, tp3Price,
+                                    tp1Distance, tp2Distance, tp3Distance);
+      tp = InitialBrokerTP(true, ask, tp2Distance, tp3Distance, tp2Price, tp3Price);
+      CheckTradeStops(ask, sl, tp);
+   }
+
    // BACKTEST COMPAT — indicators/history/broker rules ready?
    {
       string btWhy = "";
@@ -3502,6 +3536,17 @@ bool ExecuteSell()
          tp = InitialBrokerTP(false, bid, actualSLDistance * TP2_RR_Ratio,
                               actualSLDistance * TP3_RR_Ratio, tp2Price, tp3Price);
       }
+      CheckTradeStops(bid, sl, tp);
+   }
+
+   // PHASE 17 — soft TP scale only (SL / strategy unchanged); after final distances
+   {
+      tp1Distance = MathAbs(bid - tp1Price);
+      tp2Distance = MathAbs(bid - tp2Price);
+      tp3Distance = MathAbs(bid - tp3Price);
+      UltraAdaptive_ApplyTargetBias(false, bid, tp1Price, tp2Price, tp3Price,
+                                    tp1Distance, tp2Distance, tp3Distance);
+      tp = InitialBrokerTP(false, bid, tp2Distance, tp3Distance, tp2Price, tp3Price);
       CheckTradeStops(bid, sl, tp);
    }
 
