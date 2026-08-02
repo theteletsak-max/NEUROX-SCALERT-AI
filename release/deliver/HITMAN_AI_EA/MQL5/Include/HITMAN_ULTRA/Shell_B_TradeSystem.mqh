@@ -71,8 +71,11 @@ int OnInit()
    UltraNewsExec_Boot();    // NEWS EXECUTION INTELLIGENCE ∞
    UltraTarget_Boot();      // TARGET INTELLIGENCE ∞
    UltraTradeGate_Boot();   // HARD GATE — any fail = NO TRADE
+   UltraMod_Boot();         // MODULE MANAGER — Final Master Audit registry
    UltraOpt_OnTickStart();
    UltraMission_Init();
+   Print("FINAL MASTER AUDIT v1.0: HA_ULTRA_93 | one strategy · one signal · one thesis · one mission · one exit");
+   Print("MODULE MANAGER: ", g_UltraMods.summary);
    Print("VALIDATION CHAIN: Enabled=", UltraYN(UltraVChainEnabled),
          " BlockInvalid=", UltraYN(UltraVChainBlockOnInvalid),
          " BlockWait=", UltraYN(UltraVChainBlockOnWait));

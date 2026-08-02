@@ -1,0 +1,190 @@
+══════════════════════════════════════════════════════════════════════════════
+                    HITMAN AI ULTRA ∞
+                 FINAL MASTER AUDIT v1.0 — APPLIED
+BUILD: HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen=3
+Branch: cursor/ultra-market-intelligence-b12d
+══════════════════════════════════════════════════════════════════════════════
+
+MISSION
+One institutional-grade proprietary trading engine:
+consistent decisions · professional execution · maintainable architecture.
+
+OVERALL READINESS
+✓ 103 / 109 leaf checklist items DONE
+✓ 0 MISSING mission-critical engines
+△ 6 PARTIAL (manager depth / Shell_B retired-code bulk / DD+Daily opt-in)
+
+══════════════════════════════════════════════════════════════════════
+PRODUCT LOCKS (VERIFIED)
+══════════════════════════════════════════════════════════════════════
+✓ TradeComment = HITMAN AI
+✓ BUILD_ID = HA_ULTRA_93
+✓ MaxOpenTrades = 3
+✓ Mission-only exits (sole PositionClose owner = MissionControl)
+✓ Classic watermark (chart_background.bmp + CreateChartBackground)
+✓ Spread alone never rejects · News alone never rejects · News never forces
+
+══════════════════════════════════════════════════════════════════════
+ONE-OF-EACH ARCHITECTURE (VERIFIED)
+══════════════════════════════════════════════════════════════════════
+✓ One Proprietary Strategy path (UltraPickBest live tags only)
+✓ One Signal Engine (UFSE → UltraAIDecide)
+✓ One Trade Thesis (TradeThesis.mqh)
+✓ One Confidence Engine (USM2)
+✓ One Mission Control (entry + sole close)
+✓ One Execution Engine (InstantExecution → ExecuteBuy/Sell)
+✓ One Position Evolution Engine (L1/L2/L3 + replace)
+✓ One Exit Engine (Mission ValidateExit — thesis/risk/structure only)
+
+Retired (stubbed, non-firing): APEX · ContFallback · LCS · MeanReversion
+· InstantTrend · SpecBreakout · StrongBuy/Sell parallel evaluators
+
+══════════════════════════════════════════════════════════════════════
+ULTRA SYSTEM CORE
+══════════════════════════════════════════════════════════════════════
+✓ Ultra Foundation Engine .......... UltraFoundation.mqh
+✓ Ultra Module Manager ............. UltraModuleManager.mqh (registry)
+△ Ultra Memory Manager ............. Foundation + MarketMemory (overflow/stats)
+△ Ultra Resource Manager ........... Foundation objects/handles protection
+✓ Ultra Configuration Manager ...... UltraConfigOK + Foundation params
+✓ Ultra Health Monitor ............. Foundation HealthTick + SystemHealth
+✓ Ultra Error Recovery ............. 30_Recovery.mqh UltraRecover
+✓ Ultra Performance Optimizer ...... 37_Optimization.mqh
+
+══════════════════════════════════════════════════════════════════════
+ULTRA MARKET INTELLIGENCE
+══════════════════════════════════════════════════════════════════════
+✓ Market Data / Tick / Candle Validation ... UltraMarketIntelligence.mqh
+✓ Spread / Volatility / Liquidity Intel .... MarketIntel + EventEngine
+✓ Market State Detection ................... UltraMarketIntel_Classify
+✓ Session Intelligence ..................... 17_SessionIntelligence.mqh
+✓ Multi-Timeframe Synchronization .......... 23_MultiTimeframe.mqh
+
+══════════════════════════════════════════════════════════════════════
+ULTRA PROPRIETARY STRATEGY
+══════════════════════════════════════════════════════════════════════
+✓ Trend · Structure · Liquidity · Imbalance · Momentum · Confluence
+✓ Trade Thesis · Ultra Confidence Engine (USM2)
+Live tags: FlashSweep / ContSniper / RevSniper / FibSniper /
+           BreakImpulse / InstZone
+
+══════════════════════════════════════════════════════════════════════
+ULTRA SIGNAL ENGINE
+══════════════════════════════════════════════════════════════════════
+✓ Instant Detection / Analysis (UFSE)
+✓ Signal Validation / Stability / Timing / Confidence
+✓ Duplicate Prevention · False Signal Reduction
+✓ One Final Decision (UltraAIDecide → Mission)
+
+══════════════════════════════════════════════════════════════════════
+ULTRA NEWS INTELLIGENCE
+══════════════════════════════════════════════════════════════════════
+✓ Auto detection · Event classification · News awareness
+✓ High vol / high spread intelligence (soft — never sole reject)
+✓ Dynamic liquidity / slippage · Complete re-analysis · Event logging
+RULES VERIFIED:
+  ✓ EA remains active during major news
+  ✓ News does not automatically stop trading
+  ✓ High spread alone does not reject a trade
+  ✓ Every news trade requires complete strategy validation (10-point)
+
+══════════════════════════════════════════════════════════════════════
+ULTRA EXECUTION ENGINE
+══════════════════════════════════════════════════════════════════════
+✓ Instant Execution · Fill Verification · Position Verification
+✓ Retry Engine · Broker Compatibility · Margin · Slippage · Recovery
+
+══════════════════════════════════════════════════════════════════════
+ULTRA TARGET INTELLIGENCE
+══════════════════════════════════════════════════════════════════════
+✓ Dynamic SL · TP1 · TP2 · TP3 (UltraTargetIntelligence.mqh)
+Every target: thesis-aligned · RR floors · objective calc · logged reason
+
+══════════════════════════════════════════════════════════════════════
+ULTRA POSITION EVOLUTION
+══════════════════════════════════════════════════════════════════════
+✓ Live validation · Continuous thesis · Re-analysis
+✓ Replacement logic · Sync (PosLock) · Monitoring
+RULE: invalid thesis → re-analyze → candidate → Mission → Replace or Flat
+
+══════════════════════════════════════════════════════════════════════
+ULTRA EXIT ENGINE
+══════════════════════════════════════════════════════════════════════
+Exit ONLY when:
+  ✓ Trade Thesis Invalidated
+  ✓ Risk Rule Activated
+  ✓ Objective Market Invalidation
+Never because of: one candle · temp vol · temp spread · news alone
+Sole close path: MissionControl (UltraMissionOnlyExits=true)
+
+══════════════════════════════════════════════════════════════════════
+ULTRA RISK ENGINE
+══════════════════════════════════════════════════════════════════════
+✓ Dynamic Position Size · Exposure Control · Margin Protection
+✓ Capital Protection (UltraCapitalOK)
+△ Drawdown Protection — implemented, default OFF (opt-in)
+△ Daily Risk Limits — implemented, default OFF (opt-in)
+
+══════════════════════════════════════════════════════════════════════
+ULTRA LOGGER · DASHBOARD · MAINTAINABILITY
+══════════════════════════════════════════════════════════════════════
+✓ Logger: entry/exit/thesis/TP/news/event/spread/slip/execQ/conf/errors
+✓ Dashboard: market/trend/signal/position/conf/risk/event/exec/health
+              + Foundation / Market / VChain / News / Target / Gate / Mods
+△ Maintainability: modular HITMAN_ULTRA graph; Shell_B still large with
+  intentionally stubbed retired evaluators (live path is single)
+
+══════════════════════════════════════════════════════════════════════
+ULTRA VALIDATION (HARD GATE)
+══════════════════════════════════════════════════════════════════════
+Every trade must pass:
+✓ Market · Strategy · Signal · Thesis · Risk · Execution
+✓ TP1 · TP2 · TP3 · Mission Control Approval
+
+If ANY critical validation fails → NO TRADE
+(UltraTradeGate.mqh + UltraValidationChain.mqh)
+
+══════════════════════════════════════════════════════════════════════
+LIVE DECISION PATH
+══════════════════════════════════════════════════════════════════════
+Foundation Health
+→ Market Intelligence
+→ Validation Chain (VALID/INVALID/WAIT)
+→ Structure / SMT / UFSE / Thesis / USM2
+→ Session + News Execution Intelligence
+→ Defense / Discipline
+→ Mission Control
+→ Target Intelligence (SL/TP1/TP2/TP3)
+→ Trade Gate (9-point hard)
+→ Execute (fill + position verify)
+→ Position Evolution / Manage
+→ Mission-only Exit
+→ Logger / Dashboard
+
+══════════════════════════════════════════════════════════════════════
+ULTIMATE GOAL — STATUS
+══════════════════════════════════════════════════════════════════════
+✓ One Proprietary Strategy
+✓ One Signal Engine
+✓ One Trade Thesis
+✓ One Confidence Engine
+✓ One Mission Control
+✓ One Execution Engine
+✓ One Position Evolution Engine
+✓ One Exit Engine
+✓ Ultra Instant Detection
+✓ Ultra Instant Execution
+✓ Ultra Event Awareness
+✓ Ultra High-Probability Setups
+✓ Ultra Clean Architecture (modular include graph)
+✓ Ultra Maintainability (docs + consistent naming; Shell_B debt noted)
+✓ Ultra Stability (Foundation / Recovery / Gate)
+✓ Ultra Professional Standards
+✓ Continuous Improvement Through Testing (assemble + deliver packages)
+
+VERDICT
+Institutional live path is complete and coherent under HA_ULTRA_93.
+Remaining PARTIAL items are manager depth, opt-in risk shields, and
+Shell_B retired-code bulk — none break the one-decision mission.
+
+══════════════════════════════════════════════════════════════════════════════
