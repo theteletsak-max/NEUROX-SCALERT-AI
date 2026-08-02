@@ -299,6 +299,19 @@ enum ENUM_SUPREME_DECISION
    SUP_EXIT
 };
 
+// Shared early — PositionEvolution / MissionControl both need this type
+struct UltraExitValidation
+{
+   bool thesisBroken;
+   bool structureChanged;
+   bool masterTrendChanged;
+   bool riskRule;
+   bool healthyCorrection;
+   bool trueReversal;
+   bool allowClose;
+   string reason;
+};
+
 // Forward — Mission Control is sole close authority (defined later)
 bool UltraMission_ClosePosition(const ulong ticket, const string whyIn, const bool riskForced);
 bool UltraMission_ClosePartial(const ulong ticket, const double volume, const string why);

@@ -153,7 +153,7 @@ bool UltraZFR_RecoverMemory()
       g_UltraZFR.lastProblem = "memory counter overflow";
       g_UltraMem.trades = (int)MathMax(0, g_UltraMem.trades % 50000);
       g_UltraMem.lastSave = (long)TimeCurrent();
-      g_UltraCore.memoryOK = true;
+      g_UltraFoundation.memoryOK = true;
       g_UltraZFR.memoryRecoveries++;
       UltraZFR_NoteSuccess("MEMORY");
       UltraZFR_Log("memory soft-clamped");

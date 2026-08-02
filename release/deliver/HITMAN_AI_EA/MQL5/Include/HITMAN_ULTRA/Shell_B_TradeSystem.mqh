@@ -3759,6 +3759,11 @@ bool ExecuteSell()
          if(EnableVerboseLogging)
             Print("SELL transient error (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES, " - refreshing price and retrying.");
 
+         // Phase 20 — analyse recoverable reject → correct → retry
+         {
+            string zAct = "";
+            UltraZFR_PrepareExecRetry(BrokerSymbol, retcode, zAct);
+         }
          if(retcode == TRADE_RETCODE_INVALID_FILL)
             ConfigureFillingMode(BrokerSymbol);
 

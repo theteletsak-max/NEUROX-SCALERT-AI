@@ -909,6 +909,19 @@ enum ENUM_SUPREME_DECISION
    SUP_EXIT
 };
 
+// Shared early — PositionEvolution / MissionControl both need this type
+struct UltraExitValidation
+{
+   bool thesisBroken;
+   bool structureChanged;
+   bool masterTrendChanged;
+   bool riskRule;
+   bool healthyCorrection;
+   bool trueReversal;
+   bool allowClose;
+   string reason;
+};
+
 // Forward — Mission Control is sole close authority (defined later)
 bool UltraMission_ClosePosition(const ulong ticket, const string whyIn, const bool riskForced);
 bool UltraMission_ClosePartial(const ulong ticket, const double volume, const string why);
@@ -12084,17 +12097,7 @@ struct UltraPosLock
    bool     decidedThisCycle; // one decision per evaluation
 };
 
-struct UltraExitValidation
-{
-   bool thesisBroken;
-   bool structureChanged;
-   bool masterTrendChanged;
-   bool riskRule;
-   bool healthyCorrection;
-   bool trueReversal;
-   bool allowClose;
-   string reason;
-};
+// UltraExitValidation lives in 00_Types.mqh (needed by PositionEvolution before Mission)
 
 UltraMissionState g_UltraMissionLast;
 UltraPosLock      g_UltraPosLock[ULTRA_POSLOCK_MAX];
@@ -12527,7 +12530,8 @@ ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const str
 
    if(UltraPosEvoEnabled)
    {
-      UltraPosEvoDecision evo = UltraPosEvo_Evaluate(ticket, s, isBuy, u, v, hold, corr);
+      UltraPosEvoDecision evo;
+      evo = UltraPosEvo_Evaluate(ticket, s, isBuy, u, v, hold, corr);
       cmd = evo.command;
       why = evo.reason;
 
@@ -13389,7 +13393,7 @@ bool UltraZFR_RecoverMemory()
       g_UltraZFR.lastProblem = "memory counter overflow";
       g_UltraMem.trades = (int)MathMax(0, g_UltraMem.trades % 50000);
       g_UltraMem.lastSave = (long)TimeCurrent();
-      g_UltraCore.memoryOK = true;
+      g_UltraFoundation.memoryOK = true;
       g_UltraZFR.memoryRecoveries++;
       UltraZFR_NoteSuccess("MEMORY");
       UltraZFR_Log("memory soft-clamped");
@@ -19739,6 +19743,11 @@ bool ExecuteSell()
          if(EnableVerboseLogging)
             Print("SELL transient error (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES, " - refreshing price and retrying.");
 
+         // Phase 20 — analyse recoverable reject → correct → retry
+         {
+            string zAct = "";
+            UltraZFR_PrepareExecRetry(BrokerSymbol, retcode, zAct);
+         }
          if(retcode == TRADE_RETCODE_INVALID_FILL)
             ConfigureFillingMode(BrokerSymbol);
 

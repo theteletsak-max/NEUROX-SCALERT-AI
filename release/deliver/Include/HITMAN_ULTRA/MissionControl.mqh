@@ -38,17 +38,7 @@ struct UltraPosLock
    bool     decidedThisCycle; // one decision per evaluation
 };
 
-struct UltraExitValidation
-{
-   bool thesisBroken;
-   bool structureChanged;
-   bool masterTrendChanged;
-   bool riskRule;
-   bool healthyCorrection;
-   bool trueReversal;
-   bool allowClose;
-   string reason;
-};
+// UltraExitValidation lives in 00_Types.mqh (needed by PositionEvolution before Mission)
 
 UltraMissionState g_UltraMissionLast;
 UltraPosLock      g_UltraPosLock[ULTRA_POSLOCK_MAX];
@@ -481,7 +471,8 @@ ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const str
 
    if(UltraPosEvoEnabled)
    {
-      UltraPosEvoDecision evo = UltraPosEvo_Evaluate(ticket, s, isBuy, u, v, hold, corr);
+      UltraPosEvoDecision evo;
+      evo = UltraPosEvo_Evaluate(ticket, s, isBuy, u, v, hold, corr);
       cmd = evo.command;
       why = evo.reason;
 
