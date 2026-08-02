@@ -1,0 +1,29 @@
+══════════════════════════════════════
+ HITMAN AI — DOWNLOAD EA FILE
+══════════════════════════════════════
+
+CLICK TO DOWNLOAD THE EA (ZIP — recommended):
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/hitman-master-audit-b12d/HITMAN_AI.zip
+
+CLICK TO DOWNLOAD THE .mq5 EA ONLY:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/hitman-master-audit-b12d/HITMAN_AI.mq5
+
+FULL EA FOLDER PACKAGE:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/hitman-master-audit-b12d/HITMAN_AI_EA.zip
+
+WATERMARK IMAGE (for Hitman on chart):
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/hitman-master-audit-b12d/Images/chart_background.bmp
+
+──────────────────────────────────────
+INSTALL LIKE A NORMAL EA
+──────────────────────────────────────
+1) Download HITMAN_AI.zip
+2) Extract HITMAN_AI.mq5
+3) Copy to: MT5 → File → Open Data Folder → MQL5\Experts\
+4) Copy Images\chart_background.bmp → MQL5\Images\
+5) MetaEditor → Compile HITMAN_AI.mq5
+6) Navigator → Expert Advisors → drag HITMAN_AI onto chart
+7) Enable Algo Trading
+
+Trade comment: HITMAN AI
+BUILD: HA_ULTRA_93

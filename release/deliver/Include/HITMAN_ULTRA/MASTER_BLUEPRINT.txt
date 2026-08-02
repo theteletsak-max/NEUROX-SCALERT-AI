@@ -1,0 +1,73 @@
+HITMAN AI — MASTER BLUEPRINT
+(Everything we've discussed)
+══════════════════════════════════════════════════════════════
+
+MISSION
+• Professional institutional-grade Expert Advisor
+• Ultra fast execution
+• High-quality signal detection
+• Modular architecture
+• Multi-symbol trading
+• Multi-timeframe analysis
+• Explainable AI decisions
+• Reliable execution
+• Consistent capital protection
+
+SYSTEM ARCHITECTURE (Include/HITMAN_ULTRA/)
+00_Types … 31_Inputs
+32_BrokerCompatibility
+33_OrderManagement
+34_PositionManagement
+35_SignalEngine
+36_BrokerHealth
+37_Optimization
+38_Backtesting
+39_EventEngine
+40_DebugTools
++ Shell_A_InputsGlobals.mqh
++ Shell_B_TradeSystem.mqh
++ HITMAN_ULTRA.mqh (master loads 00-40)
+
+BUILD_ID: HA_ULTRA_93
+Comment:  HITMAN AI
+MaxOpen:  3
+EntryTF:  PERIOD_CURRENT (follows chart timeframe)
+
+ENGINES
+• Market Structure — HH/HL/LH/LL · Swings · Internal/External · Cont/Rev
+• BOS — Proprietary · Strong/Weak · Confirmed/Failed · Quality/Strength
+• CHoCH — Internal/External · Major/Minor · Confidence
+• Liquidity — Buy/Sell-side · Sweep/Grab · Stop Hunt · Equal H/L
+• Fibonacci — Auto swings · Retrace/Cont/Ext zones · Dynamic confluence
+• Institutional — OB · Breaker · Mitigation · FVG · Inst zones
+• Trend — Direction · Strength · Quality · Continuation · Exhaustion
+• Momentum — Strength · Acceleration · Weakness · Impulse
+• Volatility — ATR expand/compress · Relative · Classification · Context
+• Regime — Strong/Weak Trend · Range · Breakout · Reversal · Acc/Dist
+• Session — Asia/London/NY/Overlap · context only · trades 24/5
+• News — Calendar proxy · vol/spread · context only · before/during/after OK
+• MTF — MN→M1 roles (bias → precision entry)
+• Confluence — all engines → AI Confidence
+• Precision — Entry/Exit · Validation · Risk · Quality
+• Probability — Confidence · Setup quality · History · Score
+• AI Core — BUY / SELL / WAIT + reason
+• Signal Engine — formal BUY/SELL checklist thresholds
+• Execution — fast · broker compat · retry · duplicate protect · recovery
+• Trade Management — ultra long hold · dyn SL/TP · BE · trail · exits
+• Capital — sizing · equity · exposure · margin · portfolio limits
+• Multi-Symbol — FX · Gold · Silver · Indices · Commodities · Crypto
+• Dashboard / Logger / Diagnostics / Memory / Recovery
+
+SIGNAL RULES (Signal Engine)
+BUY needs: bullish structure · BOS|CHoCH · liquidity · trend · momentum · precision · confidence
+SELL needs: bearish structure · BOS|CHoCH · liquidity · trend · momentum · precision · confidence
+
+SYSTEM FLOW
+Load → Config → Data → Structure → BOS → CHoCH → Liquidity → Fib →
+Institutional → Trend → Momentum → Volatility → Regime → Session →
+News → Confluence → Probability → Precision → AI → Capital →
+Execution → Trade Management → Dashboard → Stats → Logger → Recovery
+
+NOTE
+No EA guarantees every signal or eliminates losses. Goal = maximize
+decision quality and consistency while managing risk responsibly.

@@ -1,0 +1,293 @@
+══════════════════════════════════════════════════════════════
+HITMAN AI ULTRA X
+ULTRA ARCHITECTURE SPECIFICATION
+BUILD_ID: HA_ULTRA_93 | Comment: HITMAN AI
+══════════════════════════════════════════════════════════════
+
+LEVEL 1
+ULTRA MARKET INPUT ENGINE
+
+• Ultra Tick Processing
+• Ultra Price Feed Validation
+• Ultra Spread Analysis
+• Ultra Volume Analysis
+• Ultra Market Context
+• Ultra Session Intelligence
+• Ultra News Context Intelligence
+• Ultra Broker Intelligence
+• Ultra Symbol Intelligence
+
+────────────────────────────────────────────────────────────
+
+LEVEL 2
+ULTRA DATA CORE
+
+• Ultra Tick Cache
+• Ultra Smart Cache
+• Ultra Memory Manager
+• Ultra Historical Memory
+• Ultra Event Memory
+• Ultra Timeframe Synchronization
+• Ultra Multi-Symbol Cache
+• Ultra Data Integrity Validation
+
+────────────────────────────────────────────────────────────
+
+LEVEL 3
+ULTRA MARKET INTELLIGENCE
+
+• Ultra Market Context
+• Ultra Market Regime Detection
+• Ultra Trend Intelligence
+• Ultra Momentum Intelligence
+• Ultra Volatility Intelligence
+• Ultra Swing Intelligence
+• Ultra Structure Intelligence
+• Ultra Market Cycle Recognition
+
+────────────────────────────────────────────────────────────
+
+LEVEL 4
+ULTRA SMART MONEY ENGINE
+
+• Ultra BOS Engine
+• Ultra CHoCH Engine
+• Ultra Liquidity Engine
+• Ultra Liquidity Sweep Engine
+• Ultra Stop Hunt Engine
+• Ultra Order Block Engine
+• Ultra Breaker Block Engine
+• Ultra Mitigation Block Engine
+• Ultra Fair Value Gap Engine
+• Ultra Imbalance Engine
+• Ultra Dynamic Fibonacci Engine
+
+────────────────────────────────────────────────────────────
+
+LEVEL 5
+ULTRA TRADE THESIS ENGINE
+
+Stores
+
+• Complete Entry Reason
+• Market State
+• Structure State
+• Trend State
+• Liquidity State
+• Momentum State
+• Risk State
+• Confidence State
+
+Every update compares the current market against the original trade thesis.
+
+────────────────────────────────────────────────────────────
+
+LEVEL 6
+ULTRA SCORING MACHINE
+
+• Ultra Structure Score
+• Ultra Trend Score
+• Ultra Momentum Score
+• Ultra BOS Score
+• Ultra CHoCH Score
+• Ultra Liquidity Score
+• Ultra Institutional Score
+• Ultra Fibonacci Score
+• Ultra Session Context
+• Ultra News Context
+• Ultra Precision Score
+• Ultra Probability Score
+• Ultra Risk Score
+• Ultra Execution Score
+• Ultra AI Confidence
+
+Adaptive weighting according to market regime.
+
+────────────────────────────────────────────────────────────
+
+LEVEL 7
+ULTRA DEFENSE LINE
+
+• Ultra Structure Defense
+• Ultra Trend Defense
+• Ultra BOS Defense
+• Ultra CHoCH Defense
+• Ultra Liquidity Defense
+• Ultra Momentum Defense
+• Ultra Precision Defense
+• Ultra Probability Defense
+• Ultra Risk Defense
+• Ultra Execution Defense
+• Ultra Position Defense
+• Ultra Recovery Defense
+
+────────────────────────────────────────────────────────────
+
+LEVEL 8
+ULTRA MISSION CONTROL
+
+Single Authority
+
+Approves
+
+• BUY
+
+• SELL
+
+• WAIT
+
+• HOLD
+
+• MANAGE
+
+• EXIT
+
+No other module can override Mission Control.
+
+────────────────────────────────────────────────────────────
+
+LEVEL 9
+ULTRA INSTANT EXECUTION
+
+• Ultra Event-Driven Processing
+• Ultra Broker Detection
+• Ultra Fill Mode Detection
+• Ultra Price Validation
+• Ultra Margin Validation
+• Ultra Volume Validation
+• Ultra Duplicate Trade Protection
+• Ultra Position Verification
+• Ultra Fast Recovery
+
+Execution begins immediately after all required validations succeed.
+
+────────────────────────────────────────────────────────────
+
+LEVEL 10
+ULTRA HOLD ENGINE
+
+• Ultra Hold Score
+• Ultra Trade Thesis Validation
+• Ultra Signal Correction Detection
+• Ultra Healthy Pullback Detection
+• Ultra Trend Continuation Detection
+• Ultra Structure Validation
+• Ultra Adaptive Protection
+
+Exit only when the trade thesis is invalidated or a defined risk rule requires it.
+
+────────────────────────────────────────────────────────────
+
+LEVEL 11
+ULTRA TRADE MANAGEMENT
+
+• Ultra Adaptive Stop Loss
+• Ultra Adaptive Take Profit
+• Ultra Break-even
+• Ultra Structure Trailing
+• Ultra Trend Trailing
+• Ultra Profit Protection
+• Ultra Position Scaling (Optional)
+
+────────────────────────────────────────────────────────────
+
+LEVEL 12
+ULTRA CAPITAL PROTECTION
+
+• Ultra Dynamic Position Sizing
+• Ultra Portfolio Exposure Control
+• Ultra Margin Protection
+• Ultra Equity Protection
+• Ultra Capital Preservation
+
+────────────────────────────────────────────────────────────
+
+LEVEL 13
+ULTRA SELF-DIAGNOSTICS
+
+• Ultra Data Validation
+• Ultra Indicator Validation
+• Ultra Broker Validation
+• Ultra Connection Monitoring
+• Ultra Position Validation
+• Ultra Error Recovery
+• Ultra System Integrity Monitoring
+
+────────────────────────────────────────────────────────────
+
+LEVEL 14
+ULTRA PERFORMANCE CORE
+
+• Ultra Event Scheduler
+• Ultra Cached Calculations
+• Ultra Lightweight Processing
+• Ultra CPU Optimization
+• Ultra Memory Optimization
+• Ultra Multi-Symbol Processing
+• Ultra Resource Monitoring
+
+────────────────────────────────────────────────────────────
+
+LEVEL 15
+ULTRA DASHBOARD & LOGGER
+
+Dashboard
+
+• Ultra Master Trend
+• Ultra Market Regime
+• Ultra Trade Thesis
+• Ultra AI Confidence
+• Ultra Hold Score
+• Ultra Execution Status
+• Ultra Risk Status
+• Ultra Capital Status
+• Ultra System Health
+
+Logger
+
+• Every Decision
+• Every Signal
+• Every Validation
+• Every Entry
+• Every Exit
+• Every Error
+• Every Recovery
+
+────────────────────────────────────────────────────────────
+
+ULTRA SYSTEM PRINCIPLES
+
+✓ Ultra Modular
+✓ Ultra Consistent
+✓ Ultra Explainable
+✓ Ultra Event-Driven
+✓ Ultra Multi-Timeframe
+✓ Ultra Multi-Symbol
+✓ Ultra Broker Adaptive
+✓ Ultra Capital Protection
+✓ Ultra Stable Signal Handling
+✓ Ultra Instant Validation
+✓ Ultra Instant Execution
+✓ Ultra Reliable Position Management
+✓ Ultra Error Recovery
+✓ Ultra Performance Optimization
+✓ Ultra Maintainability
+
+────────────────────────────────────────────────────────────
+MODULE MAP (implementation)
+
+L1  UltraMarketInput.mqh + 17/18 Session/News + 32/36 Broker
+L2  02_Data.mqh + 29_MarketMemory + 39_EventEngine + 23_MTF
+L3  09/10/11/12 + MarketCycle + 03 Structure
+L4  04/05/06/07/08 Smart Money
+L5  TradeThesis.mqh
+L6  UltraScoringMachine2.mqh + DynamicWeights.mqh
+L7  DefenseLineEngine.mqh
+L8  MissionControl.mqh (single authority)
+L9  InstantExecution / 19_Execution / UFSE
+L10 HoldScore + CorrectionDetector + SmartExit
+L11 Shell_B trade management (BE/trail/TP)
+L12 20_CapitalProtection + portfolio caps
+L13 26_Diagnostics + SystemHealth + 30_Recovery
+L14 37_Optimization + 22_MultiSymbol + Event scheduler
+L15 24_Dashboard + 27_Logger

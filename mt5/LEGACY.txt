@@ -1,0 +1,9 @@
+# mt5/ — LEGACY
+
+Do **not** use this folder for live SNIPER AI trading.
+
+Current product (repo root / `release/deliver/`):
+- `SNIPER_AI_OK72.mq5` — EA `SA_QUALITY_72`
+- `SNIPER_IDP.mq5` — indicator `IDP_1`
+
+`SniperAI/` and `NeuroX_Scalper_AI.mq5` here are archived experiments only.

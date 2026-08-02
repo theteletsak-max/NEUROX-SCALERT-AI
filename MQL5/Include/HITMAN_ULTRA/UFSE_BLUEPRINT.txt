@@ -1,0 +1,31 @@
+HITMAN AI — ULTRA FAST SIGNAL ENGINE v1.0
+
+MISSION
+• Detect opportunities as early as possible
+• Minimize signal delay
+• Execute only after required confirmations
+• Low CPU/memory · multi-symbol · all chart TFs
+
+PIPELINE
+Tick → Market Data → Structure → BOS → CHoCH → Liquidity →
+Trend → Momentum → Confluence → Signal Decision → Execution
+
+FEATURES
+1. Real-time scanner (bid/ask/last/vol/spread/dir/speed)
+2. Event-driven analysis (dirty critical/medium + cache hits)
+3. Signal pipeline (above)
+4. Signal cache (per-symbol UltraSnap)
+5. Priority (critical structure/BOS/CHoCH vs medium fib/session)
+6. Parallel symbol state (independent cache/lock/trend)
+7. MTF master trend (MN/W1/D1/H4 bias lock)
+8. Early setup edges (BOS/CHoCH/sweep begins)
+9. Smart filter (duplicate / weak / low-confidence / lock)
+10. Execution readiness (market/trade/margin/price/broker)
+11. Signal lock (unlock on close + new BOS/CHoCH/liq/trend flip)
+12. Master trend lock (LTF cannot reverse HTF)
+13. Entry trigger checklist
+14. Performance (cache hits logged in UFSE stats)
+15. Debug PASS/FAIL explain block on fire/wait
+
+Module: Include/HITMAN_ULTRA/UFSE_FastSignalEngine.mqh
+Inputs: 31 · ULTRA FAST SIGNAL ENGINE v1.0

@@ -1,0 +1,10 @@
+DOWNLOAD HITMAN AI EA HERE:
+
+ZIP (EA + watermark):
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/hitman-master-audit-b12d/HITMAN_AI.zip
+
+MQ5 (Expert Advisor file):
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/hitman-master-audit-b12d/HITMAN_AI.mq5
+
+EA PACKAGE:
+https://github.com/theteletsak-max/NEUROX-SCALERT-AI/raw/cursor/hitman-master-audit-b12d/HITMAN_AI_EA.zip

@@ -1,0 +1,11 @@
+HITMAN AI — WATERMARK (classic compile-clean)
+=============================================
+Uses #resource "\\Images\\chart_background.bmp"
+CreateChartBackground() centers the BMP at WatermarkScalePercent=55.
+Source of truth: the compile-clean HITMAN_AI.mq5 you provided (no errors/warnings).
+Place chart_background.bmp in MT5 Data Folder\MQL5\Images\ before compile.
+
+INPUTS (group "WATERMARK")
+  WatermarkScalePercent = 55.0
+  WatermarkOffsetX = 0
+  WatermarkOffsetY = 0

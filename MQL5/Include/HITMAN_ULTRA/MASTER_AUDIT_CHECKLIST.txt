@@ -1,0 +1,67 @@
+══════════════════════════════════════════════════════════════════════
+HITMAN AI ULTRA ∞ — MASTER AUDIT CHECKLIST (applied)
+BUILD: HA_ULTRA_93 | Comment: HITMAN AI
+══════════════════════════════════════════════════════════════════════
+
+ULTIMATE RULE (ONE DECISION PATH)
+  Market → Analysis → Structure → Smart Money → UFSE Signal
+  → Trade Thesis → Scoring (USM) → Mission Control → Execution
+  → Position Management → Exit (Mission only) → Logger
+
+══════════════════════════════════════════════════════════════════════
+PHASE 1 — PROJECT CLEANUP                          [DONE]
+══════════════════════════════════════════════════════════════════════
+✓ Removed dead LCS helper cluster (never on live path)
+✓ Removed ContFallback live checklist / anti-scalp helpers
+✓ Removed legacy PRISM path setups (TrendPullback / Sweep / FVG+OB)
+✓ Removed legacy TrendFollow strategy block
+✓ Stubbed retired setups: MeanReversion, InstantTrend, Spec/VolBreakout,
+  StrongBuy/StrongSell (early return false)
+✓ Kept ContStruct_* for AnalyzeLiveMarket diagnostics
+✓ Kept session helpers APEX_HourInWindow / DetectMarketSession
+✓ Kept CorrelationFilterOK (optional soft filter)
+✓ Live entry = EvaluateStrategySignals (UFSE) ONLY
+
+══════════════════════════════════════════════════════════════════════
+PHASE 7 / 11 — SIGNAL + MISSION CONTROL            [DONE]
+══════════════════════════════════════════════════════════════════════
+✓ One signal engine: UFSE_FastSignalEngine → UltraAIDecide
+✓ Mission Control sole entry authority (UltraMission_ApproveEntry)
+✓ PRISMFinalizeApproval: Ultra live tags pass after duplicate-bar guard
+  only — no second UltraSniperEntryOK veto after Mission approve
+
+══════════════════════════════════════════════════════════════════════
+PHASE 12 / 13 — EXECUTION + POSITION MGMT          [KEPT]
+══════════════════════════════════════════════════════════════════════
+✓ ExecuteBuy / ExecuteSell sole open path from InstantExecution
+✓ TP ladder / BE / trail retained (management, not random exits)
+✓ Max-hold risk + emergency CloseAllEAPositions via Mission
+
+══════════════════════════════════════════════════════════════════════
+PHASE 14 — EXIT ENGINE                             [DONE]
+══════════════════════════════════════════════════════════════════════
+✓ g_Trade.PositionClose / PositionClosePartial ONLY in MissionControl.mqh
+✓ Shell / Defense call UltraMission_ClosePosition / ClosePartial
+✓ UltraMissionOnlyExits=true (default):
+    - blocks Trend exit (ADX)
+    - blocks Stagnation exit
+    - blocks Defense MAE / hard reversal / trap closes
+    - blocks Defense L8 adverse-flip hard close (BE manage kept)
+✓ UltraSmartExitEnabled=false by default (opt-in Mission EXIT)
+
+══════════════════════════════════════════════════════════════════════
+PHASE 20 — FINAL VERIFY                            [DONE]
+══════════════════════════════════════════════════════════════════════
+✓ One Strategy (UFSE proprietary tags)
+✓ One Signal Engine
+✓ One Mission Control
+✓ One Exit function family (UltraMission_Close*)
+✓ One Execution path (InstantExecution → Execute*)
+✓ No duplicate PositionClose in HITMAN_ULTRA sources
+✓ OnInit logs ONE DECISION PATH + MissionOnlyExits
+
+RETAINED (not dead — diagnostics / soft context)
+  ContStruct_* · DetectMarketSession · CalculateTradeScore (snapshots)
+  Defense BE/tighten/retrace locks · Profit ladder · Trailing
+
+══════════════════════════════════════════════════════════════════════
