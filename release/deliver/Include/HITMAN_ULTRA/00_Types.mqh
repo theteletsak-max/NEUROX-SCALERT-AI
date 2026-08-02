@@ -158,7 +158,7 @@ struct UltraSessionNews
    int    sessionTrendScore;         // 0..100
    int    sessionSpreadScore;        // 0..100 (higher = healthier spread)
    int    sessionExecScore;          // 0..100
-   int    sessionBias;               // soft confidence delta applied by USM2 (−8..+12)
+   int    sessionBias;               // soft confidence delta applied by USM2 (-8..+12)
    int    londonHour;                // DST-adjusted London local hour
    bool   newsVol;
    bool   highImpactProxy, midImpactProxy, lowImpactProxy;

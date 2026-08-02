@@ -80,7 +80,7 @@ void UltraZFR_NoteFail(const string domain, const string why)
    g_UltraZFR.recovering = false;
    UltraZFR_Log("FAIL " + domain + " | " + why + " | will retry — never stop");
    if(UltraBugEnabled)
-      UltraBug_Explain("RECOVER", "UltraZeroFailRecovery", domain, why);
+      UltraBug_Explain("RECOVER", "UltraZeroFailRecovery", domain, why, "-", 0);
 }
 
 //--------------------------------------------------------------------//

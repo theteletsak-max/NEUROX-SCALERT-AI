@@ -100,7 +100,7 @@ input group "31 · ULTRA SESSION INTELLIGENCE ENGINE ∞ (Phase 16.5)"
 input bool   UltraSessionEngineEnabled   = true;   // institutional session awareness
 input bool   UltraSessionAlwaysActive    = true;   // EA active 24/7 — no session block
 input bool   UltraSessionAutoDST         = true;   // auto London DST (GMT↔BST)
-input int    UltraSessionTZOverride      = -99;    // London GMT offset override (−99=auto)
+input int    UltraSessionTZOverride      = -99;    // London GMT offset override (-99=auto)
 input bool   UltraSessionBoostOpen       = true;   // London Open / Overlap can raise confidence
 input bool   UltraSessionPenalizeWeakLiq = true;   // weak liquidity can lower confidence
 input int    UltraSessionMaxBoost        = 12;     // max confidence boost from session

@@ -290,7 +290,8 @@ bool UltraBT_PreTradeReady(const string s, string &why)
 string   g_UltraBT_LastRejectKey = "";
 datetime g_UltraBT_LastRejectBar = 0;
 
-// Forward — defined in UltraBugElimination.mqh (assembled later)
+// Forward — defined in UltraBugElimination.mqh (assembled later).
+// Defaults ONLY on this first declaration (MQL5 / MetaEditor rule).
 void UltraBug_Explain(const string action, const string module, const string func,
                       const string reason, const string side = "-", const ulong ticket = 0);
 
@@ -298,10 +299,10 @@ void UltraBT_LogReject(const string module, const string func, const string reas
 {
    g_UltraBT.rejectCount++;
 
-   // Phase 19 — single structured explain path (module/function/reason)
+   // Final Order P14/P17 — single structured explain path (module/function/reason)
    if(UltraBugEnabled)
    {
-      UltraBug_Explain("TRADE_REJECTED", module, func, reason);
+      UltraBug_Explain("TRADE_REJECTED", module, func, reason, "-", 0);
       return;
    }
 

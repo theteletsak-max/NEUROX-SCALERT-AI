@@ -6,8 +6,8 @@
 //| Approves: BUY · SELL · WAIT · HOLD · MANAGE · EXIT               |
 //+------------------------------------------------------------------+
 
-// Forward — Phase 19 Bug Elimination assembled after Mission Control
-// (defaults already declared earlier in UltraBacktestCompat)
+// Forward — Bug Elimination / Maintenance assembled after Mission Control
+// (must match early UltraBacktestCompat forward; defaults only on definition)
 void UltraBug_Explain(const string action, const string module, const string func,
                       const string reason, const string side, const ulong ticket);
 

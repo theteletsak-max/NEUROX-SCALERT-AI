@@ -87,6 +87,8 @@ void UltraMaint_OnTick(const string symbol)
 {
    if(!UltraMaintenanceEnabled || !g_UltraMaint.booted)
       return;
+   if(symbol == NULL || StringLen(symbol) == 0)
+      return;
 
    long now = (long)GetTickCount();
    if(g_UltraMaint.lastScanMs > 0 && (now - g_UltraMaint.lastScanMs) < 500)

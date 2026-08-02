@@ -768,7 +768,7 @@ struct UltraSessionNews
    int    sessionTrendScore;         // 0..100
    int    sessionSpreadScore;        // 0..100 (higher = healthier spread)
    int    sessionExecScore;          // 0..100
-   int    sessionBias;               // soft confidence delta applied by USM2 (−8..+12)
+   int    sessionBias;               // soft confidence delta applied by USM2 (-8..+12)
    int    londonHour;                // DST-adjusted London local hour
    bool   newsVol;
    bool   highImpactProxy, midImpactProxy, lowImpactProxy;
@@ -1038,7 +1038,7 @@ input group "31 · ULTRA SESSION INTELLIGENCE ENGINE ∞ (Phase 16.5)"
 input bool   UltraSessionEngineEnabled   = true;   // institutional session awareness
 input bool   UltraSessionAlwaysActive    = true;   // EA active 24/7 — no session block
 input bool   UltraSessionAutoDST         = true;   // auto London DST (GMT↔BST)
-input int    UltraSessionTZOverride      = -99;    // London GMT offset override (−99=auto)
+input int    UltraSessionTZOverride      = -99;    // London GMT offset override (-99=auto)
 input bool   UltraSessionBoostOpen       = true;   // London Open / Overlap can raise confidence
 input bool   UltraSessionPenalizeWeakLiq = true;   // weak liquidity can lower confidence
 input int    UltraSessionMaxBoost        = 12;     // max confidence boost from session
@@ -2292,7 +2292,8 @@ bool UltraBT_PreTradeReady(const string s, string &why)
 string   g_UltraBT_LastRejectKey = "";
 datetime g_UltraBT_LastRejectBar = 0;
 
-// Forward — defined in UltraBugElimination.mqh (assembled later)
+// Forward — defined in UltraBugElimination.mqh (assembled later).
+// Defaults ONLY on this first declaration (MQL5 / MetaEditor rule).
 void UltraBug_Explain(const string action, const string module, const string func,
                       const string reason, const string side = "-", const ulong ticket = 0);
 
@@ -2300,10 +2301,10 @@ void UltraBT_LogReject(const string module, const string func, const string reas
 {
    g_UltraBT.rejectCount++;
 
-   // Phase 19 — single structured explain path (module/function/reason)
+   // Final Order P14/P17 — single structured explain path (module/function/reason)
    if(UltraBugEnabled)
    {
-      UltraBug_Explain("TRADE_REJECTED", module, func, reason);
+      UltraBug_Explain("TRADE_REJECTED", module, func, reason, "-", 0);
       return;
    }
 
@@ -5516,7 +5517,7 @@ void UltraResolveSides(UltraSignal &r, const int sb, const int ss)
 
 bool UltraPassScore(const int sc)
 {
-   // LEVEL 1 — single soft floor via UltraFireFloor() only (no stacked −8 passes)
+   // LEVEL 1 — single soft floor via UltraFireFloor() only (no stacked -8 passes)
    int floor = UltraFireFloor();
    if(sc >= floor) return true;
    if(sc >= UltraInstantFireConf) return true;
@@ -10679,8 +10680,8 @@ struct UltraAdaptiveAudit
    int symbolBehaviour;
    int timeframeBehaviour;
    int composite;          // blended 0..100
-   int confBias;           // soft confidence delta (−Max..+Max)
-   int posHoldBias;        // soft hold-score bias (−N..+N) — never forces EXIT
+   int confBias;           // soft confidence delta (-Max..+Max)
+   int posHoldBias;        // soft hold-score bias (-N..+N) — never forces EXIT
    int exitUrgency;        // 0..100 soft manage urgency — never auto-closes
    double riskScale;       // soft lot risk multiplier (clamped)
    double targetScale;     // soft TP distance scale (clamped)
@@ -12066,8 +12067,8 @@ string UltraAdaptive_ReviewLine()
 //| Approves: BUY · SELL · WAIT · HOLD · MANAGE · EXIT               |
 //+------------------------------------------------------------------+
 
-// Forward — Phase 19 Bug Elimination assembled after Mission Control
-// (defaults already declared earlier in UltraBacktestCompat)
+// Forward — Bug Elimination / Maintenance assembled after Mission Control
+// (must match early UltraBacktestCompat forward; defaults only on definition)
 void UltraBug_Explain(const string action, const string module, const string func,
                       const string reason, const string side, const ulong ticket);
 
@@ -12677,6 +12678,7 @@ bool UltraBug_ShouldPrint(const string key)
 //--------------------------------------------------------------------//
 // STRUCTURED EXPLAIN — every WAIT / REJECT / TRADE / EXIT / REPLACE   //
 //--------------------------------------------------------------------//
+// Defaults are on the FIRST forward (UltraBacktestCompat) only — MQL5 rule.
 void UltraBug_Explain(const string action,
                       const string module,
                       const string func,
@@ -12753,22 +12755,25 @@ bool UltraBug_AuditSignal(const string s, const UltraSignal &sig, string &why)
       why = "conflicting BUY+SELL signal";
       g_UltraBug.signalWarnCount++;
       g_UltraBug.warnCount++;
-      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditSignal", why, "BOTH");
+      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditSignal", why, "BOTH", 0);
       return false;
    }
    if(!sig.buy && !sig.sell)
    {
       why = "missing directional signal";
       g_UltraBug.signalWarnCount++;
-      UltraBug_Explain("WAIT", "UltraBugElimination", "UltraBug_AuditSignal", why);
+      UltraBug_Explain("WAIT", "UltraBugElimination", "UltraBug_AuditSignal", why, "-", 0);
       return false;
    }
    if(StringLen(sig.tag) == 0 || sig.tag == "NONE")
    {
       why = "invalid/empty strategy tag";
       g_UltraBug.signalWarnCount++;
-      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditSignal", why,
-                       sig.buy ? "BUY" : "SELL");
+      UltraBug_Explain("REJECT",
+         "UltraBugElimination",
+         "UltraBug_AuditSignal",
+         why,
+         sig.buy ? "BUY" : "SELL", 0);
       return false;
    }
 
@@ -12779,8 +12784,11 @@ bool UltraBug_AuditSignal(const string s, const UltraSignal &sig, string &why)
       why += IntegerToString(conf);
       g_UltraBug.signalWarnCount++;
       g_UltraBug.criticalCount++;
-      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditSignal", why,
-                       sig.buy ? "BUY" : "SELL");
+      UltraBug_Explain("REJECT",
+         "UltraBugElimination",
+         "UltraBug_AuditSignal",
+         why,
+         sig.buy ? "BUY" : "SELL", 0);
       return false;
    }
 
@@ -12794,9 +12802,11 @@ bool UltraBug_AuditSignal(const string s, const UltraSignal &sig, string &why)
    {
       // Not a hard reject — SignalLock owns duplicates; log once
       g_UltraBug.signalWarnCount++;
-      UltraBug_Explain("WAIT", "UltraBugElimination", "UltraBug_AuditSignal",
-                       "duplicate signal same bar (lock should gate)",
-                       sig.buy ? "BUY" : "SELL");
+      UltraBug_Explain("WAIT",
+         "UltraBugElimination",
+         "UltraBug_AuditSignal",
+         "duplicate signal same bar (lock should gate)",
+         sig.buy ? "BUY" : "SELL", 0);
    }
    lastSym = s; lastBar = bar; lastBuy = sig.buy; lastTag = sig.tag;
    return true;
@@ -12822,7 +12832,7 @@ void UltraBug_ExplainExecFail(const string func, const string side,
    else if(retcode == TRADE_RETCODE_MARKET_CLOSED) why += " | market closed";
    else if(retcode == TRADE_RETCODE_PRICE_OFF) why += " | price off";
    g_UltraBug.execFailCount++;
-   UltraBug_Explain("EXEC_FAIL", "Shell_B", func, why, side);
+   UltraBug_Explain("EXEC_FAIL", "Shell_B", func, why, side, 0);
 }
 
 bool UltraBug_AuditStops(const string s, const bool isBuy, const double entry,
@@ -12842,14 +12852,14 @@ bool UltraBug_AuditStops(const string s, const bool isBuy, const double entry,
    if(sl <= 0.0)
    {
       why = "SL missing";
-      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditStops", why, isBuy ? "BUY" : "SELL");
+      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditStops", why, isBuy ? "BUY" : "SELL", 0);
       return false;
    }
    double slDist = MathAbs(entry - sl);
    if(minDist > 0.0 && slDist + point * 0.1 < minDist)
    {
       why = "SL inside stop level";
-      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditStops", why, isBuy ? "BUY" : "SELL");
+      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditStops", why, isBuy ? "BUY" : "SELL", 0);
       return false;
    }
    if(tp > 0.0)
@@ -12858,7 +12868,7 @@ bool UltraBug_AuditStops(const string s, const bool isBuy, const double entry,
       if(minDist > 0.0 && tpDist + point * 0.1 < minDist)
       {
          why = "TP inside stop level";
-         UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditStops", why, isBuy ? "BUY" : "SELL");
+         UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditStops", why, isBuy ? "BUY" : "SELL", 0);
          return false;
       }
    }
@@ -12866,19 +12876,22 @@ bool UltraBug_AuditStops(const string s, const bool isBuy, const double entry,
    {
       // Soft warn — freeze can block modify; not always entry-blocking
       g_UltraBug.warnCount++;
-      UltraBug_Explain("WAIT", "UltraBugElimination", "UltraBug_AuditStops",
-                       "SL near freeze level", isBuy ? "BUY" : "SELL");
+      UltraBug_Explain("WAIT",
+         "UltraBugElimination",
+         "UltraBug_AuditStops",
+         "SL near freeze level",
+         isBuy ? "BUY" : "SELL", 0);
    }
    if(isBuy && !(sl < entry))
    {
       why = "BUY SL must be below entry";
-      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditStops", why, "BUY");
+      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditStops", why, "BUY", 0);
       return false;
    }
    if(!isBuy && !(sl > entry))
    {
       why = "SELL SL must be above entry";
-      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditStops", why, "SELL");
+      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditStops", why, "SELL", 0);
       return false;
    }
    return true;
@@ -12908,18 +12921,18 @@ void UltraBug_AuditPositions(const string s)
          g_UltraBug.positionWarnCount++;
          g_UltraBug.warnCount++;
          UltraBug_Explain("WAIT", "UltraBugElimination", "UltraBug_AuditPositions",
-                          "position missing SL", 
-                          PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY ? "BUY" : "SELL",
-                          ticket);
+            "position missing SL", 
+            PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY ? "BUY" : "SELL",
+            ticket);
       }
       // Sync lock presence
       if(UltraPosLock_Find(ticket) < 0)
       {
          g_UltraBug.positionWarnCount++;
          UltraBug_Explain("WAIT", "UltraBugElimination", "UltraBug_AuditPositions",
-                          "position not in Mission lock — re-register soft",
-                          PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY ? "BUY" : "SELL",
-                          ticket);
+            "position not in Mission lock — re-register soft",
+            PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY ? "BUY" : "SELL",
+            ticket);
          UltraPosLock_Register(ticket, s,
                                PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY,
                                "BUG_SYNC");
@@ -12953,14 +12966,14 @@ bool UltraBug_AuditBroker(const string s, string &why)
    {
       why = "symbol specs invalid (digits/tick/point/lot)";
       g_UltraBug.criticalCount++;
-      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditBroker", why);
+      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditBroker", why, "-", 0);
       return false;
    }
    if(!g_UltraBug.brokerOK)
    {
       why = "symbol trade mode disabled";
       g_UltraBug.criticalCount++;
-      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditBroker", why);
+      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditBroker", why, "-", 0);
       return false;
    }
 
@@ -12993,7 +13006,7 @@ void UltraBug_NoteHandles(const int badCount, const int totalChecked)
       why += IntegerToString(badCount);
       why += "/";
       why += IntegerToString(totalChecked);
-      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_NoteHandles", why);
+      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_NoteHandles", why, "-", 0);
    }
 }
 
@@ -13027,8 +13040,11 @@ bool UltraBug_AuditInit(const string s)
    {
       g_UltraBug.initOK = false;
       g_UltraBug.criticalCount++;
-      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditInit",
-                       "TradeComment must be exactly HITMAN AI");
+      UltraBug_Explain("REJECT",
+         "UltraBugElimination",
+         "UltraBug_AuditInit",
+         "TradeComment must be exactly HITMAN AI",
+         "-", 0);
    }
 
    // Timer
@@ -13039,8 +13055,11 @@ bool UltraBug_AuditInit(const string s)
       {
          g_UltraBug.initOK = false;
          g_UltraBug.criticalCount++;
-         UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditInit",
-                          "invalid MultiSymbolTimerSeconds");
+         UltraBug_Explain("REJECT",
+            "UltraBugElimination",
+            "UltraBug_AuditInit",
+            "invalid MultiSymbolTimerSeconds",
+            "-", 0);
       }
    }
 
@@ -13048,8 +13067,11 @@ bool UltraBug_AuditInit(const string s)
    if(!g_UltraBug.handlesOK)
    {
       g_UltraBug.initOK = false;
-      UltraBug_Explain("REJECT", "UltraBugElimination", "UltraBug_AuditInit",
-                       "invalid indicator handles detected");
+      UltraBug_Explain("REJECT",
+         "UltraBugElimination",
+         "UltraBug_AuditInit",
+         "invalid indicator handles detected",
+         "-", 0);
    }
 
    // Chart object (watermark)
@@ -13057,8 +13079,11 @@ bool UltraBug_AuditInit(const string s)
    {
       g_UltraBug.objectsOK = false;
       g_UltraBug.warnCount++;
-      UltraBug_Explain("WAIT", "UltraBugElimination", "UltraBug_AuditInit",
-                       "chart background object missing (non-fatal)");
+      UltraBug_Explain("WAIT",
+         "UltraBugElimination",
+         "UltraBug_AuditInit",
+         "chart background object missing (non-fatal)",
+         "-", 0);
    }
 
    // Memory soft check
@@ -13066,8 +13091,11 @@ bool UltraBug_AuditInit(const string s)
    {
       g_UltraBug.memoryOK = false;
       g_UltraBug.warnCount++;
-      UltraBug_Explain("WAIT", "UltraBugElimination", "UltraBug_AuditInit",
-                       "memory trade counter overflow risk");
+      UltraBug_Explain("WAIT",
+         "UltraBugElimination",
+         "UltraBug_AuditInit",
+         "memory trade counter overflow risk",
+         "-", 0);
    }
 
    string bWhy = "";
@@ -13079,8 +13107,11 @@ bool UltraBug_AuditInit(const string s)
    if(MQLInfoInteger(MQL_TESTER) && !UltraBacktestCompatEnabled)
    {
       g_UltraBug.warnCount++;
-      UltraBug_Explain("WAIT", "UltraBugElimination", "UltraBug_AuditInit",
-                       "tester without backtest compat enabled");
+      UltraBug_Explain("WAIT",
+         "UltraBugElimination",
+         "UltraBug_AuditInit",
+         "tester without backtest compat enabled",
+         "-", 0);
    }
 
    g_UltraBug.summary = g_UltraBug.initOK ? "INIT_OK" : "INIT_ISSUES";
@@ -13112,8 +13143,11 @@ void UltraBug_AuditDeinit(const int reason)
       {
          g_UltraBug.deinitOK = false;
          g_UltraBug.warnCount++;
-         UltraBug_Explain("WAIT", "UltraBugElimination", "UltraBug_AuditDeinit",
-                          "chart object delete failed");
+         UltraBug_Explain("WAIT",
+            "UltraBugElimination",
+            "UltraBug_AuditDeinit",
+            "chart object delete failed",
+            "-", 0);
       }
    }
 
@@ -13152,8 +13186,11 @@ void UltraBug_PerfEnd(const string s)
    if(dt >= UltraBugPerfWarnMs)
    {
       g_UltraBug.warnCount++;
-      UltraBug_Explain("WAIT", "UltraBugElimination", "UltraBug_PerfEnd",
-                       "tick latency high ms=" + IntegerToString((int)dt) + " on " + s);
+      UltraBug_Explain("WAIT",
+         "UltraBugElimination",
+         "UltraBug_PerfEnd",
+         "tick latency high ms=" + IntegerToString((int)dt) + " on " + s,
+         "-", 0);
    }
 }
 
@@ -13167,14 +13204,20 @@ void UltraBug_AuditEvent(const UltraSnap &u)
    if(UltraNewsExec_IsNewsMode() && StringLen(u.ctx.eventClass) == 0)
    {
       g_UltraBug.warnCount++;
-      UltraBug_Explain("WAIT", "UltraBugElimination", "UltraBug_AuditEvent",
-                       "news mode on but eventClass empty");
+      UltraBug_Explain("WAIT",
+         "UltraBugElimination",
+         "UltraBug_AuditEvent",
+         "news mode on but eventClass empty",
+         "-", 0);
    }
    if(UltraSessionEngineEnabled && StringLen(u.ctx.session) == 0)
    {
       g_UltraBug.warnCount++;
-      UltraBug_Explain("WAIT", "UltraBugElimination", "UltraBug_AuditEvent",
-                       "session engine on but session empty");
+      UltraBug_Explain("WAIT",
+         "UltraBugElimination",
+         "UltraBug_AuditEvent",
+         "session engine on but session empty",
+         "-", 0);
    }
 }
 
@@ -13330,6 +13373,8 @@ void UltraMaint_OnTick(const string symbol)
 {
    if(!UltraMaintenanceEnabled || !g_UltraMaint.booted)
       return;
+   if(symbol == NULL || StringLen(symbol) == 0)
+      return;
 
    long now = (long)GetTickCount();
    if(g_UltraMaint.lastScanMs > 0 && (now - g_UltraMaint.lastScanMs) < 500)
@@ -13432,7 +13477,7 @@ void UltraZFR_NoteFail(const string domain, const string why)
    g_UltraZFR.recovering = false;
    UltraZFR_Log("FAIL " + domain + " | " + why + " | will retry — never stop");
    if(UltraBugEnabled)
-      UltraBug_Explain("RECOVER", "UltraZeroFailRecovery", domain, why);
+      UltraBug_Explain("RECOVER", "UltraZeroFailRecovery", domain, why, "-", 0);
 }
 
 //--------------------------------------------------------------------//
@@ -15131,8 +15176,11 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       if(EnableVerboseLogging)
          Print("ULTRA snapshot failed: ", g_UltraCore.lastError, " on ", BrokerSymbol);
       g_UltraLastSnap = snap;
-      UltraBug_Explain("WAIT", "UFSE", "EvaluateStrategySignals",
-                       "snapshot failed: " + g_UltraCore.lastError);
+      UltraBug_Explain("WAIT",
+         "UFSE",
+         "EvaluateStrategySignals",
+         "snapshot failed: " + g_UltraCore.lastError,
+         "-", 0);
       return;
    }
 
@@ -15145,7 +15193,7 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       best.explanation = UltraUFSE_DebugExplain(snap, leanBuy, false);
       g_UltraLastSignal = best;
       // Phase 19 — every wait explains module/function/reason (throttled)
-      UltraBug_Explain("WAIT", "UFSE", "UltraAIDecide", why);
+      UltraBug_Explain("WAIT", "UFSE", "UltraAIDecide", why, "-", 0);
       datetime bar = iTime(BrokerSymbol, UltraETF(), 0);
       bool logIt = (EnableVerboseLogging || ContStruct_LogDetail || UltraUFSE_ExplainLog) &&
                    (bar != g_UltraLastWaitBar || BrokerSymbol != g_UltraLastWaitSym);
@@ -23841,7 +23889,7 @@ void UltraSetWait(const string reason)
    // Phase 19 — no silent waits: structured explain (throttled inside UltraBug)
    g_UltraLastReject = reason;
    g_UltraLastDecision = "WAIT";
-   UltraBug_Explain("WAIT", "Shell_B", "UltraSetWait", reason);
+   UltraBug_Explain("WAIT", "Shell_B", "UltraSetWait", reason, "-", 0);
 }
 
 void UltraSetApprove(const string tag, const string grade, const int beast, const int confPct)

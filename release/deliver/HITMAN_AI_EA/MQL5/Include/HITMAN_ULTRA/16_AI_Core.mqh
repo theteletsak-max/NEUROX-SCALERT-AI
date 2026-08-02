@@ -44,7 +44,7 @@ void UltraResolveSides(UltraSignal &r, const int sb, const int ss)
 
 bool UltraPassScore(const int sc)
 {
-   // LEVEL 1 — single soft floor via UltraFireFloor() only (no stacked −8 passes)
+   // LEVEL 1 — single soft floor via UltraFireFloor() only (no stacked -8 passes)
    int floor = UltraFireFloor();
    if(sc >= floor) return true;
    if(sc >= UltraInstantFireConf) return true;

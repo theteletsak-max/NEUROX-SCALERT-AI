@@ -7722,7 +7722,7 @@ void UltraSetWait(const string reason)
    // Phase 19 — no silent waits: structured explain (throttled inside UltraBug)
    g_UltraLastReject = reason;
    g_UltraLastDecision = "WAIT";
-   UltraBug_Explain("WAIT", "Shell_B", "UltraSetWait", reason);
+   UltraBug_Explain("WAIT", "Shell_B", "UltraSetWait", reason, "-", 0);
 }
 
 void UltraSetApprove(const string tag, const string grade, const int beast, const int confPct)

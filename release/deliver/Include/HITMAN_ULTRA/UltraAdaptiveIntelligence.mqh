@@ -37,8 +37,8 @@ struct UltraAdaptiveAudit
    int symbolBehaviour;
    int timeframeBehaviour;
    int composite;          // blended 0..100
-   int confBias;           // soft confidence delta (−Max..+Max)
-   int posHoldBias;        // soft hold-score bias (−N..+N) — never forces EXIT
+   int confBias;           // soft confidence delta (-Max..+Max)
+   int posHoldBias;        // soft hold-score bias (-N..+N) — never forces EXIT
    int exitUrgency;        // 0..100 soft manage urgency — never auto-closes
    double riskScale;       // soft lot risk multiplier (clamped)
    double targetScale;     // soft TP distance scale (clamped)
