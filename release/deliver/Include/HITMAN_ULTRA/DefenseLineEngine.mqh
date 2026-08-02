@@ -298,14 +298,14 @@ bool UltraDefense_Line6_Probability(const UltraSnap &u, string &why)
 bool UltraDefense_Line7_Execution(const string s, string &why)
 {
    why = "";
-   if(!TerminalInfoInteger(TERMINAL_CONNECTED)){ why = "connection loss"; return false; }
-   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)){ why = "terminal trade blocked"; return false; }
-   if(!MQLInfoInteger(MQL_TRADE_ALLOWED)){ why = "EA trade disabled"; return false; }
+   if(!UltraBT_ConnectedOK()){ why = "connection loss"; return false; }
+   if(!UltraBT_TradeAllowed()){ why = "terminal trade blocked"; return false; }
 
    long tm = 0;
    if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm)){ why = "symbol mode unavailable"; return false; }
    // trade mode 0 = disabled — compare as long to avoid enum convert errors
-   if(tm == 0){ why = "symbol trade disabled"; return false; }
+   if(tm == 0 && !(UltraBT_CompatMode() && SymbolInfoDouble(s, SYMBOL_BID) > 0.0))
+   { why = "symbol trade disabled"; return false; }
 
    double bid = SymbolInfoDouble(s, SYMBOL_BID);
    double ask = SymbolInfoDouble(s, SYMBOL_ASK);

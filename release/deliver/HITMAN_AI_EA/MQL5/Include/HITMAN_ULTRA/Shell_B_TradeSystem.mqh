@@ -72,10 +72,14 @@ int OnInit()
    UltraTarget_Boot();      // TARGET INTELLIGENCE ∞
    UltraTradeGate_Boot();   // HARD GATE — any fail = NO TRADE
    UltraMod_Boot();         // MODULE MANAGER — Final Master Audit registry
+   UltraBT_Boot();          // BACKTEST COMPATIBILITY ∞ — Tester/Demo/Live
    UltraOpt_OnTickStart();
    UltraMission_Init();
    Print("FINAL MASTER AUDIT v1.0: HA_ULTRA_93 | one strategy · one signal · one thesis · one mission · one exit");
    Print("MODULE MANAGER: ", g_UltraMods.summary);
+   Print("BACKTEST COMPAT ∞: Mode=", UltraBT_ModeName(),
+         " Compat=", UltraYN(g_UltraBT.compatMode),
+         " Enabled=", UltraYN(UltraBacktestCompatEnabled));
    Print("VALIDATION CHAIN: Enabled=", UltraYN(UltraVChainEnabled),
          " BlockInvalid=", UltraYN(UltraVChainBlockOnInvalid),
          " BlockWait=", UltraYN(UltraVChainBlockOnWait));
@@ -3138,6 +3142,17 @@ bool ExecuteBuy()
       CheckTradeStops(ask, sl, tp); // re-validate the adjusted tp against broker minimums too
    }
 
+   // BACKTEST COMPAT — indicators/history/broker rules ready?
+   {
+      string btWhy = "";
+      if(!UltraBT_PreTradeReady(BrokerSymbol, btWhy))
+      {
+         UltraBT_LogReject("UltraBacktestCompat", "UltraBT_PreTradeReady", btWhy);
+         Print("NO TRADE — BT ready fail: ", btWhy, " on ", BrokerSymbol);
+         return false;
+      }
+   }
+
    // HARD TRADE GATE — Entry/SL/TP1/TP2/TP3/Risk/Exec/Thesis/Mission
    // ANY fail → NO TRADE
    {
@@ -3153,6 +3168,7 @@ bool ExecuteBuy()
 
    if(lot <= 0)
    {
+      UltraBT_LogReject("Shell_B", "ExecuteBuy", "invalid lot size");
       Print("Invalid lot size.");
       return false;
    }
@@ -3160,7 +3176,10 @@ bool ExecuteBuy()
    // FIX #9: check free margin BEFORE sending, instead of relying on the
    // broker to reject an under-margined order after the fact.
    if(!HasSufficientMargin(ORDER_TYPE_BUY, lot, ask))
+   {
+      UltraBT_LogReject("Shell_B", "ExecuteBuy", "insufficient margin");
       return false;
+   }
 
    LastAttemptTimeArr[symIdx] = TimeCurrent();
 
@@ -3486,6 +3505,17 @@ bool ExecuteSell()
       CheckTradeStops(bid, sl, tp);
    }
 
+   // BACKTEST COMPAT — indicators/history/broker rules ready?
+   {
+      string btWhy = "";
+      if(!UltraBT_PreTradeReady(BrokerSymbol, btWhy))
+      {
+         UltraBT_LogReject("UltraBacktestCompat", "UltraBT_PreTradeReady", btWhy);
+         Print("NO TRADE — BT ready fail: ", btWhy, " on ", BrokerSymbol);
+         return false;
+      }
+   }
+
    // HARD TRADE GATE — Entry/SL/TP1/TP2/TP3/Risk/Exec/Thesis/Mission
    // ANY fail → NO TRADE
    {
@@ -3501,12 +3531,16 @@ bool ExecuteSell()
 
    if(lot <= 0)
    {
+      UltraBT_LogReject("Shell_B", "ExecuteSell", "invalid lot size");
       Print("Invalid lot size.");
       return false;
    }
 
    if(!HasSufficientMargin(ORDER_TYPE_SELL, lot, bid))
+   {
+      UltraBT_LogReject("Shell_B", "ExecuteSell", "insufficient margin");
       return false;
+   }
 
    LastAttemptTimeArr[symIdx] = TimeCurrent();
 
@@ -7457,6 +7491,9 @@ void UltraSetReject(const string reason)
    g_UltraLastReject = reason;
    g_UltraLastDecision = "REJECT";
    g_UltraRejectCount++;
+
+   // Structured reject (module/function/reason/spread/trend/conf/news)
+   UltraBT_LogReject("Shell_B", "UltraSetReject", reason);
 
    // Throttle: same reason on same symbol prints at most once per EntryTF bar.
    // Cooldown / wait states must NOT flood Experts (your 17:38 spam).

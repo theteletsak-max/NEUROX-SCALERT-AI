@@ -1081,6 +1081,12 @@ input bool   UltraTradeGateEnabled       = true;   // hard pre-trade validation
 input bool   UltraTradeGateLog           = true;   // TRADE_GATE PASS/FAIL logs
 input bool   UltraTradeGateRequireTargets= true;   // Target Intelligence plan mandatory
 
+input group "31 · ULTRA BACKTEST COMPATIBILITY ENGINE ∞"
+input bool   UltraBacktestCompatEnabled  = true;   // Strategy Tester compatibility mode
+input bool   UltraBacktestLogBoot        = true;   // boot mode line
+input bool   UltraBacktestLogRejects     = true;   // structured TRADE REJECTED blocks
+input int    UltraBacktestMinBars        = 60;     // historical bars required
+
 input group "31 · EXECUTION INPUTS"
 input bool   UltraExecQualityEnabled     = true;
 input ENUM_TIMEFRAMES UltraTF_Bias       = PERIOD_H4;
@@ -1666,9 +1672,20 @@ bool UltraFoundation_MemoryOK()
 
 bool UltraFoundation_RuntimeOK()
 {
-   bool connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
-   bool tradeAllow = (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) &&
-                     (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
+   // Backtest Compat: tester has no live "connection"; use UltraBT helpers when available
+   bool connected = true;
+   bool tradeAllow = (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
+   if(MQLInfoInteger(MQL_TESTER) != 0)
+   {
+      connected = true;
+      tradeAllow = (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
+   }
+   else
+   {
+      connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
+      tradeAllow = (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) &&
+                   (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
+   }
    g_UltraFoundation.runtimeOK = (connected && tradeAllow && !g_UltraFoundation.shuttingDown);
    return g_UltraFoundation.runtimeOK;
 }
@@ -1904,6 +1921,387 @@ string UltraFoundation_Dashboard()
 
 #endif // HITMAN_ULTRA_FOUNDATION_MQH
 //===== END UltraFoundation.mqh =====
+
+//===== BEGIN UltraBacktestCompat.mqh =====
+#ifndef HITMAN_ULTRA_BACKTEST_COMPAT_MQH
+#define HITMAN_ULTRA_BACKTEST_COMPAT_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — ULTRA BACKTEST COMPATIBILITY ENGINE ∞                |
+//| Same strategy · Same decisions · Tester / Demo / Live            |
+//| Tester mode disables live-only gates; never changes strategy.    |
+//+------------------------------------------------------------------+
+
+struct UltraBacktestState
+{
+   bool   tester;
+   bool   optimization;
+   bool   visual;
+   bool   compatMode;          // Tester Compatibility Mode active
+   bool   liveOnlyDisabled;    // quote-age / terminal-connected hard gates softened
+   bool   histOK;
+   bool   handlesOK;
+   bool   buffersOK;
+   bool   symbolOK;
+   bool   timeframeOK;
+   bool   tickOK;
+   bool   sessionOK;
+   bool   newsOK;
+   bool   tradePermOK;
+   bool   marginOK;
+   bool   stopsOK;
+   bool   freezeOK;
+   bool   lotOK;
+   bool   ready;               // pre-trade ready
+   string modeName;
+   string detail;
+   long   lastReadyMs;
+   ulong  rejectCount;
+   ulong  readyPassCount;
+};
+
+UltraBacktestState g_UltraBT;
+
+//--------------------------------------------------------------------//
+// DETECTION                                                          //
+//--------------------------------------------------------------------//
+bool UltraBT_IsTester()
+{
+   return (bool)MQLInfoInteger(MQL_TESTER);
+}
+
+bool UltraBT_IsOptimization()
+{
+   return (bool)MQLInfoInteger(MQL_OPTIMIZATION);
+}
+
+bool UltraBT_IsVisual()
+{
+   return (bool)MQLInfoInteger(MQL_VISUAL_MODE);
+}
+
+bool UltraBT_IsDemo()
+{
+   if(UltraBT_IsTester()) return false;
+   ENUM_ACCOUNT_TRADE_MODE mode = (ENUM_ACCOUNT_TRADE_MODE)AccountInfoInteger(ACCOUNT_TRADE_MODE);
+   return (mode == ACCOUNT_TRADE_MODE_DEMO);
+}
+
+bool UltraBT_IsLiveAccount()
+{
+   if(UltraBT_IsTester()) return false;
+   ENUM_ACCOUNT_TRADE_MODE mode = (ENUM_ACCOUNT_TRADE_MODE)AccountInfoInteger(ACCOUNT_TRADE_MODE);
+   return (mode == ACCOUNT_TRADE_MODE_REAL);
+}
+
+string UltraBT_ModeName()
+{
+   if(UltraBT_IsOptimization()) return "OPTIMIZATION";
+   if(UltraBT_IsTester())
+   {
+      if(UltraBT_IsVisual()) return "TESTER_VISUAL";
+      return "TESTER";
+   }
+   if(UltraBT_IsDemo()) return "DEMO";
+   if(UltraBT_IsLiveAccount()) return "LIVE";
+   return "LIVE";
+}
+
+bool UltraBT_CompatMode()
+{
+   if(!UltraBacktestCompatEnabled) return false;
+   return UltraBT_IsTester();
+}
+
+//--------------------------------------------------------------------//
+// LIVE-ONLY REPLACEMENTS (same strategy — softer environment gates)  //
+//--------------------------------------------------------------------//
+bool UltraBT_ConnectedOK()
+{
+   // Strategy Tester has no terminal "connection" in the live sense
+   if(UltraBT_CompatMode()) return true;
+   return (TerminalInfoInteger(TERMINAL_CONNECTED) != 0);
+}
+
+bool UltraBT_TradeAllowed()
+{
+   // Tester: MQL trade allow is the authority; terminal flag is unreliable
+   if(UltraBT_CompatMode())
+      return (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
+   return (TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) != 0) &&
+          (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
+}
+
+bool UltraBT_SkipLiveOnly()
+{
+   // Disable live-only features: stale quote age, disconnect hard-fail, etc.
+   return UltraBT_CompatMode();
+}
+
+bool UltraBT_RelaxEntryDrift()
+{
+   // In tester, modeled prices can jump between decide and send
+   return UltraBT_CompatMode();
+}
+
+//--------------------------------------------------------------------//
+// HISTORICAL / INDICATOR / BROKER VALIDATION                         //
+//--------------------------------------------------------------------//
+bool UltraBT_ValidateHistory(const string s, string &why)
+{
+   why = "";
+   ENUM_TIMEFRAMES tf = UltraETF();
+   int bars = Bars(s, tf);
+   int need = UltraBacktestMinBars;
+   if(need < 60) need = 60;
+   if(bars < need)
+   { why = "insufficient historical bars (" + IntegerToString(bars) + "<" + IntegerToString(need) + ")"; return false; }
+   if(iTime(s, tf, 1) <= 0 || iClose(s, tf, 1) <= 0.0)
+   { why = "closed bar history invalid"; return false; }
+   return true;
+}
+
+bool UltraBT_ValidateBuffers(const string s, string &why)
+{
+   why = "";
+   ENUM_TIMEFRAMES tf = UltraETF();
+   MqlRates rates[];
+   ArraySetAsSeries(rates, true);
+   int n = CopyRates(s, tf, 0, 16, rates);
+   if(n < 8)
+   { why = "CopyRates/buffer validation failed"; return false; }
+   double close[];
+   ArraySetAsSeries(close, true);
+   if(CopyClose(s, tf, 0, 8, close) < 5)
+   { why = "CopyClose validation failed"; return false; }
+   return true;
+}
+
+bool UltraBT_ValidateSymbolTF(const string s, string &why)
+{
+   why = "";
+   if(StringLen(s) == 0){ why = "empty symbol"; return false; }
+   long sel = 0;
+   if(!SymbolInfoInteger(s, SYMBOL_SELECT, sel) || sel == 0)
+   {
+      if(!SymbolSelect(s, true))
+      { why = "symbol not selectable"; return false; }
+   }
+   ENUM_TIMEFRAMES tf = UltraETF();
+   if(tf <= 0){ why = "invalid timeframe"; return false; }
+   return true;
+}
+
+bool UltraBT_ValidateTick(const string s, string &why)
+{
+   why = "";
+   double bid = SymbolInfoDouble(s, SYMBOL_BID);
+   double ask = SymbolInfoDouble(s, SYMBOL_ASK);
+   if(bid <= 0.0 || ask <= 0.0){ why = "tick bid/ask invalid"; return false; }
+   if(ask < bid){ why = "ask < bid"; return false; }
+   return true;
+}
+
+bool UltraBT_ValidateBrokerRules(const string s, string &why)
+{
+   why = "";
+   long stops = UltraSymStopsLevel(s);
+   long freeze = UltraSymFreezeLevel(s);
+   // Levels themselves are informational — invalid only if symbol trade mode off
+   long tm = 0;
+   if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm) || tm == 0)
+   {
+      // In tester some symbols report mode oddly — allow if tester + bid OK
+      if(!(UltraBT_CompatMode() && SymbolInfoDouble(s, SYMBOL_BID) > 0.0))
+      { why = "symbol trade mode disabled"; return false; }
+   }
+   double minLot = SymbolInfoDouble(s, SYMBOL_VOLUME_MIN);
+   double maxLot = SymbolInfoDouble(s, SYMBOL_VOLUME_MAX);
+   double step   = SymbolInfoDouble(s, SYMBOL_VOLUME_STEP);
+   if(minLot <= 0.0 || maxLot < minLot || step <= 0.0)
+   { why = "lot constraints invalid"; return false; }
+   // Stash for dashboard
+   g_UltraBT.stopsOK = (stops >= 0);
+   g_UltraBT.freezeOK = (freeze >= 0);
+   g_UltraBT.lotOK = true;
+   return true;
+}
+
+bool UltraBT_ValidateMargin(string &why)
+{
+   why = "";
+   double free = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+   if(free < 0.0){ why = "margin free negative"; return false; }
+   // Tester can start with tiny deposit — only fail if zero and not tester
+   if(free <= 0.0 && !UltraBT_CompatMode())
+   { why = "no free margin"; return false; }
+   return true;
+}
+
+bool UltraBT_ValidateHandles(string &why)
+{
+   why = "";
+   // Soft: if handles array empty (pre-init) OK; if all invalid after boot → fail
+   int n = ArraySize(EMAHandles);
+   if(n <= 0) return true;
+   int good = 0, bad = 0;
+   for(int i = 0; i < n; i++)
+   {
+      if(EMAHandles[i] == INVALID_HANDLE) bad++;
+      else if(EMAHandles[i] != 0) good++;
+   }
+   if(g_UltraFoundation.booted && good == 0 && bad > 0)
+   { why = "indicator handles invalid"; return false; }
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// PRE-TRADE READY PIPELINE                                           //
+//--------------------------------------------------------------------//
+bool UltraBT_PreTradeReady(const string s, string &why)
+{
+   why = "";
+   g_UltraBT.ready = false;
+   g_UltraBT.histOK = g_UltraBT.handlesOK = g_UltraBT.buffersOK = false;
+   g_UltraBT.symbolOK = g_UltraBT.timeframeOK = g_UltraBT.tickOK = false;
+   g_UltraBT.sessionOK = g_UltraBT.newsOK = true; // never hard-block
+   g_UltraBT.tradePermOK = g_UltraBT.marginOK = false;
+   g_UltraBT.stopsOK = g_UltraBT.freezeOK = g_UltraBT.lotOK = false;
+
+   string w = "";
+   if(!UltraBT_ValidateSymbolTF(s, w))
+   { why = w; g_UltraBT.detail = w; return false; }
+   g_UltraBT.symbolOK = true;
+   g_UltraBT.timeframeOK = true;
+
+   if(!UltraBT_ValidateHistory(s, w))
+   { why = w; g_UltraBT.detail = w; return false; }
+   g_UltraBT.histOK = true;
+
+   if(!UltraBT_ValidateBuffers(s, w))
+   { why = w; g_UltraBT.detail = w; return false; }
+   g_UltraBT.buffersOK = true;
+
+   if(!UltraBT_ValidateHandles(w))
+   { why = w; g_UltraBT.detail = w; return false; }
+   g_UltraBT.handlesOK = true;
+
+   if(!UltraBT_ValidateTick(s, w))
+   { why = w; g_UltraBT.detail = w; return false; }
+   g_UltraBT.tickOK = true;
+
+   if(!UltraBT_TradeAllowed())
+   { why = "trade not allowed"; g_UltraBT.detail = why; return false; }
+   g_UltraBT.tradePermOK = true;
+
+   if(!UltraBT_ValidateMargin(w))
+   { why = w; g_UltraBT.detail = w; return false; }
+   g_UltraBT.marginOK = true;
+
+   if(!UltraBT_ValidateBrokerRules(s, w))
+   { why = w; g_UltraBT.detail = w; return false; }
+
+   g_UltraBT.ready = true;
+   g_UltraBT.readyPassCount++;
+   g_UltraBT.detail = "READY " + g_UltraBT.modeName;
+   g_UltraBT.lastReadyMs = (long)GetTickCount();
+   why = g_UltraBT.detail;
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// STRUCTURED REJECT LOGGER                                           //
+//--------------------------------------------------------------------//
+void UltraBT_LogReject(const string module, const string func, const string reason)
+{
+   g_UltraBT.rejectCount++;
+   UltraSnap u = g_UltraLastSnap;
+   long spr = 0;
+   SymbolInfoInteger(_Symbol, SYMBOL_SPREAD, spr);
+   if(u.ctx.spreadPts > 0.0) spr = (long)u.ctx.spreadPts;
+
+   string trend = "FLAT";
+   if(u.trend.bull && !u.trend.bear) trend = "BULL";
+   else if(u.trend.bear && !u.trend.bull) trend = "BEAR";
+   else if(u.trend.bull && u.trend.bear) trend = "MIXED";
+
+   string mkt = (StringLen(u.st.cycleName) > 0) ? u.st.cycleName : "UNKNOWN";
+
+   string news = u.ctx.eventClass;
+   if(StringLen(news) == 0 || news == "NONE")
+      news = (StringLen(u.ctx.newsPhase) > 0 ? u.ctx.newsPhase : "NONE");
+
+   string mission = "n/a";
+   // Mission sticky entry (defined later in assemble — guarded via core flags)
+   if(g_UltraCore.validated && g_UltraCore.chainOK) mission = "CHAIN_OK";
+   if(!g_UltraCore.validated) mission = "NOT_VALIDATED";
+
+   string execSt = UltraBT_TradeAllowed() ? "TRADE_OK" : "TRADE_BLOCKED";
+   if(!UltraBT_ConnectedOK()) execSt = "NO_CONN";
+
+   string t = "";
+   t += "TRADE REJECTED\n";
+   t += "Module: "; t += module; t += "\n";
+   t += "Function: "; t += func; t += "\n";
+   t += "Reason: "; t += reason; t += "\n";
+   t += "Confidence: "; t += IntegerToString(u.score.confidence); t += "%\n";
+   t += "Spread: "; t += IntegerToString((int)spr); t += "\n";
+   t += "Trend: "; t += trend; t += "\n";
+   t += "Market State: "; t += mkt; t += "\n";
+   t += "News: "; t += news; t += "\n";
+   t += "Event: "; t += u.ctx.newsPhase; t += "\n";
+   t += "Mission Control: "; t += mission; t += "\n";
+   t += "Execution Status: "; t += execSt; t += "\n";
+   t += "Mode: "; t += UltraBT_ModeName();
+
+   if(UltraBacktestLogRejects || UltraLoggingEnabled)
+      Print(t);
+
+   UltraLogDecision("TRADE_REJECTED", 0, "-", module, u.score.confidence, 0,
+                    func, news, (double)spr, u.ctx.slipProxy, reason);
+}
+
+//--------------------------------------------------------------------//
+void UltraBT_Boot()
+{
+   g_UltraBT.tester = UltraBT_IsTester();
+   g_UltraBT.optimization = UltraBT_IsOptimization();
+   g_UltraBT.visual = UltraBT_IsVisual();
+   g_UltraBT.compatMode = UltraBT_CompatMode();
+   g_UltraBT.liveOnlyDisabled = g_UltraBT.compatMode;
+   g_UltraBT.histOK = g_UltraBT.handlesOK = g_UltraBT.buffersOK = false;
+   g_UltraBT.symbolOK = g_UltraBT.timeframeOK = g_UltraBT.tickOK = false;
+   g_UltraBT.sessionOK = g_UltraBT.newsOK = true;
+   g_UltraBT.tradePermOK = g_UltraBT.marginOK = false;
+   g_UltraBT.stopsOK = g_UltraBT.freezeOK = g_UltraBT.lotOK = false;
+   g_UltraBT.ready = false;
+   g_UltraBT.modeName = UltraBT_ModeName();
+   g_UltraBT.detail = g_UltraBT.compatMode ? "COMPAT_ON" : "NATIVE";
+   g_UltraBT.lastReadyMs = 0;
+   g_UltraBT.rejectCount = 0;
+   g_UltraBT.readyPassCount = 0;
+
+   if(UltraBacktestLogBoot)
+   {
+      UltraLog("BACKTEST COMPAT ∞ mode=" + g_UltraBT.modeName +
+               " compat=" + (g_UltraBT.compatMode ? "Y" : "N") +
+               " liveOnlyDisabled=" + (g_UltraBT.liveOnlyDisabled ? "Y" : "N") +
+               " | Same strategy Tester/Demo/Live | BUILD=HA_ULTRA_93");
+   }
+}
+
+string UltraBT_Dashboard()
+{
+   string t = "BT: ";
+   t += g_UltraBT.modeName;
+   if(g_UltraBT.compatMode) t += " COMPAT";
+   t += g_UltraBT.ready ? " READY" : "";
+   t += " rej=";
+   t += IntegerToString((int)g_UltraBT.rejectCount);
+   return t;
+}
+
+#endif // HITMAN_ULTRA_BACKTEST_COMPAT_MQH
+//===== END UltraBacktestCompat.mqh =====
 
 //===== BEGIN 02_Data.mqh =====
 #ifndef HITMAN_ULTRA_02_DATA_MQH
@@ -4109,11 +4507,9 @@ bool UltraMarketIntel_MarketStatus(const string s, string &why)
 bool UltraMarketIntel_TradingPerm(string &why)
 {
    why = "";
-   bool term = (TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) != 0);
-   bool mql  = (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
-   bool conn = (TerminalInfoInteger(TERMINAL_CONNECTED) != 0);
-   if(!conn){ why = "terminal disconnected"; return false; }
-   if(!term || !mql){ why = "trading not permitted"; return false; }
+   // Ultra Backtest Compat — same strategy in Tester/Demo/Live
+   if(!UltraBT_ConnectedOK()){ why = "terminal disconnected"; return false; }
+   if(!UltraBT_TradeAllowed()){ why = "trading not permitted"; return false; }
    return true;
 }
 
@@ -4418,8 +4814,9 @@ bool UltraMarketIntel_Validate(const string s)
    if(!g_UltraMarketIntel.tickOK || !g_UltraMarketIntel.feedOK)
       return UltraMarketIntel_Reject((StringLen(why) > 0) ? why : "live feed invalid");
 
-   // Stale quote hard-reject only when extreme
-   if(UltraMarketIntelMaxQuoteAgeSec > 0 &&
+   // Stale quote hard-reject only when extreme (live-only — skipped in Strategy Tester)
+   if(!UltraBT_SkipLiveOnly() &&
+      UltraMarketIntelMaxQuoteAgeSec > 0 &&
       g_UltraMarketIntel.lastQuoteAgeSec > UltraMarketIntelMaxQuoteAgeSec)
       return UltraMarketIntel_Reject("stale live quote");
 
@@ -4617,8 +5014,13 @@ bool UltraExecReady(const string s, string &why)
 {
    why = "";
    long tm = 0;
-   if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm) || tm == 0) { why = "symbol trade mode off"; return false; }
-   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)) { why = "terminal blocked"; return false; }
+   if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm) || tm == 0)
+   {
+      // Tester: some symbols report mode oddly — allow if bid present in compat mode
+      if(!(UltraBT_CompatMode() && SymbolInfoDouble(s, SYMBOL_BID) > 0.0))
+      { why = "symbol trade mode off"; return false; }
+   }
+   if(!UltraBT_TradeAllowed()) { why = "terminal blocked"; return false; }
    // fill policy / stops validated later in ExecuteBuy/Sell
    return true;
 }
@@ -5695,14 +6097,14 @@ bool UltraDefense_Line6_Probability(const UltraSnap &u, string &why)
 bool UltraDefense_Line7_Execution(const string s, string &why)
 {
    why = "";
-   if(!TerminalInfoInteger(TERMINAL_CONNECTED)){ why = "connection loss"; return false; }
-   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)){ why = "terminal trade blocked"; return false; }
-   if(!MQLInfoInteger(MQL_TRADE_ALLOWED)){ why = "EA trade disabled"; return false; }
+   if(!UltraBT_ConnectedOK()){ why = "connection loss"; return false; }
+   if(!UltraBT_TradeAllowed()){ why = "terminal trade blocked"; return false; }
 
    long tm = 0;
    if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm)){ why = "symbol mode unavailable"; return false; }
    // trade mode 0 = disabled — compare as long to avoid enum convert errors
-   if(tm == 0){ why = "symbol trade disabled"; return false; }
+   if(tm == 0 && !(UltraBT_CompatMode() && SymbolInfoDouble(s, SYMBOL_BID) > 0.0))
+   { why = "symbol trade disabled"; return false; }
 
    double bid = SymbolInfoDouble(s, SYMBOL_BID);
    double ask = SymbolInfoDouble(s, SYMBOL_ASK);
@@ -6420,7 +6822,7 @@ bool UltraDisc_R9_Broker(const string s, string &why)
       return true;
    }
    if(!TerminalInfoInteger(TERMINAL_CONNECTED)){ why = "R9 connection"; return false; }
-   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)){ why = "R9 trading blocked"; return false; }
+   if(!UltraBT_TradeAllowed()){ why = "R9 trading blocked"; return false; }
    if(!MQLInfoInteger(MQL_TRADE_ALLOWED)){ why = "R9 EA disabled"; return false; }
    long tm = 0;
    if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm) || tm == 0){ why = "R9 market closed/disabled"; return false; }
@@ -8131,10 +8533,8 @@ bool UltraSystemHealth_Update(const string s)
    UltraSysHealth_Reset();
    if(!UltraUpgradeEnabled || !UltraSystemHealthEnabled) return true;
 
-   g_UltraSysHealth.connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
-   g_UltraSysHealth.tradeAllowed =
-      (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) &&
-      (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
+   g_UltraSysHealth.connected = UltraBT_ConnectedOK();
+   g_UltraSysHealth.tradeAllowed = UltraBT_TradeAllowed();
    // LEVEL 7 — same bar floor as UltraBuildSnapshot (60)
    g_UltraSysHealth.dataOK = (Bars(s, UltraETF()) >= 60) && (SymbolInfoDouble(s, SYMBOL_BID) > 0.0);
 
@@ -8673,9 +9073,8 @@ ENUM_ULTRA_VSTATE UltraV_ProbeHealth(const string s, string &detail)
       g_UltraSysHealth.status == "YELLOW" || g_UltraSysHealth.status == "RED")
    {
       // Keep probe side-effect free of recovery spam: read flags directly
-      bool connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
-      bool tradeAllow = (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) &&
-                        (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
+      bool connected = UltraBT_ConnectedOK();
+      bool tradeAllow = UltraBT_TradeAllowed();
       bool dataOK = (Bars(s, UltraETF()) >= 60) && (SymbolInfoDouble(s, SYMBOL_BID) > 0.0);
       long tm = 0;
       bool brokerOK = SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm) && (tm != 0);
@@ -8687,7 +9086,7 @@ ENUM_ULTRA_VSTATE UltraV_ProbeHealth(const string s, string &detail)
          else detail = "broker/symbol";
          return UV_INVALID;
       }
-      if(g_UltraCore.lastLatencyMs > 500)
+      if(!UltraBT_SkipLiveOnly() && g_UltraCore.lastLatencyMs > 500)
       { detail = "latency"; return UV_WAIT; }
       detail = "OK";
       return UV_VALID;
@@ -10784,7 +11183,8 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
       double live = isBuy ? SymbolInfoDouble(s, SYMBOL_ASK) : SymbolInfoDouble(s, SYMBOL_BID);
       if(live <= 0.0)
          UltraTradeGate_Fail(ULTRA_GATE_ENTRY, "ENTRY", "live quote missing");
-      else if(MathAbs(live - entry) > MathMax(point * 50.0, (u.vol.atr > 0.0 ? u.vol.atr * 0.15 : point * 50.0)))
+      else if(!UltraBT_RelaxEntryDrift() &&
+              MathAbs(live - entry) > MathMax(point * 50.0, (u.vol.atr > 0.0 ? u.vol.atr * 0.15 : point * 50.0)))
          UltraTradeGate_Fail(ULTRA_GATE_ENTRY, "ENTRY", "entry drifted from live price");
       else if(isBuy && !g_UltraLastSignal.buy)
          UltraTradeGate_Fail(ULTRA_GATE_ENTRY, "ENTRY", "no BUY signal for entry");
@@ -10909,9 +11309,9 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
       string exWhy = "";
       if(!UltraExecReady(s, exWhy))
          UltraTradeGate_Fail(ULTRA_GATE_EXEC, "EXEC", exWhy);
-      else if(!(bool)TerminalInfoInteger(TERMINAL_CONNECTED))
+      else if(!UltraBT_ConnectedOK())
          UltraTradeGate_Fail(ULTRA_GATE_EXEC, "EXEC", "terminal disconnected");
-      else if(!(bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || MQLInfoInteger(MQL_TRADE_ALLOWED) == 0)
+      else if(!UltraBT_TradeAllowed())
          UltraTradeGate_Fail(ULTRA_GATE_EXEC, "EXEC", "trading not allowed");
       else
          UltraTradeGate_Pass(ULTRA_GATE_EXEC);
@@ -10994,6 +11394,8 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
                           "GATE", g_UltraTradeGate.failStep, 0.0,
                           g_UltraTradeGate.risk, why);
       }
+      UltraBT_LogReject("UltraTradeGate", "UltraTradeGate_Validate",
+                        g_UltraTradeGate.failStep + ": " + g_UltraTradeGate.detail);
       return false;
    }
 
@@ -11136,6 +11538,7 @@ void UltraMod_Refresh()
    UltraMod_Reg("HEALTH", false, UltraSystemHealthEnabled, g_UltraSysHealth.status != "RED",
                 g_UltraSysHealth.status);
    UltraMod_Reg("RECOVERY", false, UltraRecoveryEnabled, UltraRecoveryEnabled, "auto");
+   UltraMod_Reg("BT_COMPAT", false, UltraBacktestCompatEnabled, true, UltraBT_ModeName());
    UltraMod_Reg("LOGGER", false, UltraLoggingEnabled, true, "OK");
    UltraMod_Reg("DASHBOARD", false, UltraDashboardEnabled, true, "OK");
 
@@ -11502,19 +11905,19 @@ bool UltraUFSE_MasterAllows(const int idx, const bool wantBuy, string &why)
 bool UltraUFSE_ExecReady(const string s, string &why)
 {
    why = "";
-   if(!TerminalInfoInteger(TERMINAL_CONNECTED)){ why = "terminal disconnected"; return false; }
-   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)){ why = "trading not allowed"; return false; }
-   if(!MQLInfoInteger(MQL_TRADE_ALLOWED)){ why = "EA trading disabled"; return false; }
+   if(!UltraBT_ConnectedOK()){ why = "terminal disconnected"; return false; }
+   if(!UltraBT_TradeAllowed()){ why = "trading not allowed"; return false; }
    long tm = 0;
    if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm)){ why = "symbol mode unavailable"; return false; }
-   if(tm == 0){ why = "symbol trade disabled"; return false; }
+   if(tm == 0 && !(UltraBT_CompatMode() && SymbolInfoDouble(s, SYMBOL_BID) > 0.0))
+   { why = "symbol trade disabled"; return false; }
    double bid = SymbolInfoDouble(s, SYMBOL_BID);
    double ask = SymbolInfoDouble(s, SYMBOL_ASK);
    if(bid <= 0.0 || ask <= 0.0){ why = "price not fresh"; return false; }
    double eq = AccountInfoDouble(ACCOUNT_EQUITY);
    double fm = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
    if(eq <= 0.0){ why = "bad equity"; return false; }
-   if(fm <= 0.0){ why = "no free margin"; return false; }
+   if(fm <= 0.0 && !UltraBT_CompatMode()){ why = "no free margin"; return false; }
    return true;
 }
 
@@ -12299,6 +12702,7 @@ string UltraDashboardText(const string s)
    t += "\n"; t += UltraTarget_Dashboard();
    t += "\n"; t += UltraTradeGate_Dashboard();
    t += "\n"; t += UltraMod_Dashboard();
+   t += "\n"; t += UltraBT_Dashboard();
    t += "\nEvent: "; t += u.ctx.eventClass;
    t += " phase="; t += u.ctx.newsPhase;
    t += " conf="; t += IntegerToString(u.ctx.eventConfidence);
@@ -12779,34 +13183,9 @@ bool UltraSignal_Validate(const string s, const UltraRawSignal &sig, string &why
 #ifndef HITMAN_ULTRA_38_BACKTEST_MQH
 #define HITMAN_ULTRA_38_BACKTEST_MQH
 //+------------------------------------------------------------------+
-//| 38_Backtesting — tester detection · stats · walk-forward hooks   |
+//| 38_Backtesting — walk-forward hooks + stats                      |
+//| Core detection/compat lives in UltraBacktestCompat.mqh (early)   |
 //+------------------------------------------------------------------+
-
-bool UltraBT_IsTester()
-{
-   return (bool)MQLInfoInteger(MQL_TESTER);
-}
-
-bool UltraBT_IsOptimization()
-{
-   return (bool)MQLInfoInteger(MQL_OPTIMIZATION);
-}
-
-bool UltraBT_IsVisual()
-{
-   return (bool)MQLInfoInteger(MQL_VISUAL_MODE);
-}
-
-string UltraBT_ModeName()
-{
-   if(UltraBT_IsOptimization()) return "OPTIMIZATION";
-   if(UltraBT_IsTester())
-   {
-      if(UltraBT_IsVisual()) return "TESTER_VISUAL";
-      return "TESTER";
-   }
-   return "LIVE";
-}
 
 void UltraBT_LogStats()
 {
@@ -12968,10 +13347,14 @@ int OnInit()
    UltraTarget_Boot();      // TARGET INTELLIGENCE ∞
    UltraTradeGate_Boot();   // HARD GATE — any fail = NO TRADE
    UltraMod_Boot();         // MODULE MANAGER — Final Master Audit registry
+   UltraBT_Boot();          // BACKTEST COMPATIBILITY ∞ — Tester/Demo/Live
    UltraOpt_OnTickStart();
    UltraMission_Init();
    Print("FINAL MASTER AUDIT v1.0: HA_ULTRA_93 | one strategy · one signal · one thesis · one mission · one exit");
    Print("MODULE MANAGER: ", g_UltraMods.summary);
+   Print("BACKTEST COMPAT ∞: Mode=", UltraBT_ModeName(),
+         " Compat=", UltraYN(g_UltraBT.compatMode),
+         " Enabled=", UltraYN(UltraBacktestCompatEnabled));
    Print("VALIDATION CHAIN: Enabled=", UltraYN(UltraVChainEnabled),
          " BlockInvalid=", UltraYN(UltraVChainBlockOnInvalid),
          " BlockWait=", UltraYN(UltraVChainBlockOnWait));
@@ -16034,6 +16417,17 @@ bool ExecuteBuy()
       CheckTradeStops(ask, sl, tp); // re-validate the adjusted tp against broker minimums too
    }
 
+   // BACKTEST COMPAT — indicators/history/broker rules ready?
+   {
+      string btWhy = "";
+      if(!UltraBT_PreTradeReady(BrokerSymbol, btWhy))
+      {
+         UltraBT_LogReject("UltraBacktestCompat", "UltraBT_PreTradeReady", btWhy);
+         Print("NO TRADE — BT ready fail: ", btWhy, " on ", BrokerSymbol);
+         return false;
+      }
+   }
+
    // HARD TRADE GATE — Entry/SL/TP1/TP2/TP3/Risk/Exec/Thesis/Mission
    // ANY fail → NO TRADE
    {
@@ -16049,6 +16443,7 @@ bool ExecuteBuy()
 
    if(lot <= 0)
    {
+      UltraBT_LogReject("Shell_B", "ExecuteBuy", "invalid lot size");
       Print("Invalid lot size.");
       return false;
    }
@@ -16056,7 +16451,10 @@ bool ExecuteBuy()
    // FIX #9: check free margin BEFORE sending, instead of relying on the
    // broker to reject an under-margined order after the fact.
    if(!HasSufficientMargin(ORDER_TYPE_BUY, lot, ask))
+   {
+      UltraBT_LogReject("Shell_B", "ExecuteBuy", "insufficient margin");
       return false;
+   }
 
    LastAttemptTimeArr[symIdx] = TimeCurrent();
 
@@ -16382,6 +16780,17 @@ bool ExecuteSell()
       CheckTradeStops(bid, sl, tp);
    }
 
+   // BACKTEST COMPAT — indicators/history/broker rules ready?
+   {
+      string btWhy = "";
+      if(!UltraBT_PreTradeReady(BrokerSymbol, btWhy))
+      {
+         UltraBT_LogReject("UltraBacktestCompat", "UltraBT_PreTradeReady", btWhy);
+         Print("NO TRADE — BT ready fail: ", btWhy, " on ", BrokerSymbol);
+         return false;
+      }
+   }
+
    // HARD TRADE GATE — Entry/SL/TP1/TP2/TP3/Risk/Exec/Thesis/Mission
    // ANY fail → NO TRADE
    {
@@ -16397,12 +16806,16 @@ bool ExecuteSell()
 
    if(lot <= 0)
    {
+      UltraBT_LogReject("Shell_B", "ExecuteSell", "invalid lot size");
       Print("Invalid lot size.");
       return false;
    }
 
    if(!HasSufficientMargin(ORDER_TYPE_SELL, lot, bid))
+   {
+      UltraBT_LogReject("Shell_B", "ExecuteSell", "insufficient margin");
       return false;
+   }
 
    LastAttemptTimeArr[symIdx] = TimeCurrent();
 
@@ -20353,6 +20766,9 @@ void UltraSetReject(const string reason)
    g_UltraLastReject = reason;
    g_UltraLastDecision = "REJECT";
    g_UltraRejectCount++;
+
+   // Structured reject (module/function/reason/spread/trend/conf/news)
+   UltraBT_LogReject("Shell_B", "UltraSetReject", reason);
 
    // Throttle: same reason on same symbol prints at most once per EntryTF bar.
    // Cooldown / wait states must NOT flood Experts (your 17:38 spam).

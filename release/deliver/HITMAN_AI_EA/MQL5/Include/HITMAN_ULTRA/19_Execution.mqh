@@ -13,8 +13,13 @@ bool UltraExecReady(const string s, string &why)
 {
    why = "";
    long tm = 0;
-   if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm) || tm == 0) { why = "symbol trade mode off"; return false; }
-   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)) { why = "terminal blocked"; return false; }
+   if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm) || tm == 0)
+   {
+      // Tester: some symbols report mode oddly — allow if bid present in compat mode
+      if(!(UltraBT_CompatMode() && SymbolInfoDouble(s, SYMBOL_BID) > 0.0))
+      { why = "symbol trade mode off"; return false; }
+   }
+   if(!UltraBT_TradeAllowed()) { why = "terminal blocked"; return false; }
    // fill policy / stops validated later in ExecuteBuy/Sell
    return true;
 }

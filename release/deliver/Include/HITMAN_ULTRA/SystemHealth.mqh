@@ -37,10 +37,8 @@ bool UltraSystemHealth_Update(const string s)
    UltraSysHealth_Reset();
    if(!UltraUpgradeEnabled || !UltraSystemHealthEnabled) return true;
 
-   g_UltraSysHealth.connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
-   g_UltraSysHealth.tradeAllowed =
-      (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) &&
-      (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
+   g_UltraSysHealth.connected = UltraBT_ConnectedOK();
+   g_UltraSysHealth.tradeAllowed = UltraBT_TradeAllowed();
    // LEVEL 7 — same bar floor as UltraBuildSnapshot (60)
    g_UltraSysHealth.dataOK = (Bars(s, UltraETF()) >= 60) && (SymbolInfoDouble(s, SYMBOL_BID) > 0.0);
 

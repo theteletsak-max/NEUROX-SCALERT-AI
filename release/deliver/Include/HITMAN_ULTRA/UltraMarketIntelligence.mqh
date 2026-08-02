@@ -186,11 +186,9 @@ bool UltraMarketIntel_MarketStatus(const string s, string &why)
 bool UltraMarketIntel_TradingPerm(string &why)
 {
    why = "";
-   bool term = (TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) != 0);
-   bool mql  = (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
-   bool conn = (TerminalInfoInteger(TERMINAL_CONNECTED) != 0);
-   if(!conn){ why = "terminal disconnected"; return false; }
-   if(!term || !mql){ why = "trading not permitted"; return false; }
+   // Ultra Backtest Compat — same strategy in Tester/Demo/Live
+   if(!UltraBT_ConnectedOK()){ why = "terminal disconnected"; return false; }
+   if(!UltraBT_TradeAllowed()){ why = "trading not permitted"; return false; }
    return true;
 }
 
@@ -495,8 +493,9 @@ bool UltraMarketIntel_Validate(const string s)
    if(!g_UltraMarketIntel.tickOK || !g_UltraMarketIntel.feedOK)
       return UltraMarketIntel_Reject((StringLen(why) > 0) ? why : "live feed invalid");
 
-   // Stale quote hard-reject only when extreme
-   if(UltraMarketIntelMaxQuoteAgeSec > 0 &&
+   // Stale quote hard-reject only when extreme (live-only — skipped in Strategy Tester)
+   if(!UltraBT_SkipLiveOnly() &&
+      UltraMarketIntelMaxQuoteAgeSec > 0 &&
       g_UltraMarketIntel.lastQuoteAgeSec > UltraMarketIntelMaxQuoteAgeSec)
       return UltraMarketIntel_Reject("stale live quote");
 

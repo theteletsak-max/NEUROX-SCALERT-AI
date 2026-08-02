@@ -103,7 +103,8 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
       double live = isBuy ? SymbolInfoDouble(s, SYMBOL_ASK) : SymbolInfoDouble(s, SYMBOL_BID);
       if(live <= 0.0)
          UltraTradeGate_Fail(ULTRA_GATE_ENTRY, "ENTRY", "live quote missing");
-      else if(MathAbs(live - entry) > MathMax(point * 50.0, (u.vol.atr > 0.0 ? u.vol.atr * 0.15 : point * 50.0)))
+      else if(!UltraBT_RelaxEntryDrift() &&
+              MathAbs(live - entry) > MathMax(point * 50.0, (u.vol.atr > 0.0 ? u.vol.atr * 0.15 : point * 50.0)))
          UltraTradeGate_Fail(ULTRA_GATE_ENTRY, "ENTRY", "entry drifted from live price");
       else if(isBuy && !g_UltraLastSignal.buy)
          UltraTradeGate_Fail(ULTRA_GATE_ENTRY, "ENTRY", "no BUY signal for entry");
@@ -228,9 +229,9 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
       string exWhy = "";
       if(!UltraExecReady(s, exWhy))
          UltraTradeGate_Fail(ULTRA_GATE_EXEC, "EXEC", exWhy);
-      else if(!(bool)TerminalInfoInteger(TERMINAL_CONNECTED))
+      else if(!UltraBT_ConnectedOK())
          UltraTradeGate_Fail(ULTRA_GATE_EXEC, "EXEC", "terminal disconnected");
-      else if(!(bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || MQLInfoInteger(MQL_TRADE_ALLOWED) == 0)
+      else if(!UltraBT_TradeAllowed())
          UltraTradeGate_Fail(ULTRA_GATE_EXEC, "EXEC", "trading not allowed");
       else
          UltraTradeGate_Pass(ULTRA_GATE_EXEC);
@@ -313,6 +314,8 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
                           "GATE", g_UltraTradeGate.failStep, 0.0,
                           g_UltraTradeGate.risk, why);
       }
+      UltraBT_LogReject("UltraTradeGate", "UltraTradeGate_Validate",
+                        g_UltraTradeGate.failStep + ": " + g_UltraTradeGate.detail);
       return false;
    }
 

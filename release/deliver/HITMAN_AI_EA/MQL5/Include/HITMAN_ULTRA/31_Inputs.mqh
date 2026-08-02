@@ -157,6 +157,12 @@ input bool   UltraTradeGateEnabled       = true;   // hard pre-trade validation
 input bool   UltraTradeGateLog           = true;   // TRADE_GATE PASS/FAIL logs
 input bool   UltraTradeGateRequireTargets= true;   // Target Intelligence plan mandatory
 
+input group "31 · ULTRA BACKTEST COMPATIBILITY ENGINE ∞"
+input bool   UltraBacktestCompatEnabled  = true;   // Strategy Tester compatibility mode
+input bool   UltraBacktestLogBoot        = true;   // boot mode line
+input bool   UltraBacktestLogRejects     = true;   // structured TRADE REJECTED blocks
+input int    UltraBacktestMinBars        = 60;     // historical bars required
+
 input group "31 · EXECUTION INPUTS"
 input bool   UltraExecQualityEnabled     = true;
 input ENUM_TIMEFRAMES UltraTF_Bias       = PERIOD_H4;

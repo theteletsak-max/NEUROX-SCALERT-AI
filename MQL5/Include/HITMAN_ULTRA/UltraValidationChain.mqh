@@ -181,9 +181,8 @@ ENUM_ULTRA_VSTATE UltraV_ProbeHealth(const string s, string &detail)
       g_UltraSysHealth.status == "YELLOW" || g_UltraSysHealth.status == "RED")
    {
       // Keep probe side-effect free of recovery spam: read flags directly
-      bool connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
-      bool tradeAllow = (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) &&
-                        (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
+      bool connected = UltraBT_ConnectedOK();
+      bool tradeAllow = UltraBT_TradeAllowed();
       bool dataOK = (Bars(s, UltraETF()) >= 60) && (SymbolInfoDouble(s, SYMBOL_BID) > 0.0);
       long tm = 0;
       bool brokerOK = SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm) && (tm != 0);
@@ -195,7 +194,7 @@ ENUM_ULTRA_VSTATE UltraV_ProbeHealth(const string s, string &detail)
          else detail = "broker/symbol";
          return UV_INVALID;
       }
-      if(g_UltraCore.lastLatencyMs > 500)
+      if(!UltraBT_SkipLiveOnly() && g_UltraCore.lastLatencyMs > 500)
       { detail = "latency"; return UV_WAIT; }
       detail = "OK";
       return UV_VALID;

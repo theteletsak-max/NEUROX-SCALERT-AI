@@ -1,34 +1,9 @@
 #ifndef HITMAN_ULTRA_38_BACKTEST_MQH
 #define HITMAN_ULTRA_38_BACKTEST_MQH
 //+------------------------------------------------------------------+
-//| 38_Backtesting — tester detection · stats · walk-forward hooks   |
+//| 38_Backtesting — walk-forward hooks + stats                      |
+//| Core detection/compat lives in UltraBacktestCompat.mqh (early)   |
 //+------------------------------------------------------------------+
-
-bool UltraBT_IsTester()
-{
-   return (bool)MQLInfoInteger(MQL_TESTER);
-}
-
-bool UltraBT_IsOptimization()
-{
-   return (bool)MQLInfoInteger(MQL_OPTIMIZATION);
-}
-
-bool UltraBT_IsVisual()
-{
-   return (bool)MQLInfoInteger(MQL_VISUAL_MODE);
-}
-
-string UltraBT_ModeName()
-{
-   if(UltraBT_IsOptimization()) return "OPTIMIZATION";
-   if(UltraBT_IsTester())
-   {
-      if(UltraBT_IsVisual()) return "TESTER_VISUAL";
-      return "TESTER";
-   }
-   return "LIVE";
-}
 
 void UltraBT_LogStats()
 {

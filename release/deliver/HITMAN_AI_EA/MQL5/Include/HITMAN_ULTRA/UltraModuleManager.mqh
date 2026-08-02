@@ -94,6 +94,7 @@ void UltraMod_Refresh()
    UltraMod_Reg("HEALTH", false, UltraSystemHealthEnabled, g_UltraSysHealth.status != "RED",
                 g_UltraSysHealth.status);
    UltraMod_Reg("RECOVERY", false, UltraRecoveryEnabled, UltraRecoveryEnabled, "auto");
+   UltraMod_Reg("BT_COMPAT", false, UltraBacktestCompatEnabled, true, UltraBT_ModeName());
    UltraMod_Reg("LOGGER", false, UltraLoggingEnabled, true, "OK");
    UltraMod_Reg("DASHBOARD", false, UltraDashboardEnabled, true, "OK");
 

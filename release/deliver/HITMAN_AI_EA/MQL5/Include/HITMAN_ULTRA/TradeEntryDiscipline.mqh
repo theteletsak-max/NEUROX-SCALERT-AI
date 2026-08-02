@@ -372,7 +372,7 @@ bool UltraDisc_R9_Broker(const string s, string &why)
       return true;
    }
    if(!TerminalInfoInteger(TERMINAL_CONNECTED)){ why = "R9 connection"; return false; }
-   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)){ why = "R9 trading blocked"; return false; }
+   if(!UltraBT_TradeAllowed()){ why = "R9 trading blocked"; return false; }
    if(!MQLInfoInteger(MQL_TRADE_ALLOWED)){ why = "R9 EA disabled"; return false; }
    long tm = 0;
    if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm) || tm == 0){ why = "R9 market closed/disabled"; return false; }

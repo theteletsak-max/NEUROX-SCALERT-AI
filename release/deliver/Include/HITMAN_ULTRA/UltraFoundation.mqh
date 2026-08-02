@@ -167,9 +167,20 @@ bool UltraFoundation_MemoryOK()
 
 bool UltraFoundation_RuntimeOK()
 {
-   bool connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
-   bool tradeAllow = (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) &&
-                     (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
+   // Backtest Compat: tester has no live "connection"; use UltraBT helpers when available
+   bool connected = true;
+   bool tradeAllow = (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
+   if(MQLInfoInteger(MQL_TESTER) != 0)
+   {
+      connected = true;
+      tradeAllow = (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
+   }
+   else
+   {
+      connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
+      tradeAllow = (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) &&
+                   (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0);
+   }
    g_UltraFoundation.runtimeOK = (connected && tradeAllow && !g_UltraFoundation.shuttingDown);
    return g_UltraFoundation.runtimeOK;
 }

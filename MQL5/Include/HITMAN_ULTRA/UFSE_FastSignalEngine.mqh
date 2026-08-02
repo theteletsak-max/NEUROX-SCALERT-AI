@@ -313,19 +313,19 @@ bool UltraUFSE_MasterAllows(const int idx, const bool wantBuy, string &why)
 bool UltraUFSE_ExecReady(const string s, string &why)
 {
    why = "";
-   if(!TerminalInfoInteger(TERMINAL_CONNECTED)){ why = "terminal disconnected"; return false; }
-   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)){ why = "trading not allowed"; return false; }
-   if(!MQLInfoInteger(MQL_TRADE_ALLOWED)){ why = "EA trading disabled"; return false; }
+   if(!UltraBT_ConnectedOK()){ why = "terminal disconnected"; return false; }
+   if(!UltraBT_TradeAllowed()){ why = "trading not allowed"; return false; }
    long tm = 0;
    if(!SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm)){ why = "symbol mode unavailable"; return false; }
-   if(tm == 0){ why = "symbol trade disabled"; return false; }
+   if(tm == 0 && !(UltraBT_CompatMode() && SymbolInfoDouble(s, SYMBOL_BID) > 0.0))
+   { why = "symbol trade disabled"; return false; }
    double bid = SymbolInfoDouble(s, SYMBOL_BID);
    double ask = SymbolInfoDouble(s, SYMBOL_ASK);
    if(bid <= 0.0 || ask <= 0.0){ why = "price not fresh"; return false; }
    double eq = AccountInfoDouble(ACCOUNT_EQUITY);
    double fm = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
    if(eq <= 0.0){ why = "bad equity"; return false; }
-   if(fm <= 0.0){ why = "no free margin"; return false; }
+   if(fm <= 0.0 && !UltraBT_CompatMode()){ why = "no free margin"; return false; }
    return true;
 }
 
