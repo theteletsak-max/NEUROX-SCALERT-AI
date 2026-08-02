@@ -85,6 +85,11 @@ void UltraMod_Refresh()
                    (g_UltraAdapt.finalEvolution ? " LOCKED" : ""))
                 : "OFF");
 
+   UltraMod_Reg("BUG_ELIM", false, UltraBugEnabled, g_UltraBug.initOK,
+                UltraBugEnabled
+                ? (g_UltraBug.summary + " expl=" + IntegerToString(g_UltraBug.explainCount))
+                : "OFF");
+
    bool gateOK = (!UltraTradeGateEnabled) || g_UltraTradeGate.passed ||
                  (StringLen(g_UltraTradeGate.failStep) == 0);
    UltraMod_Reg("TRADE_GATE", true, UltraTradeGateEnabled, gateOK,

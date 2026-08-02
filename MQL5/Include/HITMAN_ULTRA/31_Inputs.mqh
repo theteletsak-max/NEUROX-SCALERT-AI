@@ -186,6 +186,19 @@ input int    UltraAdaptiveSlipTightenPts    = 4;     // tighten deviation under 
 input int    UltraAdaptiveMonitorTightenMs  = 15;    // reduce monitor interval
 input int    UltraAdaptiveMonitorRelaxMs    = 10;    // relax monitor interval
 
+input group "31 · ULTRA BUG ELIMINATION ENGINE ∞ (Phase 19)"
+input bool   UltraBugEnabled             = true;   // master — stability / explain path
+input bool   UltraBugLogBoot             = true;   // boot / deinit audit lines
+input bool   UltraBugLogExplain          = true;   // structured ULTRA EXPLAIN blocks
+input bool   UltraBugSignalAudit         = true;   // duplicate/conflict/invalid conf
+input bool   UltraBugExecAudit           = true;   // retcode / stops / volume explain
+input bool   UltraBugPositionAudit       = true;   // SL sync / Mission lock sync
+input bool   UltraBugBrokerAudit         = true;   // symbol specs / account mode
+input bool   UltraBugEventAudit          = true;   // news/session consistency
+input bool   UltraBugPerfAudit           = true;   // tick latency warn
+input int    UltraBugPositionAuditMs     = 1000;   // position sync cadence
+input int    UltraBugPerfWarnMs          = 50;     // tick latency warn threshold
+
 input group "31 · ULTRA BACKTEST COMPATIBILITY ENGINE ∞"
 input bool   UltraBacktestCompatEnabled  = true;   // Strategy Tester compatibility mode
 input bool   UltraBacktestLogBoot        = true;   // boot mode line

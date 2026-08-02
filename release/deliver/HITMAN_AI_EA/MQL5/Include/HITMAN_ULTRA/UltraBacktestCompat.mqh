@@ -285,15 +285,27 @@ bool UltraBT_PreTradeReady(const string s, string &why)
 
 //--------------------------------------------------------------------//
 // STRUCTURED REJECT LOGGER                                           //
+// Phase 19 — prefer UltraBug_Explain when Bug Elimination is present //
 //--------------------------------------------------------------------//
 string   g_UltraBT_LastRejectKey = "";
 datetime g_UltraBT_LastRejectBar = 0;
+
+// Forward — defined in UltraBugElimination.mqh (assembled later)
+void UltraBug_Explain(const string action, const string module, const string func,
+                      const string reason, const string side = "-", const ulong ticket = 0);
 
 void UltraBT_LogReject(const string module, const string func, const string reason)
 {
    g_UltraBT.rejectCount++;
 
-   // Throttle identical rejects to once per bar (avoid Experts flood)
+   // Phase 19 — single structured explain path (module/function/reason)
+   if(UltraBugEnabled)
+   {
+      UltraBug_Explain("TRADE_REJECTED", module, func, reason);
+      return;
+   }
+
+   // Legacy fallback when Bug Elimination disabled
    datetime bar = iTime(_Symbol, UltraETF(), 0);
    string key = module + "|" + func + "|" + reason;
    bool skipPrint = (bar > 0 && bar == g_UltraBT_LastRejectBar && key == g_UltraBT_LastRejectKey);

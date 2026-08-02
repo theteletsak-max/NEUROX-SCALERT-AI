@@ -6,6 +6,10 @@
 //| Approves: BUY · SELL · WAIT · HOLD · MANAGE · EXIT               |
 //+------------------------------------------------------------------+
 
+// Forward — Phase 19 Bug Elimination assembled after Mission Control
+void UltraBug_Explain(const string action, const string module, const string func,
+                      const string reason, const string side = "-", const ulong ticket = 0);
+
 #define ULTRA_POSLOCK_MAX 64
 
 struct UltraMissionState
@@ -496,6 +500,10 @@ ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const str
                why += " | REPLACE armed if checklist passes";
             UltraLogDecisionFromSnap(evo.wantReplace ? "REPLACE" : "EXIT", ticket,
                                      isBuy ? "BUY" : "SELL", "POSEVO", u, why);
+            // Phase 19 — structured explain for exit/replace (no silent path)
+            UltraBug_Explain(evo.wantReplace ? "REPLACE" : "EXIT",
+                             "MissionControl", "UltraMission_PositionCommand", why,
+                             isBuy ? "BUY" : "SELL", ticket);
          }
       }
       else if(cmd == SUP_MANAGE && StringLen(why) == 0)

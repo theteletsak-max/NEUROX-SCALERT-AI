@@ -730,6 +730,8 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       if(EnableVerboseLogging)
          Print("ULTRA snapshot failed: ", g_UltraCore.lastError, " on ", BrokerSymbol);
       g_UltraLastSnap = snap;
+      UltraBug_Explain("WAIT", "UFSE", "EvaluateStrategySignals",
+                       "snapshot failed: " + g_UltraCore.lastError);
       return;
    }
 
@@ -741,6 +743,8 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       bool leanBuy = (UltraConfluenceBuy(snap) >= UltraConfluenceSell(snap));
       best.explanation = UltraUFSE_DebugExplain(snap, leanBuy, false);
       g_UltraLastSignal = best;
+      // Phase 19 — every wait explains module/function/reason (throttled)
+      UltraBug_Explain("WAIT", "UFSE", "UltraAIDecide", why);
       datetime bar = iTime(BrokerSymbol, UltraETF(), 0);
       bool logIt = (EnableVerboseLogging || ContStruct_LogDetail || UltraUFSE_ExplainLog) &&
                    (bar != g_UltraLastWaitBar || BrokerSymbol != g_UltraLastWaitSym);
@@ -761,6 +765,21 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
             Print(best.explanation);
       }
       return;
+   }
+
+   // Phase 19 — signal integrity audit (conflict / invalid conf / empty tag)
+   {
+      string sigWhy = "";
+      if(!UltraBug_AuditSignal(BrokerSymbol, best, sigWhy))
+      {
+         g_UltraLastSnap = snap;
+         g_UltraLastSignal = best;
+         buySignal = false;
+         sellSignal = false;
+         strategyTag = "";
+         return;
+      }
+      UltraBug_AuditEvent(snap);
    }
 
    buySignal = best.buy;

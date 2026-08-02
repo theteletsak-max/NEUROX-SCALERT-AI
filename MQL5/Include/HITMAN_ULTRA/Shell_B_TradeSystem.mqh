@@ -71,11 +71,26 @@ int OnInit()
    UltraNewsExec_Boot();    // NEWS EXECUTION INTELLIGENCE ∞
    UltraTarget_Boot();      // TARGET INTELLIGENCE ∞
    UltraAdaptive_Boot();    // PHASE 18 — ADAPTIVE FINAL EVOLUTION ∞
+   UltraBug_Boot();         // PHASE 19 — BUG ELIMINATION ∞
+   // Re-note handles after Boot zero (InitializeIndicators ran earlier)
+   {
+      int bad = 0, checked = 0;
+      for(int h = 0; h < ArraySize(MultiSymbolList); h++)
+      {
+         checked += 4;
+         if(h < ArraySize(EMAHandles) && EMAHandles[h] == INVALID_HANDLE) bad++;
+         if(h < ArraySize(ADXHandles) && ADXHandles[h] == INVALID_HANDLE) bad++;
+         if(h < ArraySize(ATRHandlesArr) && ATRHandlesArr[h] == INVALID_HANDLE) bad++;
+         if(h < ArraySize(HTFEMAHandlesArr) && HTFEMAHandlesArr[h] == INVALID_HANDLE) bad++;
+      }
+      UltraBug_NoteHandles(bad, checked);
+   }
    UltraTradeGate_Boot();   // HARD GATE — any fail = NO TRADE
    UltraMod_Boot();         // MODULE MANAGER — Final Master Audit registry
    UltraBT_Boot();          // BACKTEST COMPATIBILITY ∞ — Tester/Demo/Live
    UltraOpt_OnTickStart();
    UltraMission_Init();
+   UltraBug_AuditInit(BrokerSymbol); // init / handles / broker / timer audit
    Print("FINAL MASTER AUDIT v1.0: HA_ULTRA_93 | one strategy · one signal · one thesis · one mission · one exit");
    Print("MODULE MANAGER: ", g_UltraMods.summary);
    Print("BACKTEST COMPAT ∞: Mode=", UltraBT_ModeName(),
@@ -124,6 +139,12 @@ int OnInit()
    Print("ONE STRATEGY: UFSE only | MissionOnlyExits=", UltraYN(UltraMissionOnlyExits),
          " | PositionClose sole owner=MissionControl");
    Print("FINAL DEVELOPMENT RULE: no new engines/strategies/features — refine + validate only");
+   Print("BUG ELIMINATION ∞: Enabled=", UltraYN(UltraBugEnabled),
+         " Explain=", UltraYN(UltraBugLogExplain),
+         " Signal=", UltraYN(UltraBugSignalAudit),
+         " Exec=", UltraYN(UltraBugExecAudit),
+         " Pos=", UltraYN(UltraBugPositionAudit),
+         " init=", g_UltraBug.summary);
    Print("POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
          " L3Close=", UltraYN(UltraPosEvoCloseOnL3),
          " L3Bars=", UltraPosEvoL3ConfirmBars,
@@ -455,6 +476,7 @@ void OnDeinit(const int reason)
       EventKillTimer();
 
    ObjectDelete(0, BG_OBJECT_NAME);
+   UltraBug_AuditDeinit(reason);     // PHASE 19 — deinit / object / timer audit
    UltraFoundation_Shutdown(reason); // PHASE 1 — audited shutdown
 }
 
@@ -1024,10 +1046,16 @@ void RunTradingCycle(string symbol)
    // PHASE 18 — continuous adaptive re-analysis (soft; never changes strategy)
    UltraAdaptive_OnTick(symbol);
 
+   // PHASE 19 — bug elimination audits (position sync / perf)
+   UltraBug_PerfBegin();
+   UltraBug_OnTick(symbol);
+
    ManageOpenTrades();
 
    if(TradingAllowed)
       InstantExecution();
+
+   UltraBug_PerfEnd(symbol);
 }
 
 void OnTimer()
@@ -1168,7 +1196,7 @@ bool InitializeIndicators()
    ArraySetAsSeries(HTF_EMABuffer, true);
 
    Print("Indicators initialized successfully for ", ArraySize(MultiSymbolList), " symbol(s).");
-
+   // Handle audit reported after UltraBug_Boot() in OnInit (avoids Boot zero wipe)
    return true;
 }
 
@@ -3280,6 +3308,8 @@ bool ExecuteBuy()
       if(IsFatalOrderRetcode(retcode))
       {
          Print("BUY FAILED (fatal) | Retcode: ", retcode, " | ", DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
+         UltraBug_ExplainExecFail("ExecuteBuy", "BUY", retcode,
+                                  DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
          return false; // no point trying the no-stops fallback either - the order itself is unplaceable right now
       }
 
@@ -3298,14 +3328,16 @@ bool ExecuteBuy()
       if(posTicket == 0 || !PositionSelectByTicket(posTicket))
       {
          Print("BUY fill unverified — no position for order ", g_Trade.ResultOrder());
-         UltraLogDecision("EXEC_FAIL", 0, "BUY", g_PendingStrategyTag, 0, 0, "FILL", "NONE",
-                          0, 0, "position not found after Buy");
+         UltraBug_ExplainExecFail("ExecuteBuy", "BUY", g_Trade.ResultRetcode(),
+                                  "position not found after Buy — fill unverified");
          return false;
       }
       if(PositionGetString(POSITION_SYMBOL) != BrokerSymbol ||
          PositionGetInteger(POSITION_MAGIC) != MagicNumber)
       {
          Print("BUY fill verification mismatch symbol/magic");
+         UltraBug_Explain("EXEC_FAIL", "Shell_B", "ExecuteBuy",
+                          "fill verification mismatch symbol/magic", "BUY", posTicket);
          return false;
       }
       Print("BUY executed successfully. ticket=", posTicket);
@@ -3640,6 +3672,8 @@ bool ExecuteSell()
       if(IsFatalOrderRetcode(retcode))
       {
          Print("SELL FAILED (fatal) | Retcode: ", retcode, " | ", DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
+         UltraBug_ExplainExecFail("ExecuteSell", "SELL", retcode,
+                                  DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
          return false;
       }
 
@@ -3658,14 +3692,16 @@ bool ExecuteSell()
       if(posTicket == 0 || !PositionSelectByTicket(posTicket))
       {
          Print("SELL fill unverified — no position for order ", g_Trade.ResultOrder());
-         UltraLogDecision("EXEC_FAIL", 0, "SELL", g_PendingStrategyTag, 0, 0, "FILL", "NONE",
-                          0, 0, "position not found after Sell");
+         UltraBug_ExplainExecFail("ExecuteSell", "SELL", g_Trade.ResultRetcode(),
+                                  "position not found after Sell — fill unverified");
          return false;
       }
       if(PositionGetString(POSITION_SYMBOL) != BrokerSymbol ||
          PositionGetInteger(POSITION_MAGIC) != MagicNumber)
       {
          Print("SELL fill verification mismatch symbol/magic");
+         UltraBug_Explain("EXEC_FAIL", "Shell_B", "ExecuteSell",
+                          "fill verification mismatch symbol/magic", "SELL", posTicket);
          return false;
       }
       Print("SELL executed successfully. ticket=", posTicket);
@@ -7563,9 +7599,10 @@ void UltraSetReject(const string reason)
 
 void UltraSetWait(const string reason)
 {
-   // Silent wait (cooldown / final-check) — updates HUD state, no Experts spam.
+   // Phase 19 — no silent waits: structured explain (throttled inside UltraBug)
    g_UltraLastReject = reason;
    g_UltraLastDecision = "WAIT";
+   UltraBug_Explain("WAIT", "Shell_B", "UltraSetWait", reason);
 }
 
 void UltraSetApprove(const string tag, const string grade, const int beast, const int confPct)
