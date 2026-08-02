@@ -251,6 +251,18 @@ void UltraUFSE_Lock(const int idx, const bool isBuy)
    g_UFSE[idx].lockBar = iTime(g_UFSE[idx].symbol, UltraETF(), 0);
 }
 
+// Phase 20 — force cache rebuild after recovery
+void UltraUFSE_Invalidate(const string s)
+{
+   int idx = UltraUFSE_Ensure(s);
+   if(idx < 0) return;
+   g_UFSE[idx].snapValid = false;
+   g_UFSE[idx].dirtyCritical = true;
+   g_UFSE[idx].dirtyMedium = true;
+   g_UFSE[idx].cacheBid = 0;
+   g_UFSE[idx].cacheAsk = 0;
+}
+
 void UltraUFSE_Unlock(const int idx)
 {
    if(idx < 0 || idx >= g_UFSE_N) return;

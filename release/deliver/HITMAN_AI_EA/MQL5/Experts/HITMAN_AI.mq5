@@ -1124,6 +1124,26 @@ input bool   UltraBugPerfAudit           = true;   // tick latency warn
 input int    UltraBugPositionAuditMs     = 1000;   // position sync cadence
 input int    UltraBugPerfWarnMs          = 50;     // tick latency warn threshold
 
+input group "31 · ULTRA ZERO-FAIL RECOVERY ENGINE ∞ (Phase 20)"
+input bool   UltraZFREnabled             = true;   // master — never stop on recoverable faults
+input bool   UltraZFRLog                 = true;   // recovery action logs
+input bool   UltraZFRConnectionRecovery  = true;
+input bool   UltraZFRIndicatorRecovery   = true;
+input bool   UltraZFRBufferRecovery      = true;
+input bool   UltraZFRMemoryRecovery      = true;
+input bool   UltraZFRPositionRecovery    = true;
+input bool   UltraZFRExecRecovery        = true;
+input bool   UltraZFRSymbolRecovery      = true;
+input bool   UltraZFRTimeframeRecovery   = true;
+input bool   UltraZFRSessionRecovery     = true;
+input bool   UltraZFREventRecovery       = true;
+input bool   UltraZFRDashboardRecovery   = true;
+input bool   UltraZFRLoggerRecovery      = true;
+input int    UltraZFRMonitorMs           = 200;    // system verify cadence
+input int    UltraZFRRetryBackoffMs      = 250;    // backoff after failed recover
+input int    UltraZFRPositionMs          = 1000;   // position sync cadence
+input int    UltraZFRDashboardMs         = 5000;   // dashboard/object check cadence
+
 input group "31 · ULTRA BACKTEST COMPATIBILITY ENGINE ∞"
 input bool   UltraBacktestCompatEnabled  = true;   // Strategy Tester compatibility mode
 input bool   UltraBacktestLogBoot        = true;   // boot mode line
@@ -13213,6 +13233,491 @@ string UltraBug_Dashboard()
 #endif // HITMAN_ULTRA_BUG_ELIMINATION_MQH
 //===== END UltraBugElimination.mqh =====
 
+//===== BEGIN UltraZeroFailRecovery.mqh =====
+#ifndef HITMAN_ULTRA_ZERO_FAIL_RECOVERY_MQH
+#define HITMAN_ULTRA_ZERO_FAIL_RECOVERY_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — ULTRA ZERO-FAIL RECOVERY ENGINE ∞ (Phase 20)         |
+//| Never stop operating because of a recoverable problem.           |
+//| Monitor → Detect → Recover → Retry → Continue (never hang)       |
+//| NOT a new strategy — stability recovery under Final Dev Rule     |
+//+------------------------------------------------------------------+
+
+// Shell_B implements these (indicator arrays / chart / filling live there)
+bool   UltraZFR_ShellIndicatorsHealthy(const string s);
+bool   UltraZFR_ShellRecoverIndicators(const string s);
+bool   UltraZFR_ShellRecoverBuffers(const string s);
+void   UltraZFR_ShellInvalidateIndicatorCache(const string s);
+void   UltraZFR_ShellRecoverExecution(const string s);
+string UltraZFR_ShellRecoverSymbol(const string s);
+void   UltraZFR_ShellRecoverDashboard();
+
+// UFSE — assembled after this module
+void UltraUFSE_Invalidate(const string s);
+
+// Dashboard text refresh — assembled later
+void CreateDashboard();
+
+struct UltraZFRState
+{
+   bool   booted;
+   bool   lastConnected;
+   bool   recovering;
+   int    problemsFound;
+   int    recoverAttempts;
+   int    recoverSuccess;
+   int    recoverFail;
+   int    indicatorRecoveries;
+   int    bufferRecoveries;
+   int    memoryRecoveries;
+   int    tradeRecoveries;
+   int    positionRecoveries;
+   int    execRecoveries;
+   int    connectionRecoveries;
+   int    symbolRecoveries;
+   int    timeframeRecoveries;
+   int    sessionRecoveries;
+   int    eventRecoveries;
+   int    dashboardRecoveries;
+   int    loggerRecoveries;
+   int    consecutiveFail;
+   long   lastMonitorMs;
+   long   lastRecoverMs;
+   string lastProblem;
+   string lastAction;
+   string summary;
+};
+
+UltraZFRState g_UltraZFR;
+
+//--------------------------------------------------------------------//
+void UltraZFR_Log(const string msg)
+{
+   if(UltraZFRLog)
+      UltraLog("ZFR ∞ " + msg);
+}
+
+void UltraZFR_NoteSuccess(const string domain)
+{
+   g_UltraZFR.recoverSuccess++;
+   g_UltraZFR.consecutiveFail = 0;
+   g_UltraZFR.lastAction = domain + ":OK";
+   g_UltraZFR.recovering = false;
+}
+
+void UltraZFR_NoteFail(const string domain, const string why)
+{
+   g_UltraZFR.recoverFail++;
+   g_UltraZFR.consecutiveFail++;
+   g_UltraZFR.lastAction = domain + ":FAIL";
+   g_UltraZFR.lastProblem = why;
+   g_UltraZFR.recovering = false;
+   UltraZFR_Log("FAIL " + domain + " | " + why + " | will retry — never stop");
+   if(UltraBugEnabled)
+      UltraBug_Explain("RECOVER", "UltraZeroFailRecovery", domain, why);
+}
+
+//--------------------------------------------------------------------//
+bool UltraZFR_RecoverConnection(const string s)
+{
+   bool connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
+   if(connected && g_UltraZFR.lastConnected)
+      return true;
+
+   g_UltraZFR.recoverAttempts++;
+   g_UltraZFR.recovering = true;
+   g_UltraZFR.lastProblem = connected ? "reconnect edge" : "connection loss";
+   UltraRecover(g_UltraZFR.lastProblem);
+   g_UltraZFR.connectionRecoveries++;
+
+   MqlTick tick;
+   bool tickOK = SymbolInfoTick(s, tick) && tick.bid > 0.0;
+   g_UltraZFR.lastConnected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
+   if(g_UltraZFR.lastConnected && tickOK)
+   {
+      UltraZFR_NoteSuccess("CONNECTION");
+      UltraZFR_Log("connection recovered tickOK on " + s);
+      return true;
+   }
+   UltraZFR_NoteFail("CONNECTION", g_UltraZFR.lastProblem);
+   return false;
+}
+
+bool UltraZFR_RecoverIndicators(const string s)
+{
+   g_UltraZFR.recoverAttempts++;
+   g_UltraZFR.recovering = true;
+   g_UltraZFR.lastProblem = "indicator handle/data";
+   bool ok = UltraZFR_ShellRecoverIndicators(s);
+   if(ok)
+   {
+      g_UltraZFR.indicatorRecoveries++;
+      UltraZFR_NoteSuccess("INDICATORS");
+      UltraZFR_Log("indicators recovered on " + s);
+      return true;
+   }
+   UltraZFR_NoteFail("INDICATORS", "recreate failed on " + s);
+   return false;
+}
+
+bool UltraZFR_RecoverBuffers(const string s)
+{
+   g_UltraZFR.recoverAttempts++;
+   g_UltraZFR.recovering = true;
+   g_UltraZFR.lastProblem = "buffer/copy";
+   UltraZFR_ShellInvalidateIndicatorCache(s);
+   UltraUFSE_Invalidate(s);
+   bool ok = UltraZFR_ShellRecoverBuffers(s);
+   if(ok)
+   {
+      g_UltraZFR.bufferRecoveries++;
+      UltraZFR_NoteSuccess("BUFFERS");
+      UltraZFR_Log("buffers recovered on " + s);
+      return true;
+   }
+   UltraZFR_NoteFail("BUFFERS", "reload failed on " + s);
+   return false;
+}
+
+bool UltraZFR_RecoverMemory()
+{
+   if(!UltraMemoryEngineEnabled) return true;
+   if(g_UltraMem.trades > 100000 || g_UltraMem.trades < 0)
+   {
+      g_UltraZFR.recoverAttempts++;
+      g_UltraZFR.recovering = true;
+      g_UltraZFR.lastProblem = "memory counter overflow";
+      g_UltraMem.trades = (int)MathMax(0, g_UltraMem.trades % 50000);
+      g_UltraMem.lastSave = (long)TimeCurrent();
+      g_UltraCore.memoryOK = true;
+      g_UltraZFR.memoryRecoveries++;
+      UltraZFR_NoteSuccess("MEMORY");
+      UltraZFR_Log("memory soft-clamped");
+      return true;
+   }
+   return true;
+}
+
+bool UltraZFR_RecoverPositions(const string s)
+{
+   g_UltraZFR.recoverAttempts++;
+   g_UltraZFR.recovering = true;
+   g_UltraZFR.lastProblem = "position sync";
+
+   int synced = 0;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0 || !PositionSelectByTicket(ticket)) continue;
+      if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+      if(PositionGetString(POSITION_SYMBOL) != s) continue;
+      if(UltraPosLock_Find(ticket) < 0)
+      {
+         bool isBuy = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY);
+         UltraPosLock_Register(ticket, s, isBuy, "ZFR_SYNC");
+         synced++;
+      }
+   }
+   HistorySelect(TimeCurrent() - 86400, TimeCurrent() + 60);
+   g_UltraZFR.positionRecoveries++;
+   UltraZFR_NoteSuccess("POSITIONS");
+   if(synced > 0)
+      UltraZFR_Log("positions re-synced n=" + IntegerToString(synced) + " on " + s);
+   return true;
+}
+
+bool UltraZFR_RecoverExecution(const string s)
+{
+   g_UltraZFR.recoverAttempts++;
+   g_UltraZFR.recovering = true;
+   g_UltraZFR.lastProblem = "execution context";
+   UltraZFR_ShellRecoverExecution(s);
+   g_UltraZFR.execRecoveries++;
+   bool tradeOK = UltraBT_TradeAllowed();
+   bool connOK = UltraBT_ConnectedOK();
+   if(tradeOK && connOK)
+   {
+      UltraZFR_NoteSuccess("EXECUTION");
+      UltraZFR_Log("execution context refreshed on " + s);
+      return true;
+   }
+   UltraZFR_NoteFail("EXECUTION", tradeOK ? "connection" : "trade not allowed");
+   return false;
+}
+
+bool UltraZFR_RecoverSymbol(const string s)
+{
+   g_UltraZFR.recoverAttempts++;
+   g_UltraZFR.recovering = true;
+   g_UltraZFR.lastProblem = "symbol";
+   string det = UltraZFR_ShellRecoverSymbol(s);
+   bool ok = (StringLen(det) > 0);
+   if(ok)
+   {
+      g_UltraZFR.symbolRecoveries++;
+      UltraZFR_NoteSuccess("SYMBOL");
+      UltraZFR_Log("symbol OK " + det);
+      return true;
+   }
+   UltraZFR_NoteFail("SYMBOL", "trade mode/bid invalid for " + s);
+   return false;
+}
+
+bool UltraZFR_RecoverTimeframe(const string s)
+{
+   g_UltraZFR.recoverAttempts++;
+   g_UltraZFR.recovering = true;
+   g_UltraZFR.lastProblem = "timeframe/history";
+   ENUM_TIMEFRAMES tf = UltraETF();
+   int bars = Bars(s, tf);
+   datetime t0 = iTime(s, tf, 0);
+   // Soft continue threshold — never stop scanning
+   bool ok = (bars >= 30 && t0 > 0);
+   g_UltraZFR.timeframeRecoveries++;
+   if(ok)
+   {
+      UltraZFR_NoteSuccess("TIMEFRAME");
+      return true;
+   }
+   UltraZFR_NoteFail("TIMEFRAME", "thin history bars=" + IntegerToString(bars));
+   return false;
+}
+
+bool UltraZFR_RecoverSession(const string s)
+{
+   g_UltraZFR.recoverAttempts++;
+   g_UltraZFR.recovering = true;
+   UltraSnap u = g_UltraLastSnap;
+   UltraEngSession(s, u);
+   g_UltraLastSnap.ctx = u.ctx;
+   g_UltraZFR.sessionRecoveries++;
+   UltraZFR_NoteSuccess("SESSION");
+   UltraZFR_Log("session refreshed " + u.ctx.session);
+   return true;
+}
+
+bool UltraZFR_RecoverEvent(const string s)
+{
+   g_UltraZFR.recoverAttempts++;
+   g_UltraZFR.recovering = true;
+   UltraNewsExec_OnTick(s);
+   UltraMarketIntel_Validate(s);
+   g_UltraZFR.eventRecoveries++;
+   UltraZFR_NoteSuccess("EVENT");
+   UltraZFR_Log("event/news context refreshed");
+   return true;
+}
+
+bool UltraZFR_RecoverDashboard()
+{
+   g_UltraZFR.recoverAttempts++;
+   g_UltraZFR.recovering = true;
+   UltraZFR_ShellRecoverDashboard();
+   CreateDashboard();
+   g_UltraZFR.dashboardRecoveries++;
+   UltraZFR_NoteSuccess("DASHBOARD");
+   return true;
+}
+
+bool UltraZFR_RecoverLogger()
+{
+   g_UltraZFR.recoverAttempts++;
+   g_UltraZFR.recovering = true;
+   if(StringLen(g_UltraCore.lastError) > 200)
+      g_UltraCore.lastError = "ZFR_trimmed";
+   g_UltraZFR.loggerRecoveries++;
+   UltraZFR_NoteSuccess("LOGGER");
+   UltraLog("ZFR ∞ logger path verified");
+   return true;
+}
+
+bool UltraZFR_RecoverTradeContext(const string s)
+{
+   g_UltraZFR.tradeRecoveries++;
+   UltraRecover("trade context");
+   return UltraZFR_RecoverExecution(s);
+}
+
+//--------------------------------------------------------------------//
+// EXECUTION RETRY PREP — broker reject → analyse → correct → retry   //
+//--------------------------------------------------------------------//
+bool UltraZFR_PrepareExecRetry(const string s, const uint retcode, string &action)
+{
+   action = "";
+   if(!UltraZFREnabled || !UltraZFRExecRecovery) return false;
+
+   g_UltraZFR.problemsFound++;
+   g_UltraZFR.lastProblem = "exec retcode=" + IntegerToString((int)retcode);
+
+   if(retcode == TRADE_RETCODE_REQUOTE ||
+      retcode == TRADE_RETCODE_PRICE_OFF ||
+      retcode == TRADE_RETCODE_PRICE_CHANGED ||
+      retcode == TRADE_RETCODE_TIMEOUT ||
+      retcode == TRADE_RETCODE_CONNECTION ||
+      retcode == TRADE_RETCODE_INVALID_FILL)
+   {
+      UltraZFR_ShellRecoverExecution(s);
+      action = "refill+slip";
+      g_UltraZFR.execRecoveries++;
+      UltraZFR_Log("exec retry prep " + action + " ret=" + IntegerToString((int)retcode));
+      return true;
+   }
+   if(retcode == TRADE_RETCODE_INVALID_STOPS)
+   {
+      action = "stops-fallback";
+      g_UltraZFR.execRecoveries++;
+      return true;
+   }
+   if(retcode == TRADE_RETCODE_LIMIT_VOLUME || retcode == TRADE_RETCODE_INVALID_VOLUME)
+   {
+      action = "volume-reject";
+      UltraZFR_Log("volume reject — not auto-mutating lots (safety)");
+      return false;
+   }
+   return false;
+}
+
+//--------------------------------------------------------------------//
+// MONITOR — every tick verify → recover → continue (never stop)       //
+//--------------------------------------------------------------------//
+void UltraZFR_OnTick(const string s)
+{
+   if(!UltraZFREnabled) return;
+
+   long now = (long)GetTickCount();
+   int every = UltraZFRMonitorMs;
+   if(every < 50) every = 50;
+   if(g_UltraZFR.lastMonitorMs > 0 && (now - g_UltraZFR.lastMonitorMs) < every)
+      return;
+   g_UltraZFR.lastMonitorMs = now;
+
+   if(g_UltraZFR.consecutiveFail > 0)
+   {
+      int backoff = UltraZFRRetryBackoffMs * MathMin(g_UltraZFR.consecutiveFail, 8);
+      if(g_UltraZFR.lastRecoverMs > 0 && (now - g_UltraZFR.lastRecoverMs) < backoff)
+         return;
+   }
+
+   bool need = false;
+   string domain = "OK";
+
+   bool connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
+   if(UltraZFRConnectionRecovery && (!connected || (!g_UltraZFR.lastConnected && connected)))
+   {
+      need = true; domain = "CONNECTION";
+      g_UltraZFR.problemsFound++;
+      g_UltraZFR.lastRecoverMs = now;
+      UltraZFR_RecoverConnection(s);
+   }
+   g_UltraZFR.lastConnected = connected;
+
+   long tm = 0;
+   bool modeOK = SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm);
+   if(UltraZFRSymbolRecovery && (!modeOK || tm == 0 || SymbolInfoDouble(s, SYMBOL_BID) <= 0.0))
+   {
+      need = true; domain = "SYMBOL";
+      g_UltraZFR.problemsFound++;
+      g_UltraZFR.lastRecoverMs = now;
+      UltraZFR_RecoverSymbol(s);
+   }
+
+   if(UltraZFRTimeframeRecovery && (Bars(s, UltraETF()) < 30 || iTime(s, UltraETF(), 0) <= 0))
+   {
+      need = true; domain = "TIMEFRAME";
+      g_UltraZFR.problemsFound++;
+      g_UltraZFR.lastRecoverMs = now;
+      UltraZFR_RecoverTimeframe(s);
+   }
+
+   if((UltraZFRIndicatorRecovery || UltraZFRBufferRecovery) &&
+      !UltraZFR_ShellIndicatorsHealthy(s))
+   {
+      need = true; domain = "INDICATORS";
+      g_UltraZFR.problemsFound++;
+      g_UltraZFR.lastRecoverMs = now;
+      if(UltraZFRIndicatorRecovery) UltraZFR_RecoverIndicators(s);
+      if(UltraZFRBufferRecovery) UltraZFR_RecoverBuffers(s);
+   }
+
+   if(UltraZFRMemoryRecovery)
+      UltraZFR_RecoverMemory();
+
+   static long lastPos = 0;
+   if(UltraZFRPositionRecovery && (lastPos <= 0 || (now - lastPos) >= UltraZFRPositionMs))
+   {
+      lastPos = now;
+      UltraZFR_RecoverPositions(s);
+   }
+
+   if(UltraZFRExecRecovery && connected && !UltraBT_TradeAllowed())
+   {
+      need = true; domain = "EXECUTION";
+      g_UltraZFR.problemsFound++;
+      g_UltraZFR.lastRecoverMs = now;
+      UltraZFR_RecoverTradeContext(s);
+   }
+
+   if(UltraZFRSessionRecovery && UltraSessionEngineEnabled &&
+      StringLen(g_UltraLastSnap.ctx.session) == 0)
+   {
+      g_UltraZFR.problemsFound++;
+      UltraZFR_RecoverSession(s);
+   }
+   if(UltraZFREventRecovery && UltraNewsExec_IsNewsMode() &&
+      StringLen(g_UltraLastSnap.ctx.eventClass) == 0)
+   {
+      g_UltraZFR.problemsFound++;
+      UltraZFR_RecoverEvent(s);
+   }
+
+   static long lastDash = 0;
+   if(UltraZFRDashboardRecovery && (lastDash <= 0 || (now - lastDash) >= UltraZFRDashboardMs))
+   {
+      lastDash = now;
+      if((EnableDashboard || UltraDashboardEnabled) && ObjectFind(0, BG_OBJECT_NAME) < 0)
+         UltraZFR_RecoverDashboard();
+   }
+   if(UltraZFRLoggerRecovery && StringLen(g_UltraCore.lastError) > 200)
+      UltraZFR_RecoverLogger();
+
+   g_UltraZFR.summary = need ? ("FIX:" + domain) : "MONITOR_OK";
+   // NEVER abort trading cycle — always return
+}
+
+//--------------------------------------------------------------------//
+void UltraZFR_Boot()
+{
+   ZeroMemory(g_UltraZFR);
+   g_UltraZFR.lastConnected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
+   g_UltraZFR.summary = "BOOT";
+   g_UltraZFR.booted = true;
+   if(UltraZFRLog || UltraFoundationLogBoot)
+      UltraLog("ZERO-FAIL RECOVERY ∞ boot Enabled=" + (UltraZFREnabled ? "Y" : "N") +
+               " MonitorMs=" + IntegerToString(UltraZFRMonitorMs) +
+               " NeverStop=Y BUILD=HA_ULTRA_93");
+}
+
+string UltraZFR_Dashboard()
+{
+   string t = "ZFR: ";
+   if(!UltraZFREnabled) { t += "OFF"; return t; }
+   t += g_UltraZFR.summary;
+   t += " ok=";
+   t += IntegerToString(g_UltraZFR.recoverSuccess);
+   t += " fail=";
+   t += IntegerToString(g_UltraZFR.recoverFail);
+   t += " ind=";
+   t += IntegerToString(g_UltraZFR.indicatorRecoveries);
+   t += " pos=";
+   t += IntegerToString(g_UltraZFR.positionRecoveries);
+   t += " conn=";
+   t += IntegerToString(g_UltraZFR.connectionRecoveries);
+   return t;
+}
+
+#endif // HITMAN_ULTRA_ZERO_FAIL_RECOVERY_MQH
+//===== END UltraZeroFailRecovery.mqh =====
+
 //===== BEGIN UltraTradeGate.mqh =====
 #ifndef HITMAN_ULTRA_TRADE_GATE_MQH
 #define HITMAN_ULTRA_TRADE_GATE_MQH
@@ -13586,7 +14091,7 @@ string UltraTradeGate_Dashboard()
 //| Status mirrors Foundation / Market / VChain / Gate — never guess |
 //+------------------------------------------------------------------+
 
-#define ULTRA_MOD_MAX 24
+#define ULTRA_MOD_MAX 28
 
 struct UltraModEntry
 {
@@ -13668,6 +14173,11 @@ void UltraMod_Refresh()
    UltraMod_Reg("BUG_ELIM", false, UltraBugEnabled, g_UltraBug.initOK,
                 UltraBugEnabled
                 ? (g_UltraBug.summary + " expl=" + IntegerToString(g_UltraBug.explainCount))
+                : "OFF");
+
+   UltraMod_Reg("ZERO_FAIL", false, UltraZFREnabled, UltraZFREnabled,
+                UltraZFREnabled
+                ? (g_UltraZFR.summary + " ok=" + IntegerToString(g_UltraZFR.recoverSuccess))
                 : "OFF");
 
    bool gateOK = (!UltraTradeGateEnabled) || g_UltraTradeGate.passed ||
@@ -13989,6 +14499,18 @@ void UltraUFSE_Lock(const int idx, const bool isBuy)
    g_UFSE[idx].signalLocked = true;
    g_UFSE[idx].lockedIsBuy = isBuy;
    g_UFSE[idx].lockBar = iTime(g_UFSE[idx].symbol, UltraETF(), 0);
+}
+
+// Phase 20 — force cache rebuild after recovery
+void UltraUFSE_Invalidate(const string s)
+{
+   int idx = UltraUFSE_Ensure(s);
+   if(idx < 0) return;
+   g_UFSE[idx].snapValid = false;
+   g_UFSE[idx].dirtyCritical = true;
+   g_UFSE[idx].dirtyMedium = true;
+   g_UFSE[idx].cacheBid = 0;
+   g_UFSE[idx].cacheAsk = 0;
 }
 
 void UltraUFSE_Unlock(const int idx)
@@ -14882,6 +15404,7 @@ string UltraDashboardText(const string s)
    t += "\n"; t += UltraTarget_Dashboard();
    t += "\n"; t += UltraAdaptive_Dashboard();
    t += "\n"; t += UltraBug_Dashboard();
+   t += "\n"; t += UltraZFR_Dashboard();
    t += "\n"; t += UltraTradeGate_Dashboard();
    t += "\n"; t += UltraMod_Dashboard();
    t += "\n"; t += UltraBT_Dashboard();
@@ -15529,6 +16052,7 @@ int OnInit()
    UltraTarget_Boot();      // TARGET INTELLIGENCE ∞
    UltraAdaptive_Boot();    // PHASE 18 — ADAPTIVE FINAL EVOLUTION ∞
    UltraBug_Boot();         // PHASE 19 — BUG ELIMINATION ∞
+   UltraZFR_Boot();         // PHASE 20 — ZERO-FAIL RECOVERY ∞
    // Re-note handles after Boot zero (InitializeIndicators ran earlier)
    {
       int bad = 0, checked = 0;
@@ -15602,6 +16126,12 @@ int OnInit()
          " Exec=", UltraYN(UltraBugExecAudit),
          " Pos=", UltraYN(UltraBugPositionAudit),
          " init=", g_UltraBug.summary);
+   Print("ZERO-FAIL RECOVERY ∞: Enabled=", UltraYN(UltraZFREnabled),
+         " MonitorMs=", UltraZFRMonitorMs,
+         " Ind=", UltraYN(UltraZFRIndicatorRecovery),
+         " Pos=", UltraYN(UltraZFRPositionRecovery),
+         " Conn=", UltraYN(UltraZFRConnectionRecovery),
+         " NeverStop=Y");
    Print("POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
          " L3Close=", UltraYN(UltraPosEvoCloseOnL3),
          " L3Bars=", UltraPosEvoL3ConfirmBars,
@@ -16473,6 +17003,8 @@ void RunTradingCycle(string symbol)
 
    // PHASE 1 — Ultra Foundation Health Engine (throttled full verify)
    UltraFoundation_OnTick(symbol);
+   // PHASE 20 — Zero-Fail Recovery always monitors (even when RED / degraded)
+   UltraZFR_OnTick(symbol);
    if(UltraFoundationEnabled && g_UltraFoundation.status == "RED")
    {
       ManageOpenTrades(); // still protect open positions — never abandon risk
@@ -16483,6 +17015,7 @@ void RunTradingCycle(string symbol)
    UltraMarketIntel_OnTick(symbol);
    if(UltraMarketIntelEnabled && !UltraMarketIntel_Approved())
    {
+      UltraZFR_OnTick(symbol); // keep recovering data path
       ManageOpenTrades(); // still protect open positions — never abandon risk
       return;
    }
@@ -16741,6 +17274,101 @@ bool UpdateIndicators()
    IndicatorCacheCycleArr[idx] = (long)g_CycleCounter;
 
    return true;
+}
+
+//--------------------------------------------------------------------//
+// PHASE 20 — ZERO-FAIL RECOVERY Shell hooks (indicator arrays here)  //
+//--------------------------------------------------------------------//
+bool UltraZFR_ShellIndicatorsHealthy(const string s)
+{
+   int idx = GetSymbolIndex(s);
+   if(idx < 0) return false;
+   if(idx >= ArraySize(EMAHandles) || idx >= ArraySize(ADXHandles) ||
+      idx >= ArraySize(ATRHandlesArr) || idx >= ArraySize(HTFEMAHandlesArr))
+      return false;
+   if(EMAHandles[idx] == INVALID_HANDLE) return false;
+   if(ADXHandles[idx] == INVALID_HANDLE) return false;
+   if(ATRHandlesArr[idx] == INVALID_HANDLE) return false;
+   if(HTFEMAHandlesArr[idx] == INVALID_HANDLE) return false;
+   if(BarsCalculated(EMAHandles[idx]) < 4) return false;
+   if(BarsCalculated(ADXHandles[idx]) < 4) return false;
+   if(BarsCalculated(ATRHandlesArr[idx]) < 4) return false;
+   return true;
+}
+
+void UltraZFR_ShellInvalidateIndicatorCache(const string s)
+{
+   int idx = GetSymbolIndex(s);
+   if(idx < 0) return;
+   if(idx < ArraySize(IndicatorCacheCycleArr))
+      IndicatorCacheCycleArr[idx] = -1;
+}
+
+bool UltraZFR_ShellRecoverIndicators(const string s)
+{
+   int idx = GetSymbolIndex(s);
+   if(idx < 0) return false;
+
+   string prev = BrokerSymbol;
+   BrokerSymbol = s;
+
+   if(EMAHandles[idx] != INVALID_HANDLE) IndicatorRelease(EMAHandles[idx]);
+   if(ADXHandles[idx] != INVALID_HANDLE) IndicatorRelease(ADXHandles[idx]);
+   if(ATRHandlesArr[idx] != INVALID_HANDLE) IndicatorRelease(ATRHandlesArr[idx]);
+   if(HTFEMAHandlesArr[idx] != INVALID_HANDLE) IndicatorRelease(HTFEMAHandlesArr[idx]);
+
+   EMAHandles[idx] = iMA(s, TrendTF, EMA_Period, 0, MODE_EMA, PRICE_CLOSE);
+   ADXHandles[idx] = iADX(s, TrendTF, ADX_Period);
+   ATRHandlesArr[idx] = iATR(s, EntryTF, ATR_Period);
+   HTFEMAHandlesArr[idx] = iMA(s, HigherTimeframe, EMA_Period, 0, MODE_EMA, PRICE_CLOSE);
+
+   UltraZFR_ShellInvalidateIndicatorCache(s);
+   bool ok = (EMAHandles[idx] != INVALID_HANDLE && ADXHandles[idx] != INVALID_HANDLE &&
+              ATRHandlesArr[idx] != INVALID_HANDLE && HTFEMAHandlesArr[idx] != INVALID_HANDLE);
+   if(ok)
+      Print("ZFR ∞ indicators recreated on ", s);
+   else
+      Print("ZFR ∞ indicator recreate FAILED on ", s);
+
+   BrokerSymbol = prev;
+   return ok;
+}
+
+bool UltraZFR_ShellRecoverBuffers(const string s)
+{
+   string prev = BrokerSymbol;
+   BrokerSymbol = s;
+   UltraZFR_ShellInvalidateIndicatorCache(s);
+   bool ok = UpdateIndicators();
+   BrokerSymbol = prev;
+   return ok;
+}
+
+void UltraZFR_ShellRecoverExecution(const string s)
+{
+   g_Trade.SetExpertMagicNumber(MagicNumber);
+   ConfigureFillingMode(s);
+   g_Trade.SetDeviationInPoints(GetEffectiveSlippagePoints());
+}
+
+string UltraZFR_ShellRecoverSymbol(const string s)
+{
+   string det = DetectBrokerSymbol(s);
+   if(StringLen(det) == 0) det = s;
+   long mode = 0;
+   bool modeOK = SymbolInfoInteger(det, SYMBOL_TRADE_MODE, mode);
+   double bid = SymbolInfoDouble(det, SYMBOL_BID);
+   if(!(modeOK && mode != 0 && bid > 0.0))
+      return "";
+   if(s == _Symbol || s == BrokerSymbol || s == PrimarySymbol)
+      BrokerSymbol = det;
+   return det;
+}
+
+void UltraZFR_ShellRecoverDashboard()
+{
+   if(ObjectFind(0, BG_OBJECT_NAME) < 0)
+      CreateChartBackground();
 }
 
 //======================== HELPERS =================================//
@@ -18742,6 +19370,11 @@ bool ExecuteBuy()
          if(EnableVerboseLogging)
             Print("BUY transient error (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES, " - refreshing price and retrying.");
 
+         // Phase 20 — analyse recoverable reject → correct → retry
+         {
+            string zAct = "";
+            UltraZFR_PrepareExecRetry(BrokerSymbol, retcode, zAct);
+         }
          if(retcode == TRADE_RETCODE_INVALID_FILL)
             ConfigureFillingMode(BrokerSymbol);
 

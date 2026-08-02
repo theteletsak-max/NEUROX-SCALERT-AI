@@ -199,6 +199,26 @@ input bool   UltraBugPerfAudit           = true;   // tick latency warn
 input int    UltraBugPositionAuditMs     = 1000;   // position sync cadence
 input int    UltraBugPerfWarnMs          = 50;     // tick latency warn threshold
 
+input group "31 · ULTRA ZERO-FAIL RECOVERY ENGINE ∞ (Phase 20)"
+input bool   UltraZFREnabled             = true;   // master — never stop on recoverable faults
+input bool   UltraZFRLog                 = true;   // recovery action logs
+input bool   UltraZFRConnectionRecovery  = true;
+input bool   UltraZFRIndicatorRecovery   = true;
+input bool   UltraZFRBufferRecovery      = true;
+input bool   UltraZFRMemoryRecovery      = true;
+input bool   UltraZFRPositionRecovery    = true;
+input bool   UltraZFRExecRecovery        = true;
+input bool   UltraZFRSymbolRecovery      = true;
+input bool   UltraZFRTimeframeRecovery   = true;
+input bool   UltraZFRSessionRecovery     = true;
+input bool   UltraZFREventRecovery       = true;
+input bool   UltraZFRDashboardRecovery   = true;
+input bool   UltraZFRLoggerRecovery      = true;
+input int    UltraZFRMonitorMs           = 200;    // system verify cadence
+input int    UltraZFRRetryBackoffMs      = 250;    // backoff after failed recover
+input int    UltraZFRPositionMs          = 1000;   // position sync cadence
+input int    UltraZFRDashboardMs         = 5000;   // dashboard/object check cadence
+
 input group "31 · ULTRA BACKTEST COMPATIBILITY ENGINE ∞"
 input bool   UltraBacktestCompatEnabled  = true;   // Strategy Tester compatibility mode
 input bool   UltraBacktestLogBoot        = true;   // boot mode line

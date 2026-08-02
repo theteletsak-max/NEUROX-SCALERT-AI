@@ -72,6 +72,7 @@ int OnInit()
    UltraTarget_Boot();      // TARGET INTELLIGENCE ∞
    UltraAdaptive_Boot();    // PHASE 18 — ADAPTIVE FINAL EVOLUTION ∞
    UltraBug_Boot();         // PHASE 19 — BUG ELIMINATION ∞
+   UltraZFR_Boot();         // PHASE 20 — ZERO-FAIL RECOVERY ∞
    // Re-note handles after Boot zero (InitializeIndicators ran earlier)
    {
       int bad = 0, checked = 0;
@@ -145,6 +146,12 @@ int OnInit()
          " Exec=", UltraYN(UltraBugExecAudit),
          " Pos=", UltraYN(UltraBugPositionAudit),
          " init=", g_UltraBug.summary);
+   Print("ZERO-FAIL RECOVERY ∞: Enabled=", UltraYN(UltraZFREnabled),
+         " MonitorMs=", UltraZFRMonitorMs,
+         " Ind=", UltraYN(UltraZFRIndicatorRecovery),
+         " Pos=", UltraYN(UltraZFRPositionRecovery),
+         " Conn=", UltraYN(UltraZFRConnectionRecovery),
+         " NeverStop=Y");
    Print("POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
          " L3Close=", UltraYN(UltraPosEvoCloseOnL3),
          " L3Bars=", UltraPosEvoL3ConfirmBars,
@@ -1016,6 +1023,8 @@ void RunTradingCycle(string symbol)
 
    // PHASE 1 — Ultra Foundation Health Engine (throttled full verify)
    UltraFoundation_OnTick(symbol);
+   // PHASE 20 — Zero-Fail Recovery always monitors (even when RED / degraded)
+   UltraZFR_OnTick(symbol);
    if(UltraFoundationEnabled && g_UltraFoundation.status == "RED")
    {
       ManageOpenTrades(); // still protect open positions — never abandon risk
@@ -1026,6 +1035,7 @@ void RunTradingCycle(string symbol)
    UltraMarketIntel_OnTick(symbol);
    if(UltraMarketIntelEnabled && !UltraMarketIntel_Approved())
    {
+      UltraZFR_OnTick(symbol); // keep recovering data path
       ManageOpenTrades(); // still protect open positions — never abandon risk
       return;
    }
@@ -1284,6 +1294,101 @@ bool UpdateIndicators()
    IndicatorCacheCycleArr[idx] = (long)g_CycleCounter;
 
    return true;
+}
+
+//--------------------------------------------------------------------//
+// PHASE 20 — ZERO-FAIL RECOVERY Shell hooks (indicator arrays here)  //
+//--------------------------------------------------------------------//
+bool UltraZFR_ShellIndicatorsHealthy(const string s)
+{
+   int idx = GetSymbolIndex(s);
+   if(idx < 0) return false;
+   if(idx >= ArraySize(EMAHandles) || idx >= ArraySize(ADXHandles) ||
+      idx >= ArraySize(ATRHandlesArr) || idx >= ArraySize(HTFEMAHandlesArr))
+      return false;
+   if(EMAHandles[idx] == INVALID_HANDLE) return false;
+   if(ADXHandles[idx] == INVALID_HANDLE) return false;
+   if(ATRHandlesArr[idx] == INVALID_HANDLE) return false;
+   if(HTFEMAHandlesArr[idx] == INVALID_HANDLE) return false;
+   if(BarsCalculated(EMAHandles[idx]) < 4) return false;
+   if(BarsCalculated(ADXHandles[idx]) < 4) return false;
+   if(BarsCalculated(ATRHandlesArr[idx]) < 4) return false;
+   return true;
+}
+
+void UltraZFR_ShellInvalidateIndicatorCache(const string s)
+{
+   int idx = GetSymbolIndex(s);
+   if(idx < 0) return;
+   if(idx < ArraySize(IndicatorCacheCycleArr))
+      IndicatorCacheCycleArr[idx] = -1;
+}
+
+bool UltraZFR_ShellRecoverIndicators(const string s)
+{
+   int idx = GetSymbolIndex(s);
+   if(idx < 0) return false;
+
+   string prev = BrokerSymbol;
+   BrokerSymbol = s;
+
+   if(EMAHandles[idx] != INVALID_HANDLE) IndicatorRelease(EMAHandles[idx]);
+   if(ADXHandles[idx] != INVALID_HANDLE) IndicatorRelease(ADXHandles[idx]);
+   if(ATRHandlesArr[idx] != INVALID_HANDLE) IndicatorRelease(ATRHandlesArr[idx]);
+   if(HTFEMAHandlesArr[idx] != INVALID_HANDLE) IndicatorRelease(HTFEMAHandlesArr[idx]);
+
+   EMAHandles[idx] = iMA(s, TrendTF, EMA_Period, 0, MODE_EMA, PRICE_CLOSE);
+   ADXHandles[idx] = iADX(s, TrendTF, ADX_Period);
+   ATRHandlesArr[idx] = iATR(s, EntryTF, ATR_Period);
+   HTFEMAHandlesArr[idx] = iMA(s, HigherTimeframe, EMA_Period, 0, MODE_EMA, PRICE_CLOSE);
+
+   UltraZFR_ShellInvalidateIndicatorCache(s);
+   bool ok = (EMAHandles[idx] != INVALID_HANDLE && ADXHandles[idx] != INVALID_HANDLE &&
+              ATRHandlesArr[idx] != INVALID_HANDLE && HTFEMAHandlesArr[idx] != INVALID_HANDLE);
+   if(ok)
+      Print("ZFR ∞ indicators recreated on ", s);
+   else
+      Print("ZFR ∞ indicator recreate FAILED on ", s);
+
+   BrokerSymbol = prev;
+   return ok;
+}
+
+bool UltraZFR_ShellRecoverBuffers(const string s)
+{
+   string prev = BrokerSymbol;
+   BrokerSymbol = s;
+   UltraZFR_ShellInvalidateIndicatorCache(s);
+   bool ok = UpdateIndicators();
+   BrokerSymbol = prev;
+   return ok;
+}
+
+void UltraZFR_ShellRecoverExecution(const string s)
+{
+   g_Trade.SetExpertMagicNumber(MagicNumber);
+   ConfigureFillingMode(s);
+   g_Trade.SetDeviationInPoints(GetEffectiveSlippagePoints());
+}
+
+string UltraZFR_ShellRecoverSymbol(const string s)
+{
+   string det = DetectBrokerSymbol(s);
+   if(StringLen(det) == 0) det = s;
+   long mode = 0;
+   bool modeOK = SymbolInfoInteger(det, SYMBOL_TRADE_MODE, mode);
+   double bid = SymbolInfoDouble(det, SYMBOL_BID);
+   if(!(modeOK && mode != 0 && bid > 0.0))
+      return "";
+   if(s == _Symbol || s == BrokerSymbol || s == PrimarySymbol)
+      BrokerSymbol = det;
+   return det;
+}
+
+void UltraZFR_ShellRecoverDashboard()
+{
+   if(ObjectFind(0, BG_OBJECT_NAME) < 0)
+      CreateChartBackground();
 }
 
 //======================== HELPERS =================================//
@@ -3285,6 +3390,11 @@ bool ExecuteBuy()
          if(EnableVerboseLogging)
             Print("BUY transient error (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES, " - refreshing price and retrying.");
 
+         // Phase 20 — analyse recoverable reject → correct → retry
+         {
+            string zAct = "";
+            UltraZFR_PrepareExecRetry(BrokerSymbol, retcode, zAct);
+         }
          if(retcode == TRADE_RETCODE_INVALID_FILL)
             ConfigureFillingMode(BrokerSymbol);
 
@@ -3649,6 +3759,11 @@ bool ExecuteSell()
          if(EnableVerboseLogging)
             Print("SELL transient error (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES, " - refreshing price and retrying.");
 
+         // Phase 20 — analyse recoverable reject → correct → retry
+         {
+            string zAct = "";
+            UltraZFR_PrepareExecRetry(BrokerSymbol, retcode, zAct);
+         }
          if(retcode == TRADE_RETCODE_INVALID_FILL)
             ConfigureFillingMode(BrokerSymbol);
 

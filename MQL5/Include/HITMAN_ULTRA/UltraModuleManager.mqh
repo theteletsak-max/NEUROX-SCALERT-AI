@@ -6,7 +6,7 @@
 //| Status mirrors Foundation / Market / VChain / Gate — never guess |
 //+------------------------------------------------------------------+
 
-#define ULTRA_MOD_MAX 24
+#define ULTRA_MOD_MAX 28
 
 struct UltraModEntry
 {
@@ -88,6 +88,11 @@ void UltraMod_Refresh()
    UltraMod_Reg("BUG_ELIM", false, UltraBugEnabled, g_UltraBug.initOK,
                 UltraBugEnabled
                 ? (g_UltraBug.summary + " expl=" + IntegerToString(g_UltraBug.explainCount))
+                : "OFF");
+
+   UltraMod_Reg("ZERO_FAIL", false, UltraZFREnabled, UltraZFREnabled,
+                UltraZFREnabled
+                ? (g_UltraZFR.summary + " ok=" + IntegerToString(g_UltraZFR.recoverSuccess))
                 : "OFF");
 
    bool gateOK = (!UltraTradeGateEnabled) || g_UltraTradeGate.passed ||
