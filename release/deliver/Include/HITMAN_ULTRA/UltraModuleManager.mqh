@@ -80,8 +80,9 @@ void UltraMod_Refresh()
 
    UltraMod_Reg("ADAPTIVE", false, UltraAdaptiveEnabled, UltraAdaptiveEnabled,
                 UltraAdaptiveEnabled
-                ? ("Q=" + IntegerToString(g_UltraAdapt.audit.composite) +
-                   " n=" + IntegerToString(g_UltraAdapt.review.trades))
+                ? ("FINAL Q=" + IntegerToString(g_UltraAdapt.audit.composite) +
+                   " n=" + IntegerToString(g_UltraAdapt.review.trades) +
+                   (g_UltraAdapt.finalEvolution ? " LOCKED" : ""))
                 : "OFF");
 
    bool gateOK = (!UltraTradeGateEnabled) || g_UltraTradeGate.passed ||

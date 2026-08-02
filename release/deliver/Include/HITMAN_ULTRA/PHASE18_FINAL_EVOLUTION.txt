@@ -1,0 +1,55 @@
+HITMAN AI — PHASE 18
+ULTRA ADAPTIVE INTELLIGENCE ENGINE ∞
+FINAL EVOLUTION ENGINE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Continuously improve decision quality without
+  changing the proprietary strategy.
+
+  One Strategy. One Brain. One Mission.
+
+LOCKED EVOLUTION RULES
+  ✓ Never Change Strategy Automatically
+  ✓ Never Modify Rules Automatically
+  ✓ Never Optimise Parameters Automatically
+  ✓ Learn Through Statistics Only
+  ✓ Present Measurable Results
+  ✓ Support Future Refinements
+
+ULTRA ADAPTIVE AUDIT
+  Market Regime · Trend Quality · Trend Strength · Trend Stability
+  Momentum · Liquidity · Volatility · Session · News Environment
+  Spread Behaviour · Slippage Behaviour · Execution Quality
+  Trade Confidence · Position Quality · Risk Quality
+
+ULTRA ADAPTIVE ENGINE
+  Dynamic Market Reading · Confidence · Risk · Position
+  Execution · Target · Exit Intelligence · Continuous Re-analysis
+
+PERFORMANCE INTELLIGENCE
+  Records: symbol/TF/session/event/regime/entry/SL/TP1-3/exit
+           PnL/hold/confidence/exec speed/spread/slip/thesis/reasons
+  Analytics: WR · PF · Expectancy · Recovery Factor · Drawdown
+             Avg Win/Loss/Hold · Session/News/Symbol/TF/Exec/Thesis
+
+SELF ANALYSIS (every closed trade)
+  Review → Compare Planned → Compare Actual → Store Stats
+  → Update Performance DB → Continue Trading
+
+PATH
+  MarketIntel → Signal → Thesis → Risk → Exec → Adaptive → Mission
+  → BUY / SELL / WAIT
+
+MODULE
+  UltraAdaptiveIntelligence.mqh (evolved — NOT a new parallel engine)
+
+FINAL DEVELOPMENT RULE
+  After this phase:
+    NO MORE NEW ENGINES
+    NO MORE NEW STRATEGIES
+    NO MORE FEATURE EXPANSION
+  Only: bug fixes · signal/execution refinement · performance
+        broker compatibility · stability · backtest/forward/live
+        validation · continuous professional refinement

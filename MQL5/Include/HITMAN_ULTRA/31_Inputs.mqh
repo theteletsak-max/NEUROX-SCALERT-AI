@@ -157,7 +157,7 @@ input bool   UltraTradeGateEnabled       = true;   // hard pre-trade validation
 input bool   UltraTradeGateLog           = true;   // TRADE_GATE PASS/FAIL logs
 input bool   UltraTradeGateRequireTargets= true;   // Target Intelligence plan mandatory
 
-input group "31 · ULTRA ADAPTIVE INTELLIGENCE ENGINE ∞ (Phase 17)"
+input group "31 · ULTRA ADAPTIVE INTELLIGENCE ∞ FINAL EVOLUTION (Phase 18)"
 input bool   UltraAdaptiveEnabled           = true;  // master — decision quality only
 input bool   UltraAdaptiveLog               = true;  // ADAPTIVE audit / record logs
 input bool   UltraAdaptiveConfEnabled       = true;  // soft confidence bias
@@ -165,11 +165,18 @@ input bool   UltraAdaptiveRiskEnabled       = true;  // soft risk scale (clamped
 input bool   UltraAdaptiveExecEnabled       = true;  // soft slippage bias
 input bool   UltraAdaptiveTargetEnabled     = true;  // soft TP distance scale
 input bool   UltraAdaptiveMonitorEnabled    = true;  // soft monitor cadence
+input bool   UltraAdaptivePosEnabled        = true;  // soft position intelligence
+input bool   UltraAdaptiveExitEnabled       = true;  // soft exit urgency (never auto-close)
+input bool   UltraAdaptiveReanalyzeEnabled  = true;  // continuous re-analysis
+input bool   UltraAdaptiveSelfReviewEnabled = true;  // post-trade self analysis
 input bool   UltraAdaptiveAnalyticsEnabled  = true;  // record + review stats
 input bool   UltraAdaptiveLearnEnabled      = true;  // statistical soft nudge only
 input int    UltraAdaptiveMaxConfBoost      = 6;     // max soft confidence boost
 input int    UltraAdaptiveMaxConfPenalty    = 6;     // max soft confidence penalty
+input int    UltraAdaptiveMaxPosHoldBias    = 6;     // max soft hold-score bias
+input int    UltraAdaptiveExitUrgencyManage = 55;    // urg≥ → soft HOLD→MANAGE only
 input int    UltraAdaptiveMinTradesLearn    = 8;     // min closed trades before hist nudge
+input int    UltraAdaptiveReanalyzeMs       = 250;   // continuous re-analysis throttle
 input double UltraAdaptiveRiskMinScale      = 0.85;  // floor risk multiplier
 input double UltraAdaptiveRiskMaxScale      = 1.15;  // ceiling risk multiplier
 input double UltraAdaptiveTargetMinScale    = 0.90;  // floor TP scale

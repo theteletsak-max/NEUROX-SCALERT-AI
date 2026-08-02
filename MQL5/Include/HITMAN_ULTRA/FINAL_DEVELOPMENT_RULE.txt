@@ -1,0 +1,35 @@
+HITMAN AI — FINAL DEVELOPMENT RULE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+After Phase 18 (Ultra Adaptive Intelligence ∞ Final Evolution):
+
+NO MORE NEW ENGINES
+NO MORE NEW STRATEGIES
+NO MORE FEATURE EXPANSION
+
+Only allowed work going forward:
+
+✓ Bug Fixes
+✓ Signal Refinement
+✓ Execution Refinement
+✓ Performance Optimisation
+✓ Broker Compatibility
+✓ Stability Improvements
+✓ Backtest Optimisation
+✓ Forward-Test Validation
+✓ Live Performance Validation
+✓ Continuous Professional Refinement
+
+Architecture locks remain:
+
+✓ One Proprietary Strategy
+✓ One Signal Engine (UFSE)
+✓ One Confidence Engine (USM2)
+✓ One Mission Control
+✓ One Execution Engine
+✓ One Position Evolution Engine
+✓ One Exit Engine (Mission-only closes)
+✓ TradeComment = HITMAN AI
+✓ BUILD_ID = HA_ULTRA_93
+✓ MaxOpen = 3

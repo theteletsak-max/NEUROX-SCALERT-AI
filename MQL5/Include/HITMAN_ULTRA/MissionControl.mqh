@@ -469,6 +469,8 @@ ENUM_SUPREME_DECISION UltraMission_PositionCommand(const ulong ticket, const str
    UltraExitValidation v = UltraMission_ValidateExit(ticket, s, isBuy, u, false);
    UltraCorrection corr = UltraCorr_Detect(u, isBuy);
    UltraHoldScore hold = UltraHold_Evaluate(u, isBuy, !v.thesisBroken, corr);
+   // PHASE 18 — soft position/exit intelligence (never forces Mission EXIT alone)
+   UltraAdaptive_ApplyPositionIntel(ticket, s, isBuy, u, hold);
    UltraSmartExit sx = UltraSmartExit_Decide(hold, corr, !v.thesisBroken, false);
 
    ENUM_SUPREME_DECISION cmd = SUP_HOLD;

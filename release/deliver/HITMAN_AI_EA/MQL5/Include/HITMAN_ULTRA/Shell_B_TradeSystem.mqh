@@ -70,7 +70,7 @@ int OnInit()
    UltraVChain_Boot();      // VALIDATION CHAIN — VALID/INVALID/WAIT
    UltraNewsExec_Boot();    // NEWS EXECUTION INTELLIGENCE ∞
    UltraTarget_Boot();      // TARGET INTELLIGENCE ∞
-   UltraAdaptive_Boot();    // PHASE 17 — ADAPTIVE INTELLIGENCE ∞
+   UltraAdaptive_Boot();    // PHASE 18 — ADAPTIVE FINAL EVOLUTION ∞
    UltraTradeGate_Boot();   // HARD GATE — any fail = NO TRADE
    UltraMod_Boot();         // MODULE MANAGER — Final Master Audit registry
    UltraBT_Boot();          // BACKTEST COMPATIBILITY ∞ — Tester/Demo/Live
@@ -94,13 +94,15 @@ int OnInit()
          " MinRR=", DoubleToString(UltraTargetMinRR1, 1), "/",
          DoubleToString(UltraTargetMinRR2, 1), "/",
          DoubleToString(UltraTargetMinRR3, 1));
-   Print("ADAPTIVE INTEL ∞: Enabled=", UltraYN(UltraAdaptiveEnabled),
+   Print("ADAPTIVE INTEL ∞ FINAL: Enabled=", UltraYN(UltraAdaptiveEnabled),
          " Conf=", UltraYN(UltraAdaptiveConfEnabled),
          " Risk=", UltraYN(UltraAdaptiveRiskEnabled),
-         " Exec=", UltraYN(UltraAdaptiveExecEnabled),
-         " Target=", UltraYN(UltraAdaptiveTargetEnabled),
-         " Analytics=", UltraYN(UltraAdaptiveAnalyticsEnabled),
-         " Learn=STAT_ONLY");
+         " Pos=", UltraYN(UltraAdaptivePosEnabled),
+         " Exit=", UltraYN(UltraAdaptiveExitEnabled),
+         " Reanalyze=", UltraYN(UltraAdaptiveReanalyzeEnabled),
+         " SelfReview=", UltraYN(UltraAdaptiveSelfReviewEnabled),
+         " Learn=STAT_ONLY NO_MORE_ENGINES");
+   Print("ONE DECISION PATH: MarketIntel→Signal→Thesis→Risk→Exec→Adaptive→Mission→BUY/SELL/WAIT");
    Print("TRADE GATE: Enabled=", UltraYN(UltraTradeGateEnabled),
          " RequireTargets=", UltraYN(UltraTradeGateRequireTargets),
          " — ANY validation fail = NO TRADE");
@@ -119,9 +121,9 @@ int OnInit()
             ") — change the chart timeframe to change trading TF, or set EntryTF input");
    }
    Print("HITMAN MASTER BLUEPRINT: modules 00-40 + UFSE v1.0 + DEFENSE LINE v1.0 | HITMAN AI live path");
-   Print("ONE DECISION PATH: Market→Analysis→Thesis→Confidence→ExecQuality→Adaptive→Mission→Execute");
    Print("ONE STRATEGY: UFSE only | MissionOnlyExits=", UltraYN(UltraMissionOnlyExits),
          " | PositionClose sole owner=MissionControl");
+   Print("FINAL DEVELOPMENT RULE: no new engines/strategies/features — refine + validate only");
    Print("POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
          " L3Close=", UltraYN(UltraPosEvoCloseOnL3),
          " L3Bars=", UltraPosEvoL3ConfirmBars,
@@ -959,12 +961,13 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
    ReportSignalOutcome(trans.position, profit >= 0, profit);
    RecordStrategyPerformance(trans.position, profit >= 0);
 
-   // PHASE 17 — Adaptive Intelligence analytics (statistical learning only)
+   // PHASE 18 — Adaptive Final Evolution analytics (statistical learning only)
    {
       string exitWhy = HistoryDealGetString(trans.deal, DEAL_COMMENT);
       if(StringLen(exitWhy) == 0)
          exitWhy = (profit >= 0.0) ? "CLOSE_WIN" : "CLOSE_LOSS";
-      UltraAdaptive_RecordClose(trans.position, profit, exitWhy);
+      double exitPx = HistoryDealGetDouble(trans.deal, DEAL_PRICE);
+      UltraAdaptive_RecordClose(trans.position, profit, exitWhy, exitPx);
    }
 }
 
@@ -1017,6 +1020,9 @@ void RunTradingCycle(string symbol)
          return;
       }
    }
+
+   // PHASE 18 — continuous adaptive re-analysis (soft; never changes strategy)
+   UltraAdaptive_OnTick(symbol);
 
    ManageOpenTrades();
 
