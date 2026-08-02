@@ -70,6 +70,7 @@ int OnInit()
    UltraVChain_Boot();      // VALIDATION CHAIN — VALID/INVALID/WAIT
    UltraNewsExec_Boot();    // NEWS EXECUTION INTELLIGENCE ∞
    UltraTarget_Boot();      // TARGET INTELLIGENCE ∞
+   UltraTradeGate_Boot();   // HARD GATE — any fail = NO TRADE
    UltraOpt_OnTickStart();
    UltraMission_Init();
    Print("VALIDATION CHAIN: Enabled=", UltraYN(UltraVChainEnabled),
@@ -85,6 +86,9 @@ int OnInit()
          " MinRR=", DoubleToString(UltraTargetMinRR1, 1), "/",
          DoubleToString(UltraTargetMinRR2, 1), "/",
          DoubleToString(UltraTargetMinRR3, 1));
+   Print("TRADE GATE: Enabled=", UltraYN(UltraTradeGateEnabled),
+         " RequireTargets=", UltraYN(UltraTradeGateRequireTargets),
+         " — ANY validation fail = NO TRADE");
    Print("FOUNDATION ENGINE: Enabled=", UltraYN(UltraFoundationEnabled),
          " HealthTick=", UltraYN(UltraFoundationHealthTick),
          " Status=", g_UltraFoundation.status,
@@ -3085,7 +3089,7 @@ bool ExecuteBuy()
          if(EnableVerboseLogging || UltraTargetLog)
             Print("TARGET BUY applied: ", tWhy);
       }
-      else if(UltraTargetStrict)
+      else if(UltraTargetStrict || (UltraTradeGateEnabled && UltraTradeGateRequireTargets))
       {
          Print("TARGET blocked BUY — no validated targets: ", tWhy);
          return false;
@@ -3129,6 +3133,17 @@ bool ExecuteBuy()
                               actualSLDistance * TP3_RR_Ratio, tp2Price, tp3Price);
       }
       CheckTradeStops(ask, sl, tp); // re-validate the adjusted tp against broker minimums too
+   }
+
+   // HARD TRADE GATE — Entry/SL/TP1/TP2/TP3/Risk/Exec/Thesis/Mission
+   // ANY fail → NO TRADE
+   {
+      string gateWhy = "";
+      if(!UltraTradeGate_Validate(BrokerSymbol, true, ask, sl, tp1Price, tp2Price, tp3Price, gateWhy))
+      {
+         Print(gateWhy, " on ", BrokerSymbol);
+         return false;
+      }
    }
 
    double lot = CalculateLotSize(actualSLDistance);
@@ -3430,7 +3445,7 @@ bool ExecuteSell()
          if(EnableVerboseLogging || UltraTargetLog)
             Print("TARGET SELL applied: ", tWhy);
       }
-      else if(UltraTargetStrict)
+      else if(UltraTargetStrict || (UltraTradeGateEnabled && UltraTradeGateRequireTargets))
       {
          Print("TARGET blocked SELL — no validated targets: ", tWhy);
          return false;
@@ -3466,6 +3481,17 @@ bool ExecuteSell()
                               actualSLDistance * TP3_RR_Ratio, tp2Price, tp3Price);
       }
       CheckTradeStops(bid, sl, tp);
+   }
+
+   // HARD TRADE GATE — Entry/SL/TP1/TP2/TP3/Risk/Exec/Thesis/Mission
+   // ANY fail → NO TRADE
+   {
+      string gateWhy = "";
+      if(!UltraTradeGate_Validate(BrokerSymbol, false, bid, sl, tp1Price, tp2Price, tp3Price, gateWhy))
+      {
+         Print(gateWhy, " on ", BrokerSymbol);
+         return false;
+      }
    }
 
    double lot = CalculateLotSize(actualSLDistance);

@@ -152,6 +152,11 @@ input double UltraTargetTP1MaxRR         = 2.00;   // TP1 conservative cap (R)
 input int    UltraTargetTP3MinConf       = 62;     // min confidence to arm TP3
 input int    UltraTargetTP3MinTrend      = 60;     // min trend strength to arm TP3
 
+input group "31 · ULTRA TRADE GATE (ANY FAIL = NO TRADE)"
+input bool   UltraTradeGateEnabled       = true;   // hard pre-trade validation
+input bool   UltraTradeGateLog           = true;   // TRADE_GATE PASS/FAIL logs
+input bool   UltraTradeGateRequireTargets= true;   // Target Intelligence plan mandatory
+
 input group "31 · EXECUTION INPUTS"
 input bool   UltraExecQualityEnabled     = true;
 input ENUM_TIMEFRAMES UltraTF_Bias       = PERIOD_H4;

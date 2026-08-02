@@ -1,0 +1,25 @@
+══════════════════════════════════════════════════════════════════════
+ULTRA TRADE GATE — ANY FAIL = NO TRADE
+BUILD: HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen=3
+══════════════════════════════════════════════════════════════════════
+
+Every BUY or SELL must pass ALL of:
+
+✓ Entry Validation
+✓ Stop Loss Validation
+✓ TP1 Validation
+✓ TP2 Validation
+✓ TP3 Validation
+✓ Risk Validation
+✓ Execution Validation
+✓ Trade Thesis Validation
+✓ Mission Control Approval
+
+If ANY validation fails → NO TRADE.
+
+Wired into ExecuteBuy / ExecuteSell after final SL/TP levels
+are computed (Target Intelligence + broker stop checks).
+
+FILE
+MQL5/Include/HITMAN_ULTRA/UltraTradeGate.mqh
+══════════════════════════════════════════════════════════════════════

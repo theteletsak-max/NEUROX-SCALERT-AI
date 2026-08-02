@@ -52,6 +52,11 @@ int               g_UltraPosLockN = 0;
 datetime          g_UltraMissionCycleBar = 0;
 bool              g_UltraMissionClosedThisCycle = false;
 bool              g_UltraMissionOpenedThisCycle = false;
+// Sticky entry approval — survives PositionCommand overwriting g_UltraMissionLast
+bool              g_UltraMissionEntryOK = false;
+bool              g_UltraMissionEntryBuy = false;
+string            g_UltraMissionEntryTag = "";
+datetime          g_UltraMissionEntryTs = 0;
 
 //--------------------------------------------------------------------//
 void UltraMission_Init()
@@ -68,6 +73,10 @@ void UltraMission_Init()
    g_UltraMissionCycleBar = 0;
    g_UltraMissionClosedThisCycle = false;
    g_UltraMissionOpenedThisCycle = false;
+   g_UltraMissionEntryOK = false;
+   g_UltraMissionEntryBuy = false;
+   g_UltraMissionEntryTag = "";
+   g_UltraMissionEntryTs = 0;
 }
 
 void UltraMission_NewCycle(const string s)
@@ -433,10 +442,15 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
                        g_UltraSupremeLast.tradeScore, g_UltraSupremeLast.grade,
                        g_UltraSupremeLast.thesis, 0);
       UltraMission_Log(UltraMission_Name(c), 0, g_UltraSupremeLast.reason);
+      g_UltraMissionEntryOK = true;
+      g_UltraMissionEntryBuy = sig.buy;
+      g_UltraMissionEntryTag = sig.tag;
+      g_UltraMissionEntryTs = TimeCurrent();
    }
    else
    {
       UltraMission_Set(SUP_WAIT, why, u.score.confidence, u.score.confidence, "IGNORE", "", 0);
+      g_UltraMissionEntryOK = false;
    }
    return ok;
 }

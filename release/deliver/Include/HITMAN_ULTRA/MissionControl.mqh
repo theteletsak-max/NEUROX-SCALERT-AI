@@ -52,6 +52,11 @@ int               g_UltraPosLockN = 0;
 datetime          g_UltraMissionCycleBar = 0;
 bool              g_UltraMissionClosedThisCycle = false;
 bool              g_UltraMissionOpenedThisCycle = false;
+// Sticky entry approval — survives PositionCommand overwriting g_UltraMissionLast
+bool              g_UltraMissionEntryOK = false;
+bool              g_UltraMissionEntryBuy = false;
+string            g_UltraMissionEntryTag = "";
+datetime          g_UltraMissionEntryTs = 0;
 
 //--------------------------------------------------------------------//
 void UltraMission_Init()
