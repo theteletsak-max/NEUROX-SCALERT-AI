@@ -120,6 +120,7 @@ string UltraDashboardText(const string s)
    t += "\n"; t += UltraNewsExec_Dashboard();
    t += "\n"; t += UltraTarget_Dashboard();
    t += "\n"; t += UltraTradeGate_Dashboard();
+   t += "\n"; t += UltraMod_Dashboard();
    t += "\nEvent: "; t += u.ctx.eventClass;
    t += " phase="; t += u.ctx.newsPhase;
    t += " conf="; t += IntegerToString(u.ctx.eventConfidence);
