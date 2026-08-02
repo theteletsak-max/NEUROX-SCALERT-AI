@@ -136,6 +136,22 @@ input int    UltraNewsExecReanalyzeMs    = 0;      // 0 = every event decision r
 input int    UltraNewsExecMinConf        = 55;     // confidence floor during news (never reduced)
 input double UltraNewsExecHighVolRel     = 1.45;   // high-volatility news-mode trigger
 
+input group "31 · ULTRA TARGET INTELLIGENCE ENGINE ∞"
+input bool   UltraTargetEnabled          = true;   // institutional TP/SL intelligence
+input bool   UltraTargetLog              = true;   // log every target reason
+input bool   UltraTargetStrict           = false;  // true = block trade if target build fails
+input bool   UltraTargetEnableTP3        = true;   // arm TP3 only when thesis exceptional
+input double UltraTargetSLATR            = 2.0;    // ATR multiplier for stop floor
+input double UltraTargetMinSLATR         = 0.60;   // min structure SL distance (ATR)
+input double UltraTargetMaxSLATR         = 3.50;   // max structure SL distance (ATR)
+input double UltraTargetStructBufferATR  = 0.10;   // buffer beyond structure
+input double UltraTargetMinRR1           = 1.50;   // TP1 minimum R:R floor
+input double UltraTargetMinRR2           = 2.50;   // TP2 minimum R:R floor
+input double UltraTargetMinRR3           = 4.00;   // TP3 minimum R:R floor
+input double UltraTargetTP1MaxRR         = 2.00;   // TP1 conservative cap (R)
+input int    UltraTargetTP3MinConf       = 62;     // min confidence to arm TP3
+input int    UltraTargetTP3MinTrend      = 60;     // min trend strength to arm TP3
+
 input group "31 · EXECUTION INPUTS"
 input bool   UltraExecQualityEnabled     = true;
 input ENUM_TIMEFRAMES UltraTF_Bias       = PERIOD_H4;

@@ -69,6 +69,7 @@ int OnInit()
    UltraMarketIntel_Boot(); // PHASE 2 — verified market data gate
    UltraVChain_Boot();      // VALIDATION CHAIN — VALID/INVALID/WAIT
    UltraNewsExec_Boot();    // NEWS EXECUTION INTELLIGENCE ∞
+   UltraTarget_Boot();      // TARGET INTELLIGENCE ∞
    UltraOpt_OnTickStart();
    UltraMission_Init();
    Print("VALIDATION CHAIN: Enabled=", UltraYN(UltraVChainEnabled),
@@ -78,6 +79,12 @@ int OnInit()
          " InstantPath=", UltraYN(UltraNewsExecInstantPath),
          " ForceReanalyze=", UltraYN(UltraNewsExecForceReanalyze),
          " MinConf=", UltraNewsExecMinConf);
+   Print("TARGET INTEL ∞: Enabled=", UltraYN(UltraTargetEnabled),
+         " Strict=", UltraYN(UltraTargetStrict),
+         " TP3=", UltraYN(UltraTargetEnableTP3),
+         " MinRR=", DoubleToString(UltraTargetMinRR1, 1), "/",
+         DoubleToString(UltraTargetMinRR2, 1), "/",
+         DoubleToString(UltraTargetMinRR3, 1));
    Print("FOUNDATION ENGINE: Enabled=", UltraYN(UltraFoundationEnabled),
          " HealthTick=", UltraYN(UltraFoundationHealthTick),
          " Status=", g_UltraFoundation.status,
@@ -3062,6 +3069,29 @@ bool ExecuteBuy()
    // Far broker TP (TP3) so ladder is not cut short by a full close at TP2
    tp = InitialBrokerTP(true, ask, tp2Distance, tp3Distance, tp2Price, tp3Price);
 
+   // ULTRA TARGET INTELLIGENCE ∞ — every TP must have a validated reason
+   bool targetAppliedBuy = false;
+   if(UltraTargetEnabled)
+   {
+      string tWhy = "";
+      double tSL = sl, t1 = tp1Price, t2 = tp2Price, t3 = tp3Price;
+      double d0 = slDistance, d1 = tp1Distance, d2 = tp2Distance, d3 = tp3Distance;
+      if(UltraTarget_Apply(BrokerSymbol, true, ask, tSL, t1, t2, t3, d0, d1, d2, d3, tWhy))
+      {
+         sl = tSL; tp1Price = t1; tp2Price = t2; tp3Price = t3;
+         slDistance = d0; tp1Distance = d1; tp2Distance = d2; tp3Distance = d3;
+         tp = InitialBrokerTP(true, ask, tp2Distance, tp3Distance, tp2Price, tp3Price);
+         targetAppliedBuy = true;
+         if(EnableVerboseLogging || UltraTargetLog)
+            Print("TARGET BUY applied: ", tWhy);
+      }
+      else if(UltraTargetStrict)
+      {
+         Print("TARGET blocked BUY — no validated targets: ", tWhy);
+         return false;
+      }
+   }
+
    if(!CheckTradeStops(ask,sl,tp))
    {
       Print("Failed to validate BUY stops.");
@@ -3080,11 +3110,24 @@ bool ExecuteBuy()
 
    if(MathAbs(actualSLDistance - slDistance) > SymbolInfoDouble(BrokerSymbol, SYMBOL_POINT))
    {
-      tp1Price = ask + actualSLDistance * TP1_RR_Ratio;
-      tp2Price = ask + actualSLDistance * TP2_RR_Ratio;
-      tp3Price = ask + actualSLDistance * TP3_RR_Ratio;
-      tp = InitialBrokerTP(true, ask, actualSLDistance * TP2_RR_Ratio,
-                          actualSLDistance * TP3_RR_Ratio, tp2Price, tp3Price);
+      if(targetAppliedBuy && g_UltraTargetLast.valid && g_UltraTargetLast.rr1 > 0.0)
+      {
+         // Preserve validated R:R from Target Intelligence (not fixed ratios)
+         tp1Price = ask + actualSLDistance * g_UltraTargetLast.rr1;
+         tp2Price = ask + actualSLDistance * g_UltraTargetLast.rr2;
+         tp3Price = ask + actualSLDistance * MathMax(g_UltraTargetLast.rr3, g_UltraTargetLast.rr2);
+         tp = InitialBrokerTP(true, ask, actualSLDistance * g_UltraTargetLast.rr2,
+                              actualSLDistance * MathMax(g_UltraTargetLast.rr3, g_UltraTargetLast.rr2),
+                              tp2Price, tp3Price);
+      }
+      else
+      {
+         tp1Price = ask + actualSLDistance * TP1_RR_Ratio;
+         tp2Price = ask + actualSLDistance * TP2_RR_Ratio;
+         tp3Price = ask + actualSLDistance * TP3_RR_Ratio;
+         tp = InitialBrokerTP(true, ask, actualSLDistance * TP2_RR_Ratio,
+                              actualSLDistance * TP3_RR_Ratio, tp2Price, tp3Price);
+      }
       CheckTradeStops(ask, sl, tp); // re-validate the adjusted tp against broker minimums too
    }
 
@@ -3371,6 +3414,29 @@ bool ExecuteSell()
    tp3Price = bid - tp3Distance;
    tp = InitialBrokerTP(false, bid, tp2Distance, tp3Distance, tp2Price, tp3Price);
 
+   // ULTRA TARGET INTELLIGENCE ∞ — every TP must have a validated reason
+   bool targetAppliedSell = false;
+   if(UltraTargetEnabled)
+   {
+      string tWhy = "";
+      double tSL = sl, t1 = tp1Price, t2 = tp2Price, t3 = tp3Price;
+      double d0 = slDistance, d1 = tp1Distance, d2 = tp2Distance, d3 = tp3Distance;
+      if(UltraTarget_Apply(BrokerSymbol, false, bid, tSL, t1, t2, t3, d0, d1, d2, d3, tWhy))
+      {
+         sl = tSL; tp1Price = t1; tp2Price = t2; tp3Price = t3;
+         slDistance = d0; tp1Distance = d1; tp2Distance = d2; tp3Distance = d3;
+         tp = InitialBrokerTP(false, bid, tp2Distance, tp3Distance, tp2Price, tp3Price);
+         targetAppliedSell = true;
+         if(EnableVerboseLogging || UltraTargetLog)
+            Print("TARGET SELL applied: ", tWhy);
+      }
+      else if(UltraTargetStrict)
+      {
+         Print("TARGET blocked SELL — no validated targets: ", tWhy);
+         return false;
+      }
+   }
+
    if(!CheckTradeStops(bid,sl,tp))
    {
       Print("Failed to validate SELL stops.");
@@ -3382,11 +3448,23 @@ bool ExecuteSell()
 
    if(MathAbs(actualSLDistance - slDistance) > SymbolInfoDouble(BrokerSymbol, SYMBOL_POINT))
    {
-      tp1Price = bid - actualSLDistance * TP1_RR_Ratio;
-      tp2Price = bid - actualSLDistance * TP2_RR_Ratio;
-      tp3Price = bid - actualSLDistance * TP3_RR_Ratio;
-      tp = InitialBrokerTP(false, bid, actualSLDistance * TP2_RR_Ratio,
-                          actualSLDistance * TP3_RR_Ratio, tp2Price, tp3Price);
+      if(targetAppliedSell && g_UltraTargetLast.valid && g_UltraTargetLast.rr1 > 0.0)
+      {
+         tp1Price = bid - actualSLDistance * g_UltraTargetLast.rr1;
+         tp2Price = bid - actualSLDistance * g_UltraTargetLast.rr2;
+         tp3Price = bid - actualSLDistance * MathMax(g_UltraTargetLast.rr3, g_UltraTargetLast.rr2);
+         tp = InitialBrokerTP(false, bid, actualSLDistance * g_UltraTargetLast.rr2,
+                              actualSLDistance * MathMax(g_UltraTargetLast.rr3, g_UltraTargetLast.rr2),
+                              tp2Price, tp3Price);
+      }
+      else
+      {
+         tp1Price = bid - actualSLDistance * TP1_RR_Ratio;
+         tp2Price = bid - actualSLDistance * TP2_RR_Ratio;
+         tp3Price = bid - actualSLDistance * TP3_RR_Ratio;
+         tp = InitialBrokerTP(false, bid, actualSLDistance * TP2_RR_Ratio,
+                              actualSLDistance * TP3_RR_Ratio, tp2Price, tp3Price);
+      }
       CheckTradeStops(bid, sl, tp);
    }
 
