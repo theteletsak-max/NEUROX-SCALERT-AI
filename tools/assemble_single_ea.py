@@ -26,6 +26,7 @@ order = [
     "UltraNewsExecution.mqh",
     "UltraTargetIntelligence.mqh",
     "UltraAdaptiveIntelligence.mqh",
+    "35_SignalEngine.mqh",
     "MissionControl.mqh",
     "UltraBugElimination.mqh",
     "UltraStopEvolution.mqh",
@@ -39,7 +40,7 @@ order = [
     "21_TradeManagement.mqh","22_MultiSymbol.mqh",
     "25_Statistics.mqh","37_Optimization.mqh","24_Dashboard.mqh",
     "32_BrokerCompatibility.mqh","36_BrokerHealth.mqh","33_OrderManagement.mqh",
-    "34_PositionManagement.mqh","35_SignalEngine.mqh",
+    "34_PositionManagement.mqh",
     "38_Backtesting.mqh","40_DebugTools.mqh",
     "Shell_B_TradeSystem.mqh",
 ]

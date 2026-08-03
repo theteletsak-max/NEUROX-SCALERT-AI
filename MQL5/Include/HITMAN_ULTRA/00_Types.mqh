@@ -237,6 +237,17 @@ struct UltraSnap
    bool buyBias, sellBias;
 };
 
+enum ENUM_ULTRA_SIGNAL_LIFE
+{
+   USIG_NONE = 0,
+   USIG_CREATED,
+   USIG_VALIDATED,
+   USIG_MISSION,
+   USIG_EXECUTED,
+   USIG_REJECTED,
+   USIG_ARCHIVED
+};
+
 struct UltraSignal
 {
    bool buy, sell;
@@ -244,6 +255,16 @@ struct UltraSignal
    string tag;
    string reason;
    string explanation; // Master Blueprint explainable decision text
+   // MASTER SPEC CHAPTER 4 — Signal Intelligence outputs (never executes)
+   string candidate;          // BUY_CANDIDATE | SELL_CANDIDATE | WAIT
+   int    confidence;         // sole EA confidence 0..100 (mirrors u.score.confidence)
+   int    quality;            // composite signal quality 0..100
+   int    strength;           // 0..100
+   int    stability;          // 0..100
+   int    reliability;        // 0..100
+   int    consistency;        // 0..100
+   ENUM_ULTRA_SIGNAL_LIFE life;
+   string lifeName;           // CREATED|VALIDATED|MISSION|EXECUTED|REJECTED|ARCHIVED
 };
 
 UltraCoreState g_UltraCore;

@@ -23,6 +23,7 @@ PHASE 3  — PROPRIETARY STRATEGY ENGINE
 PHASE 4  — SIGNAL INTELLIGENCE ENGINE
   BUY/SELL detect · Validate · False-signal cut · Duplicate prevention
   Aging · Priority · Confidence · Final Signal
+  MASTER SPEC CHAPTER 4 — candidates only (never executes)
 
 PHASE 5  — NEWS INTELLIGENCE ENGINE
   Event detect/classify/awareness · Ultra News Mode

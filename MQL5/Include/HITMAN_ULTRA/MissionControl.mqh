@@ -483,6 +483,8 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
       g_UltraMissionEntryBuy = sig.buy;
       g_UltraMissionEntryTag = sig.tag;
       g_UltraMissionEntryTs = TimeCurrent();
+      // CHAPTER 4 lifecycle — Mission accepted candidate (Signal never executes)
+      UltraSignalIntel_MarkMission(sig);
    }
    else
    {

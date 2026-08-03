@@ -51,7 +51,6 @@
 #include "36_BrokerHealth.mqh"
 #include "33_OrderManagement.mqh"
 #include "34_PositionManagement.mqh"
-#include "35_SignalEngine.mqh"
 #include "38_Backtesting.mqh"
 #include "40_DebugTools.mqh"
 

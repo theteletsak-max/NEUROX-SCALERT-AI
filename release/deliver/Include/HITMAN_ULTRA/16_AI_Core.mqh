@@ -185,6 +185,9 @@ UltraSignal UltraPickBest(const UltraSnap &u)
    // PERF — one confluence calculation for all strategy evaluators
    UltraSignal best; best.buy = best.sell = false; best.score = -1; best.tag = "NONE";
    best.reason = "no setup"; best.explanation = "";
+   best.candidate = "WAIT"; best.confidence = 0; best.quality = 0;
+   best.strength = best.stability = best.reliability = best.consistency = 0;
+   best.life = USIG_NONE; best.lifeName = "NONE";
    int sb = UltraConfluenceBuy(u);
    int ss = UltraConfluenceSell(u);
    if(UltraPerfCacheConfluence)

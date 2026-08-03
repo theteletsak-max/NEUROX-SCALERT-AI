@@ -554,7 +554,7 @@ string UltraUFSE_Stats(const string s)
 bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
 {
    why = "";
-   sig.buy = sig.sell = false; sig.tag = "NONE"; sig.reason = ""; sig.score = 0; sig.explanation = "";
+   UltraSignalIntel_Clear(sig);
 
    if(UltraPerfOneAnalysisPerCycle)
       UltraLL_NoteAnalysis();
@@ -727,6 +727,17 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       }
    }
 
+   // MASTER SPEC CHAPTER 4 — Signal Intelligence finalize (never executes)
+   // Outputs: BUY_CANDIDATE | SELL_CANDIDATE | WAIT · one confidence · quality
+   {
+      string sigWhy = "";
+      if(!UltraSignalIntel_Finalize(s, u, sig, sigWhy))
+      {
+         why = sigWhy;
+         return false;
+      }
+   }
+
    // ULTRA X — LEVEL 8 MISSION CONTROL (sole entry authority)
    // ULTRA SIGNAL — Route Immediately → One Decision
    if(UltraUpgradeEnabled && UltraSupremeEnabled)
@@ -737,10 +748,13 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       string supWhy = "";
       if(!UltraMission_ApproveEntry(s, u, sig, supWhy))
       {
+         UltraSignalIntel_MarkRejected(sig, (StringLen(supWhy) > 0) ? supWhy : "MISSION WAIT");
+         UltraSignalIntel_Archive(sig);
          if(StringLen(supWhy) > 0) why = supWhy;
          else why = "MISSION WAIT";
          return false;
       }
+      // lifecycle MISSION set inside UltraMission_ApproveEntry
       UltraLL_SetPipelineStage(1); // Signal Confirmed
    }
    return true;
@@ -784,6 +798,11 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       else
          leanBuy = (UltraConfluenceBuy(snap) >= UltraConfluenceSell(snap));
       best.explanation = UltraUFSE_DebugExplain(snap, leanBuy, false);
+      // CHAPTER 4 lifecycle — archive WAIT/reject (avoid double-count if Finalize already rejected)
+      if(best.life != USIG_REJECTED && best.life != USIG_ARCHIVED)
+         UltraSignalIntel_MarkRejected(best, why);
+      if(best.life != USIG_ARCHIVED)
+         UltraSignalIntel_Archive(best);
       g_UltraLastSignal = best;
       // PHASE A — only Mission Control emits decision-level WAIT
       if(UltraPhaseA_MissionSoleAuthority)

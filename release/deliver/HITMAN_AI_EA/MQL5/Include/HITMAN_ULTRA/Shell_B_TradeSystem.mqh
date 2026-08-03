@@ -69,6 +69,7 @@ int OnInit()
    UltraEvent_OnBoot();
    UltraMarketIntel_Boot(); // P02 Market Intelligence
    UltraVChain_Boot();      // supporting validation (feeds Mission/Risk)
+   UltraSignalIntel_Boot(); // P04 Signal Intelligence (never executes)
    UltraNewsExec_Boot();    // P05 News Intelligence (+ Phase 23 protocol)
    UltraTarget_Boot();      // P09 Target Intelligence
    UltraAdaptive_Boot();    // P12 Performance Analytics (soft adaptive)
@@ -3547,6 +3548,8 @@ bool ExecuteBuy()
       UltraLL_SetExecTicket(posTicket, true, g_PendingStrategyTag);
       UltraLL_SetPipelineStage(7); // Protection Activated (state registered)
       UltraLL_MarkTimeWait(false);
+      UltraSignalIntel_MarkExecuted(g_UltraLastSignal);
+      UltraSignalIntel_Archive(g_UltraLastSignal);
       UltraLogDecision("EXEC_OK", posTicket, "BUY", g_PendingStrategyTag,
                        g_UltraLastSnap.score.confidence, g_UltraUSM2Last.tradeScore,
                        "THESIS", g_UltraLastSnap.ctx.newsPhase,
@@ -3632,6 +3635,8 @@ bool ExecuteBuy()
          UltraLL_SetExecTicket(newTicket, true, g_PendingStrategyTag);
          UltraLL_SetPipelineStage(7);
          UltraLL_MarkTimeWait(false);
+         UltraSignalIntel_MarkExecuted(g_UltraLastSignal);
+         UltraSignalIntel_Archive(g_UltraLastSignal);
          return true;
       }
    }
@@ -3959,6 +3964,8 @@ bool ExecuteSell()
       UltraLL_SetExecTicket(posTicket, false, g_PendingStrategyTag);
       UltraLL_SetPipelineStage(7);
       UltraLL_MarkTimeWait(false);
+      UltraSignalIntel_MarkExecuted(g_UltraLastSignal);
+      UltraSignalIntel_Archive(g_UltraLastSignal);
       UltraLogDecision("EXEC_OK", posTicket, "SELL", g_PendingStrategyTag,
                        g_UltraLastSnap.score.confidence, g_UltraUSM2Last.tradeScore,
                        "THESIS", g_UltraLastSnap.ctx.newsPhase,
@@ -4034,6 +4041,8 @@ bool ExecuteSell()
          UltraLL_SetExecTicket(newTicket, false, g_PendingStrategyTag);
          UltraLL_SetPipelineStage(7);
          UltraLL_MarkTimeWait(false);
+         UltraSignalIntel_MarkExecuted(g_UltraLastSignal);
+         UltraSignalIntel_Archive(g_UltraLastSignal);
          return true;
       }
    }

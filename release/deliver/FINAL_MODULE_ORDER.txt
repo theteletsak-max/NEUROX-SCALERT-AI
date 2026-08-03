@@ -19,7 +19,10 @@ PHASE 3  — PROPRIETARY STRATEGY ENGINE
   UFSE · TradeThesis · Confluence · USM2 confidence
 
 PHASE 4  — SIGNAL INTELLIGENCE ENGINE
-  UltraPickBest · SignalEvolution · false-signal / duplicate filters
+  UltraPickBest · 35_SignalEngine · SignalEvolution · UFSE filters
+  MASTER SPEC CHAPTER 4 — BUY/SELL candidate / WAIT only
+  Outputs: candidate · one confidence · quality · lifecycle
+  LOCK: never executes · never manages · never controls risk
 
 PHASE 5  — NEWS INTELLIGENCE ENGINE
   UltraNewsExecution · 18_NewsIntelligence · 39_EventEngine

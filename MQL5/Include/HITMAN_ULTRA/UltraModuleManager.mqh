@@ -82,9 +82,17 @@ void UltraMod_Refresh()
    UltraMod_Reg("P03_PROP_STRATEGY", true, UltraFastSignalEnabled, UltraFastSignalEnabled,
                 "UFSE+Thesis sole strategy");
 
-   // PHASE 4 — Signal Intelligence
-   UltraMod_Reg("P04_SIGNAL_INTEL", true, UltraFastSignalEnabled, UltraFastSignalEnabled,
-                "BUY/SELL validate+filter");
+   // PHASE 4 — Signal Intelligence (Chapter 4 — never executes)
+   bool sigOK = UltraFastSignalEnabled;
+   string sigDetail = g_UltraSignalIntel.lastCandidate;
+   if(StringLen(sigDetail) == 0) sigDetail = "WAIT";
+   sigDetail += " ";
+   sigDetail += g_UltraSignalIntel.lastLife;
+   sigDetail += " conf=";
+   sigDetail += IntegerToString(g_UltraSignalIntel.lastConfidence);
+   sigDetail += " Q=";
+   sigDetail += IntegerToString(g_UltraSignalIntel.lastQuality);
+   UltraMod_Reg("P04_SIGNAL_INTEL", true, UltraFastSignalEnabled, sigOK, sigDetail);
 
    // PHASE 5 — News Intelligence
    UltraMod_Reg("P05_NEWS_INTEL", false, UltraNewsExecEnabled, UltraNewsExecEnabled,

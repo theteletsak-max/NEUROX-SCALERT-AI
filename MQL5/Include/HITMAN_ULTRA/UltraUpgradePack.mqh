@@ -14,6 +14,7 @@
 #include "SystemHealth.mqh"
 #include "MasterAIBrain.mqh"
 #include "SupremeCommand.mqh"
+#include "35_SignalEngine.mqh"   // CHAPTER 4 — before Mission (never executes)
 #include "MissionControl.mqh"
 
 #endif
