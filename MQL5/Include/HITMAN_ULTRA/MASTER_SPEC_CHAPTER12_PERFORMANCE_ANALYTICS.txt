@@ -1,0 +1,77 @@
+HITMAN AI — MASTER SPECIFICATION
+CHAPTER 12 — PERFORMANCE ANALYTICS ENGINE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Measure everything · assume nothing.
+  Every decision · trade · result recorded for analysis.
+  NEVER trades · NEVER executes · NEVER modifies the strategy.
+  ONLY measures performance.
+
+============================================================
+1. ANALYTICS CORE
+  Record trades/decisions/results · Calculate stats · Reports
+  API: UltraPerfAnalytics_Boot · Sync · RecordOpen/Close
+       ReportDaily/Weekly/Monthly/Overall · Dashboard
+
+2. TRADE JOURNAL
+  Symbol · TF · entry/exit time · direction · prices · SL/TP
+  Duration · exit reason · confidence · thesis
+  Store: UltraAdaptive open/closed ring (via facade aliases)
+
+3. ENTRY ANALYTICS
+  Entry quality · timing · precision · confidence
+  → entryQuality from Adaptive audit
+
+4. EXIT ANALYTICS
+  Exit timing · precision · quality · reason
+  → exitQuality · ExitIntel close journal
+
+5. STRATEGY ANALYTICS
+  Wins/losses · avg win/loss · PF · RF · expectancy
+  → UltraAdaptiveReview + UltraStats
+
+6. MARKET ANALYTICS
+  Trend · momentum · volatility · liquidity · session · news
+  → buckets + MarketStats()
+
+7. EXECUTION ANALYTICS
+  Success · delay · rejections · recovery · verification
+  → ExecIntel counters + execQuality
+
+8. RISK ANALYTICS
+  Risk/trade · max risk · drawdown · margin · exposure
+  → RiskStats() · Adaptive review DD/RF
+
+9. PERFORMANCE REPORT
+  Daily · Weekly · Monthly · Overall (closed-ring windows)
+
+10. ANALYTICS LOGGER
+  PERF_ANALYTICS JOURNAL_OPEN/CLOSE · ADAPTIVE REC · decisions
+  Nothing discarded from Adaptive journal ring
+
+11. ANALYTICS OUTPUT
+  Performance · Trading · Strategy · Risk · Execution · System stats
+
+============================================================
+RULES
+  ✔ Record every trade/decision/entry/exit/error/recovery
+  ✔ Measure everything · Never hide statistics
+  ✔ Never modify strategy automatically
+  ✔ Soft Adaptive biases remain soft (Risk/Target scale consumers)
+  ✔ Reliable D/W/M/Overall reports
+
+PHILOSOPHY
+  You cannot improve what you do not measure.
+  Analytics informs development — never replaces strategy.
+
+FILES
+  UltraPerfAnalytics.mqh (facade)
+  UltraAdaptiveIntelligence.mqh · 25_Statistics.mqh
+
+LOCKS
+  HITMAN AI · HA_ULTRA_93 · MaxOpen=3 · Mission sole close
+  Final Development Rule — refine only (facade over Adaptive+Stats)
+============================================================
+END OF CHAPTER 12

@@ -129,6 +129,7 @@ string UltraDashboardText(const string s)
    t += "\n"; t += UltraNewsExec_Dashboard();
    t += "\n"; t += UltraTarget_Dashboard();
    t += "\n"; t += UltraAdaptive_Dashboard();
+   t += "\n"; t += UltraPerfAnalytics_Dashboard();
    t += "\n"; t += UltraBug_Dashboard();
    t += "\n"; t += UltraZFR_Dashboard();
    t += "\n"; t += UltraTradeGate_Dashboard();

@@ -63,8 +63,9 @@ PHASE 11 — EXIT INTELLIGENCE ENGINE
 
 PHASE 12 — PERFORMANCE ANALYTICS ENGINE
   Journal · Entry/Exit analysis · Symbol/Session/Event stats
-  Win rate · PF · Drawdown · Expectancy
-  LOCK: Adaptive soft analytics only — never mutates strategy
+  Win rate · PF · Drawdown · Expectancy · D/W/M/Overall reports
+  MASTER SPEC CHAPTER 12 — UltraPerfAnalytics_* facade (measure only)
+  LOCK: NEVER trades · NEVER executes · NEVER modifies strategy
 
 PHASE 13 — LOGGER ENGINE
   Decision · Entry · Exit · Exec · Event · Recovery · Perf · Debug

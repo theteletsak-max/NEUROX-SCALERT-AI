@@ -75,7 +75,8 @@ int OnInit()
    UltraExecIntel_Boot();   // P08 Execution Intelligence (Mission-only execute)
    UltraNewsExec_Boot();    // P05 News Intelligence (+ Phase 23 protocol)
    UltraTarget_Boot();      // P09 Target Intelligence
-   UltraAdaptive_Boot();    // P12 Performance Analytics (soft adaptive)
+   UltraAdaptive_Boot();    // P12 Performance Analytics core (soft adaptive)
+   UltraPerfAnalytics_Boot(); // P12 Chapter 12 measure-only facade
    UltraBug_Boot();         // P19 Maintenance core (Bug Elimination)
    UltraStopEvo_Boot();     // P10 support — Stop Evolution
    UltraMaint_Boot();       // P19 Maintenance orchestrator
@@ -149,14 +150,15 @@ int OnInit()
          DoubleToString(UltraTargetMinRR2, 1), "/",
          DoubleToString(UltraTargetMinRR3, 1),
          " (never executes · never signals · objectives only)");
-   Print("P12 PERF ANALYTICS ∞: Enabled=", UltraYN(UltraAdaptiveEnabled),
+   Print("P12 PERF ANALYTICS (Ch12): Boot=", UltraYN(g_UltraPerfAnalytics.booted),
+         " Enabled=", UltraYN(UltraAdaptiveEnabled),
          " Conf=", UltraYN(UltraAdaptiveConfEnabled),
          " Risk=", UltraYN(UltraAdaptiveRiskEnabled),
          " Pos=", UltraYN(UltraAdaptivePosEnabled),
          " Exit=", UltraYN(UltraAdaptiveExitEnabled),
          " Reanalyze=", UltraYN(UltraAdaptiveReanalyzeEnabled),
          " SelfReview=", UltraYN(UltraAdaptiveSelfReviewEnabled),
-         " Learn=STAT_ONLY NO_MORE_ENGINES");
+         " Learn=STAT_ONLY NEVER_TRADES NEVER_MODIFIES_STRATEGY");
    Print("MAIN FLOW v6+: Foundation→Market→Strategy→Signal→News→Mission→Risk→Exec→Target→PosEvo→Exit→Analytics→Logger→Dashboard→Recovery");
    Print("P07 RISK / TRADE GATE: Enabled=", UltraYN(UltraTradeGateEnabled),
          " RequireTargets=", UltraYN(UltraTradeGateRequireTargets),
@@ -1059,7 +1061,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
       if(StringLen(exitWhy) == 0)
          exitWhy = (profit >= 0.0) ? "CLOSE_WIN" : "CLOSE_LOSS";
       double exitPx = HistoryDealGetDouble(trans.deal, DEAL_PRICE);
-      UltraAdaptive_RecordClose(trans.position, profit, exitWhy, exitPx);
+      UltraPerfAnalytics_RecordClose(trans.position, profit, exitWhy, exitPx);
    }
 }
 

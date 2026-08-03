@@ -192,12 +192,20 @@ void UltraMod_Refresh()
       UltraMod_Reg("P11_EXIT_INTEL", true, true, exitOK, exitDetail);
    }
 
-   // PHASE 12 — Performance Analytics
-   UltraMod_Reg("P12_PERF_ANALYTICS", false, UltraAdaptiveEnabled, UltraAdaptiveEnabled,
-                UltraAdaptiveEnabled
-                ? ("Q=" + IntegerToString(g_UltraAdapt.audit.composite) +
-                   " n=" + IntegerToString(g_UltraAdapt.review.trades))
-                : "OFF");
+   // PHASE 12 — Performance Analytics (Chapter 12 — never trades)
+   {
+      UltraPerfAnalytics_Sync();
+      bool perfOK = g_UltraPerfAnalytics.booted &&
+                    (UltraAdaptiveEnabled || g_UltraPerfAnalytics.status == "OFF");
+      string perfDetail = g_UltraPerfAnalytics.status;
+      perfDetail += " WR=";
+      perfDetail += DoubleToString(g_UltraPerfAnalytics.winRate, 1);
+      perfDetail += "% n=";
+      perfDetail += IntegerToString(g_UltraPerfAnalytics.trades);
+      perfDetail += " Q=";
+      perfDetail += IntegerToString(g_UltraPerfAnalytics.systemQuality);
+      UltraMod_Reg("P12_PERF_ANALYTICS", true, UltraAdaptiveEnabled, perfOK, perfDetail);
+   }
 
    // PHASE 13 — Logger
    UltraMod_Reg("P13_LOGGER", false, UltraLoggingEnabled, true, "OK");

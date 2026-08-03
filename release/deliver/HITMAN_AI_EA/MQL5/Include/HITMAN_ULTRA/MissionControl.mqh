@@ -11,6 +11,9 @@
 // (must match early UltraBacktestCompat forward; defaults only on definition)
 void UltraBug_Explain(const string action, const string module, const string func,
                       const string reason, const string side, const ulong ticket);
+// Chapter 12 Performance Analytics facade (assembled after Exec Intel)
+void UltraPerfAnalytics_RecordOpen(const ulong ticket, const string s,
+                                   const bool isBuy, const string tag);
 
 #define ULTRA_POSLOCK_MAX 64
 
@@ -395,8 +398,8 @@ void UltraMission_NoteOpen(const ulong ticket, const string s, const bool isBuy,
    g_UltraMissionOpenedThisCycle = true;
    UltraPosLock_Register(ticket, s, isBuy, tag);
    UltraMission_Log("OPEN", ticket, tag);
-   // PHASE 17 — analytics open record (strategy unchanged)
-   UltraAdaptive_RecordOpen(ticket, s, isBuy, tag);
+   // CHAPTER 12 — analytics open journal (strategy unchanged · never trades)
+   UltraPerfAnalytics_RecordOpen(ticket, s, isBuy, tag);
 }
 
 // Block new entries if we already closed this cycle (anti flip-flop)

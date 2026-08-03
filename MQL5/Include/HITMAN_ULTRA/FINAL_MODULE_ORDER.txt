@@ -67,8 +67,10 @@ PHASE 11 — EXIT INTELLIGENCE ENGINE
   LOCK: Mission sole PositionClose* · never emotional · never news-alone · every exit has reason
 
 PHASE 12 — PERFORMANCE ANALYTICS ENGINE
-  UltraAdaptiveIntelligence · 25_Statistics
-  LOCK: soft analytics only
+  UltraPerfAnalytics · UltraAdaptiveIntelligence · 25_Statistics
+  MASTER SPEC CHAPTER 12 — journal · entry/exit/strategy/market/exec/risk · reports
+  Outputs: perf/trading/strategy/risk/exec/system stats · D/W/M/Overall reports
+  LOCK: NEVER trades · NEVER executes · NEVER modifies strategy · measure only
 
 PHASE 13 — LOGGER ENGINE
   27_Logger · UltraBug_Explain · decision logs
