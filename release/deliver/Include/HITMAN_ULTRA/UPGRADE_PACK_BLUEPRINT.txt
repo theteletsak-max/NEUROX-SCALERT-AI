@@ -1,0 +1,24 @@
+HITMAN AI — ULTRA UPGRADE PACK (Levels 1-20)
+============================================
+L1  Supreme Command Engine
+L2  Market Memory Engine (29_MarketMemory + thesis notes)
+L3  Signal Evolution Engine
+L4  Ultra Scoring Machine 2.0
+L5  Dynamic Weight Engine
+L6  Signal Stability (TradeEntryDiscipline R3)
+L7  Trade Entry Discipline (existing)
+L8  Instant Execution (Shell_B InstantExecution)
+L9  Broker Adaptation (32_BrokerCompatibility)
+L10 Execution Defense (Defense Line 7)
+L11 Trade Thesis Engine
+L12 Hold Score Engine
+L13 Correction Detector
+L14 Smart Exit Engine
+L15 Self-Diagnostic Engine
+L16 Performance Engine
+L17 System Health Engine
+L18 Dashboard
+L19 Logger
+L20 Final AI Decision (Supreme Command)
+
+Defaults: UltraUpgradeEnabled=true, UltraUpgradeStrict=false (soft InstantQuality)

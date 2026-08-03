@@ -1,0 +1,73 @@
+HITMAN AI — MASTER SPECIFICATION
+CHAPTER 16 — ENVIRONMENT COMPATIBILITY ENGINE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Consistent behaviour across Strategy Tester · Demo · Live.
+  WITHOUT changing Strategy · Risk · Thesis · Mission Control.
+  Only the execution environment adapts.
+
+============================================================
+1. ENVIRONMENT DETECTION
+  Automatic: TESTER · TESTER_VISUAL · OPTIMIZATION · DEMO · CONTEST · LIVE
+  API: UltraEnvIntel_DetectMode · ModeName
+
+2. UNIFIED STRATEGY
+  One Strategy · One Signal · One Mission · One Risk
+  Locks: strategyLocked · riskLocked · thesisLocked · missionLocked
+  executionAdaptationOnly = true (invariant)
+
+3. EXECUTION ADAPTATION
+  Order timing · verification · retry · broker sync
+  NEVER adapt strategy rules
+  Delegates: UltraBT_* · UltraBroker_* · Ch8 Execution
+
+4. DATA VALIDATION
+  Tick · Indicators · History · Symbol specs
+  UltraEnvIntel_ValidateData · UltraBT_Validate*
+
+5. TESTER COMPATIBILITY
+  Every Tick · Real Tick · OHLC — stable via UltraBT_CompatMode
+
+6. LIVE COMPATIBILITY
+  Instant · Market · Exchange — SYMBOL_TRADE_EXEMODE snapshot
+
+7. BROKER COMPATIBILITY
+  Filling · Stops · Freeze · Lot step · Contract · Tick · Margin
+  UltraEnvIntel_RefreshBroker · UltraBroker_Detect
+
+8. SYNCHRONIZATION
+  Orders · Positions · Account · Broker responses
+  UltraEnvIntel_Synchronize · UltraHealth_Update
+
+9. VALIDATION (pre-trade)
+  Strategy Ready · Data Ready · Indicators Ready
+  Environment Ready · Broker Ready
+  UltraEnvIntel_PreTradeReady → UltraBT_PreTradeReady + env checks
+
+10. OUTPUT
+  Environment · Synchronization · Compatibility · Readiness
+  UltraEnvIntel_Dashboard (ENV16)
+
+============================================================
+RULES
+  ✔ One Strategy · Mission · Signal · Risk · Execution · Codebase
+  ✔ Automatic env detection · Automatic broker adaptation
+  ✔ No duplicate / tester-only / live-only strategy logic
+
+PHILOSOPHY
+  Strategy identical in every environment.
+  Only the execution layer adapts.
+
+FILES
+  UltraEnvironmentIntelligence.mqh  (Chapter 16 facade)
+  UltraBacktestCompat.mqh           (tester relaxations)
+  32_BrokerCompatibility.mqh
+  36_BrokerHealth.mqh
+
+LOCKS
+  HITMAN AI · HA_ULTRA_93 · MaxOpen=3 · Mission sole close
+  Final Development Rule — refine only (facade over BT+broker)
+============================================================
+END OF CHAPTER 16

@@ -1,0 +1,75 @@
+HITMAN AI — MASTER SPECIFICATION
+CHAPTER 4 — SIGNAL INTELLIGENCE ENGINE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Transform Strategy Engine output into one clean, high-quality
+  trading signal (BUY Candidate / SELL Candidate / WAIT).
+
+  The Signal Engine NEVER executes trades.
+  It NEVER manages positions.
+  It NEVER controls risk.
+  Mission Control decides whether execution is allowed.
+
+============================================================
+1. SIGNAL CORE
+  Receive: Thesis · Confidence · Trend · Momentum · Vol · Liq
+  Generate: BUY_CANDIDATE | SELL_CANDIDATE | WAIT
+  API: UltraSignalIntel_MarkCreated / UltraSignalIntel_Finalize
+
+2. BUY DETECTION
+  UltraPickBest + UltraSignal_EvalSide(buy)
+  Validate structure · momentum · trend · confidence
+
+3. SELL DETECTION
+  UltraPickBest + UltraSignal_EvalSide(sell)
+  Validate structure · momentum · trend · confidence
+
+4. SIGNAL VALIDATION
+  Thesis · Market Context · Trend · Momentum · Confidence
+  API: UltraSignalIntel_ValidateCore
+
+5. SIGNAL QUALITY
+  Strength · Stability · Reliability · Consistency → quality 0–100
+  API: UltraSignalIntel_ComputeQuality
+
+6. FALSE SIGNAL REDUCTION
+  Weak trend/momentum · poor thesis · low confidence · contradiction
+  API: UltraSignalIntel_FalseReduce (+ UFSE EntryTrigger/SmartFilter)
+
+7. DUPLICATE PREVENTION
+  UltraUFSE_SmartFilter · SignalLock · opposite-block · Mission one/cycle
+
+8. SIGNAL CONFIDENCE
+  One score: UltraSignal.confidence = u.score.confidence (USM2)
+  0–100 only
+
+9. SIGNAL LIFECYCLE
+  CREATED → VALIDATED → MISSION → EXECUTED|REJECTED → ARCHIVED
+  ENUM_ULTRA_SIGNAL_LIFE on UltraSignal
+
+10. SIGNAL OUTPUT (and nothing else)
+  BUY_CANDIDATE | SELL_CANDIDATE | WAIT
+  (+ confidence · quality · lifecycle for sync/dashboard)
+
+============================================================
+RULES
+  ✔ One BUY candidate · one SELL candidate · one confidence · one quality
+  ✔ No duplicate / conflicting signals
+  ✔ No signal execution
+  ✔ Signal Engine NEVER opens or closes trades
+
+LIVE PATH
+  UltraPickBest → filters → UltraSignalIntel_Finalize
+  → MissionControl → Execution Engine (P8)
+
+FILES
+  35_SignalEngine.mqh
+  UFSE_FastSignalEngine.mqh · SignalEvolution.mqh · 16_AI_Core.mqh
+
+LOCKS
+  HITMAN AI · HA_ULTRA_93 · MaxOpen=3 · Mission sole close
+  Final Development Rule — refine only
+============================================================
+END OF CHAPTER 4

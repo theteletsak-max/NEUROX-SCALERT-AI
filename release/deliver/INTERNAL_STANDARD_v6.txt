@@ -1,0 +1,111 @@
+HITMAN AI — INTERNAL STANDARD v6+
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+Canonical architecture for the live EA (Module Manager · OnInit · tick).
+Supersedes prior Final Module Order 1–17 numbering where they diverge.
+Historical Phase 17–23 design notes remain valid as implementation detail.
+
+============================================================
+PHASE 1  — CORE FOUNDATION ENGINE
+  Init · Deinit · Config · Symbol · Timeframe · Resource · Memory
+  Cache · Timer · Health · Integrity · State · Recovery
+
+PHASE 2  — MARKET INTELLIGENCE ENGINE
+  Tick · Candle · Classification · Trend · Momentum · Liquidity
+  Volatility · Spread · Session · Event · MTF · Market Quality
+  MASTER SPEC CHAPTER 2 — read-only unified picture (never trades)
+
+PHASE 3  — PROPRIETARY STRATEGY ENGINE
+  Trend/Structure/Momentum/Liquidity logic · Confluence
+  Trade Thesis · Confidence (USM2) · Signal Scoring · Dynamic Validation
+  MASTER SPEC CHAPTER 3 — candidates only (never executes)
+
+PHASE 4  — SIGNAL INTELLIGENCE ENGINE
+  BUY/SELL detect · Validate · False-signal cut · Duplicate prevention
+  Aging · Priority · Confidence · Final Signal
+  MASTER SPEC CHAPTER 4 — candidates only (never executes)
+
+PHASE 5  — NEWS INTELLIGENCE ENGINE
+  Event detect/classify/awareness · Ultra News Mode
+  High vol/spread/liquidity · Re-analysis · Exec priority
+  LOCK: never force · never news/spread-only hard reject
+
+PHASE 6  — MISSION CONTROL (ONLY FINAL DECISION MAKER)
+  Receives: Market · Strategy · Signal · Risk · News · Execution
+  Returns ONLY: BUY | SELL | WAIT | REPLACE
+  LOCK: sole close authority · Phase A sole WAIT emitter
+
+PHASE 7  — RISK INTELLIGENCE ENGINE
+  Size · Exposure · Margin · Drawdown · Daily Loss
+  Portfolio · Capital Protection · Dynamic Risk · TradeGate
+  MASTER SPEC CHAPTER 7 — protect capital (never signals/executes)
+
+PHASE 8  — EXECUTION ENGINE
+  Instant detect/decision · Order prepare · Exec pipeline
+  Broker compat · Order/Fill verify · Retry · Recovery · Sync
+
+PHASE 9  — TARGET INTELLIGENCE ENGINE
+  Dynamic SL · TP1 · TP2 · TP3 · R:R · Target validation · Evolution
+
+PHASE 10 — POSITION EVOLUTION ENGINE
+  Monitor · Re-analysis · Thesis validation · Stop Evolution
+  Profit protect · Sync · Exit preparation
+
+PHASE 11 — EXIT INTELLIGENCE ENGINE
+  Thesis invalidation · Dynamic exit · Confirm · Verify · Diagnostics
+  LOCK: Mission-only closes
+
+PHASE 12 — PERFORMANCE ANALYTICS ENGINE
+  Journal · Entry/Exit analysis · Symbol/Session/Event stats
+  Win rate · PF · Drawdown · Expectancy
+  LOCK: Adaptive soft analytics only — never mutates strategy
+
+PHASE 13 — LOGGER ENGINE
+  Decision · Entry · Exit · Exec · Event · Recovery · Perf · Debug
+  LOCK: every WAIT / BUY / SELL / Exit / Recovery has a reason
+
+PHASE 14 — DASHBOARD ENGINE
+  Market · Trend · Thesis · Confidence · Signal · News
+  Position · Risk · Execution · System Health
+
+PHASE 15 — ZERO-FAIL RECOVERY ENGINE
+  Indicator · Handle · Buffer · Exec · Position · Connection
+  Sync · Automatic health monitoring
+
+PHASE 16 — BACKTEST COMPATIBILITY ENGINE
+  Tester detect · Historical · Indicator · MTF · News · Exec · Diagnostics
+
+PHASE 17 — LOW-LATENCY ENGINE
+  Cached calcs · One analysis/cycle · No duplicate calcs
+  Optimized indicators/memory/CPU/tick/exec path
+
+PHASE 18 — QUALITY ASSURANCE ENGINE
+  Decision/Signal/Risk/Position consistency
+  Module integrity · State validation · Conflict detection
+  (Thin auditor over live engines — not a new strategy)
+
+PHASE 19 — MAINTENANCE ENGINE
+  Bug detection · Code audit · Stability · Perf · Broker · Version
+  LOCK: maintenance only (Final Development Rule)
+
+============================================================
+MAIN EXECUTION FLOW
+
+OnInit → P1 Foundation → P2 Market → P3 Strategy → P4 Signal
+      → P5 News → P6 Mission → P7 Risk → P8 Execution
+      → P9 Target → P10 PosEvo → P11 Exit → P12 Analytics
+      → P13 Logger → P14 Dashboard → P15 Recovery
+      → P16 BT · P17 Low-Latency · P18 QA · P19 Maintenance
+Every Tick → same living path (Decide inside InstantExecution)
+
+============================================================
+ENGINEERING RULES
+  ✓ One Mission Control · One Final Decision · One Trade Thesis
+  ✓ One Confidence Score · One Final Signal · One Order Request
+  ✓ One Execution Pipeline · One Logger · One Source of Truth
+  ✓ Every WAIT / BUY / SELL / Exit / Recovery has a reason
+
+PRODUCT LOCKS
+  TradeComment=HITMAN AI · BUILD=HA_ULTRA_93 · MaxOpen=3
+  EntryTF=PERIOD_CURRENT · CTrade g_Trade · Mission-only closes

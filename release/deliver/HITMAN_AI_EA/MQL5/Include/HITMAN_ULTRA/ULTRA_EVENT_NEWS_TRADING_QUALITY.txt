@@ -1,0 +1,56 @@
+HITMAN AI ULTRA ∞ — EVENT / NEWS TRADING QUALITY
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Maintain signal quality during high-impact economic events.
+  Execute only validated news setups.
+
+============================================================
+PHASE 1 — ULTRA EVENT DETECTION
+  ✓ Upcoming event     → MQL5 calendar window (g_UltraCal*) + NewsIntel
+  ✓ Event start/end    → beforeNews / duringNews / afterNews
+  ✓ Abnormal volatility→ vol.expansion + UltraNewsExecHighVolRel
+  ✓ Spread expansion   → UltraEventSpreadWarnPts (never auto-reject)
+  ✓ Liquidity changes  → EventEngine liqThin / liqScore
+  API: UltraNewsExec_DetectContext · UltraEngNews · UltraEvent_AssessMarket
+
+PHASE 2 — ULTRA MARKET STABILIZATION (before entry)
+  Analyse: Direction · Speed · Momentum · Volatility · Liquidity · Trend · Thesis
+  API: UltraNewsExec_StabilityOK (combined score; never spread/news alone)
+
+PHASE 3 — ULTRA SIGNAL VALIDATION
+  BUY/SELL → Thesis → Trend → Momentum → Risk → Market/Struct/Liq/MTF/Conf/Exec
+  → Mission Control → BUY/SELL/WAIT
+  API: UltraNewsExec_ValidateSignal → UltraMission_ApproveEntry
+
+PHASE 4 — ULTRA FALSE SIGNAL REDUCTION
+  Reject: weak trend · weak momentum · incomplete thesis · poor risk ·
+          low confidence · conflicting signals (MTF)
+
+PHASE 5 — ULTRA EXECUTION
+  Prepare → Submit Immediately → Verify Fill → Activate Monitoring
+  Packet freshness: UltraNewsExecMaxPacketAgeMs
+  Actual slip: UltraNewsExecLogActualSlippage
+  API: ProtocolPrepare / ProtocolSubmit / NoteFill
+
+PHASE 6 — ULTRA POSITION MANAGEMENT
+  Dynamic SL (Stop Evolution) · TP ladder · continuous re-analysis
+  Thesis monitoring · Exit when thesis invalid (Mission-only close)
+  NEWS_POS_MGMT log while News Mode active
+
+============================================================
+INPUTS
+  UltraNewsExecUseCalendarContext = true
+  UltraNewsExecRequireStability   = true
+  UltraNewsExecMinStabilityScore  = 60
+  UltraNewsExecMaxPacketAgeMs     = 250
+  UltraNewsExecLogActualSlippage  = true
+  UltraNewsExecStrongerOnWeakExec = true
+  (+ Phase 23 NewsExec / EventEngine inputs)
+
+LOCKS
+  Never force trades · never news-only reject · never spread-only reject
+  Never reduce validation under volatility
+  Mission sole close · HITMAN AI · HA_ULTRA_93 · MaxOpen=3
+  Final Development Rule — refine only

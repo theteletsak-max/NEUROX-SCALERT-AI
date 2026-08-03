@@ -1,0 +1,99 @@
+HITMAN AI ULTRA ∞ — FINAL MODULE ORDER
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+Authoritative numbering = INTERNAL STANDARD v6+ (Phases 1–19).
+See INTERNAL_STANDARD_v6.txt for the full checklist.
+
+============================================================
+PHASE 1  — CORE FOUNDATION ENGINE
+  UltraFoundation.mqh (+ 01_Core)
+
+PHASE 2  — MARKET INTELLIGENCE ENGINE
+  UltraMarketIntelligence.mqh (+ tick/candle/MTF/session layers)
+
+PHASE 3  — PROPRIETARY STRATEGY ENGINE
+  UFSE · TradeThesis · Confluence · USM2 confidence
+
+PHASE 4  — SIGNAL INTELLIGENCE ENGINE
+  UltraPickBest · SignalEvolution · false-signal / duplicate filters
+
+PHASE 5  — NEWS INTELLIGENCE ENGINE
+  UltraNewsExecution · 18_NewsIntelligence · 39_EventEngine
+  LOCK: never force · never news/spread-only hard reject
+
+PHASE 6  — MISSION CONTROL (ONLY FINAL DECISION)
+  MissionControl.mqh → BUY | SELL | WAIT | REPLACE
+  LOCK: sole close · Phase A sole WAIT emitter
+
+PHASE 7  — RISK INTELLIGENCE ENGINE
+  20_CapitalProtection · UltraTradeGate · Shell risk path
+
+PHASE 8  — EXECUTION ENGINE
+  Shell_B ExecuteBuy/Sell · 19_Execution · Broker 32/36
+
+PHASE 9  — TARGET INTELLIGENCE ENGINE
+  UltraTargetIntelligence.mqh
+
+PHASE 10 — POSITION EVOLUTION ENGINE
+  PositionEvolution · UltraStopEvolution (profit protect)
+
+PHASE 11 — EXIT INTELLIGENCE ENGINE
+  Mission EXIT · SmartExit · UltraExitValidation
+  LOCK: Mission-only closes
+
+PHASE 12 — PERFORMANCE ANALYTICS ENGINE
+  UltraAdaptiveIntelligence · 25_Statistics
+  LOCK: soft analytics only
+
+PHASE 13 — LOGGER ENGINE
+  27_Logger · UltraBug_Explain · decision logs
+  LOCK: every WAIT has an explicit reason
+
+PHASE 14 — DASHBOARD ENGINE
+  UltraDashboardIntelligence · 24_Dashboard
+  MASTER SPEC CHAPTER 14 — display-only panels · never trades/executes
+
+PHASE 15 — RECOVERY ENGINE
+  UltraRecoveryIntelligence · UltraZeroFailRecovery · 30_Recovery
+  MASTER SPEC CHAPTER 15 — never changes strategy · safe mode blocks entries
+
+PHASE 16 — ENVIRONMENT COMPATIBILITY ENGINE
+  UltraEnvironmentIntelligence · UltraBacktestCompat · BrokerCompat
+  MASTER SPEC CHAPTER 16 — one strategy · exec adapts only
+
+PHASE 17 — LOW-LATENCY & PERFORMANCE ENGINE
+  UltraLowLatencyIntelligence · UltraLowLatency · 37_Optimization
+  MASTER SPEC CHAPTER 17 — never changes strategy · optimize only
+  LOCK: never skips ManageOpenTrades / Mission / Execute on price change
+
+PHASE 18 — QUALITY ASSURANCE ENGINE
+  UltraQualityAssurance.mqh — consistency / integrity / conflict audit
+
+PHASE 19 — MAINTENANCE ENGINE
+  UltraMaintenance.mqh (+ UltraBugElimination)
+  LOCK: maintenance only — Final Development Rule
+
+============================================================
+MAIN EXECUTION FLOW
+
+OnInit()
+  → P1 Foundation → P2 Market Intel
+  → Supporting: VChain · P5 News · P9 Target · P12 Analytics
+  → P19 Maint/Bug · P17 LL · P15 ZFR · P7 TradeGate · Module Mgr
+  → P16 BT · P18 QA · P6 Mission
+
+Every Tick
+  → P1 → P15 monitor → P2 → P17 cadence
+  → P10/P11 ManageOpenTrades (never skipped)
+  → InstantExecution: P3→P4→P5→P6→P7→P8→P9
+  → P12 analytics · P13 logger · P14 dashboard · P18 QA · P19 maint
+
+============================================================
+PRODUCT LOCKS (unchanged)
+  TradeComment = HITMAN AI
+  BUILD_ID     = HA_ULTRA_93
+  MaxOpen      = 3
+  EntryTF      = PERIOD_CURRENT
+  Global       = CTrade g_Trade
+  One strategy · one signal · one thesis · one mission · one exit

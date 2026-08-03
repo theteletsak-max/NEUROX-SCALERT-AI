@@ -1,0 +1,77 @@
+HITMAN AI — MASTER SPECIFICATION
+CHAPTER 17 — LOW-LATENCY & PERFORMANCE ENGINE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Maximum performance · minimize internal processing time.
+  Optimize resource usage · stable under high activity.
+  NEVER changes trading strategy · ONLY optimizes performance.
+
+============================================================
+1. PERFORMANCE CORE
+  Optimize processing · reduce latency · CPU/memory/cache
+  Monitor runtime performance
+  API: UltraLowLatencyIntel_Boot · OnTickStart/End · Sync · Dashboard
+
+2. CPU OPTIMIZATION
+  Processing loops · tick path · indicator reads · buffers · pipeline
+  Proxy: tick latency pressure (cpuStatus)
+
+3. MEMORY OPTIMIZATION
+  Dynamic memory · temps · buffers · arrays · cache
+  Prevent leaks / unnecessary allocations (executor cadence)
+
+4. CACHE OPTIMIZATION
+  Trend · Momentum · Volatility · Liquidity · Thesis · Signal
+  Inputs: UltraPerfOneAnalysisPerCycle · CacheConfluence · ReuseVChain
+  Facade tracks cacheHits / cacheMisses (skip vs analysis)
+
+5. TICK OPTIMIZATION
+  Read required data · reuse cache · necessary calc · update
+  UltraLowLatencyIntel_ShouldEarlySkipEntry → UltraLL_ShouldEarlySkipEntry
+  One analysis per cycle when enabled
+
+6. MODULE SCHEDULING
+  Priority: EXEC > POS > MISSION > STRAT > MKT > DASH > ANAL > LOG
+  Heavy pass (analytics/QA/maint/log) never delays Manage/Exec/Mission
+
+7. RUNTIME MONITOR
+  CPU · Memory · Tick time · Cache · Module · Timer
+  UltraLowLatencyIntel_RefreshMonitors
+
+8. LATENCY MONITOR
+  Decision time · Order prep · Execution confirm
+  NotePrep · NoteConfirm · lastDecisionMs / lastTickMs / avgTickMs
+
+9. PERFORMANCE LOGGER
+  CPU/memory proxies · tick rate · cache hit/miss · slow ops
+  UltraLoggerIntel_LogPerf (SLOW_TICK / BOOT)
+
+10. OUTPUT
+  Runtime · CPU · Memory · Cache · Performance status
+  UltraLowLatencyIntel_Dashboard (LL17)
+
+============================================================
+RULES
+  ✔ One calculation per tick · One cache per value
+  ✔ No duplicate indicator/CopyBuffer reads
+  ✔ Minimal memory/CPU · Efficient scheduling
+  ✔ Continuous monitoring · Stable operation
+  ✔ NEVER skip ManageOpenTrades / Mission / Execute on price change
+
+PHILOSOPHY
+  Efficient internal processing — not forcing faster trades.
+  Optimization must never change proprietary strategy
+  or compromise decision quality.
+
+FILES
+  UltraLowLatencyIntelligence.mqh  (Chapter 17 facade)
+  UltraLowLatency.mqh              (executor)
+  37_Optimization.mqh              (cadence / resource monitor)
+
+LOCKS
+  HITMAN AI · HA_ULTRA_93 · MaxOpen=3 · Mission sole close
+  Final Development Rule — refine only (facade over LL+Opt)
+============================================================
+END OF CHAPTER 17

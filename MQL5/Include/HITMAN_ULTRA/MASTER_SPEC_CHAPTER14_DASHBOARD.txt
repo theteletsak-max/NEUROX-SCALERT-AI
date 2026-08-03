@@ -1,0 +1,83 @@
+HITMAN AI — MASTER SPECIFICATION
+CHAPTER 14 — DASHBOARD ENGINE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Professional real-time interface.
+  Display current state · strategy · market · system health.
+  NEVER trades · NEVER executes · ONLY displays information.
+
+============================================================
+1. DASHBOARD CORE
+  System · Market · Strategy · Position · Risk · Performance · Diagnostics
+  API: UltraDashboardIntel_Boot · ResolveState · Build · Refresh
+       NoteTradeRefresh · NoteErrorRefresh · Dashboard
+
+2. SYSTEM PANEL
+  EA Name/Version · Symbol · Timeframe · Broker
+  Server/Local time · Ping · Connection
+
+3. MARKET PANEL
+  Market state · Trend · Momentum · Volatility · Liquidity
+  Spread · Session · News · Market quality
+
+4. STRATEGY PANEL
+  Trade thesis · Strategy state · Confidence · Signal
+  Entry/Exit status · Decision (Mission)
+
+5. POSITION PANEL
+  Status · Direction · Entry/Current · SL · TP1/2/3
+  Floating P/L · Duration
+
+6. RISK PANEL
+  Risk/trade · Exposure · Free margin · Margin level
+  Daily/Overall drawdown · Position size
+
+7. PERFORMANCE PANEL
+  Trades · Wins/Losses · Win rate · Profit factor
+  Average win/loss · Net profit
+
+8. EXECUTION PANEL
+  Status · Last order · Broker response
+  Last exec time · Verification · Sync
+
+9. SYSTEM HEALTH PANEL
+  CPU/Memory · Cache · Module health
+  Recovery · Logger · Runtime state
+
+10. DASHBOARD STATUS
+  INITIALIZING · READY · SCANNING · VALIDATING
+  EXECUTING · MANAGING POSITION · RECOVERING · ERROR
+
+11. REFRESH
+  Every tick (critical) · Timer (statistics)
+  Immediate after trade · recovery · error
+
+12. OUTPUTS
+  Market · Strategy · Position · Risk · Performance · Diagnostics
+  Nothing more.
+
+============================================================
+RULES
+  ✔ Clean · Professional · Real-time
+  ✔ No duplicates · No hidden info · One source of truth
+  ✔ Low CPU · Fast refresh · Easy to read/debug
+  ✔ Never trades · Never executes
+
+PHILOSOPHY
+  Answers three questions instantly:
+    What is the market doing?
+    What is HITMAN AI thinking?
+    What is HITMAN AI doing?
+  Informs. Never controls.
+
+FILES
+  UltraDashboardIntelligence.mqh
+  24_Dashboard.mqh (thin display surface)
+
+LOCKS
+  HITMAN AI · HA_ULTRA_93 · MaxOpen=3 · Mission sole close
+  Final Development Rule — refine only (facade over existing panels)
+============================================================
+END OF CHAPTER 14

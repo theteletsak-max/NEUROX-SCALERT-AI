@@ -1,0 +1,81 @@
+HITMAN AI — MASTER SPECIFICATION
+CHAPTER 15 — RECOVERY ENGINE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Maintain continuous system stability.
+  Detect failures · recover automatically when safe.
+  Protect open positions · preserve trading integrity.
+  NEVER changes proprietary strategy · NEVER creates signals.
+  ONLY restores normal operation after recoverable problems.
+
+============================================================
+1. RECOVERY CORE
+  Detect · Classify · Recover · Protect · Restore · Notify
+  API: UltraRecoveryIntel_Boot · OnTick · Sync · Classify
+       Validate · PositionSafetyOK · AllowNewEntries
+       PrepareExecRetry · EnterSafeMode · Dashboard
+
+2. HEALTH MONITOR
+  Engine · Indicators · Broker connection · Data sync
+  Trade context · Runtime integrity
+
+3. FAILURE CLASSIFICATION
+  Recoverable: connection · broker reject · indicator reload
+               data sync delay · cache refresh
+  Non-Recoverable: corrupt data · invalid config
+                   critical runtime · unsupported env
+
+4. AUTOMATIC RECOVERY
+  Identify → Apply (ZFR executor) → Verify → Resume
+  No manual intervention when recovery succeeds
+
+5. POSITION SAFETY
+  Continue monitoring open positions / broker / sync
+  Never abandon an active position
+
+6. MODULE RESTART
+  Restart only affected module via ZFR domain recoveries
+  Never restart entire EA unless absolutely necessary
+
+7. RECOVERY VALIDATION
+  Module healthy · Sync · Indicators · Data current · Exec
+  → Recovery Complete (or Safe Mode)
+
+8. SAFE MODE
+  Suspend new trade execution (TradeGate)
+  Continue monitoring existing positions
+  Log issue · Notify diagnostics
+  Resume when validated
+
+9. RECOVERY LOGGER
+  Failure time/type · Module · Method · Duration · Result
+  via UltraLoggerIntel_LogRecovery (Ch13)
+
+10. OUTPUTS
+  Recovery Successful · Failed · Safe Mode · Resume · Diag
+
+============================================================
+RULES
+  ✔ Detect quickly · Recover only when safe
+  ✔ Protect open positions
+  ✔ Restart only required modules
+  ✔ Verify every recovery · Log every recovery
+  ✔ Never hide failures · Never ignore critical errors
+  ✔ Never continue after unverified recovery
+
+PHILOSOPHY
+  Detect → Recover → Verify → Continue (when safe).
+  If not safe: protect positions · block new decisions.
+
+FILES
+  UltraRecoveryIntelligence.mqh  (Chapter 15 facade)
+  UltraZeroFailRecovery.mqh      (executor)
+  30_Recovery.mqh                (legacy UltraRecover)
+
+LOCKS
+  HITMAN AI · HA_ULTRA_93 · MaxOpen=3 · Mission sole close
+  Final Development Rule — refine only (facade over ZFR)
+============================================================
+END OF CHAPTER 15

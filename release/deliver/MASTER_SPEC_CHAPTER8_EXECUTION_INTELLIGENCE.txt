@@ -1,0 +1,83 @@
+HITMAN AI — MASTER SPECIFICATION
+CHAPTER 8 — EXECUTION INTELLIGENCE ENGINE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Execute approved trades with maximum precision.
+  Minimum internal latency · maximum reliability · broker compatibility.
+  NEVER creates signals · NEVER changes strategy.
+  ONLY executes Mission Control decisions.
+
+============================================================
+1. EXECUTION CORE
+  Receive BUY/SELL · Prepare · Verify · Submit
+  Verify Position · Synchronize · Activate Position Evolution
+  API: UltraExecIntel_Prepare · NoteSubmitting · NoteOpen
+       VerifyPosition · NoteSynced · NoteRetry · NoteFailed
+
+2. ORDER PREPARATION
+  Symbol · type · volume · entry · SL · TP · TradeComment · Magic
+  Packet: g_UltraExecPacket (armed only after full validate)
+
+3. BROKER INTELLIGENCE
+  Filling · stops/freeze level · volume min/max/step
+  Tick size · contract size — adapted before submit
+
+4. EXECUTION VALIDATION
+  Margin · volume · price · SL/TP · broker requirements
+  → Execution Approved (UEXEC_PREPARED)
+
+5. ORDER SUBMISSION
+  Mission → Exec Intel → Prepare → Submit immediately
+  Shell_B owns g_Trade.Buy/Sell (one send path)
+
+6. EXECUTION VERIFICATION
+  Ticket · position open · volume · entry · SL/TP
+  → POSITION_VERIFIED only after checks
+
+7. POSITION SYNCHRONIZATION
+  Internal · broker · account must match
+  UltraExecIntel_NoteSynced → PosEvo / RegisterTradeState
+
+8. EXECUTION RECOVERY
+  Requote · reject · network · invalid fill/price
+  Detect → Log → Recover → Retry → Verify → Continue
+
+9. EXECUTION LOGGER
+  Time · symbol · decision · entry · volume · SL/TP
+  Broker response · ticket · result via UltraExecIntel_Log
+
+10. EXECUTION OUTPUT
+  POSITION_OPEN | POSITION_FAILED | POSITION_VERIFIED | RECOVERY_REQUIRED
+  → Position Evolution Engine
+
+11. PERFORMANCE
+  One pipeline · one order · one verification · one sync
+  Minimum internal latency
+
+12. SAFETY
+  No duplicate orders · no ignored broker errors
+  No skipped verification / sync / position status
+
+============================================================
+RULES
+  ✔ One Execution Pipeline / Submission / Verification / Sync
+  ✔ One Recovery System · One Logger
+  ✔ No duplicate orders · No hidden errors
+  ✔ Maximum broker compatibility · Minimum internal latency
+  ✔ Mission-only entry (Phase A sticky BUY/SELL)
+
+PHILOSOPHY
+  Fast execution is valuable. Correct execution is essential.
+  Execute approved trades accurately, reliably, consistently.
+
+FILES
+  UltraExecutionIntelligence.mqh
+  Shell_B ExecuteBuy/Sell · 19_Execution · UltraTradeGate EXEC bit
+
+LOCKS
+  HITMAN AI · HA_ULTRA_93 · MaxOpen=3 · Mission sole close
+  Final Development Rule — refine only (facade over existing send path)
+============================================================
+END OF CHAPTER 8

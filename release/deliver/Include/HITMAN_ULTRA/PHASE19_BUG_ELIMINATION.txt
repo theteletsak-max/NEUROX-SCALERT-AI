@@ -1,0 +1,42 @@
+HITMAN AI — PHASE 19
+ULTRA BUG ELIMINATION ENGINE ∞
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Maximum stability and reliability.
+  No hidden bugs. No silent failures. No unexpected behaviour.
+
+ALLOWED UNDER FINAL DEVELOPMENT RULE
+  Bug fixes · stability · broker compatibility · logging clarity
+  (NOT a new strategy / NOT feature expansion)
+
+AUDITS
+  Init / Deinit / Timer / Memory / Indicators / Objects / Handles
+  Signal integrity (conflict / duplicate / invalid confidence)
+  Execution (retcodes / volume / stops / freeze / fill verify)
+  Position sync (SL / Mission lock re-register)
+  Event / Session consistency
+  Broker symbol specs · digits · tick · hedging/netting
+  Backtest compat awareness
+  Performance tick latency
+
+LOGGING RULE
+  Every WAIT / REJECT / EXEC_FAIL / EXIT / REPLACE explains:
+    Action · Module · Function · Reason · Side · Ticket
+    Confidence · Spread · Trend · Session · News · Mode
+
+MODULE
+  UltraBugElimination.mqh
+
+WIRES
+  UltraBT_LogReject → UltraBug_Explain (when enabled)
+  UltraSetWait → UltraBug_Explain (no silent waits)
+  EvaluateStrategySignals wait / signal audit / event audit
+  ExecuteBuy/Sell fatal + fill verification
+  OnInit AuditInit · OnDeinit AuditDeinit
+  RunTradingCycle Perf + Position audit
+  Dashboard · Module Manager
+
+OBJECTIVE
+  Zero Critical Bugs · Maximum Stability · Predictable Behaviour

@@ -1,0 +1,2 @@
+See PHASE23_NEWS_EXECUTION_PROTOCOL.txt — canonical Phase 23 spec.
+(This file retained for download-path compatibility.)

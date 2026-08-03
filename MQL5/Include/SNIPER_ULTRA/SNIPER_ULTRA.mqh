@@ -1,0 +1,5 @@
+#ifndef SNIPER_ULTRA_REDIRECT_MQH
+#define SNIPER_ULTRA_REDIRECT_MQH
+// Legacy path redirect → HITMAN_ULTRA
+#include <HITMAN_ULTRA/HITMAN_ULTRA.mqh>
+#endif

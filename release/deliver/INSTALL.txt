@@ -1,0 +1,9 @@
+HITMAN AI — INSTALL FROM ZIP
+
+1. Download HITMAN_AI.zip
+2. Extract HITMAN_AI.mq5
+3. Copy → MetaTrader 5 Data Folder / MQL5 / Experts /
+4. MetaEditor → open HITMAN_AI.mq5 → F7 Compile
+5. Attach HITMAN_AI to chart · enable Algo Trading
+
+Single-file EA — no Include folder required.

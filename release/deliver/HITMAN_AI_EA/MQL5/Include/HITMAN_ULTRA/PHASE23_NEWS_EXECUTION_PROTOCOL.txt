@@ -1,0 +1,59 @@
+HITMAN AI ULTRA ∞ — PHASE 23
+ULTRA NEWS EXECUTION PROTOCOL ∞
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Execute validated trades during major economic events with
+  minimum internal latency.
+  Never disable trading because of news alone.
+
+============================================================
+ULTRA NEWS MODE
+  Major Event Detected
+    → Activate Ultra News Mode
+    → Increase Market Monitoring
+    → Increase Signal Validation Frequency
+    → Increase Execution Priority
+    → Continue Trading
+
+============================================================
+ULTRA INSTANT NEWS DETECTION
+  ✓ Event Detection · Price Analysis · Market Re-analysis
+  ✓ Signal Detection · Confidence Validation · Mission Control
+
+ULTRA INSTANT NEWS EXECUTION
+  ✓ Order Preparation · Risk Validation · Broker Submission
+  ✓ Fill Verification · Position Sync · Execution Recovery
+
+============================================================
+HIGH SPREAD RULE
+  High Spread
+    → DO NOT Reject Automatically
+    → Continue Full Market Analysis
+    → Trade Thesis Still Valid?
+         YES → Risk Acceptable? → YES → Execute / NO → Wait
+         NO  → Wait
+
+============================================================
+NEWS EXECUTION RULES
+  ✓ Continue trading during major news / high volatility
+  ✓ High spread does not automatically block trading
+  ✓ Re-analyse before every news entry
+  ✓ Submit with minimum internal latency
+  ✓ Verify execution · recover temporary problems
+  ✓ Log event name, spread, slippage, execution result
+
+============================================================
+IMPLEMENTATION
+  Module: UltraNewsExecution.mqh
+  API: HighSpreadRule · DetectContext · StabilityOK · ValidateSignal
+       EnterMode · AllowTrade · Protocol*
+  InstantPath / Phase23Boost raise exec priority
+  Protocol: Prepare → Submit → Verify → Retry(re-analyze) → Cancel/Log
+  Quality mission: ULTRA_EVENT_NEWS_TRADING_QUALITY.txt (Phases 1–6)
+
+LOCKS
+  Never force trades · never news-only reject · never spread-only reject
+  Never reduce validation under volatility
+  Mission sole close authority · TradeComment=HITMAN AI · BUILD=HA_ULTRA_93

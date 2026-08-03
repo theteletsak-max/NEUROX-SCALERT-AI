@@ -1,0 +1,79 @@
+HITMAN AI — MASTER SPECIFICATION
+CHAPTER 3 — PROPRIETARY STRATEGY ENGINE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Transform raw market information into one high-quality trading thesis.
+  The Strategy Engine NEVER places orders.
+  The Strategy Engine NEVER closes trades.
+  The Strategy Engine NEVER manages positions.
+  It ONLY determines whether a valid opportunity exists
+  according to the proprietary strategy family.
+
+============================================================
+1. STRATEGY CORE
+  Inputs: Trend · Momentum · Volatility · Liquidity · Spread
+          · Session · Event (from Market Intelligence / snap)
+  Output: Trade Thesis
+  API: UltraPropStrategy_Evaluate
+
+2. MARKET CONTEXT
+  BULLISH | BEARISH | NEUTRAL | TRANSITION
+  API: UltraPropStrategy_MarketContext (reuses Chapter 2 picture)
+
+3. TREND VALIDATION
+  Direction · Strength · Stability · Continuation · Exhaustion
+  Rule: weak trends never become high-confidence trades
+
+4. MOMENTUM VALIDATION
+  Direction · Strength · Acceleration · Continuation
+  Energy required to justify participation
+
+5. LIQUIDITY VALIDATION
+  Participation · efficiency · conditions
+  Supports decision quality (fake/thin soft-hard)
+
+6. TRADE THESIS ENGINE
+  Every trade answers: Why should this trade exist?
+  Contains: Direction · Context · Evidence · Risk note · Confidence
+  No clear thesis → No trade
+
+7. CONFLUENCE ENGINE
+  Trend + Momentum + Liquidity + Volatility + Context
+  → one confluence result 0–100 (side-aligned UltraConfluence*)
+  More agreement → higher confidence
+
+8. CONFIDENCE ENGINE
+  One score 0–100 from USM2 (u.score.confidence)
+  Increases when independent factors agree
+
+9. ENTRY VALIDATION → Strategy Approved
+  Thesis · Trend · Momentum · Confluence · Risk requirements
+  API: UltraPropStrategy_ValidateEntry
+
+10. STRATEGY OUTPUT (and nothing else)
+  BUY_CANDIDATE | SELL_CANDIDATE | WAIT
+  Mission Control makes the final decision
+
+============================================================
+RULES
+  ✔ One Trade Thesis · one Confidence · one Strategy Decision
+  ✔ No duplicate / contradictory signals
+  ✔ Strategy never executes orders
+  ✔ Strategy only creates high-quality candidates
+
+LIVE PATH
+  UltraPickBest → USM2 → UltraPropStrategy_Evaluate
+  → (filters) → Chapter 4 Signal Finalize → Mission → Exec
+
+FILES
+  UltraPropStrategy.mqh
+  16_AI_Core (UltraPickBest) · 15_Confluence · UltraScoringMachine2
+  TradeThesis.mqh (post-fill memory) · PROP_STRATEGY_REFINEMENT.txt
+
+LOCKS
+  HITMAN AI · HA_ULTRA_93 · MaxOpen=3 · Mission sole close
+  Final Development Rule — refine only
+============================================================
+END OF CHAPTER 3

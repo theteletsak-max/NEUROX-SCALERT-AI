@@ -1,0 +1,39 @@
+HITMAN AI — PHASE 20
+ULTRA ZERO-FAIL RECOVERY ENGINE ∞
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  The EA must never stop operating because of
+  a recoverable problem.
+
+ALLOWED UNDER FINAL DEVELOPMENT RULE
+  Stability · broker compatibility · continuous monitoring
+  (NOT a new strategy)
+
+AUTO RECOVERY
+  Indicators · Handles · Buffers · Memory · Trade · Positions
+  Execution · Connection · Symbol · Timeframe · Session · Event
+  Dashboard · Logger
+
+MONITOR LOOP
+  Every Tick → Verify System → Problem?
+    YES → Recover Automatically → Success? → Continue Trading
+    NO  → Continue Monitoring / Retry Recovery
+  Never Stop
+
+RULES
+  Never Crash · Never Freeze · Never Hang
+  Never Stop Monitoring / Scanning
+  Never Lose Synchronization · Never Ignore Errors
+  Recover Automatically · Continue Operation
+
+MODULE
+  UltraZeroFailRecovery.mqh
+  Shell hooks: UltraZFR_ShellRecover*
+
+WIRES
+  RunTradingCycle → UltraZFR_OnTick (even on Foundation RED / MarketIntel deny)
+  ExecuteBuy/Sell → UltraZFR_PrepareExecRetry on recoverable retcodes
+  UFSE → UltraUFSE_Invalidate on buffer recovery
+  Dashboard · Module Manager · OnInit boot

@@ -1,0 +1,33 @@
+══════════════════════════════════════════════════════════════════════
+ULTRA TARGET INTELLIGENCE ENGINE ∞ — APPLIED
+BUILD: HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen=3
+══════════════════════════════════════════════════════════════════════
+
+MISSION
+Every Take Profit must have a validated reason.
+Never use random targets. No fixed-only targets.
+
+WORKFLOW
+Market Analysis → Trade Thesis → Mission Approval
+→ Entry → Stop Loss → TP1 → TP2 → TP3
+→ Validate Complete Trade → Execute
+
+TP1 — Secure first objective (high probability, conservative)
+TP2 — Capture primary move (trend continuation + structure)
+TP3 — Exceptional continuation only (never forced)
+
+VALIDATION
+Entry · SL · TP1 · TP2 · TP3 · Complete R:R · reasons logged
+
+RULES
+✓ Dynamic · Strategy-based · Thesis-following
+✓ Adapt to structure / fib / liquidity / momentum
+✓ Log every target reason
+✓ RR floors are minimums — not sole random prices
+
+FILE
+MQL5/Include/HITMAN_ULTRA/UltraTargetIntelligence.mqh
+
+LOCKS
+TradeComment=HITMAN AI · BUILD=HA_ULTRA_93 · MaxOpen=3
+══════════════════════════════════════════════════════════════════════

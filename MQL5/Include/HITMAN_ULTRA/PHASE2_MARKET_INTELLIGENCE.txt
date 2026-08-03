@@ -1,0 +1,48 @@
+══════════════════════════════════════════════════════════════════════
+PHASE 2 — ULTRA MARKET INTELLIGENCE ENGINE — APPLIED
+MASTER SPEC CHAPTER 2 · BUILD: HA_ULTRA_93 | Comment: HITMAN AI
+══════════════════════════════════════════════════════════════════════
+
+MISSION
+Read the market with maximum precision · minimum latency.
+Produce one clean market picture for the entire EA.
+NEVER open/close/manage trades — ONLY read the market.
+
+DATA GATE (integrity — not a trade decision)
+Verify Tick → Candle → Buffers → Indicators → Symbol
+→ Spread (info) → Behaviour → Classify → PublishLite
+Bad / missing prices = no new analysis. Verified = continue.
+
+HARD REJECT (no new analysis path)
+✗ Missing / invalid prices
+✗ Corrupted OHLC / buffers
+✗ Incomplete closed candle / thin history
+✗ Invalid symbol properties
+✗ Trading disabled / disconnected
+✗ Weekend / holiday close (configurable)
+✗ Stale live quote (configurable)
+
+DEGRADED (analysis continues — never sole hard-reject)
+• Wide spread · Slow ticks / jumps · Gap noise · Thin liq proxy
+
+CHAPTER 2 MARKET PICTURE (g_UltraMarketIntel)
+readerState · outTrend/Conf · outMomentum · outVolatility
+outLiquidity · outSpread · outSession · outEvent
+marketQuality 0–100 · mtfPicture (H4>H1>M15>M5) · marketContext
+Synced from UltraSnap via UltraMarketIntel_SyncFromSnap
+(after UltraBuildSnapshot — no duplicate engine calcs)
+
+RUNTIME
+• REJECTED → ManageOpenTrades only (never abandon risk)
+• DEGRADED / APPROVED → full analysis path
+• Strategy Engine decides what to do with the picture
+
+FILE
+MQL5/Include/HITMAN_ULTRA/UltraMarketIntelligence.mqh
+MQL5/Include/HITMAN_ULTRA/MASTER_SPEC_CHAPTER2_MARKET_INTELLIGENCE.txt
+
+LOCKS
+TradeComment=HITMAN AI · BUILD=HA_ULTRA_93 · MaxOpen=3
+EntryTF=PERIOD_CURRENT · Mission-only closes · classic watermark
+Spread/news alone NEVER hard-reject
+══════════════════════════════════════════════════════════════════════

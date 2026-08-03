@@ -1,0 +1,138 @@
+HITMAN AI ULTRA ∞ — FINAL MODULE ORDER
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+Authoritative numbering = INTERNAL STANDARD v6+ (Phases 1–19).
+See INTERNAL_STANDARD_v6.txt for the full checklist.
+
+============================================================
+PHASE 1  — CORE FOUNDATION ENGINE
+  UltraFoundation.mqh (+ 01_Core)
+
+PHASE 2  — MARKET INTELLIGENCE ENGINE
+  UltraMarketIntelligence.mqh (+ tick/candle/MTF/session layers)
+  MASTER SPEC CHAPTER 2 — read-only market picture
+  Outputs: Trend·Momentum·Vol·Liq·Spread·Session·Event·Quality
+  LOCK: never trades / never executes / never manages positions
+
+PHASE 3  — PROPRIETARY STRATEGY ENGINE
+  UltraPropStrategy · UltraPickBest · Confluence · USM2 · TradeThesis
+  MASTER SPEC CHAPTER 3 — one thesis · one confluence · one confidence
+  Outputs: BUY/SELL Candidate | WAIT only
+  LOCK: never places/closes/manages orders
+
+PHASE 4  — SIGNAL INTELLIGENCE ENGINE
+  UltraPickBest · 35_SignalEngine · SignalEvolution · UFSE filters
+  MASTER SPEC CHAPTER 4 — BUY/SELL candidate / WAIT only
+  Outputs: candidate · one confidence · quality · lifecycle
+  LOCK: never executes · never manages · never controls risk
+
+PHASE 5  — NEWS INTELLIGENCE ENGINE
+  UltraNewsExecution · 18_NewsIntelligence · 39_EventEngine
+  LOCK: never force · never news/spread-only hard reject
+
+PHASE 6  — MISSION CONTROL (ONLY FINAL DECISION)
+  MissionControl.mqh → BUY | SELL | WAIT | REPLACE
+  LOCK: sole close · Phase A sole WAIT emitter
+
+PHASE 7  — RISK INTELLIGENCE ENGINE
+  UltraRiskIntelligence · 20_CapitalProtection · UltraTradeGate · Shell risk
+  MASTER SPEC CHAPTER 7 — size · exposure · margin · DD · portfolio
+  Outputs: approvedLot · maxRisk · status (Mission receives assessment)
+  LOCK: never signals · never market-reads · never executes
+
+PHASE 8  — EXECUTION INTELLIGENCE ENGINE
+  UltraExecutionIntelligence · Shell_B ExecuteBuy/Sell · 19_Execution · Broker 32/36
+  MASTER SPEC CHAPTER 8 — prepare · broker-adapt · validate · submit · verify · sync
+  Outputs: POSITION_OPEN | POSITION_FAILED | POSITION_VERIFIED | RECOVERY_REQUIRED
+  LOCK: never creates signals · never changes strategy · Mission decisions only
+
+PHASE 9  — TARGET INTELLIGENCE ENGINE
+  UltraTargetIntelligence.mqh (UltraTarget_* · UltraTargetIntel_* facade)
+  MASTER SPEC CHAPTER 9 — SL · TP1 · TP2 · TP3 · R:R · validate · evolve advisory
+  Outputs: SL · TP1 · TP2 · TP3 · Target Status · Evolution Status → PosEvo
+  LOCK: never executes · never generates signals · objectives only
+  Profit protect / partials: advisory hints → P10 StopEvo · Shell ladder
+
+PHASE 10 — POSITION EVOLUTION ENGINE
+  PositionEvolution · UltraStopEvolution · UltraPosEvoIntel_* facade
+  MASTER SPEC CHAPTER 10 — continuous market/thesis/trend/mom/SL/target/news/risk
+  Outputs: CONTINUE · MODIFY_SL · MODIFY_TARGETS · PROTECT_PROFIT · PREPARE_EXIT → Exit
+  LOCK: never widen SL · never protect too early · Mission sole close · one PosEvo engine
+
+PHASE 11 — EXIT INTELLIGENCE ENGINE
+  UltraExitIntelligence · Mission ValidateExit/ClosePosition · SmartExit · UltraExitValidation
+  MASTER SPEC CHAPTER 11 — thesis/trend/mom/target · validate · close · verify · log
+  Outputs: POSITION_CLOSED · STATS · ANALYTICS · READY_NEXT
+  LOCK: Mission sole PositionClose* · never emotional · never news-alone · every exit has reason
+
+PHASE 12 — PERFORMANCE ANALYTICS ENGINE
+  UltraPerfAnalytics · UltraAdaptiveIntelligence · 25_Statistics
+  MASTER SPEC CHAPTER 12 — journal · entry/exit/strategy/market/exec/risk · reports
+  Outputs: perf/trading/strategy/risk/exec/system stats · D/W/M/Overall reports
+  LOCK: NEVER trades · NEVER executes · NEVER modifies strategy · measure only
+
+PHASE 13 — LOGGER & DIAGNOSTICS ENGINE
+  UltraLoggerIntelligence · 27_Logger · UltraBug_Explain · 26_Diagnostics
+  MASTER SPEC CHAPTER 13 — system/market/strategy/exec/position/error/recovery/perf
+  Outputs: runtime · trade · exec · error · recovery · diagnostics · event history
+  LOCK: NEVER trades · NEVER executes · ONLY records · no silent errors
+
+PHASE 14 — DASHBOARD ENGINE
+  UltraDashboardIntelligence · 24_Dashboard
+  MASTER SPEC CHAPTER 14 — system/market/strategy/position/risk/perf/exec/health
+  States: INITIALIZING|READY|SCANNING|VALIDATING|EXECUTING|MANAGING|RECOVERING|ERROR
+  Refresh: tick · timer · immediate after trade/recovery/error
+  LOCK: NEVER trades · NEVER executes · ONLY displays · one source of truth
+
+PHASE 15 — RECOVERY ENGINE
+  UltraRecoveryIntelligence · UltraZeroFailRecovery · 30_Recovery
+  MASTER SPEC CHAPTER 15 — detect·classify·recover·verify·safe-mode
+  Outputs: success · failed · safe mode · resume · diagnostics
+  LOCK: NEVER changes strategy · NEVER creates signals · restore only
+        Protect open positions · TradeGate blocks entries in Safe Mode
+
+PHASE 16 — ENVIRONMENT COMPATIBILITY ENGINE
+  UltraEnvironmentIntelligence · UltraBacktestCompat
+  32_BrokerCompatibility · 36_BrokerHealth
+  MASTER SPEC CHAPTER 16 — Tester/Demo/Live · one strategy
+  Detect · broker adapt · data validate · sync · readiness
+  LOCK: NEVER changes Strategy/Risk/Thesis/Mission — exec only
+
+PHASE 17 — LOW-LATENCY & PERFORMANCE ENGINE
+  UltraLowLatencyIntelligence · UltraLowLatency · 37_Optimization
+  MASTER SPEC CHAPTER 17 — CPU/mem/cache/tick · schedule · monitors
+  Outputs: runtime · CPU · memory · cache · performance (LL17)
+  LOCK: NEVER changes strategy · NEVER skips ManageOpenTrades /
+        Mission / Execute on price change · optimize only
+
+PHASE 18 — QUALITY ASSURANCE ENGINE
+  UltraQualityAssurance.mqh — consistency / integrity / conflict audit
+
+PHASE 19 — MAINTENANCE ENGINE
+  UltraMaintenance.mqh (+ UltraBugElimination)
+  LOCK: maintenance only — Final Development Rule
+
+============================================================
+MAIN EXECUTION FLOW
+
+OnInit()
+  → P1 Foundation → P2 Market Intel
+  → Supporting: VChain · P5 News · P9 Target · P12 Analytics
+  → P19 Maint/Bug · P17 LL · P15 ZFR · P7 TradeGate · Module Mgr
+  → P16 BT · P18 QA · P6 Mission
+
+Every Tick
+  → P1 → P15 monitor → P2 → P17 cadence
+  → P10/P11 ManageOpenTrades (never skipped)
+  → InstantExecution: P3→P4→P5→P6→P7→P8→P9
+  → P12 analytics · P13 logger · P14 dashboard · P18 QA · P19 maint
+
+============================================================
+PRODUCT LOCKS (unchanged)
+  TradeComment = HITMAN AI
+  BUILD_ID     = HA_ULTRA_93
+  MaxOpen      = 3
+  EntryTF      = PERIOD_CURRENT
+  Global       = CTrade g_Trade
+  One strategy · one signal · one thesis · one mission · one exit

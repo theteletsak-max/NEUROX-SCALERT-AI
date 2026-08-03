@@ -1,0 +1,75 @@
+HITMAN AI — MASTER SPECIFICATION
+CHAPTER 9 — TARGET INTELLIGENCE ENGINE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Determine the safest and most logical trade objectives.
+  Every position must know: risk start · profit expect · when to protect · when objective changed.
+  NEVER executes trades · NEVER generates signals.
+  ONLY manages trade objectives → Position Evolution Engine.
+
+============================================================
+1. TARGET CORE
+  Initial SL · TP1 · TP2 · TP3 · R:R · Validate · Adapt · Support PosEvo
+  API: UltraTarget_Build / UltraTargetIntel_Calculate
+       UltraTarget_Apply / UltraTargetIntel_Apply
+       UltraTarget_ValidatePlan / UltraTargetIntel_Validate
+       UltraTargetIntel_EvaluateActive (live advisory)
+
+2. INITIAL STOP LOSS
+  Structure/liquidity invalidation + ATR floor/clamp
+  Strategy-based + market-based · risk validated
+
+3. TAKE PROFIT ENGINE
+  TP1 → TP2 → TP3 (thesis-supported, never arbitrary distances)
+  TP3 exceptional continuation only (never forced)
+
+4. RISK : REWARD ENGINE
+  Potential reward / risk → RR1/RR2/RR3
+  Floors: UltraTargetMinRR1/2/3 · TradeGate enforce
+
+5. TARGET VALIDATION
+  SL · TP1 · TP2 · TP3 · R:R · geometry · reasons
+  → Targets Approved (g_UltraTargetLast.valid)
+
+6. TARGET EVOLUTION
+  While active: thesis · trend · momentum · volatility pressure
+  YES → MAINTAIN · NO → ADJUST_ADVISORY (P10 applies; Target never modifies)
+
+7. PROFIT PROTECTION
+  Advisory flag profitProtectReady when thesis OK + ≥1R progress
+  Never too early · P10 UltraStopEvo owns tighten/BE
+
+8. PARTIAL PROFIT
+  Advisory partialTP1Ready / partialTP2Ready
+  Optional Shell ladder + Mission ClosePartial (configurable)
+
+9. TARGET LOGGER
+  SL · TP1 · TP2 · TP3 · R:R · adjustments · protect events
+  UltraTargetIntel_Log · UltraLogDecision TARGET
+
+10. TARGET OUTPUT
+  SL · TP1 · TP2 · TP3 · Target Status · Evolution Status
+  → RegisterTradeState · PosEvo / StopEvo
+
+============================================================
+RULES
+  ✔ One Initial SL · One TP1 · One TP2 · One TP3
+  ✔ One R:R · One Validation · Dynamic Evolution (advisory)
+  ✔ Intelligent profit-protect hints · No random / arbitrary targets
+  ✔ Every target supports the trade thesis
+
+PHILOSOPHY
+  A trade should never exist without a clear objective.
+  Targets evolve only when strategy objectively supports the change.
+
+FILES
+  UltraTargetIntelligence.mqh
+  UltraTradeGate (require plan) · Shell Execute Apply · ManageOpenTrades EvaluateActive
+
+LOCKS
+  HITMAN AI · HA_ULTRA_93 · MaxOpen=3 · Mission sole close
+  Final Development Rule — refine only (facade over existing Target engine)
+============================================================
+END OF CHAPTER 9

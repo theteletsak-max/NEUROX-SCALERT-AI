@@ -1,0 +1,30 @@
+══════════════════════════════════════════════════════════════════════
+ULTRA BACKTEST COMPATIBILITY ENGINE ∞ — APPLIED
+BUILD: HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen=3
+══════════════════════════════════════════════════════════════════════
+
+MISSION
+Same strategy · Same decisions · Same behaviour in
+Strategy Tester · Demo · Live
+
+TESTER COMPATIBILITY MODE
+→ Detect MQL_TESTER
+→ Soften live-only gates (connection / stale quote / entry drift)
+→ Keep full proprietary strategy analysis
+→ Allow trading when history/indicators/broker rules ready
+
+PRE-TRADE VALIDATION
+Indicators ready → Historical bars → Trade allowed → Broker rules
+→ Mission Control → Trade Gate → Execute
+
+REJECT LOGGER
+Every reject prints: Module · Function · Reason · Spread · Trend ·
+Confidence · Market State · News/Event · Mission · Execution · Mode
+
+FILE
+MQL5/Include/HITMAN_ULTRA/UltraBacktestCompat.mqh
+
+LOCKS
+Strategy logic unchanged across environments
+Spread/news never sole reject
+══════════════════════════════════════════════════════════════════════

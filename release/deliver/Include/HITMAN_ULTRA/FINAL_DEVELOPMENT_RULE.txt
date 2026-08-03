@@ -1,0 +1,42 @@
+HITMAN AI — FINAL DEVELOPMENT RULE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+Canonical architecture numbering: INTERNAL STANDARD v6+
+  (INTERNAL_STANDARD_v6.txt · FINAL_MODULE_ORDER.txt · Phases 1–19).
+
+After Adaptive Final Evolution (now Standard Phase 12 analytics):
+
+NO MORE NEW ENGINES
+NO MORE NEW STRATEGIES
+NO MORE FEATURE EXPANSION
+
+Only allowed work going forward:
+
+✓ Bug Fixes
+✓ Signal Refinement
+✓ Execution Refinement
+✓ Performance Optimisation
+✓ Broker Compatibility
+✓ Stability Improvements
+✓ Backtest Optimisation
+✓ Forward-Test Validation
+✓ Live Performance Validation
+✓ Continuous Professional Refinement
+✓ Quality Assurance (Phase 18) — consistency / integrity / conflicts
+✓ Maintenance (Phase 19) — bug/perf/memory/CPU/stability/version
+
+Architecture locks remain:
+
+✓ One Proprietary Strategy
+✓ One Signal Engine (UFSE)
+✓ One Confidence Engine (USM2)
+✓ One Mission Control
+✓ One Execution Engine
+✓ One Position Evolution Engine
+✓ One Exit Engine (Mission-only closes)
+✓ One Logger · One Source of Truth
+✓ Every WAIT / BUY / SELL / Exit / Recovery has a reason
+✓ TradeComment = HITMAN AI
+✓ BUILD_ID = HA_ULTRA_93
+✓ MaxOpen = 3

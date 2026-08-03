@@ -1,0 +1,33 @@
+══════════════════════════════════════════════════════════════════════
+PHASE 16 — ULTRA EVENT TRADING ENGINE ∞ — APPLIED
+BUILD: HA_ULTRA_93 | Comment: HITMAN AI
+══════════════════════════════════════════════════════════════════════
+
+MISSION
+Trade institutional-quality setups before, during, and after major
+economic events. Never disable trading simply because news started.
+
+RULES
+✓ EA Always Active
+✓ No Automatic News Shutdown
+✓ No Automatic Spread Shutdown
+✓ Never reject solely because spread is elevated
+✓ Never reject solely because a news event is occurring
+✓ Never force a trade because of a news event
+✓ Every event trade must satisfy the complete proprietary strategy
+✓ Every event trade must pass Mission Control
+✓ Every event trade must be logged (UltraLogDecision EVENT_TRADE/FLAT)
+
+DECISION PATH
+News/Vol Context → Complete Market Re-analysis → Strategy Validation
+→ Thesis/Structure/Trend/Liq/OB/FVG/Fib/Mom/MTF/Confidence
+→ Exec Quality + Spread + Slip assessment (context)
+→ Mission Control → Execute OR Remain Flat
+
+FILES
+18_NewsIntelligence.mqh — event class (NFP/FOMC/CPI/PMI/RATES/MAJOR)
+39_EventEngine.mqh      — assessment + AllowTrade + dashboard/log
+UFSE_FastSignalEngine   — wires UltraEvent_AllowTrade before fire
+Shell NewsTradingAllowed — always true (awareness only)
+
+══════════════════════════════════════════════════════════════════════

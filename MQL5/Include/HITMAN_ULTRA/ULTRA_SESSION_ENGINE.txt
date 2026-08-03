@@ -1,0 +1,32 @@
+══════════════════════════════════════════════════════════════════════
+PHASE 16.5 — ULTRA SESSION INTELLIGENCE ENGINE ∞ — APPLIED
+BUILD: HA_ULTRA_93 | Comment: HITMAN AI
+══════════════════════════════════════════════════════════════════════
+
+MISSION
+Institutional session awareness that improves decision quality.
+EA remains active 24/7. Sessions never force or prevent trades.
+
+WINDOWS (London local, auto DST)
+★★★★★ London Open              09:00–11:00
+★★★★☆ London Continuation      11:00–14:00
+★★★★★ London–New York Overlap  14:00–18:00
+★★★★☆ New York Continuation    18:00–23:00
+★★★☆☆ Asian (Sydney/Tokyo)     23:00–09:00
+
+RULES
+✓ No session restrictions
+✓ No automatic session blocking
+✓ No forced session trading
+✓ Session used as intelligence only
+✓ London Open / Overlap can raise confidence
+✓ Weak liquidity can reduce confidence
+✓ Proprietary strategy always has final authority
+
+PATH
+Session → Market Analysis → Strategy → Thesis → USM2
+→ Apply Session Bias → Mission Control → Execute / Monitor
+
+FILE
+17_SessionIntelligence.mqh
+══════════════════════════════════════════════════════════════════════
