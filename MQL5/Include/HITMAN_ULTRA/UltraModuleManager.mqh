@@ -78,9 +78,17 @@ void UltraMod_Refresh()
    }
    UltraMod_Reg("P02_MARKET_INTEL", true, UltraMarketIntelEnabled, mktOK, mktDetail);
 
-   // PHASE 3 — Proprietary Strategy
-   UltraMod_Reg("P03_PROP_STRATEGY", true, UltraFastSignalEnabled, UltraFastSignalEnabled,
-                "UFSE+Thesis sole strategy");
+   // PHASE 3 — Proprietary Strategy (Chapter 3 — never executes)
+   string stratDetail = g_UltraPropStrategy.approved ? "APPROVED " : "WAIT ";
+   stratDetail += g_UltraPropStrategy.candidate;
+   stratDetail += " ctx=";
+   stratDetail += g_UltraPropStrategy.context;
+   stratDetail += " cfl=";
+   stratDetail += IntegerToString(g_UltraPropStrategy.confluence);
+   stratDetail += " conf=";
+   stratDetail += IntegerToString(g_UltraPropStrategy.confidence);
+   UltraMod_Reg("P03_PROP_STRATEGY", true, UltraFastSignalEnabled,
+                (!UltraFastSignalEnabled) || g_UltraPropStrategy.booted, stratDetail);
 
    // PHASE 4 — Signal Intelligence (Chapter 4 — never executes)
    bool sigOK = UltraFastSignalEnabled;

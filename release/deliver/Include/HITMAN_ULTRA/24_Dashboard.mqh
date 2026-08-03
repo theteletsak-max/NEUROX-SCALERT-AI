@@ -104,6 +104,7 @@ string UltraDashboardText(const string s)
    t += "\nWR: "; t += DoubleToString(g_UltraMem.winRate, 1); t += "%";
    t += " PF: "; t += DoubleToString(g_UltraMem.profitFactor, 2);
    t += " RR: "; t += DoubleToString(g_UltraMem.avgRR, 2);
+   t += "\n"; t += UltraPropStrategy_Dashboard();
    t += "\n"; t += UltraSignalIntel_Dashboard();
    t += "\nSignal: "; t += dir; t += " ["; t += sig.tag; t += "] "; t += sig.reason;
    if(StringLen(sig.candidate) > 0) { t += " | "; t += sig.candidate; }

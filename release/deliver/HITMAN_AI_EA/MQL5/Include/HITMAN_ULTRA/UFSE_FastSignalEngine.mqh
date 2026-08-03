@@ -626,6 +626,17 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
    if(u.score.probability < UltraMinProbability && u.score.confidence < UltraInstantFireConf)
    { why = "probability low"; return false; }
 
+   // MASTER SPEC CHAPTER 3 — Proprietary Strategy (never executes)
+   // One thesis · one confluence · one confidence → BUY/SELL Candidate or WAIT
+   {
+      string stWhy = "";
+      if(!UltraPropStrategy_Evaluate(s, u, sig, stWhy))
+      {
+         why = stWhy;
+         return false;
+      }
+   }
+
    // DEFENSE LINE ENGINE v1.0 — Lines 1-7 + 10 (GREEN / YELLOW / RED)
    if(UltraDefenseEnabled && UltraDefenseGateEntry)
    {

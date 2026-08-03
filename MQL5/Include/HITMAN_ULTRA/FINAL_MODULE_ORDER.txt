@@ -16,7 +16,10 @@ PHASE 2  — MARKET INTELLIGENCE ENGINE
   LOCK: never trades / never executes / never manages positions
 
 PHASE 3  — PROPRIETARY STRATEGY ENGINE
-  UFSE · TradeThesis · Confluence · USM2 confidence
+  UltraPropStrategy · UltraPickBest · Confluence · USM2 · TradeThesis
+  MASTER SPEC CHAPTER 3 — one thesis · one confluence · one confidence
+  Outputs: BUY/SELL Candidate | WAIT only
+  LOCK: never places/closes/manages orders
 
 PHASE 4  — SIGNAL INTELLIGENCE ENGINE
   UltraPickBest · 35_SignalEngine · SignalEvolution · UFSE filters

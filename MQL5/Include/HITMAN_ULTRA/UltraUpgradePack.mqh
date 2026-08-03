@@ -7,6 +7,7 @@
 #include "UltraScoringMachine2.mqh"
 #include "SignalEvolution.mqh"
 #include "TradeThesis.mqh"
+#include "UltraPropStrategy.mqh"   // CHAPTER 3 — proprietary strategy (never executes)
 #include "CorrectionDetector.mqh"
 #include "HoldScore.mqh"
 #include "SmartExit.mqh"

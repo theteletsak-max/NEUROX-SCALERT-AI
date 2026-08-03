@@ -19,6 +19,7 @@ PHASE 2  — MARKET INTELLIGENCE ENGINE
 PHASE 3  — PROPRIETARY STRATEGY ENGINE
   Trend/Structure/Momentum/Liquidity logic · Confluence
   Trade Thesis · Confidence (USM2) · Signal Scoring · Dynamic Validation
+  MASTER SPEC CHAPTER 3 — candidates only (never executes)
 
 PHASE 4  — SIGNAL INTELLIGENCE ENGINE
   BUY/SELL detect · Validate · False-signal cut · Duplicate prevention

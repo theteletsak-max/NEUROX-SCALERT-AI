@@ -20,7 +20,7 @@ order = [
     "DefenseLineEngine.mqh",
     "TradeEntryDiscipline.mqh",
     "DynamicWeights.mqh","UltraScoringMachine2.mqh","SignalEvolution.mqh",
-    "TradeThesis.mqh","CorrectionDetector.mqh","HoldScore.mqh",
+    "TradeThesis.mqh","UltraPropStrategy.mqh","CorrectionDetector.mqh","HoldScore.mqh",
     "SmartExit.mqh","PositionEvolution.mqh","SystemHealth.mqh","MasterAIBrain.mqh","SupremeCommand.mqh",
     "UltraValidationChain.mqh",
     "UltraNewsExecution.mqh",

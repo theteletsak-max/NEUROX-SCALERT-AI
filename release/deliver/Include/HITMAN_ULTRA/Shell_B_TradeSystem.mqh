@@ -68,6 +68,7 @@ int OnInit()
    UltraFoundation_Boot();  // P01 Core Foundation
    UltraEvent_OnBoot();
    UltraMarketIntel_Boot(); // P02 Market Intelligence
+   UltraPropStrategy_Boot();// P03 Proprietary Strategy (never executes)
    UltraVChain_Boot();      // supporting validation (feeds Mission/Risk)
    UltraSignalIntel_Boot(); // P04 Signal Intelligence (never executes)
    UltraNewsExec_Boot();    // P05 News Intelligence (+ Phase 23 protocol)
@@ -166,6 +167,10 @@ int OnInit()
          " Status=", g_UltraMarketIntel.status,
          " State=", g_UltraMarketIntel.stateName,
          " Detail=", g_UltraMarketIntel.detail);
+   Print("P03 PROP STRATEGY: Boot=", UltraYN(g_UltraPropStrategy.booted),
+         " Candidate=", g_UltraPropStrategy.candidate,
+         " Ctx=", g_UltraPropStrategy.context,
+         " (never executes)");
    {
       ENUM_TIMEFRAMES etf = (EntryTF == PERIOD_CURRENT) ? (ENUM_TIMEFRAMES)Period() : EntryTF;
       Print("OK93 ENTRY TF=", EnumToString(etf),

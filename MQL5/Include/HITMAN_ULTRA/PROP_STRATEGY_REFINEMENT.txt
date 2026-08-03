@@ -1,10 +1,11 @@
 ══════════════════════════════════════════════════════════════════════
 HITMAN AI ULTRA ∞ — PROPRIETARY STRATEGY REFINEMENT (APPLIED)
-BUILD: HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen=3
+MASTER SPEC CHAPTER 3 · BUILD: HA_ULTRA_93 | Comment: HITMAN AI
 ══════════════════════════════════════════════════════════════════════
 
 MISSION: One Strategy · One Brain · One Decision · One Mission
 Never mix external strategies. Refine only.
+Chapter 3 surface: UltraPropStrategy.mqh (never executes)
 
 LEVEL 1 Signal Precision          [DONE]
   ✓ Removed stacked InstantQuality -8 soft passes
