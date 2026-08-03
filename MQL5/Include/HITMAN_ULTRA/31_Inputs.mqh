@@ -139,6 +139,12 @@ input double UltraNewsExecHighVolRel     = 1.45;   // high-volatility news-mode 
 input bool   UltraNewsExecProtocolEnabled = true;  // prepare→submit→verify→retry protocol
 input bool   UltraNewsExecProtocolFastRetry = true; // minimize Sleep under InstantPath
 input int    UltraNewsExecProtocolRetryMs = 20;    // fast retry pause (ms); 0 = none
+input bool   UltraNewsExecUseCalendarContext = true;  // wire MQL5 calendar into news context
+input bool   UltraNewsExecRequireStability = true;    // Phase 2 market stabilization before entry
+input int    UltraNewsExecMinStabilityScore = 60;     // 0..100 combined stability floor
+input int    UltraNewsExecMaxPacketAgeMs = 250;       // stale prepared packet → refresh/cancel
+input bool   UltraNewsExecLogActualSlippage = true;   // fill vs prepared quote slippage
+input bool   UltraNewsExecStrongerOnWeakExec = true;  // weak execQ needs stronger setup
 
 input group "31 · ULTRA TARGET INTELLIGENCE ENGINE ∞"
 input bool   UltraTargetEnabled          = true;   // institutional TP/SL intelligence

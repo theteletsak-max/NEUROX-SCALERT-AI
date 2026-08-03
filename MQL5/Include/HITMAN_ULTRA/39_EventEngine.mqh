@@ -317,14 +317,39 @@ bool UltraEvent_AllowTrade(const string s, const UltraSnap &u, const bool buySid
    string vWhy = "";
    a.setupValid = UltraEvent_ValidateSetup(u, buySide, vWhy);
 
-   // Execution quality soft gate during events — if unacceptable AND setup weak → flat
-   // Never sole reject on exec/spread if setup is fully valid
+   // Execution quality: never sole-reject on spread; weak exec needs stronger setup
    if(a.setupValid)
    {
       a.allowTrade = true;
       a.reason = "EVENT VALID — full strategy + Mission path";
       if(a.spreadElevated) a.reason += " | spread elevated (allowed)";
-      if(!a.execAcceptable) a.reason += " | exec soft (setup still valid)";
+      if(!a.execAcceptable)
+      {
+         if(UltraNewsExecStrongerOnWeakExec)
+         {
+            bool strong = (u.score.confidence >= UltraEventMinConf + 10) &&
+                          (buySide
+                           ? ((u.bos.buy && (u.bos.confirmed || u.bos.strong)) ||
+                              UltraLiq_IsGenuine(u, true))
+                           : ((u.bos.sell && (u.bos.confirmed || u.bos.strong)) ||
+                              UltraLiq_IsGenuine(u, false)));
+            bool momOK = buySide ? (u.mom.momBuy || u.mom.impulse)
+                                 : (u.mom.momSell || u.mom.impulse);
+            if(!(strong && momOK))
+            {
+               a.allowTrade = false;
+               a.reason = "EVENT: exec quality weak — need stronger confirmed setup";
+               UltraEvent_Note(UEV_EVENT_FLAT);
+               g_UltraEventStats.lastDecision = "FLAT";
+               g_UltraEventLast = a;
+               why = a.reason;
+               return false;
+            }
+            a.reason += " | exec weak but strong setup OK";
+         }
+         else
+            a.reason += " | exec soft (setup still valid)";
+      }
       UltraEvent_Note(UEV_EVENT_TRADE);
       g_UltraEventStats.lastDecision = "TRADE";
    }

@@ -157,7 +157,8 @@ bool UltraNewsExec_DetectContext(const UltraSnap &u)
 {
    if(!UltraNewsExecEnabled) return false;
 
-   // Major calendar / volatility event context from News + Event engines
+   // PHASE 1 — Ultra Event Detection
+   // upcoming/start/end · abnormal vol · spread expansion · liquidity changes
    bool majorClass =
       (u.ctx.eventClass == "NFP" || u.ctx.eventClass == "FOMC" ||
        u.ctx.eventClass == "CPI" || u.ctx.eventClass == "RATES" ||
@@ -166,16 +167,103 @@ bool UltraNewsExec_DetectContext(const UltraSnap &u)
    bool phaseActive = (u.ctx.beforeNews || u.ctx.duringNews || u.ctx.afterNews);
    bool highVol = (u.vol.expansion && u.vol.relative >= UltraNewsExecHighVolRel);
    bool eventEngine = g_UltraEventLast.active;
+   bool spreadExpand = (u.ctx.spreadPts >= UltraEventSpreadWarnPts) ||
+                       g_UltraEventLast.spreadElevated;
+   bool liqChange = g_UltraEventLast.liqThin ||
+                    (g_UltraEventLast.liqScore > 0 && g_UltraEventLast.liqScore < 40);
+   bool calendarHit = (UltraNewsExecUseCalendarContext && g_UltraCalInWindow &&
+                       g_UltraCalUpdated > 0 &&
+                       (TimeCurrent() - g_UltraCalUpdated) <= 120);
 
+   if(calendarHit && (majorClass || phaseActive || highVol || u.ctx.eventImpact >= 2))
+      return true;
    if(majorClass && (phaseActive || highVol || u.ctx.eventImpact >= 2))
       return true;
-   if(eventEngine && (u.ctx.eventImpact >= 2 || highVol))
+   if(eventEngine && (u.ctx.eventImpact >= 2 || highVol || spreadExpand || liqChange))
       return true;
    if(u.ctx.duringNews && u.ctx.eventImpact >= 2)
       return true;
    if(highVol && majorClass)
       return true;
+   if(calendarHit && (spreadExpand || liqChange || highVol))
+      return true;
    return false;
+}
+
+//--------------------------------------------------------------------//
+// PHASE 2 — ULTRA MARKET STABILIZATION (before entry)                //
+// Direction · Speed · Momentum · Volatility · Liquidity · Trend · Thesis
+// Never fails on spread/news alone — combined instability only       //
+//--------------------------------------------------------------------//
+bool UltraNewsExec_StabilityOK(const UltraSnap &u, const bool buySide, string &why)
+{
+   why = "";
+   if(!UltraNewsExecRequireStability)
+      return true;
+
+   int score = 0;
+
+   // Price direction / trend
+   bool trend = buySide ? (u.trend.bull || u.trend.htfBull || u.trend.macroBull)
+                        : (u.trend.bear || u.trend.htfBear || u.trend.macroBear);
+   if(trend) score += 18;
+
+   // Market speed (tick speed proxy)
+   double spd = g_UltraEventStats.tickSpeed;
+   if(spd <= 0.0) spd = u.ctx.tickSpeed;
+   if(spd >= 1.0) score += 12;
+   else if(spd >= 0.3) score += 6;
+
+   // Momentum
+   bool mom = buySide ? (u.mom.momBuy || u.mom.impulse || u.ict.dispBuy)
+                      : (u.mom.momSell || u.mom.impulse || u.ict.dispSell);
+   if(mom) score += 18;
+
+   // Volatility readable (abnormal alone never fails)
+   if(u.vol.atr > 0.0) score += 10;
+   if(u.vol.relative > 0.0 && u.vol.relative < UltraNewsExecHighVolRel * 2.5)
+      score += 6;
+
+   // Liquidity
+   bool liq = UltraLiq_IsGenuine(u, buySide) ||
+              (buySide ? (u.liq.confirmedBuy || u.bos.buy)
+                       : (u.liq.confirmedSell || u.bos.sell));
+   if(liq) score += 14;
+   if(g_UltraEventLast.liqScore >= 40) score += 6;
+
+   // Trade thesis shape
+   bool thesis = buySide
+      ? (u.bos.buy || u.choch.buy || UltraLiq_IsGenuine(u, true) ||
+         (u.trend.bull && (u.ict.instZoneBuy || u.fib.atBuyZone)))
+      : (u.bos.sell || u.choch.sell || UltraLiq_IsGenuine(u, false) ||
+         (u.trend.bear && (u.ict.instZoneSell || u.fib.atSellZone)));
+   if(thesis) score += 16;
+
+   // Exec quality soft contribution
+   int eq = g_UltraEventLast.execQuality;
+   if(eq <= 0) eq = u.ctx.execQuality;
+   if(eq >= UltraEventExecQualityMin) score += 10;
+   else if(eq >= UltraEventExecQualityMin / 2) score += 4;
+
+   int need = UltraNewsExecMinStabilityScore;
+   if(need < 40) need = 40;
+   if(need > 95) need = 95;
+
+   if(score < need)
+   {
+      why = "NEWS_STABILITY fail score=" + IntegerToString(score) +
+            "/" + IntegerToString(need);
+      if(!trend) why += " trend";
+      if(!mom) why += " momentum";
+      if(!liq) why += " liquidity";
+      if(!thesis) why += " thesis";
+      if(eq < UltraEventExecQualityMin) why += " execQ";
+      return false;
+   }
+
+   why = "NEWS_STABILITY PASS score=" + IntegerToString(score) +
+         " dir=" + (buySide ? "BUY" : "SELL");
+   return true;
 }
 
 void UltraNewsExec_EnterMode(const UltraSnap &u)
@@ -292,7 +380,9 @@ void UltraNewsExec_OnTick(const string s)
 }
 
 //--------------------------------------------------------------------//
-// 10-POINT NEWS SIGNAL VALIDATION — never reduced under volatility   //
+// PHASE 3/4 — ULTRA SIGNAL VALIDATION + FALSE SIGNAL REDUCTION       //
+// Flow: side → thesis → trend → momentum → risk → market/struct…     //
+// → Mission-ready. Never reduced under volatility.                   //
 //--------------------------------------------------------------------//
 bool UltraNewsExec_ValidateSignal(const string s, const UltraSnap &u,
                                   const bool buySide, string &why)
@@ -302,27 +392,55 @@ bool UltraNewsExec_ValidateSignal(const string s, const UltraSnap &u,
    g_UltraNewsExec.failMask = 0;
    g_UltraNewsExec.lastSignalValid = false;
 
-   // 1) Trend Validation
+   // PHASE 3 — Trade Thesis Valid?
+   bool thesis = false;
+   if(buySide)
+      thesis = (u.bos.buy || u.choch.buy || UltraLiq_IsGenuine(u, true) ||
+                (u.trend.bull && (u.ict.instZoneBuy || u.fib.atBuyZone || u.ict.inDiscount)));
+   else
+      thesis = (u.bos.sell || u.choch.sell || UltraLiq_IsGenuine(u, false) ||
+                (u.trend.bear && (u.ict.instZoneSell || u.fib.atSellZone || u.ict.inPremium)));
+   if(thesis) g_UltraNewsExec.passMask |= ULTRA_NEWS_VAL_THESIS;
+   else g_UltraNewsExec.failMask |= ULTRA_NEWS_VAL_THESIS;
+
+   // PHASE 3 — Trend Supports?
    bool trend = buySide ? (u.trend.bull || u.trend.htfBull || u.trend.continuation)
                         : (u.trend.bear || u.trend.htfBear || u.trend.continuation);
    if(trend) g_UltraNewsExec.passMask |= ULTRA_NEWS_VAL_TREND;
    else g_UltraNewsExec.failMask |= ULTRA_NEWS_VAL_TREND;
 
-   // 2) Market Intelligence Validation
+   // PHASE 3 — Momentum Supports?
+   bool mom = buySide ? (u.mom.momBuy || u.mom.impulse || u.ict.dispBuy)
+                      : (u.mom.momSell || u.mom.impulse || u.ict.dispSell);
+   if(mom) g_UltraNewsExec.passMask |= ULTRA_NEWS_VAL_MOM;
+   else g_UltraNewsExec.failMask |= ULTRA_NEWS_VAL_MOM;
+
+   // PHASE 3 — Risk Acceptable?
+   string capWhy = "";
+   bool riskOK = UltraCapitalOK(capWhy);
+   if(MaxOpenTrades > 0 && UltraExec_OpenCountMagic() >= MaxOpenTrades)
+   {
+      riskOK = false;
+      capWhy = "max open reached";
+   }
+   if(riskOK) g_UltraNewsExec.passMask |= ULTRA_NEWS_VAL_RISK;
+   else g_UltraNewsExec.failMask |= ULTRA_NEWS_VAL_RISK;
+
+   // Market Intelligence
    bool mkt = true;
    if(UltraMarketIntelEnabled)
       mkt = UltraMarketIntel_Approved();
    if(mkt) g_UltraNewsExec.passMask |= ULTRA_NEWS_VAL_MKTINTEL;
    else g_UltraNewsExec.failMask |= ULTRA_NEWS_VAL_MKTINTEL;
 
-   // 3) Structure Validation
+   // Structure
    bool structure = buySide
       ? (u.st.hh || u.st.hl || u.st.externalBull || u.st.internalBull || u.bos.buy || u.choch.buy)
       : (u.st.lh || u.st.ll || u.st.externalBear || u.st.internalBear || u.bos.sell || u.choch.sell);
    if(structure) g_UltraNewsExec.passMask |= ULTRA_NEWS_VAL_STRUCT;
    else g_UltraNewsExec.failMask |= ULTRA_NEWS_VAL_STRUCT;
 
-   // 4) Liquidity Validation — genuine / confirmed / strong BOS (fake alone fails)
+   // Liquidity — genuine / confirmed / strong BOS (fake alone fails)
    bool bosStrong = buySide
       ? (u.bos.buy && (u.bos.confirmed || u.bos.strong))
       : (u.bos.sell && (u.bos.confirmed || u.bos.strong));
@@ -339,13 +457,7 @@ bool UltraNewsExec_ValidateSignal(const string s, const UltraSnap &u,
       else g_UltraNewsExec.failMask |= ULTRA_NEWS_VAL_LIQ;
    }
 
-   // 5) Momentum Validation
-   bool mom = buySide ? (u.mom.momBuy || u.mom.impulse || u.ict.dispBuy)
-                      : (u.mom.momSell || u.mom.impulse || u.ict.dispSell);
-   if(mom) g_UltraNewsExec.passMask |= ULTRA_NEWS_VAL_MOM;
-   else g_UltraNewsExec.failMask |= ULTRA_NEWS_VAL_MOM;
-
-   // 6) Multi-Timeframe Validation
+   // Multi-Timeframe — conflicting master = reject
    string mtfWhy = "";
    bool mtf = UltraMTF_NoConflict(s, buySide, mtfWhy);
    int master = UltraMTF_MasterDir(s);
@@ -354,45 +466,22 @@ bool UltraNewsExec_ValidateSignal(const string s, const UltraSnap &u,
    if(mtf) g_UltraNewsExec.passMask |= ULTRA_NEWS_VAL_MTF;
    else g_UltraNewsExec.failMask |= ULTRA_NEWS_VAL_MTF;
 
-   // 7) Trade Thesis Validation — clear directional thesis shape (pre-fill)
-   bool thesis = false;
-   if(buySide)
-      thesis = (u.bos.buy || u.choch.buy || UltraLiq_IsGenuine(u, true) ||
-                (u.trend.bull && (u.ict.instZoneBuy || u.fib.atBuyZone || u.ict.inDiscount)));
-   else
-      thesis = (u.bos.sell || u.choch.sell || UltraLiq_IsGenuine(u, false) ||
-                (u.trend.bear && (u.ict.instZoneSell || u.fib.atSellZone || u.ict.inPremium)));
-   if(thesis) g_UltraNewsExec.passMask |= ULTRA_NEWS_VAL_THESIS;
-   else g_UltraNewsExec.failMask |= ULTRA_NEWS_VAL_THESIS;
-
-   // 8) Confidence Validation — never lowered for news/vol
+   // PHASE 4 — Low Confidence reject (never lowered for news/vol)
    int confFloor = UltraNewsExecMinConf;
    if(confFloor < UltraEventMinConf) confFloor = UltraEventMinConf;
    bool confOK = (u.score.confidence >= confFloor);
    if(confOK) g_UltraNewsExec.passMask |= ULTRA_NEWS_VAL_CONF;
    else g_UltraNewsExec.failMask |= ULTRA_NEWS_VAL_CONF;
 
-   // 9) Risk Validation
-   string capWhy = "";
-   bool riskOK = UltraCapitalOK(capWhy);
-   if(MaxOpenTrades > 0 && UltraExec_OpenCountMagic() >= MaxOpenTrades)
-   {
-      riskOK = false;
-      capWhy = "max open reached";
-   }
-   if(riskOK) g_UltraNewsExec.passMask |= ULTRA_NEWS_VAL_RISK;
-   else g_UltraNewsExec.failMask |= ULTRA_NEWS_VAL_RISK;
-
-   // 10) Execution Validation
+   // Execution Validation — elevated spread NEVER sole-fails
    string exWhy = "";
    bool execOK = UltraExecReady(s, exWhy);
-   // Phase 23 — elevated spread NEVER sole-fails exec; still require trade mode
    string sprNote = "";
    UltraNewsExec_HighSpreadRule(u, sprNote);
    if(execOK) g_UltraNewsExec.passMask |= ULTRA_NEWS_VAL_EXEC;
    else g_UltraNewsExec.failMask |= ULTRA_NEWS_VAL_EXEC;
 
-   // Optional: Validation Chain must be Mission-ready during news
+   // Mission-ready Validation Chain during news
    if(UltraNewsExecRequireVChain && UltraVChainEnabled)
    {
       string vWhy = "";
@@ -408,25 +497,25 @@ bool UltraNewsExec_ValidateSignal(const string s, const UltraSnap &u,
    bool all = ((g_UltraNewsExec.passMask & ULTRA_NEWS_VAL_ALL) == ULTRA_NEWS_VAL_ALL);
    if(!all)
    {
-      why = "NEWS_VAL incomplete mask=" + IntegerToString(g_UltraNewsExec.passMask) +
-            "/" + IntegerToString(ULTRA_NEWS_VAL_ALL) +
-            " fail=" + IntegerToString(g_UltraNewsExec.failMask);
-      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_TREND) != 0) why += " trend";
-      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_MKTINTEL) != 0) why += " market";
-      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_STRUCT) != 0) why += " structure";
-      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_LIQ) != 0) why += " liquidity";
-      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_MOM) != 0) why += " momentum";
-      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_MTF) != 0) why += " mtf";
-      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_THESIS) != 0) why += " thesis";
-      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_CONF) != 0) why += " confidence";
-      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_RISK) != 0) why += " risk";
-      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_EXEC) != 0) why += " exec";
+      // PHASE 4 — false signal reduction reasons (thesis-first wording)
+      why = "NEWS_VAL REJECT mask=" + IntegerToString(g_UltraNewsExec.passMask) +
+            "/" + IntegerToString(ULTRA_NEWS_VAL_ALL);
+      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_THESIS) != 0) why += " | incomplete thesis";
+      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_TREND) != 0) why += " | weak trend";
+      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_MOM) != 0) why += " | weak momentum";
+      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_RISK) != 0) why += " | poor risk";
+      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_CONF) != 0) why += " | low confidence";
+      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_MTF) != 0) why += " | conflicting signals";
+      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_MKTINTEL) != 0) why += " | market";
+      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_STRUCT) != 0) why += " | structure";
+      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_LIQ) != 0) why += " | liquidity";
+      if((g_UltraNewsExec.failMask & ULTRA_NEWS_VAL_EXEC) != 0) why += " | exec";
       g_UltraNewsExec.lastWhy = why;
       g_UltraNewsExec.lastSignalValid = false;
       return false;
    }
 
-   why = "PHASE23 NEWS_VAL PASS event=" + g_UltraNewsExec.eventName +
+   why = "NEWS_VAL PASS event=" + g_UltraNewsExec.eventName +
          " phase=" + g_UltraNewsExec.phase +
          " conf=" + IntegerToString(u.score.confidence) +
          " spr=" + DoubleToString(g_UltraNewsExec.lastSpread, 0) +
@@ -510,6 +599,24 @@ bool UltraNewsExec_AllowTrade(const string s, UltraSnap &u, const bool buySide, 
    if(valMs < 25) valMs = 25;
    g_UltraNewsExec.lastValidateMs = now;
 
+   // PHASE 2 — Market Stabilization before entry
+   string stWhy = "";
+   if(!UltraNewsExec_StabilityOK(u, buySide, stWhy))
+   {
+      why = stWhy;
+      g_UltraNewsExec.lastTradeAllowed = false;
+      g_UltraNewsExec.eventFlatCount++;
+      g_UltraNewsExec.lastWhy = why;
+      UltraEvent_Note(UEV_EVENT_FLAT);
+      if(UltraNewsExecLog)
+         UltraLogDecision("EVENT_FLAT", 0, buySide ? "BUY" : "SELL",
+                          g_UltraNewsExec.eventName, u.score.confidence,
+                          u.ctx.eventConfidence, g_UltraNewsExec.phase,
+                          g_UltraNewsExec.phase, u.ctx.spreadPts, u.ctx.slipProxy, why);
+      return false;
+   }
+
+   // PHASE 3/4 — Signal Validation + False Signal Reduction
    string vWhy = "";
    if(!UltraNewsExec_ValidateSignal(s, u, buySide, vWhy))
    {
@@ -527,9 +634,9 @@ bool UltraNewsExec_AllowTrade(const string s, UltraSnap &u, const bool buySide, 
       return false;
    }
 
-   // Proprietary strategy remains fully validated — allow
+   // Proprietary strategy remains fully validated — allow → Mission Control next
    why = "NEWS_EXEC READY event=" + g_UltraNewsExec.eventName +
-         " | " + vWhy + " | " + evWhy;
+         " | " + stWhy + " | " + vWhy + " | " + evWhy;
    g_UltraNewsExec.lastTradeAllowed = true;
    g_UltraNewsExec.lastWhy = why;
    g_UltraNewsExec.lastSpread = u.ctx.spreadPts;
@@ -582,15 +689,31 @@ void UltraNewsExec_NoteFill(const ulong ticket, const string s, const bool buySi
    g_UltraNewsExec.fillOkCount++;
    g_UltraNewsExec.lastFillDetail = detail;
    string side = buySide ? "BUY" : "SELL";
+
+   // PHASE 5 — actual fill slippage vs prepared quote (when available)
+   double actSlip = g_UltraNewsExec.lastSlip;
+   if(UltraNewsExecLogActualSlippage && ticket > 0 && PositionSelectByTicket(ticket))
+   {
+      double openPx = PositionGetDouble(POSITION_PRICE_OPEN);
+      double expected = buySide ? g_UltraNewsPacket.ask : g_UltraNewsPacket.bid;
+      double point = SymbolInfoDouble(s, SYMBOL_POINT);
+      if(expected > 0.0 && openPx > 0.0 && point > 0.0)
+      {
+         actSlip = buySide ? ((openPx - expected) / point)
+                           : ((expected - openPx) / point);
+         g_UltraNewsExec.lastSlip = actSlip;
+      }
+   }
+
    string msg = "NEWS_FILL event=" + g_UltraNewsExec.eventName +
                 " ticket=" + IntegerToString((int)ticket) +
                 " " + side + " " + detail +
                 " spr=" + DoubleToString(g_UltraNewsExec.lastSpread, 0) +
-                " slip=" + DoubleToString(g_UltraNewsExec.lastSlip, 1);
+                " slip=" + DoubleToString(actSlip, 1);
    UltraLogDecision("EVENT_FILL", ticket, side, g_UltraNewsExec.eventName,
                     g_UltraNewsExec.lastConf, g_UltraNewsExec.impact,
                     g_UltraNewsExec.phase, "FILL", g_UltraNewsExec.lastSpread,
-                    g_UltraNewsExec.lastSlip, msg);
+                    actSlip, msg);
    if(UltraNewsExecLog)
       UltraLog(msg + " on " + s);
 
@@ -598,7 +721,7 @@ void UltraNewsExec_NoteFill(const ulong ticket, const string s, const bool buySi
    UltraNewsExec_ProtocolLog("OK", ticket, buySide, 0, detail);
    UltraNewsExec_ProtocolDisarm("fill_ok");
 
-   // Instant position verification
+   // Instant position verification + activate monitoring
    if(ticket > 0)
    {
       if(!PositionSelectByTicket(ticket))
@@ -728,9 +851,35 @@ bool UltraNewsExec_ProtocolSubmit(const string s, const bool buySide, string &wh
          UltraNewsExec_ProtocolDisarm(why);
          return false;
       }
+
+      // PHASE 5 — prepared packet freshness (fast news market)
+      if(UltraNewsExecMaxPacketAgeMs > 0 && g_UltraNewsPacket.preparedMs > 0)
+      {
+         long age = (long)GetTickCount() - g_UltraNewsPacket.preparedMs;
+         if(age < 0) age = 0;
+         if(age > UltraNewsExecMaxPacketAgeMs)
+         {
+            if(g_UltraNewsExec.lastSignalValid)
+            {
+               g_UltraNewsPacket.bid = SymbolInfoDouble(s, SYMBOL_BID);
+               g_UltraNewsPacket.ask = SymbolInfoDouble(s, SYMBOL_ASK);
+               g_UltraNewsPacket.preparedMs = (long)GetTickCount();
+               if(UltraNewsExecLog)
+                  UltraLog("NEWS_PACKET refresh stale age=" + IntegerToString((int)age) +
+                           "ms on " + s);
+            }
+            else
+            {
+               why = "packet stale age=" + IntegerToString((int)age) + "ms";
+               UltraNewsExec_ProtocolLog("CANCEL", 0, buySide, 0, why);
+               UltraNewsExec_ProtocolDisarm(why);
+               return false;
+            }
+         }
+      }
    }
 
-   // Minimize latency: refresh quotes only — submit immediately after confirm
+   // PHASE 5 — Submit Immediately after confirm
    string execWhy = "";
    if(!UltraExecReady(s, execWhy))
    {

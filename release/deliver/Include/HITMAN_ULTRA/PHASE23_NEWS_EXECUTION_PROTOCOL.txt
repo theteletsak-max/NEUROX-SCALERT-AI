@@ -47,9 +47,11 @@ NEWS EXECUTION RULES
 ============================================================
 IMPLEMENTATION
   Module: UltraNewsExecution.mqh
-  API: HighSpreadRule · EnterMode · AllowTrade · Protocol*
+  API: HighSpreadRule · DetectContext · StabilityOK · ValidateSignal
+       EnterMode · AllowTrade · Protocol*
   InstantPath / Phase23Boost raise exec priority
   Protocol: Prepare → Submit → Verify → Retry(re-analyze) → Cancel/Log
+  Quality mission: ULTRA_EVENT_NEWS_TRADING_QUALITY.txt (Phases 1–6)
 
 LOCKS
   Never force trades · never news-only reject · never spread-only reject

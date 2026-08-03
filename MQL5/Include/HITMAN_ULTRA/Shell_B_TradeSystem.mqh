@@ -130,6 +130,12 @@ int OnInit()
          " RetryMs=", UltraNewsExecProtocolRetryMs,
          " MinConf=", UltraNewsExecMinConf,
          " HighSpread=NEVER_AUTO_REJECT");
+   Print("EVENT/NEWS TRADING QUALITY: Calendar=", UltraYN(UltraNewsExecUseCalendarContext),
+         " Stability=", UltraYN(UltraNewsExecRequireStability),
+         " MinStab=", UltraNewsExecMinStabilityScore,
+         " PacketAgeMs=", UltraNewsExecMaxPacketAgeMs,
+         " StrongerOnWeakExec=", UltraYN(UltraNewsExecStrongerOnWeakExec),
+         " | Phases 1-6 detect→stabilize→validate→exec→manage");
    Print("P08 TARGET INTEL ∞: Enabled=", UltraYN(UltraTargetEnabled),
          " Strict=", UltraYN(UltraTargetStrict),
          " TP3=", UltraYN(UltraTargetEnableTP3),
@@ -4518,6 +4524,23 @@ void ManageOpenTrades()
 
          ENUM_SUPREME_DECISION mission = UltraMission_PositionCommand(ticket, BrokerSymbol, isBuyPos, sxSnap, sxWhy);
          ENUM_SMART_EXIT sx = UltraMission_ToSmartExit(mission);
+
+         // PHASE 6 — Ultra Position Management during news (thesis monitor log)
+         if(UltraNewsExec_IsNewsMode() && UltraNewsExecLog)
+         {
+            static datetime s_newsPosLogBar = 0;
+            datetime nb = iTime(BrokerSymbol, EntryTF, 0);
+            if(nb != s_newsPosLogBar)
+            {
+               s_newsPosLogBar = nb;
+               Print("NEWS_POS_MGMT ticket=", ticket,
+                     " cmd=", UltraMission_Name(mission),
+                     " event=", g_UltraNewsExec.eventName,
+                     " phase=", g_UltraNewsExec.phase,
+                     " thesis=", sxWhy,
+                     " on ", BrokerSymbol);
+            }
+         }
 
          // Minimum hold before Mission EXIT can fire (protect fresh entries)
          int minMissionExitBars = MinimumHoldBars;
@@ -11723,24 +11746,30 @@ bool NewsAwarenessInWindow(string &detail)
    if(hit <= 0)
    {
       detail = "news: no relevant high-impact in window";
+      UltraNews_SetCalendarContext(false, 0, "");
       return false;
    }
 
    detail = StringFormat("news AWARE high-impact x%d [%s] — NOT blocking trades", hit, names);
+   UltraNews_SetCalendarContext(true, hit, names);
    return true;
 }
 
 void UpdateNewsAwareness()
 {
    if(!EnableNewsAwareness)
+   {
+      UltraNews_SetCalendarContext(false, 0, "");
       return;
+   }
 
    datetime barTime = iTime(BrokerSymbol, EntryTF, 0);
-   if(NewsAwarenessLogOncePerBar && barTime > 0 && barTime == g_NewsAwareLastLogBar)
-      return;
-
+   // Always refresh calendar context for Ultra News Mode (log still throttled)
    string detail = "";
    bool inWin = NewsAwarenessInWindow(detail);
+
+   if(NewsAwarenessLogOncePerBar && barTime > 0 && barTime == g_NewsAwareLastLogBar)
+      return;
    if(barTime > 0)
       g_NewsAwareLastLogBar = barTime;
 

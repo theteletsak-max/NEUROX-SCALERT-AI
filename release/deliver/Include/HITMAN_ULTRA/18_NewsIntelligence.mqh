@@ -7,6 +7,20 @@
 //| Context Only · Trades Before / During / After · NEVER hard-block |
 //+------------------------------------------------------------------+
 
+// Shared calendar awareness (set by Shell UpdateNewsAwareness; read by EngNews/Detect)
+bool     g_UltraCalInWindow = false;
+string   g_UltraCalNames = "";
+int      g_UltraCalHitCount = 0;
+datetime g_UltraCalUpdated = 0;
+
+void UltraNews_SetCalendarContext(const bool inWindow, const int hitCount, const string names)
+{
+   g_UltraCalInWindow = inWindow;
+   g_UltraCalHitCount = hitCount;
+   g_UltraCalNames = names;
+   g_UltraCalUpdated = TimeCurrent();
+}
+
 bool UltraNews_IsFirstFridayGMT(const MqlDateTime &t)
 {
    if(t.day_of_week != 5) return false; // Friday
@@ -101,6 +115,23 @@ void UltraEngNews(const string s, UltraSnap &u)
       u.ctx.eventImpact = 1;
    }
 
+   // PHASE 1 — wire live MQL5 calendar window (never forces / never sole-blocks)
+   if(UltraNewsExecUseCalendarContext && g_UltraCalInWindow &&
+      g_UltraCalUpdated > 0 && (TimeCurrent() - g_UltraCalUpdated) <= 120)
+   {
+      if(u.ctx.eventClass == "NONE")
+         u.ctx.eventClass = "MAJOR";
+      if(u.ctx.eventImpact < 2)
+         u.ctx.eventImpact = 2;
+      // Upcoming calendar → BEFORE unless already in high-vol DURING
+      if(!u.ctx.duringNews)
+      {
+         u.ctx.beforeNews = true;
+         if(u.ctx.newsPhase == "NONE")
+            u.ctx.newsPhase = "BEFORE";
+      }
+   }
+
    // Event-context confidence (informational — never a sole reject)
    int ec = 50;
    if(u.ctx.duringNews) ec = 70;
@@ -109,6 +140,7 @@ void UltraEngNews(const string s, UltraSnap &u)
    if(u.ctx.eventClass == "NFP" || u.ctx.eventClass == "FOMC") ec += 15;
    if(u.ctx.eventClass == "CPI" || u.ctx.eventClass == "RATES") ec += 10;
    if(u.ctx.newsVol) ec += 5;
+   if(g_UltraCalInWindow) ec += 8;
    if(ec > 100) ec = 100;
    u.ctx.eventConfidence = ec;
 
