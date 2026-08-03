@@ -99,9 +99,12 @@ PHASE 16 — ENVIRONMENT COMPATIBILITY ENGINE
   Detect · broker adapt · data validate · sync · readiness
   LOCK: NEVER changes Strategy/Risk/Thesis/Mission — exec only
 
-PHASE 17 — LOW-LATENCY ENGINE
-  UltraLowLatency.mqh · UltraPerf* inputs
-  LOCK: never skips ManageOpenTrades / Mission / Execute on price change
+PHASE 17 — LOW-LATENCY & PERFORMANCE ENGINE
+  UltraLowLatencyIntelligence · UltraLowLatency · 37_Optimization
+  MASTER SPEC CHAPTER 17 — CPU/mem/cache/tick · schedule · monitors
+  Outputs: runtime · CPU · memory · cache · performance (LL17)
+  LOCK: NEVER changes strategy · NEVER skips ManageOpenTrades /
+        Mission / Execute on price change · optimize only
 
 PHASE 18 — QUALITY ASSURANCE ENGINE
   UltraQualityAssurance.mqh — consistency / integrity / conflict audit

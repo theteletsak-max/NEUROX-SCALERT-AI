@@ -323,6 +323,10 @@ string UltraDashboardIntel_PanelHealth()
    t += "\n";
    t += UltraEnvIntel_Dashboard();
    t += "\n";
+   t += UltraLowLatencyIntel_Dashboard();
+   t += "\n";
+   t += UltraLL_Dashboard();
+   t += "\n";
    t += UltraBT_Dashboard();
    t += "\n";
    t += UltraZFR_Dashboard();

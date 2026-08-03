@@ -35,6 +35,7 @@ order = [
     "UltraStopEvolution.mqh",
     "UltraMaintenance.mqh",
     "UltraLowLatency.mqh",
+    "37_Optimization.mqh",  # LL cadence helper — early with P17
     "UltraZeroFailRecovery.mqh",
     "UltraRiskIntelligence.mqh",
     "UltraExecutionIntelligence.mqh",
@@ -43,12 +44,13 @@ order = [
     "UltraTradeGate.mqh",
     "UltraRecoveryIntelligence.mqh",  # Ch15 after Logger+ZFR; before Dashboard consumers
     "UltraEnvironmentIntelligence.mqh",  # Ch16 env compat (BT+broker facade)
+    "UltraLowLatencyIntelligence.mqh",  # Ch17 LL/perf facade
     "UltraDashboardIntelligence.mqh",  # after TradeGate (g_UltraTradeGate state)
     "UltraQualityAssurance.mqh",
     "UltraModuleManager.mqh",
     "UFSE_FastSignalEngine.mqh",
     "21_TradeManagement.mqh","22_MultiSymbol.mqh",
-    "25_Statistics.mqh","37_Optimization.mqh","24_Dashboard.mqh",
+    "25_Statistics.mqh","24_Dashboard.mqh",
     "33_OrderManagement.mqh",
     "34_PositionManagement.mqh",
     "38_Backtesting.mqh","40_DebugTools.mqh",

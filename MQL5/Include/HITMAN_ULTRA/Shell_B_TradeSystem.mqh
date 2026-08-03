@@ -82,7 +82,8 @@ int OnInit()
    UltraDashboardIntel_Boot(); // P14 Dashboard (display only)
    UltraStopEvo_Boot();     // P10 support — Stop Evolution
    UltraMaint_Boot();       // P19 Maintenance orchestrator
-   UltraLL_Boot();          // P17 Low-Latency Engine
+   UltraLL_Boot();          // P17 Low-Latency core
+   UltraLowLatencyIntel_Boot(); // P17 Low-Latency Intelligence (Ch17 facade)
    UltraZFR_Boot();         // P15 Zero-Fail Recovery executor
    UltraRecoveryIntel_Boot(); // P15 Recovery Intelligence (Ch15 facade)
    // Re-note handles after Boot zero (InitializeIndicators ran earlier)
@@ -185,8 +186,13 @@ int OnInit()
          " Ready=", UltraEnvIntel_ReadyName(g_UltraEnvIntel.readiness),
          " Locks=strategy/risk/thesis/mission",
          " (exec adapts only · never changes strategy)");
+   Print("P17 LOW-LATENCY INTEL (Ch17): Boot=", UltraYN(g_UltraLLIntel.booted),
+         " Enabled=", UltraYN(UltraLowLatencyEnabled),
+         " Status=", g_UltraLLIntel.statusName,
+         " Sched=", g_UltraLLIntel.scheduleOrder,
+         " (never changes strategy · optimizes performance only)");
    UltraLoggerIntel_LogSystem("STARTUP", "OnInit complete Internal Standard v6+ HA_ULTRA_93");
-   Print("MAIN FLOW v6+: Foundation→Market→Strategy→Signal→News→Mission→Risk→Exec→Target→PosEvo→Exit→Analytics→Logger→Dashboard→Recovery→Env");
+   Print("MAIN FLOW v6+: Foundation→Market→Strategy→Signal→News→Mission→Risk→Exec→Target→PosEvo→Exit→Analytics→Logger→Dashboard→Recovery→Env→LL");
    Print("P07 RISK / TRADE GATE: Enabled=", UltraYN(UltraTradeGateEnabled),
          " RequireTargets=", UltraYN(UltraTradeGateRequireTargets),
          " — ANY validation fail = NO TRADE");
@@ -1114,8 +1120,8 @@ void RunTradingCycle(string symbol)
 
    BrokerSymbol = symbol;
 
-   // ULTRA LOW-LATENCY — tick budget (UltraOpt cycle + latency stamp)
-   UltraLL_OnTickStart();
+   // ULTRA LOW-LATENCY — tick budget (Ch17 facade → UltraLL + UltraOpt)
+   UltraLowLatencyIntel_OnTickStart();
 
    // INTERNAL STANDARD v6+ — tick cycle
    // Decide path: P3→P4→P5→P6→P7→P8→P9 inside InstantExecution
@@ -1128,7 +1134,7 @@ void RunTradingCycle(string symbol)
    if(UltraFoundationEnabled && g_UltraFoundation.status == "RED")
    {
       ManageOpenTrades(); // still protect open positions — never abandon risk
-      UltraLL_OnTickEnd();
+      UltraLowLatencyIntel_OnTickEnd();
       return;
    }
 
@@ -1139,7 +1145,7 @@ void RunTradingCycle(string symbol)
       UltraRecoveryIntel_OnTick(symbol); // keep recovering data path
       UltraEnvIntel_OnTick(symbol);
       ManageOpenTrades(); // still protect open positions — never abandon risk
-      UltraLL_OnTickEnd();
+      UltraLowLatencyIntel_OnTickEnd();
       return;
    }
 
@@ -1152,13 +1158,13 @@ void RunTradingCycle(string symbol)
       if(!UltraSystemHealth_Update(symbol))
       {
          ManageOpenTrades(); // still protect open positions
-         UltraLL_OnTickEnd();
+         UltraLowLatencyIntel_OnTickEnd();
          return;
       }
    }
 
    // Cadenced heavy pass (P12 Analytics / P18 QA / P19 Maint) — never blocks Manage/Exec
-   bool heavyPass = UltraLL_AllowMaintPass();
+   bool heavyPass = UltraLowLatencyIntel_AllowMaintPass();
    if(heavyPass)
    {
       // P12 Performance Analytics — continuous soft re-analysis
@@ -1183,7 +1189,7 @@ void RunTradingCycle(string symbol)
       InstantExecution();
 
    UltraBug_PerfEnd(symbol);
-   UltraLL_OnTickEnd();
+   UltraLowLatencyIntel_OnTickEnd();
 }
 
 void OnTimer()
@@ -3650,6 +3656,7 @@ bool ExecuteBuy()
       RecordSignalSnapshot(posTicket, true);
       UltraLL_SetExecTicket(posTicket, true, g_PendingStrategyTag);
       UltraLL_SetPipelineStage(7); // Protection Activated (state registered)
+      UltraLowLatencyIntel_NoteConfirm();
       UltraLL_MarkTimeWait(false);
       UltraSignalIntel_MarkExecuted(g_UltraLastSignal);
       UltraSignalIntel_Archive(g_UltraLastSignal);
@@ -4124,6 +4131,7 @@ bool ExecuteSell()
       RecordSignalSnapshot(posTicket, false);
       UltraLL_SetExecTicket(posTicket, false, g_PendingStrategyTag);
       UltraLL_SetPipelineStage(7);
+      UltraLowLatencyIntel_NoteConfirm();
       UltraLL_MarkTimeWait(false);
       UltraSignalIntel_MarkExecuted(g_UltraLastSignal);
       UltraSignalIntel_Archive(g_UltraLastSignal);
@@ -11690,7 +11698,7 @@ void InstantExecution()
    // ULTRA LOW-LATENCY — earliest safe short-circuit BEFORE news/market prelude
    // (UltraSmartTickUnchanged has side effects — call at most once per InstantExecution)
    bool smartTickChecked = false;
-   if(UltraLL_ShouldEarlySkipEntry())
+   if(UltraLowLatencyIntel_ShouldEarlySkipEntry())
    {
       UltraLL_NoteSkipEntry();
       return;
@@ -11812,6 +11820,7 @@ void InstantExecution()
       Print("BUY approved (", BrokerSymbol, ") [", strategyTag, "]");
       g_PendingStrategyTag = strategyTag;
       UltraLL_SetPipelineStage(3); // Order Prepared
+      UltraLowLatencyIntel_NotePrep();
       if(ExecuteBuy())
       {
          UltraDiscipline_OnFill(BrokerSymbol, true, strategyTag, g_UltraLastSnap);
@@ -11860,6 +11869,7 @@ void InstantExecution()
       Print("SELL approved (", BrokerSymbol, ") [", strategyTag, "]");
       g_PendingStrategyTag = strategyTag;
       UltraLL_SetPipelineStage(3); // Order Prepared
+      UltraLowLatencyIntel_NotePrep();
       if(ExecuteSell())
       {
          UltraDiscipline_OnFill(BrokerSymbol, false, strategyTag, g_UltraLastSnap);

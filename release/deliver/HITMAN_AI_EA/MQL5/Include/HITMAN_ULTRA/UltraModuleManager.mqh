@@ -261,9 +261,20 @@ void UltraMod_Refresh()
                    envOK, envDetail);
    }
 
-   // PHASE 17 — Low-Latency
-   UltraMod_Reg("P17_LOW_LATENCY", false, UltraLowLatencyEnabled, UltraLowLatencyEnabled,
-                UltraLowLatencyEnabled ? g_UltraLL.summary : "OFF");
+   // PHASE 17 — Low-Latency & Performance (Chapter 17)
+   {
+      bool llOK = g_UltraLLIntel.booted &&
+                  (!UltraLowLatencyEnabled || g_UltraLLIntel.healthy);
+      string llDetail = g_UltraLLIntel.statusName;
+      llDetail += " cpu=";
+      llDetail += g_UltraLLIntel.cpuStatus;
+      llDetail += " cache=";
+      llDetail += g_UltraLLIntel.cacheStatus;
+      llDetail += " lat=";
+      llDetail += IntegerToString((int)g_UltraLLIntel.lastTickMs);
+      llDetail += "ms";
+      UltraMod_Reg("P17_LOW_LATENCY", true, UltraLowLatencyEnabled, llOK, llDetail);
+   }
 
    // PHASE 18 — Quality Assurance
    bool qaOK = (!UltraQAEnabled) || g_UltraQA.ok;

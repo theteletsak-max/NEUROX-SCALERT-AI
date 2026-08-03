@@ -62,8 +62,9 @@ PHASE 16 — ENVIRONMENT COMPATIBILITY ENGINE
   UltraEnvironmentIntelligence · UltraBacktestCompat · BrokerCompat
   MASTER SPEC CHAPTER 16 — one strategy · exec adapts only
 
-PHASE 17 — LOW-LATENCY ENGINE
-  UltraLowLatency.mqh · UltraPerf* inputs
+PHASE 17 — LOW-LATENCY & PERFORMANCE ENGINE
+  UltraLowLatencyIntelligence · UltraLowLatency · 37_Optimization
+  MASTER SPEC CHAPTER 17 — never changes strategy · optimize only
   LOCK: never skips ManageOpenTrades / Mission / Execute on price change
 
 PHASE 18 — QUALITY ASSURANCE ENGINE
