@@ -17458,6 +17458,492 @@ string UltraRiskIntel_Dashboard()
 #endif // HITMAN_ULTRA_RISK_INTELLIGENCE_MQH
 //===== END UltraRiskIntelligence.mqh =====
 
+//===== BEGIN UltraExecutionIntelligence.mqh =====
+#ifndef HITMAN_ULTRA_EXECUTION_INTELLIGENCE_MQH
+#define HITMAN_ULTRA_EXECUTION_INTELLIGENCE_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — MASTER SPEC CHAPTER 8 · EXECUTION INTELLIGENCE       |
+//| Prepare · broker-adapt · validate · submit · verify · sync       |
+//| NEVER creates signals · NEVER changes strategy                   |
+//| ONLY executes Mission Control decisions                          |
+//+------------------------------------------------------------------+
+
+// Shell_B (defined later in assemble)
+bool HasSufficientMargin(ENUM_ORDER_TYPE orderType, double lot, double price);
+
+enum ENUM_ULTRA_EXEC_OUTCOME
+{
+   UEXEC_NONE = 0,
+   UEXEC_PREPARED,
+   UEXEC_SUBMITTING,
+   UEXEC_OPEN,
+   UEXEC_VERIFIED,
+   UEXEC_FAILED,
+   UEXEC_RECOVERY_REQUIRED
+};
+
+struct UltraExecPacket
+{
+   bool   armed;
+   bool   isBuy;
+   string symbol;
+   string comment;
+   double volume;
+   double entry;
+   double sl;
+   double tp;          // primary TP (TP1)
+   double tp2;
+   double tp3;
+   long   magic;
+   ENUM_ORDER_TYPE_FILLING filling;
+   int    stopsLevel;
+   int    freezeLevel;
+   double volumeMin;
+   double volumeMax;
+   double volumeStep;
+   double tickSize;
+   double contractSize;
+   long   preparedMs;
+};
+
+struct UltraExecIntelState
+{
+   bool   booted;
+   bool   missionLocked;       // only Mission decisions allowed
+   ENUM_ULTRA_EXEC_OUTCOME outcome;
+   string outcomeName;
+   string status;              // READY | PREPARED | OPEN | VERIFIED | FAILED | RECOVERY
+   string detail;
+   string symbol;
+   bool   isBuy;
+   double volume;
+   double entry;
+   double sl;
+   double tp;
+   ulong  orderTicket;
+   ulong  positionTicket;
+   uint   lastRetcode;
+   int    retryCount;
+   bool   verified;
+   bool   synced;
+   bool   recoveryRequired;
+   // Broker intelligence snapshot
+   int    stopsLevel;
+   int    freezeLevel;
+   int    fillingMode;
+   double volumeMin;
+   double volumeMax;
+   double volumeStep;
+   double tickSize;
+   double contractSize;
+   string fillingName;
+   long   lastMs;
+   ulong  prepareCount;
+   ulong  submitCount;
+   ulong  verifyCount;
+   ulong  failCount;
+   ulong  recoverCount;
+};
+
+UltraExecIntelState g_UltraExecIntel;
+UltraExecPacket     g_UltraExecPacket;
+
+//--------------------------------------------------------------------//
+string UltraExecIntel_OutcomeName(const ENUM_ULTRA_EXEC_OUTCOME o)
+{
+   switch(o)
+   {
+      case UEXEC_PREPARED:           return "PREPARED";
+      case UEXEC_SUBMITTING:         return "SUBMITTING";
+      case UEXEC_OPEN:               return "POSITION_OPEN";
+      case UEXEC_VERIFIED:           return "POSITION_VERIFIED";
+      case UEXEC_FAILED:             return "POSITION_FAILED";
+      case UEXEC_RECOVERY_REQUIRED:  return "RECOVERY_REQUIRED";
+      default:                       return "NONE";
+   }
+}
+
+void UltraExecIntel_Boot()
+{
+   g_UltraExecIntel.booted = true;
+   g_UltraExecIntel.missionLocked = true;
+   g_UltraExecIntel.outcome = UEXEC_NONE;
+   g_UltraExecIntel.outcomeName = "NONE";
+   g_UltraExecIntel.status = "READY";
+   g_UltraExecIntel.detail = "boot";
+   g_UltraExecIntel.symbol = "";
+   g_UltraExecIntel.isBuy = true;
+   g_UltraExecIntel.volume = g_UltraExecIntel.entry = 0.0;
+   g_UltraExecIntel.sl = g_UltraExecIntel.tp = 0.0;
+   g_UltraExecIntel.orderTicket = g_UltraExecIntel.positionTicket = 0;
+   g_UltraExecIntel.lastRetcode = 0;
+   g_UltraExecIntel.retryCount = 0;
+   g_UltraExecIntel.verified = g_UltraExecIntel.synced = false;
+   g_UltraExecIntel.recoveryRequired = false;
+   g_UltraExecIntel.stopsLevel = g_UltraExecIntel.freezeLevel = 0;
+   g_UltraExecIntel.fillingMode = 0;
+   g_UltraExecIntel.volumeMin = g_UltraExecIntel.volumeMax = 0.0;
+   g_UltraExecIntel.volumeStep = g_UltraExecIntel.tickSize = 0.0;
+   g_UltraExecIntel.contractSize = 0.0;
+   g_UltraExecIntel.fillingName = "RETURN";
+   g_UltraExecIntel.lastMs = 0;
+   g_UltraExecIntel.prepareCount = g_UltraExecIntel.submitCount = 0;
+   g_UltraExecIntel.verifyCount = g_UltraExecIntel.failCount = 0;
+   g_UltraExecIntel.recoverCount = 0;
+   g_UltraExecPacket.armed = false;
+}
+
+void UltraExecIntel_SetOutcome(const ENUM_ULTRA_EXEC_OUTCOME o, const string detail)
+{
+   g_UltraExecIntel.outcome = o;
+   g_UltraExecIntel.outcomeName = UltraExecIntel_OutcomeName(o);
+   g_UltraExecIntel.detail = detail;
+   g_UltraExecIntel.lastMs = (long)GetTickCount();
+   if(o == UEXEC_PREPARED) g_UltraExecIntel.status = "PREPARED";
+   else if(o == UEXEC_SUBMITTING) g_UltraExecIntel.status = "SUBMITTING";
+   else if(o == UEXEC_OPEN) g_UltraExecIntel.status = "OPEN";
+   else if(o == UEXEC_VERIFIED) g_UltraExecIntel.status = "VERIFIED";
+   else if(o == UEXEC_FAILED) g_UltraExecIntel.status = "FAILED";
+   else if(o == UEXEC_RECOVERY_REQUIRED) g_UltraExecIntel.status = "RECOVERY";
+}
+
+void UltraExecIntel_Log(const string verb)
+{
+   string line = "EXEC_INTEL ";
+   line += verb;
+   line += " ";
+   line += g_UltraExecIntel.outcomeName;
+   line += " ";
+   line += g_UltraExecIntel.symbol;
+   line += (g_UltraExecIntel.isBuy ? " BUY" : " SELL");
+   line += " vol=";
+   line += DoubleToString(g_UltraExecIntel.volume, 2);
+   line += " entry=";
+   line += DoubleToString(g_UltraExecIntel.entry, (int)SymbolInfoInteger(g_UltraExecIntel.symbol, SYMBOL_DIGITS));
+   line += " sl=";
+   line += DoubleToString(g_UltraExecIntel.sl, (int)SymbolInfoInteger(g_UltraExecIntel.symbol, SYMBOL_DIGITS));
+   line += " tp=";
+   line += DoubleToString(g_UltraExecIntel.tp, (int)SymbolInfoInteger(g_UltraExecIntel.symbol, SYMBOL_DIGITS));
+   line += " ret=";
+   line += IntegerToString((int)g_UltraExecIntel.lastRetcode);
+   line += " ticket=";
+   line += IntegerToString((int)g_UltraExecIntel.positionTicket);
+   line += " | ";
+   line += g_UltraExecIntel.detail;
+   UltraLog(line);
+}
+
+//--------------------------------------------------------------------//
+// §3 BROKER INTELLIGENCE — adapt to broker requirements              //
+//--------------------------------------------------------------------//
+void UltraExecIntel_BrokerRefresh(const string s)
+{
+   long stops = 0, freeze = 0, fill = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL, stops);
+   SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL, freeze);
+   SymbolInfoInteger(s, SYMBOL_FILLING_MODE, fill);
+   g_UltraExecIntel.stopsLevel = (int)stops;
+   g_UltraExecIntel.freezeLevel = (int)freeze;
+   g_UltraExecIntel.fillingMode = (int)fill;
+   g_UltraExecIntel.volumeMin = SymbolInfoDouble(s, SYMBOL_VOLUME_MIN);
+   g_UltraExecIntel.volumeMax = SymbolInfoDouble(s, SYMBOL_VOLUME_MAX);
+   g_UltraExecIntel.volumeStep = SymbolInfoDouble(s, SYMBOL_VOLUME_STEP);
+   g_UltraExecIntel.tickSize = SymbolInfoDouble(s, SYMBOL_TRADE_TICK_SIZE);
+   g_UltraExecIntel.contractSize = SymbolInfoDouble(s, SYMBOL_TRADE_CONTRACT_SIZE);
+
+   if((fill & SYMBOL_FILLING_FOK) != 0)
+   { g_UltraExecPacket.filling = ORDER_FILLING_FOK; g_UltraExecIntel.fillingName = "FOK"; }
+   else if((fill & SYMBOL_FILLING_IOC) != 0)
+   { g_UltraExecPacket.filling = ORDER_FILLING_IOC; g_UltraExecIntel.fillingName = "IOC"; }
+   else
+   { g_UltraExecPacket.filling = ORDER_FILLING_RETURN; g_UltraExecIntel.fillingName = "RETURN"; }
+
+   g_UltraExecPacket.stopsLevel = g_UltraExecIntel.stopsLevel;
+   g_UltraExecPacket.freezeLevel = g_UltraExecIntel.freezeLevel;
+   g_UltraExecPacket.volumeMin = g_UltraExecIntel.volumeMin;
+   g_UltraExecPacket.volumeMax = g_UltraExecIntel.volumeMax;
+   g_UltraExecPacket.volumeStep = g_UltraExecIntel.volumeStep;
+   g_UltraExecPacket.tickSize = g_UltraExecIntel.tickSize;
+   g_UltraExecPacket.contractSize = g_UltraExecIntel.contractSize;
+}
+
+//--------------------------------------------------------------------//
+// §1 / §4 READY + VALIDATION (never signals)                         //
+//--------------------------------------------------------------------//
+bool UltraExecIntel_Ready(const string s, string &why)
+{
+   why = "";
+   if(!UltraExecReady(s, why)) return false;
+   UltraExecIntel_BrokerRefresh(s);
+   if(g_UltraExecIntel.volumeMin <= 0.0)
+   { why = "invalid volume min"; return false; }
+   if(g_UltraExecIntel.tickSize <= 0.0)
+   { why = "invalid tick size"; return false; }
+   if(g_UltraExecIntel.contractSize <= 0.0)
+   { why = "invalid contract size"; return false; }
+   return true;
+}
+
+bool UltraExecIntel_MissionAllows(const bool isBuy, string &why)
+{
+   why = "";
+   if(!g_UltraExecIntel.missionLocked) return true;
+   // Only Mission Control decisions — Phase A sticky entry
+   if(UltraPhaseA_MissionSoleAuthority)
+   {
+      if(!UltraMission_HasFinalEntry(isBuy))
+      {
+         why = "EXEC: no Mission final ";
+         why += isBuy ? "BUY" : "SELL";
+         return false;
+      }
+   }
+   return true;
+}
+
+bool UltraExecIntel_ValidatePacket(const UltraExecPacket &p, string &why)
+{
+   why = "";
+   if(!p.armed)
+   { why = "order not prepared"; return false; }
+   if(StringLen(p.symbol) == 0)
+   { why = "missing symbol"; return false; }
+   if(p.volume < p.volumeMin || (p.volumeMax > 0.0 && p.volume > p.volumeMax))
+   { why = "invalid volume"; return false; }
+   if(p.entry <= 0.0)
+   { why = "invalid entry price"; return false; }
+   if(p.sl <= 0.0)
+   { why = "invalid stop loss"; return false; }
+   // Broker stops distance
+   double point = SymbolInfoDouble(p.symbol, SYMBOL_POINT);
+   if(point <= 0.0) point = _Point;
+   double minDist = (double)p.stopsLevel * point;
+   if(minDist > 0.0 && MathAbs(p.entry - p.sl) + 1e-12 < minDist)
+   { why = "SL inside stops level"; return false; }
+   if(p.tp > 0.0 && minDist > 0.0 && MathAbs(p.entry - p.tp) + 1e-12 < minDist)
+   { why = "TP inside stops level"; return false; }
+   // Freeze level is broker intel for modify/pending — never hard-block market entry
+   // (live ≈ entry on market orders; a freeze check would reject every fill).
+   if(p.magic == 0)
+   { why = "magic number missing"; return false; }
+   if(StringLen(p.comment) == 0)
+   { why = "trade comment missing"; return false; }
+   if(p.volumeStep > 0.0)
+   {
+      double steps = p.volume / p.volumeStep;
+      if(MathAbs(steps - MathRound(steps)) > 1e-6)
+      { why = "volume not on broker step"; return false; }
+   }
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// §2 ORDER PREPARATION                                               //
+//--------------------------------------------------------------------//
+bool UltraExecIntel_Prepare(const string s, const bool isBuy,
+                            const double entry, const double sl,
+                            const double tp1, const double tp2, const double tp3,
+                            const double lot, string &why)
+{
+   why = "";
+   g_UltraExecIntel.recoveryRequired = false;
+   g_UltraExecIntel.verified = false;
+   g_UltraExecIntel.synced = false;
+   g_UltraExecIntel.orderTicket = 0;
+   g_UltraExecIntel.positionTicket = 0;
+   g_UltraExecIntel.lastRetcode = 0;
+
+   if(!UltraExecIntel_MissionAllows(isBuy, why))
+   {
+      UltraExecIntel_SetOutcome(UEXEC_FAILED, why);
+      g_UltraExecIntel.failCount++;
+      UltraExecIntel_Log("BLOCK");
+      return false;
+   }
+
+   if(!UltraExecIntel_Ready(s, why))
+   {
+      UltraExecIntel_SetOutcome(UEXEC_FAILED, why);
+      g_UltraExecIntel.failCount++;
+      UltraExecIntel_Log("NOT_READY");
+      return false;
+   }
+
+   g_UltraExecPacket.armed = true;
+   g_UltraExecPacket.isBuy = isBuy;
+   g_UltraExecPacket.symbol = s;
+   g_UltraExecPacket.comment = TradeComment;
+   g_UltraExecPacket.volume = lot;
+   g_UltraExecPacket.entry = entry;
+   g_UltraExecPacket.sl = sl;
+   g_UltraExecPacket.tp = tp1;
+   g_UltraExecPacket.tp2 = tp2;
+   g_UltraExecPacket.tp3 = tp3;
+   g_UltraExecPacket.magic = MagicNumber;
+   g_UltraExecPacket.preparedMs = (long)GetTickCount();
+
+   // Prefer Risk Intel approved lot (Chapter 7)
+   if(g_UltraRiskIntel.approved && g_UltraRiskIntel.approvedLot > 0.0)
+      g_UltraExecPacket.volume = g_UltraRiskIntel.approvedLot;
+
+   // Normalize volume to broker step before validation
+   if(g_UltraExecPacket.volumeStep > 0.0)
+   {
+      double vs = g_UltraExecPacket.volumeStep;
+      g_UltraExecPacket.volume = MathFloor(g_UltraExecPacket.volume / vs + 1e-12) * vs;
+      if(g_UltraExecPacket.volume < g_UltraExecPacket.volumeMin)
+         g_UltraExecPacket.volume = g_UltraExecPacket.volumeMin;
+   }
+
+   ENUM_ORDER_TYPE ot = isBuy ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
+   if(!HasSufficientMargin(ot, g_UltraExecPacket.volume, entry))
+   {
+      why = "insufficient margin";
+      g_UltraExecPacket.armed = false;
+      UltraExecIntel_SetOutcome(UEXEC_FAILED, why);
+      g_UltraExecIntel.failCount++;
+      UltraExecIntel_Log("MARGIN_FAIL");
+      return false;
+   }
+
+   if(!UltraExecIntel_ValidatePacket(g_UltraExecPacket, why))
+   {
+      g_UltraExecPacket.armed = false;
+      UltraExecIntel_SetOutcome(UEXEC_FAILED, why);
+      g_UltraExecIntel.failCount++;
+      UltraExecIntel_Log("VALIDATE_FAIL");
+      return false;
+   }
+
+   g_UltraExecIntel.symbol = s;
+   g_UltraExecIntel.isBuy = isBuy;
+   g_UltraExecIntel.volume = g_UltraExecPacket.volume;
+   g_UltraExecIntel.entry = entry;
+   g_UltraExecIntel.sl = sl;
+   g_UltraExecIntel.tp = tp1;
+   g_UltraExecIntel.prepareCount++;
+   UltraExecIntel_SetOutcome(UEXEC_PREPARED, "order prepared");
+   UltraLL_SetPipelineStage(3); // Order Prepared
+   UltraExecIntel_Log("PREPARE");
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// §5–8 SUBMIT / VERIFY / RECOVERY / SYNC hooks (Shell owns g_Trade)  //
+//--------------------------------------------------------------------//
+void UltraExecIntel_NoteSubmitting()
+{
+   g_UltraExecIntel.submitCount++;
+   UltraExecIntel_SetOutcome(UEXEC_SUBMITTING, "submitting to broker");
+   UltraExecIntel_Log("SUBMIT");
+}
+
+bool UltraExecIntel_IsRecoverable(const uint retcode)
+{
+   return (retcode == TRADE_RETCODE_REQUOTE ||
+           retcode == TRADE_RETCODE_PRICE_OFF ||
+           retcode == TRADE_RETCODE_PRICE_CHANGED ||
+           retcode == TRADE_RETCODE_TIMEOUT ||
+           retcode == TRADE_RETCODE_CONNECTION ||
+           retcode == TRADE_RETCODE_TOO_MANY_REQUESTS ||
+           retcode == TRADE_RETCODE_INVALID_FILL ||
+           retcode == TRADE_RETCODE_INVALID_PRICE);
+}
+
+void UltraExecIntel_NoteRetry(const uint retcode)
+{
+   g_UltraExecIntel.lastRetcode = retcode;
+   g_UltraExecIntel.retryCount++;
+   g_UltraExecIntel.recoverCount++;
+   g_UltraExecIntel.recoveryRequired = true;
+   UltraExecIntel_SetOutcome(UEXEC_RECOVERY_REQUIRED,
+                             "recoverable retcode=" + IntegerToString((int)retcode));
+   UltraExecIntel_Log("RECOVER");
+}
+
+void UltraExecIntel_NoteFailed(const uint retcode, const string why)
+{
+   g_UltraExecIntel.lastRetcode = retcode;
+   g_UltraExecIntel.failCount++;
+   g_UltraExecPacket.armed = false;
+   UltraExecIntel_SetOutcome(UEXEC_FAILED, why);
+   UltraExecIntel_Log("FAIL");
+}
+
+void UltraExecIntel_NoteOpen(const ulong orderTicket)
+{
+   g_UltraExecIntel.orderTicket = orderTicket;
+   UltraExecIntel_SetOutcome(UEXEC_OPEN, "broker accepted order");
+   UltraExecIntel_Log("OPEN");
+}
+
+bool UltraExecIntel_VerifyPosition(const ulong posTicket, string &why)
+{
+   why = "";
+   if(posTicket == 0 || !PositionSelectByTicket(posTicket))
+   { why = "position not found"; return false; }
+   if(PositionGetString(POSITION_SYMBOL) != g_UltraExecIntel.symbol)
+   { why = "symbol mismatch"; return false; }
+   if(PositionGetInteger(POSITION_MAGIC) != MagicNumber)
+   { why = "magic mismatch"; return false; }
+   double vol = PositionGetDouble(POSITION_VOLUME);
+   if(vol <= 0.0)
+   { why = "zero volume"; return false; }
+   // Volume should be near prepared (step tolerance)
+   if(g_UltraExecIntel.volume > 0.0 &&
+      MathAbs(vol - g_UltraExecIntel.volume) > MathMax(g_UltraExecIntel.volumeStep, 0.01) + 1e-9)
+   {
+      // soft warn — some brokers partial-fill; still verify
+      g_UltraExecIntel.detail = "volume differs from prepared (partial?)";
+   }
+   g_UltraExecIntel.positionTicket = posTicket;
+   g_UltraExecIntel.entry = PositionGetDouble(POSITION_PRICE_OPEN);
+   g_UltraExecIntel.verified = true;
+   g_UltraExecIntel.verifyCount++;
+   UltraExecIntel_SetOutcome(UEXEC_VERIFIED, "position verified");
+   UltraLL_SetPipelineStage(6); // Position Verified
+   UltraExecIntel_Log("VERIFY");
+   return true;
+}
+
+void UltraExecIntel_NoteSynced()
+{
+   g_UltraExecIntel.synced = true;
+   g_UltraExecIntel.recoveryRequired = false;
+   g_UltraExecPacket.armed = false;
+   UltraLL_SetPipelineStage(7); // Protection / PosEvo ready
+   if(g_UltraExecIntel.outcome != UEXEC_VERIFIED)
+      UltraExecIntel_SetOutcome(UEXEC_VERIFIED, "position synchronized");
+   UltraExecIntel_Log("SYNC");
+}
+
+string UltraExecIntel_Dashboard()
+{
+   string t = "EXEC: ";
+   t += g_UltraExecIntel.status;
+   t += " ";
+   t += g_UltraExecIntel.outcomeName;
+   if(StringLen(g_UltraExecIntel.symbol) > 0)
+   {
+      t += " ";
+      t += g_UltraExecIntel.symbol;
+      t += (g_UltraExecIntel.isBuy ? " BUY" : " SELL");
+   }
+   t += " fill=";
+   t += g_UltraExecIntel.fillingName;
+   t += " ticket=";
+   t += IntegerToString((int)g_UltraExecIntel.positionTicket);
+   if(g_UltraExecIntel.retryCount > 0)
+   {
+      t += " retry=";
+      t += IntegerToString(g_UltraExecIntel.retryCount);
+   }
+   return t;
+}
+
+#endif // HITMAN_ULTRA_EXECUTION_INTELLIGENCE_MQH
+//===== END UltraExecutionIntelligence.mqh =====
+
 //===== BEGIN UltraTradeGate.mqh =====
 #ifndef HITMAN_ULTRA_TRADE_GATE_MQH
 #define HITMAN_ULTRA_TRADE_GATE_MQH
@@ -17680,10 +18166,10 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
          UltraTradeGate_Pass(ULTRA_GATE_RISK);
    }
 
-   // 7) EXECUTION VALIDATION
+   // 7) EXECUTION VALIDATION — Chapter 8 Execution Intelligence
    {
       string exWhy = "";
-      if(!UltraExecReady(s, exWhy))
+      if(!UltraExecIntel_Ready(s, exWhy))
          UltraTradeGate_Fail(ULTRA_GATE_EXEC, "EXEC", exWhy);
       else if(!UltraBT_ConnectedOK())
          UltraTradeGate_Fail(ULTRA_GATE_EXEC, "EXEC", "terminal disconnected");
@@ -18132,9 +18618,19 @@ void UltraMod_Refresh()
    riskDetail += g_UltraRiskIntel.marginStatus;
    UltraMod_Reg("P07_RISK_INTEL", true, true, riskOK, riskDetail);
 
-   // PHASE 8 — Execution Engine
-   UltraMod_Reg("P08_EXECUTION", true, true, true,
-                "pipe@" + IntegerToString(g_UltraExecPipelineStage));
+   // PHASE 8 — Execution Intelligence (Chapter 8 — Mission-only)
+   {
+      bool execOK = g_UltraExecIntel.booted &&
+                    g_UltraExecIntel.outcome != UEXEC_FAILED;
+      string execDetail = g_UltraExecIntel.status;
+      execDetail += " ";
+      execDetail += g_UltraExecIntel.outcomeName;
+      execDetail += " fill=";
+      execDetail += g_UltraExecIntel.fillingName;
+      execDetail += " pipe@";
+      execDetail += IntegerToString(g_UltraExecPipelineStage);
+      UltraMod_Reg("P08_EXECUTION", true, true, execOK, execDetail);
+   }
 
    // PHASE 9 — Target Intelligence
    UltraMod_Reg("P09_TARGET_INTEL", true, UltraTargetEnabled, UltraTargetEnabled,
@@ -19457,6 +19953,7 @@ string UltraDashboardText(const string s)
    t += "\n"; t += UltraPropStrategy_Dashboard();
    t += "\n"; t += UltraSignalIntel_Dashboard();
    t += "\n"; t += UltraRiskIntel_Dashboard();
+   t += "\n"; t += UltraExecIntel_Dashboard();
    t += "\nSignal: "; t += dir; t += " ["; t += sig.tag; t += "] "; t += sig.reason;
    if(StringLen(sig.candidate) > 0) { t += " | "; t += sig.candidate; }
    if(sig.confidence > 0) { t += " conf="; t += IntegerToString(sig.confidence); }
@@ -19986,6 +20483,7 @@ int OnInit()
    UltraVChain_Boot();      // supporting validation (feeds Mission/Risk)
    UltraSignalIntel_Boot(); // P04 Signal Intelligence (never executes)
    UltraRiskIntel_Boot();   // P07 Risk Intelligence (never executes)
+   UltraExecIntel_Boot();   // P08 Execution Intelligence (Mission-only execute)
    UltraNewsExec_Boot();    // P05 News Intelligence (+ Phase 23 protocol)
    UltraTarget_Boot();      // P09 Target Intelligence
    UltraAdaptive_Boot();    // P12 Performance Analytics (soft adaptive)
@@ -20089,6 +20587,10 @@ int OnInit()
    Print("P07 RISK INTEL: Boot=", UltraYN(g_UltraRiskIntel.booted),
          " Status=", g_UltraRiskIntel.status,
          " (never executes · Mission receives assessment)");
+   Print("P08 EXEC INTEL: Boot=", UltraYN(g_UltraExecIntel.booted),
+         " Status=", g_UltraExecIntel.status,
+         " MissionLocked=", UltraYN(g_UltraExecIntel.missionLocked),
+         " (prepare→validate→submit→verify→sync · never signals)");
    {
       ENUM_TIMEFRAMES etf = (EntryTF == PERIOD_CURRENT) ? (ENUM_TIMEFRAMES)Period() : EntryTF;
       Print("OK93 ENTRY TF=", EnumToString(etf),
@@ -23346,6 +23848,19 @@ bool ExecuteBuy()
       return false;
    }
 
+   // CHAPTER 8 — Execution Intelligence: prepare · broker-adapt · validate
+   {
+      string execWhy = "";
+      if(!UltraExecIntel_Prepare(BrokerSymbol, true, ask, sl, tp1Price, tp2Price, tp3Price, lot, execWhy))
+      {
+         UltraBT_LogReject("Shell_B", "ExecuteBuy", "exec intel: " + execWhy);
+         Print("BUY blocked by Exec Intel: ", execWhy);
+         return false;
+      }
+      lot = g_UltraExecPacket.volume;
+      g_Trade.SetTypeFilling(g_UltraExecPacket.filling);
+   }
+
    LastAttemptTimeArr[symIdx] = TimeCurrent();
 
    g_Trade.SetExpertMagicNumber(MagicNumber);
@@ -23367,12 +23882,14 @@ bool ExecuteBuy()
          if(!UltraNewsExec_ProtocolSubmit(BrokerSymbol, true, subWhy))
          {
             Print("BUY cancelled by News Exec Protocol: ", subWhy);
+            UltraExecIntel_NoteFailed(0, "NEWS_PROTO CANCEL " + subWhy);
             UltraBug_Explain("EXEC_FAIL", "Shell_B", "ExecuteBuy",
                              "NEWS_PROTO CANCEL " + subWhy, "BUY", 0);
             return false;
          }
       }
 
+      UltraExecIntel_NoteSubmitting();
       ResetLastError();
       result = g_Trade.Buy(lot, BrokerSymbol, 0.0, sl, tp, TradeComment);
 
@@ -23389,6 +23906,7 @@ bool ExecuteBuy()
          {
             Print("BUY retry cancelled (", action, ") retcode=", retcode,
                   " — ", g_Trade.ResultRetcodeDescription());
+            UltraExecIntel_NoteFailed(retcode, "NEWS_PROTO " + action);
             UltraBug_ExplainExecFail("ExecuteBuy", "BUY", retcode,
                                      "NEWS_PROTO " + action + " " +
                                      g_Trade.ResultRetcodeDescription());
@@ -23399,6 +23917,7 @@ bool ExecuteBuy()
             Print("BUY transient (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES,
                   " action=", action, " — refreshing price and retrying.");
 
+         UltraExecIntel_NoteRetry(retcode);
          // Zero-Fail — recoverable reject → correct → retry
          {
             string zAct = "";
@@ -23424,12 +23943,23 @@ bool ExecuteBuy()
          tp = InitialBrokerTP(true, ask, tp2Distance, tp3Distance, tp2Price, tp3Price);
 
          CheckTradeStops(ask, sl, tp);
+         {
+            string reWhy = "";
+            if(!UltraExecIntel_Prepare(BrokerSymbol, true, ask, sl, tp1Price, tp2Price, tp3Price, lot, reWhy))
+            {
+               UltraExecIntel_NoteFailed(retcode, "retry prepare: " + reWhy);
+               return false;
+            }
+            lot = g_UltraExecPacket.volume;
+            g_Trade.SetTypeFilling(g_UltraExecPacket.filling);
+         }
          continue;
       }
 
       if(IsFatalOrderRetcode(retcode))
       {
          Print("BUY FAILED (fatal) | Retcode: ", retcode, " | ", DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
+         UltraExecIntel_NoteFailed(retcode, DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
          UltraNewsExec_ProtocolLog("FAIL", 0, true, retcode,
                                    DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
          UltraNewsExec_ProtocolDisarm("fatal");
@@ -23444,6 +23974,7 @@ bool ExecuteBuy()
 
    if(result)
    {
+      UltraExecIntel_NoteOpen(g_Trade.ResultOrder());
       ulong posTicket = ResolvePositionTicket(g_Trade.ResultOrder());
       if(posTicket == 0)
       {
@@ -23454,6 +23985,7 @@ bool ExecuteBuy()
       if(posTicket == 0 || !PositionSelectByTicket(posTicket))
       {
          Print("BUY fill unverified — no position for order ", g_Trade.ResultOrder());
+         UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "position not found after Buy");
          UltraBug_ExplainExecFail("ExecuteBuy", "BUY", g_Trade.ResultRetcode(),
                                   "position not found after Buy — fill unverified");
          return false;
@@ -23462,9 +23994,20 @@ bool ExecuteBuy()
          PositionGetInteger(POSITION_MAGIC) != MagicNumber)
       {
          Print("BUY fill verification mismatch symbol/magic");
+         UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "fill verification mismatch");
          UltraBug_Explain("EXEC_FAIL", "Shell_B", "ExecuteBuy",
                           "fill verification mismatch symbol/magic", "BUY", posTicket);
          return false;
+      }
+      {
+         string vWhy = "";
+         if(!UltraExecIntel_VerifyPosition(posTicket, vWhy))
+         {
+            UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), vWhy);
+            Print("BUY Exec Intel verify failed: ", vWhy);
+            return false;
+         }
+         UltraExecIntel_NoteSynced();
       }
       Print("BUY executed successfully. ticket=", posTicket);
       LastTradeTimeArr[symIdx] = TimeCurrent();
@@ -23494,18 +24037,22 @@ bool ExecuteBuy()
       if(EnableVerboseLogging)
          Print("BUY retry: opening without stops, will attach SL/TP after fill.");
 
+      UltraExecIntel_NoteRetry(TRADE_RETCODE_INVALID_STOPS);
+      UltraExecIntel_NoteSubmitting();
       ResetLastError();
 
       bool openedNoStops = g_Trade.Buy(lot, BrokerSymbol, 0.0, 0.0, 0.0, TradeComment);
 
       if(openedNoStops)
       {
+         UltraExecIntel_NoteOpen(g_Trade.ResultOrder());
          ulong newTicket = ResolvePositionTicket(g_Trade.ResultOrder());
          bool stopsAttached = false;
 
          if(newTicket == 0)
          {
             Print("HARDEN: BUY no-stops fill but ticket unresolved — abort attach");
+            UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "no-stops ticket unresolved");
             return false;
          }
 
@@ -23549,10 +24096,20 @@ bool ExecuteBuy()
          if(!stopsAttached)
          {
             Print("BUY: could not attach SL/TP after fallback - closing the unprotected position for safety (ticket ", newTicket, ").");
+            UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "could not attach SL/TP");
             UltraMission_ClosePosition(newTicket, "EXEC cleanup invalid stops", true);
             return false;
          }
 
+         {
+            string vWhy = "";
+            if(!UltraExecIntel_VerifyPosition(newTicket, vWhy))
+            {
+               UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), vWhy);
+               return false;
+            }
+            UltraExecIntel_NoteSynced();
+         }
          Print("BUY executed successfully (no-stops fallback).");
          LastTradeTimeArr[symIdx] = TimeCurrent();
          MarkContFallbackFillIfNeeded();
@@ -23567,6 +24124,7 @@ bool ExecuteBuy()
       }
    }
 
+   UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), g_Trade.ResultRetcodeDescription());
    Print(
       "BUY FAILED | Retcode: ",
       g_Trade.ResultRetcode(),
@@ -23772,6 +24330,19 @@ bool ExecuteSell()
       return false;
    }
 
+   // CHAPTER 8 — Execution Intelligence: prepare · broker-adapt · validate
+   {
+      string execWhy = "";
+      if(!UltraExecIntel_Prepare(BrokerSymbol, false, bid, sl, tp1Price, tp2Price, tp3Price, lot, execWhy))
+      {
+         UltraBT_LogReject("Shell_B", "ExecuteSell", "exec intel: " + execWhy);
+         Print("SELL blocked by Exec Intel: ", execWhy);
+         return false;
+      }
+      lot = g_UltraExecPacket.volume;
+      g_Trade.SetTypeFilling(g_UltraExecPacket.filling);
+   }
+
    LastAttemptTimeArr[symIdx] = TimeCurrent();
 
    g_Trade.SetExpertMagicNumber(MagicNumber);
@@ -23788,12 +24359,14 @@ bool ExecuteSell()
          if(!UltraNewsExec_ProtocolSubmit(BrokerSymbol, false, subWhy))
          {
             Print("SELL cancelled by News Exec Protocol: ", subWhy);
+            UltraExecIntel_NoteFailed(0, "NEWS_PROTO CANCEL " + subWhy);
             UltraBug_Explain("EXEC_FAIL", "Shell_B", "ExecuteSell",
                              "NEWS_PROTO CANCEL " + subWhy, "SELL", 0);
             return false;
          }
       }
 
+      UltraExecIntel_NoteSubmitting();
       ResetLastError();
       result = g_Trade.Sell(lot, BrokerSymbol, 0.0, sl, tp, TradeComment);
 
@@ -23809,6 +24382,7 @@ bool ExecuteSell()
          {
             Print("SELL retry cancelled (", action, ") retcode=", retcode,
                   " — ", g_Trade.ResultRetcodeDescription());
+            UltraExecIntel_NoteFailed(retcode, "NEWS_PROTO " + action);
             UltraBug_ExplainExecFail("ExecuteSell", "SELL", retcode,
                                      "NEWS_PROTO " + action + " " +
                                      g_Trade.ResultRetcodeDescription());
@@ -23819,6 +24393,7 @@ bool ExecuteSell()
             Print("SELL transient (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES,
                   " action=", action, " — refreshing price and retrying.");
 
+         UltraExecIntel_NoteRetry(retcode);
          {
             string zAct = "";
             UltraZFR_PrepareExecRetry(BrokerSymbol, retcode, zAct);
@@ -23842,12 +24417,23 @@ bool ExecuteSell()
          tp = InitialBrokerTP(false, bid, tp2Distance, tp3Distance, tp2Price, tp3Price);
 
          CheckTradeStops(bid, sl, tp);
+         {
+            string reWhy = "";
+            if(!UltraExecIntel_Prepare(BrokerSymbol, false, bid, sl, tp1Price, tp2Price, tp3Price, lot, reWhy))
+            {
+               UltraExecIntel_NoteFailed(retcode, "retry prepare: " + reWhy);
+               return false;
+            }
+            lot = g_UltraExecPacket.volume;
+            g_Trade.SetTypeFilling(g_UltraExecPacket.filling);
+         }
          continue;
       }
 
       if(IsFatalOrderRetcode(retcode))
       {
          Print("SELL FAILED (fatal) | Retcode: ", retcode, " | ", DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
+         UltraExecIntel_NoteFailed(retcode, DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
          UltraNewsExec_ProtocolLog("FAIL", 0, false, retcode,
                                    DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
          UltraNewsExec_ProtocolDisarm("fatal");
@@ -23862,6 +24448,7 @@ bool ExecuteSell()
 
    if(result)
    {
+      UltraExecIntel_NoteOpen(g_Trade.ResultOrder());
       ulong posTicket = ResolvePositionTicket(g_Trade.ResultOrder());
       if(posTicket == 0)
       {
@@ -23872,6 +24459,7 @@ bool ExecuteSell()
       if(posTicket == 0 || !PositionSelectByTicket(posTicket))
       {
          Print("SELL fill unverified — no position for order ", g_Trade.ResultOrder());
+         UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "position not found after Sell");
          UltraBug_ExplainExecFail("ExecuteSell", "SELL", g_Trade.ResultRetcode(),
                                   "position not found after Sell — fill unverified");
          return false;
@@ -23880,9 +24468,20 @@ bool ExecuteSell()
          PositionGetInteger(POSITION_MAGIC) != MagicNumber)
       {
          Print("SELL fill verification mismatch symbol/magic");
+         UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "fill verification mismatch");
          UltraBug_Explain("EXEC_FAIL", "Shell_B", "ExecuteSell",
                           "fill verification mismatch symbol/magic", "SELL", posTicket);
          return false;
+      }
+      {
+         string vWhy = "";
+         if(!UltraExecIntel_VerifyPosition(posTicket, vWhy))
+         {
+            UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), vWhy);
+            Print("SELL Exec Intel verify failed: ", vWhy);
+            return false;
+         }
+         UltraExecIntel_NoteSynced();
       }
       Print("SELL executed successfully. ticket=", posTicket);
       LastTradeTimeArr[symIdx] = TimeCurrent();
@@ -23909,18 +24508,22 @@ bool ExecuteSell()
       if(EnableVerboseLogging)
          Print("SELL retry: opening without stops, will attach SL/TP after fill.");
 
+      UltraExecIntel_NoteRetry(TRADE_RETCODE_INVALID_STOPS);
+      UltraExecIntel_NoteSubmitting();
       ResetLastError();
 
       bool openedNoStops = g_Trade.Sell(lot, BrokerSymbol, 0.0, 0.0, 0.0, TradeComment);
 
       if(openedNoStops)
       {
+         UltraExecIntel_NoteOpen(g_Trade.ResultOrder());
          ulong newTicket = ResolvePositionTicket(g_Trade.ResultOrder());
          bool stopsAttached = false;
 
          if(newTicket == 0)
          {
             Print("HARDEN: SELL no-stops fill but ticket unresolved — abort attach");
+            UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "no-stops ticket unresolved");
             return false;
          }
 
@@ -23957,10 +24560,20 @@ bool ExecuteSell()
          if(!stopsAttached)
          {
             Print("SELL: could not attach SL/TP after fallback - closing the unprotected position for safety (ticket ", newTicket, ").");
+            UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "could not attach SL/TP");
             UltraMission_ClosePosition(newTicket, "EXEC cleanup invalid stops", true);
             return false;
          }
 
+         {
+            string vWhy = "";
+            if(!UltraExecIntel_VerifyPosition(newTicket, vWhy))
+            {
+               UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), vWhy);
+               return false;
+            }
+            UltraExecIntel_NoteSynced();
+         }
          Print("SELL executed successfully (no-stops fallback).");
          LastTradeTimeArr[symIdx] = TimeCurrent();
          MarkContFallbackFillIfNeeded();
@@ -23975,6 +24588,7 @@ bool ExecuteSell()
       }
    }
 
+   UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), g_Trade.ResultRetcodeDescription());
    Print(
       "SELL FAILED | Retcode: ",
       g_Trade.ResultRetcode(),

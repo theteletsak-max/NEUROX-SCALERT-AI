@@ -219,10 +219,10 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
          UltraTradeGate_Pass(ULTRA_GATE_RISK);
    }
 
-   // 7) EXECUTION VALIDATION
+   // 7) EXECUTION VALIDATION — Chapter 8 Execution Intelligence
    {
       string exWhy = "";
-      if(!UltraExecReady(s, exWhy))
+      if(!UltraExecIntel_Ready(s, exWhy))
          UltraTradeGate_Fail(ULTRA_GATE_EXEC, "EXEC", exWhy);
       else if(!UltraBT_ConnectedOK())
          UltraTradeGate_Fail(ULTRA_GATE_EXEC, "EXEC", "terminal disconnected");

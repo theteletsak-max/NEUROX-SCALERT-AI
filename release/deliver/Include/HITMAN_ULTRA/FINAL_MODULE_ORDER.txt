@@ -41,8 +41,11 @@ PHASE 7  — RISK INTELLIGENCE ENGINE
   Outputs: approvedLot · maxRisk · status (Mission receives assessment)
   LOCK: never signals · never market-reads · never executes
 
-PHASE 8  — EXECUTION ENGINE
-  Shell_B ExecuteBuy/Sell · 19_Execution · Broker 32/36
+PHASE 8  — EXECUTION INTELLIGENCE ENGINE
+  UltraExecutionIntelligence · Shell_B ExecuteBuy/Sell · 19_Execution · Broker 32/36
+  MASTER SPEC CHAPTER 8 — prepare · broker-adapt · validate · submit · verify · sync
+  Outputs: POSITION_OPEN | POSITION_FAILED | POSITION_VERIFIED | RECOVERY_REQUIRED
+  LOCK: never creates signals · never changes strategy · Mission decisions only
 
 PHASE 9  — TARGET INTELLIGENCE ENGINE
   UltraTargetIntelligence.mqh

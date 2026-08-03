@@ -128,9 +128,19 @@ void UltraMod_Refresh()
    riskDetail += g_UltraRiskIntel.marginStatus;
    UltraMod_Reg("P07_RISK_INTEL", true, true, riskOK, riskDetail);
 
-   // PHASE 8 — Execution Engine
-   UltraMod_Reg("P08_EXECUTION", true, true, true,
-                "pipe@" + IntegerToString(g_UltraExecPipelineStage));
+   // PHASE 8 — Execution Intelligence (Chapter 8 — Mission-only)
+   {
+      bool execOK = g_UltraExecIntel.booted &&
+                    g_UltraExecIntel.outcome != UEXEC_FAILED;
+      string execDetail = g_UltraExecIntel.status;
+      execDetail += " ";
+      execDetail += g_UltraExecIntel.outcomeName;
+      execDetail += " fill=";
+      execDetail += g_UltraExecIntel.fillingName;
+      execDetail += " pipe@";
+      execDetail += IntegerToString(g_UltraExecPipelineStage);
+      UltraMod_Reg("P08_EXECUTION", true, true, execOK, execDetail);
+   }
 
    // PHASE 9 — Target Intelligence
    UltraMod_Reg("P09_TARGET_INTEL", true, UltraTargetEnabled, UltraTargetEnabled,

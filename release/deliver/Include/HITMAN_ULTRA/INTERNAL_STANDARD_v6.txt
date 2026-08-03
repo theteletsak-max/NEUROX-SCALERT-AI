@@ -93,7 +93,8 @@ PHASE 19 — MAINTENANCE ENGINE
 MAIN EXECUTION FLOW
 
 OnInit → P1 Foundation → P2 Market → P3 Strategy → P4 Signal
-      → P5 News → P6 Mission → P7 Risk → P8 Execution
+      → P5 News → P6 Mission → P7 Risk → P8 Execution Intel
+        (prepare→broker-validate→submit→verify→sync · Mission-only)
       → P9 Target → P10 PosEvo → P11 Exit → P12 Analytics
       → P13 Logger → P14 Dashboard → P15 Recovery
       → P16 BT · P17 Low-Latency · P18 QA · P19 Maintenance

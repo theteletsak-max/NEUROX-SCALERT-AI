@@ -72,6 +72,7 @@ int OnInit()
    UltraVChain_Boot();      // supporting validation (feeds Mission/Risk)
    UltraSignalIntel_Boot(); // P04 Signal Intelligence (never executes)
    UltraRiskIntel_Boot();   // P07 Risk Intelligence (never executes)
+   UltraExecIntel_Boot();   // P08 Execution Intelligence (Mission-only execute)
    UltraNewsExec_Boot();    // P05 News Intelligence (+ Phase 23 protocol)
    UltraTarget_Boot();      // P09 Target Intelligence
    UltraAdaptive_Boot();    // P12 Performance Analytics (soft adaptive)
@@ -175,6 +176,10 @@ int OnInit()
    Print("P07 RISK INTEL: Boot=", UltraYN(g_UltraRiskIntel.booted),
          " Status=", g_UltraRiskIntel.status,
          " (never executes · Mission receives assessment)");
+   Print("P08 EXEC INTEL: Boot=", UltraYN(g_UltraExecIntel.booted),
+         " Status=", g_UltraExecIntel.status,
+         " MissionLocked=", UltraYN(g_UltraExecIntel.missionLocked),
+         " (prepare→validate→submit→verify→sync · never signals)");
    {
       ENUM_TIMEFRAMES etf = (EntryTF == PERIOD_CURRENT) ? (ENUM_TIMEFRAMES)Period() : EntryTF;
       Print("OK93 ENTRY TF=", EnumToString(etf),
@@ -3432,6 +3437,19 @@ bool ExecuteBuy()
       return false;
    }
 
+   // CHAPTER 8 — Execution Intelligence: prepare · broker-adapt · validate
+   {
+      string execWhy = "";
+      if(!UltraExecIntel_Prepare(BrokerSymbol, true, ask, sl, tp1Price, tp2Price, tp3Price, lot, execWhy))
+      {
+         UltraBT_LogReject("Shell_B", "ExecuteBuy", "exec intel: " + execWhy);
+         Print("BUY blocked by Exec Intel: ", execWhy);
+         return false;
+      }
+      lot = g_UltraExecPacket.volume;
+      g_Trade.SetTypeFilling(g_UltraExecPacket.filling);
+   }
+
    LastAttemptTimeArr[symIdx] = TimeCurrent();
 
    g_Trade.SetExpertMagicNumber(MagicNumber);
@@ -3453,12 +3471,14 @@ bool ExecuteBuy()
          if(!UltraNewsExec_ProtocolSubmit(BrokerSymbol, true, subWhy))
          {
             Print("BUY cancelled by News Exec Protocol: ", subWhy);
+            UltraExecIntel_NoteFailed(0, "NEWS_PROTO CANCEL " + subWhy);
             UltraBug_Explain("EXEC_FAIL", "Shell_B", "ExecuteBuy",
                              "NEWS_PROTO CANCEL " + subWhy, "BUY", 0);
             return false;
          }
       }
 
+      UltraExecIntel_NoteSubmitting();
       ResetLastError();
       result = g_Trade.Buy(lot, BrokerSymbol, 0.0, sl, tp, TradeComment);
 
@@ -3475,6 +3495,7 @@ bool ExecuteBuy()
          {
             Print("BUY retry cancelled (", action, ") retcode=", retcode,
                   " — ", g_Trade.ResultRetcodeDescription());
+            UltraExecIntel_NoteFailed(retcode, "NEWS_PROTO " + action);
             UltraBug_ExplainExecFail("ExecuteBuy", "BUY", retcode,
                                      "NEWS_PROTO " + action + " " +
                                      g_Trade.ResultRetcodeDescription());
@@ -3485,6 +3506,7 @@ bool ExecuteBuy()
             Print("BUY transient (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES,
                   " action=", action, " — refreshing price and retrying.");
 
+         UltraExecIntel_NoteRetry(retcode);
          // Zero-Fail — recoverable reject → correct → retry
          {
             string zAct = "";
@@ -3510,12 +3532,23 @@ bool ExecuteBuy()
          tp = InitialBrokerTP(true, ask, tp2Distance, tp3Distance, tp2Price, tp3Price);
 
          CheckTradeStops(ask, sl, tp);
+         {
+            string reWhy = "";
+            if(!UltraExecIntel_Prepare(BrokerSymbol, true, ask, sl, tp1Price, tp2Price, tp3Price, lot, reWhy))
+            {
+               UltraExecIntel_NoteFailed(retcode, "retry prepare: " + reWhy);
+               return false;
+            }
+            lot = g_UltraExecPacket.volume;
+            g_Trade.SetTypeFilling(g_UltraExecPacket.filling);
+         }
          continue;
       }
 
       if(IsFatalOrderRetcode(retcode))
       {
          Print("BUY FAILED (fatal) | Retcode: ", retcode, " | ", DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
+         UltraExecIntel_NoteFailed(retcode, DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
          UltraNewsExec_ProtocolLog("FAIL", 0, true, retcode,
                                    DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
          UltraNewsExec_ProtocolDisarm("fatal");
@@ -3530,6 +3563,7 @@ bool ExecuteBuy()
 
    if(result)
    {
+      UltraExecIntel_NoteOpen(g_Trade.ResultOrder());
       ulong posTicket = ResolvePositionTicket(g_Trade.ResultOrder());
       if(posTicket == 0)
       {
@@ -3540,6 +3574,7 @@ bool ExecuteBuy()
       if(posTicket == 0 || !PositionSelectByTicket(posTicket))
       {
          Print("BUY fill unverified — no position for order ", g_Trade.ResultOrder());
+         UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "position not found after Buy");
          UltraBug_ExplainExecFail("ExecuteBuy", "BUY", g_Trade.ResultRetcode(),
                                   "position not found after Buy — fill unverified");
          return false;
@@ -3548,9 +3583,20 @@ bool ExecuteBuy()
          PositionGetInteger(POSITION_MAGIC) != MagicNumber)
       {
          Print("BUY fill verification mismatch symbol/magic");
+         UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "fill verification mismatch");
          UltraBug_Explain("EXEC_FAIL", "Shell_B", "ExecuteBuy",
                           "fill verification mismatch symbol/magic", "BUY", posTicket);
          return false;
+      }
+      {
+         string vWhy = "";
+         if(!UltraExecIntel_VerifyPosition(posTicket, vWhy))
+         {
+            UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), vWhy);
+            Print("BUY Exec Intel verify failed: ", vWhy);
+            return false;
+         }
+         UltraExecIntel_NoteSynced();
       }
       Print("BUY executed successfully. ticket=", posTicket);
       LastTradeTimeArr[symIdx] = TimeCurrent();
@@ -3580,18 +3626,22 @@ bool ExecuteBuy()
       if(EnableVerboseLogging)
          Print("BUY retry: opening without stops, will attach SL/TP after fill.");
 
+      UltraExecIntel_NoteRetry(TRADE_RETCODE_INVALID_STOPS);
+      UltraExecIntel_NoteSubmitting();
       ResetLastError();
 
       bool openedNoStops = g_Trade.Buy(lot, BrokerSymbol, 0.0, 0.0, 0.0, TradeComment);
 
       if(openedNoStops)
       {
+         UltraExecIntel_NoteOpen(g_Trade.ResultOrder());
          ulong newTicket = ResolvePositionTicket(g_Trade.ResultOrder());
          bool stopsAttached = false;
 
          if(newTicket == 0)
          {
             Print("HARDEN: BUY no-stops fill but ticket unresolved — abort attach");
+            UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "no-stops ticket unresolved");
             return false;
          }
 
@@ -3635,10 +3685,20 @@ bool ExecuteBuy()
          if(!stopsAttached)
          {
             Print("BUY: could not attach SL/TP after fallback - closing the unprotected position for safety (ticket ", newTicket, ").");
+            UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "could not attach SL/TP");
             UltraMission_ClosePosition(newTicket, "EXEC cleanup invalid stops", true);
             return false;
          }
 
+         {
+            string vWhy = "";
+            if(!UltraExecIntel_VerifyPosition(newTicket, vWhy))
+            {
+               UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), vWhy);
+               return false;
+            }
+            UltraExecIntel_NoteSynced();
+         }
          Print("BUY executed successfully (no-stops fallback).");
          LastTradeTimeArr[symIdx] = TimeCurrent();
          MarkContFallbackFillIfNeeded();
@@ -3653,6 +3713,7 @@ bool ExecuteBuy()
       }
    }
 
+   UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), g_Trade.ResultRetcodeDescription());
    Print(
       "BUY FAILED | Retcode: ",
       g_Trade.ResultRetcode(),
@@ -3858,6 +3919,19 @@ bool ExecuteSell()
       return false;
    }
 
+   // CHAPTER 8 — Execution Intelligence: prepare · broker-adapt · validate
+   {
+      string execWhy = "";
+      if(!UltraExecIntel_Prepare(BrokerSymbol, false, bid, sl, tp1Price, tp2Price, tp3Price, lot, execWhy))
+      {
+         UltraBT_LogReject("Shell_B", "ExecuteSell", "exec intel: " + execWhy);
+         Print("SELL blocked by Exec Intel: ", execWhy);
+         return false;
+      }
+      lot = g_UltraExecPacket.volume;
+      g_Trade.SetTypeFilling(g_UltraExecPacket.filling);
+   }
+
    LastAttemptTimeArr[symIdx] = TimeCurrent();
 
    g_Trade.SetExpertMagicNumber(MagicNumber);
@@ -3874,12 +3948,14 @@ bool ExecuteSell()
          if(!UltraNewsExec_ProtocolSubmit(BrokerSymbol, false, subWhy))
          {
             Print("SELL cancelled by News Exec Protocol: ", subWhy);
+            UltraExecIntel_NoteFailed(0, "NEWS_PROTO CANCEL " + subWhy);
             UltraBug_Explain("EXEC_FAIL", "Shell_B", "ExecuteSell",
                              "NEWS_PROTO CANCEL " + subWhy, "SELL", 0);
             return false;
          }
       }
 
+      UltraExecIntel_NoteSubmitting();
       ResetLastError();
       result = g_Trade.Sell(lot, BrokerSymbol, 0.0, sl, tp, TradeComment);
 
@@ -3895,6 +3971,7 @@ bool ExecuteSell()
          {
             Print("SELL retry cancelled (", action, ") retcode=", retcode,
                   " — ", g_Trade.ResultRetcodeDescription());
+            UltraExecIntel_NoteFailed(retcode, "NEWS_PROTO " + action);
             UltraBug_ExplainExecFail("ExecuteSell", "SELL", retcode,
                                      "NEWS_PROTO " + action + " " +
                                      g_Trade.ResultRetcodeDescription());
@@ -3905,6 +3982,7 @@ bool ExecuteSell()
             Print("SELL transient (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES,
                   " action=", action, " — refreshing price and retrying.");
 
+         UltraExecIntel_NoteRetry(retcode);
          {
             string zAct = "";
             UltraZFR_PrepareExecRetry(BrokerSymbol, retcode, zAct);
@@ -3928,12 +4006,23 @@ bool ExecuteSell()
          tp = InitialBrokerTP(false, bid, tp2Distance, tp3Distance, tp2Price, tp3Price);
 
          CheckTradeStops(bid, sl, tp);
+         {
+            string reWhy = "";
+            if(!UltraExecIntel_Prepare(BrokerSymbol, false, bid, sl, tp1Price, tp2Price, tp3Price, lot, reWhy))
+            {
+               UltraExecIntel_NoteFailed(retcode, "retry prepare: " + reWhy);
+               return false;
+            }
+            lot = g_UltraExecPacket.volume;
+            g_Trade.SetTypeFilling(g_UltraExecPacket.filling);
+         }
          continue;
       }
 
       if(IsFatalOrderRetcode(retcode))
       {
          Print("SELL FAILED (fatal) | Retcode: ", retcode, " | ", DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
+         UltraExecIntel_NoteFailed(retcode, DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
          UltraNewsExec_ProtocolLog("FAIL", 0, false, retcode,
                                    DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
          UltraNewsExec_ProtocolDisarm("fatal");
@@ -3948,6 +4037,7 @@ bool ExecuteSell()
 
    if(result)
    {
+      UltraExecIntel_NoteOpen(g_Trade.ResultOrder());
       ulong posTicket = ResolvePositionTicket(g_Trade.ResultOrder());
       if(posTicket == 0)
       {
@@ -3958,6 +4048,7 @@ bool ExecuteSell()
       if(posTicket == 0 || !PositionSelectByTicket(posTicket))
       {
          Print("SELL fill unverified — no position for order ", g_Trade.ResultOrder());
+         UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "position not found after Sell");
          UltraBug_ExplainExecFail("ExecuteSell", "SELL", g_Trade.ResultRetcode(),
                                   "position not found after Sell — fill unverified");
          return false;
@@ -3966,9 +4057,20 @@ bool ExecuteSell()
          PositionGetInteger(POSITION_MAGIC) != MagicNumber)
       {
          Print("SELL fill verification mismatch symbol/magic");
+         UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "fill verification mismatch");
          UltraBug_Explain("EXEC_FAIL", "Shell_B", "ExecuteSell",
                           "fill verification mismatch symbol/magic", "SELL", posTicket);
          return false;
+      }
+      {
+         string vWhy = "";
+         if(!UltraExecIntel_VerifyPosition(posTicket, vWhy))
+         {
+            UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), vWhy);
+            Print("SELL Exec Intel verify failed: ", vWhy);
+            return false;
+         }
+         UltraExecIntel_NoteSynced();
       }
       Print("SELL executed successfully. ticket=", posTicket);
       LastTradeTimeArr[symIdx] = TimeCurrent();
@@ -3995,18 +4097,22 @@ bool ExecuteSell()
       if(EnableVerboseLogging)
          Print("SELL retry: opening without stops, will attach SL/TP after fill.");
 
+      UltraExecIntel_NoteRetry(TRADE_RETCODE_INVALID_STOPS);
+      UltraExecIntel_NoteSubmitting();
       ResetLastError();
 
       bool openedNoStops = g_Trade.Sell(lot, BrokerSymbol, 0.0, 0.0, 0.0, TradeComment);
 
       if(openedNoStops)
       {
+         UltraExecIntel_NoteOpen(g_Trade.ResultOrder());
          ulong newTicket = ResolvePositionTicket(g_Trade.ResultOrder());
          bool stopsAttached = false;
 
          if(newTicket == 0)
          {
             Print("HARDEN: SELL no-stops fill but ticket unresolved — abort attach");
+            UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "no-stops ticket unresolved");
             return false;
          }
 
@@ -4043,10 +4149,20 @@ bool ExecuteSell()
          if(!stopsAttached)
          {
             Print("SELL: could not attach SL/TP after fallback - closing the unprotected position for safety (ticket ", newTicket, ").");
+            UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "could not attach SL/TP");
             UltraMission_ClosePosition(newTicket, "EXEC cleanup invalid stops", true);
             return false;
          }
 
+         {
+            string vWhy = "";
+            if(!UltraExecIntel_VerifyPosition(newTicket, vWhy))
+            {
+               UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), vWhy);
+               return false;
+            }
+            UltraExecIntel_NoteSynced();
+         }
          Print("SELL executed successfully (no-stops fallback).");
          LastTradeTimeArr[symIdx] = TimeCurrent();
          MarkContFallbackFillIfNeeded();
@@ -4061,6 +4177,7 @@ bool ExecuteSell()
       }
    }
 
+   UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), g_Trade.ResultRetcodeDescription());
    Print(
       "SELL FAILED | Retcode: ",
       g_Trade.ResultRetcode(),
