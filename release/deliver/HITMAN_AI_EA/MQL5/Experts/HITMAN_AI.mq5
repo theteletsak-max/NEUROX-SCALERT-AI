@@ -2493,6 +2493,174 @@ string UltraBT_Dashboard()
 #endif // HITMAN_ULTRA_BACKTEST_COMPAT_MQH
 //===== END UltraBacktestCompat.mqh =====
 
+//===== BEGIN 32_BrokerCompatibility.mqh =====
+#ifndef HITMAN_ULTRA_32_BROKERCOMPAT_MQH
+#define HITMAN_ULTRA_32_BROKERCOMPAT_MQH
+//+------------------------------------------------------------------+
+//| 32_BrokerCompatibility — fill/exec modes · stops · freeze · caps |
+//+------------------------------------------------------------------+
+
+struct UltraBrokerCaps
+{
+   string company;
+   long   login;
+   int    stopsLevel;
+   int    freezeLevel;
+   int    fillingMode;
+   bool   fillFOK;
+   bool   fillIOC;
+   bool   fillRETURN;
+   bool   tradeAllowed;
+   bool   valid;
+};
+
+UltraBrokerCaps g_UltraBrokerCaps;
+
+void UltraBroker_ClearCaps(UltraBrokerCaps &c)
+{
+   c.company = "";
+   c.login = 0;
+   c.stopsLevel = 0;
+   c.freezeLevel = 0;
+   c.fillingMode = 0;
+   c.fillFOK = c.fillIOC = c.fillRETURN = false;
+   c.tradeAllowed = false;
+   c.valid = false;
+}
+
+bool UltraBroker_Detect(const string s, UltraBrokerCaps &c)
+{
+   UltraBroker_ClearCaps(c);
+   c.company = AccountInfoString(ACCOUNT_COMPANY);
+   c.login   = AccountInfoInteger(ACCOUNT_LOGIN);
+   long stopsLevel = 0, freezeLevel = 0, fillingMode = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL, stopsLevel);
+   SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL, freezeLevel);
+   SymbolInfoInteger(s, SYMBOL_FILLING_MODE, fillingMode);
+   c.stopsLevel  = (int)stopsLevel;
+   c.freezeLevel = (int)freezeLevel;
+   c.fillingMode = (int)fillingMode;
+   c.fillFOK    = ((c.fillingMode & SYMBOL_FILLING_FOK) != 0);
+   c.fillIOC    = ((c.fillingMode & SYMBOL_FILLING_IOC) != 0);
+   c.fillRETURN = true;
+   long tmMode = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tmMode);
+   c.tradeAllowed = (tmMode != 0);
+   c.valid = (SymbolInfoDouble(s, SYMBOL_BID) > 0.0);
+   g_UltraBrokerCaps = c;
+   return c.valid;
+}
+
+ENUM_ORDER_TYPE_FILLING UltraBroker_PickFilling(const string s)
+{
+   UltraBrokerCaps c;
+   UltraBroker_Detect(s, c);
+   if(c.fillFOK) return ORDER_FILLING_FOK;
+   if(c.fillIOC) return ORDER_FILLING_IOC;
+   return ORDER_FILLING_RETURN;
+}
+
+bool UltraBroker_StopsOK(const string s, const double price, const double sl, const double tp, string &why)
+{
+   why = "";
+   long stops = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL, stops);
+   double point = SymbolInfoDouble(s, SYMBOL_POINT);
+   if(point <= 0){ why = "bad point"; return false; }
+   double minDist = stops * point;
+   if(sl > 0 && MathAbs(price - sl) < minDist){ why = "SL inside stops level"; return false; }
+   if(tp > 0 && MathAbs(price - tp) < minDist){ why = "TP inside stops level"; return false; }
+   return true;
+}
+
+bool UltraBroker_FreezeOK(const string s, const double price, const double sl, const double tp, string &why)
+{
+   why = "";
+   long freeze = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL, freeze);
+   double point = SymbolInfoDouble(s, SYMBOL_POINT);
+   if(freeze <= 0 || point <= 0) return true;
+   double minDist = freeze * point;
+   if(sl > 0 && MathAbs(price - sl) < minDist){ why = "SL inside freeze level"; return false; }
+   if(tp > 0 && MathAbs(price - tp) < minDist){ why = "TP inside freeze level"; return false; }
+   return true;
+}
+
+string UltraBroker_Summary(const string s)
+{
+   UltraBrokerCaps c; UltraBroker_Detect(s, c);
+   string t = c.company;
+   t += " stops="; t += IntegerToString(c.stopsLevel);
+   t += " freeze="; t += IntegerToString(c.freezeLevel);
+   t += " FOK=";
+   if(c.fillFOK) t += "Y"; else t += "N";
+   t += " IOC=";
+   if(c.fillIOC) t += "Y"; else t += "N";
+   return t;
+}
+
+#endif
+//===== END 32_BrokerCompatibility.mqh =====
+
+//===== BEGIN 36_BrokerHealth.mqh =====
+#ifndef HITMAN_ULTRA_36_BROKERHEALTH_MQH
+#define HITMAN_ULTRA_36_BROKERHEALTH_MQH
+//+------------------------------------------------------------------+
+//| 36_BrokerHealth — connection · permissions · market · symbols    |
+//+------------------------------------------------------------------+
+
+struct UltraBrokerHealth
+{
+   bool connected;
+   bool tradeAllowed;
+   bool terminalTrade;
+   bool marketOpen;      // soft: has quotes
+   bool symbolOK;
+   long pingMs;          // TerminalInfoInteger TERMINAL_PING approx if available
+   string status;
+};
+
+UltraBrokerHealth g_UltraBrokerHealth;
+
+void UltraHealth_Update(const string s)
+{
+   // Ch16 — tester-aware health (same strategy; env gates only)
+   bool tester = UltraBT_CompatMode();
+   g_UltraBrokerHealth.connected = tester ? true : (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
+   g_UltraBrokerHealth.terminalTrade = tester
+      ? (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0)
+      : (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED);
+   g_UltraBrokerHealth.tradeAllowed = tester
+      ? (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0)
+      : (AccountInfoInteger(ACCOUNT_TRADE_ALLOWED) != 0);
+   long sel = 0;
+   SymbolInfoInteger(s, SYMBOL_SELECT, sel);
+   g_UltraBrokerHealth.symbolOK = (sel != 0) || tester;
+   double bid = SymbolInfoDouble(s, SYMBOL_BID);
+   g_UltraBrokerHealth.marketOpen = (bid > 0.0);
+   g_UltraBrokerHealth.pingMs = 0; // broker RTT probe reserved
+   if(!g_UltraBrokerHealth.connected) g_UltraBrokerHealth.status = "DISCONNECTED";
+   else if(!g_UltraBrokerHealth.terminalTrade || !g_UltraBrokerHealth.tradeAllowed) g_UltraBrokerHealth.status = "TRADE_BLOCKED";
+   else if(!g_UltraBrokerHealth.symbolOK) g_UltraBrokerHealth.status = "SYMBOL_BAD";
+   else if(!g_UltraBrokerHealth.marketOpen) g_UltraBrokerHealth.status = "NO_QUOTES";
+   else g_UltraBrokerHealth.status = "OK";
+}
+
+bool UltraHealth_OK(const string s)
+{
+   UltraHealth_Update(s);
+   return (g_UltraBrokerHealth.status == "OK");
+}
+
+string UltraHealth_Summary(const string s)
+{
+   UltraHealth_Update(s);
+   return g_UltraBrokerHealth.status + " pingMs=" + IntegerToString((int)g_UltraBrokerHealth.pingMs);
+}
+
+#endif
+//===== END 36_BrokerHealth.mqh =====
+
 //===== BEGIN 02_Data.mqh =====
 #ifndef HITMAN_ULTRA_02_DATA_MQH
 #define HITMAN_ULTRA_02_DATA_MQH
@@ -20363,6 +20531,498 @@ string UltraRecoveryIntel_Dashboard()
 #endif // HITMAN_ULTRA_RECOVERY_INTELLIGENCE_MQH
 //===== END UltraRecoveryIntelligence.mqh =====
 
+//===== BEGIN UltraEnvironmentIntelligence.mqh =====
+#ifndef HITMAN_ULTRA_ENVIRONMENT_INTELLIGENCE_MQH
+#define HITMAN_ULTRA_ENVIRONMENT_INTELLIGENCE_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — MASTER SPEC CHAPTER 16 · ENVIRONMENT COMPATIBILITY   |
+//| Consistent behaviour: Strategy Tester · Demo · Live              |
+//| NEVER changes Strategy · Risk · Thesis · Mission Control         |
+//| ONLY adapts execution environment / broker mechanics             |
+//| Thin facade over UltraBacktestCompat + BrokerCompatibility       |
+//+------------------------------------------------------------------+
+
+enum ENUM_ULTRA_ENV_MODE
+{
+   UENV_UNKNOWN = 0,
+   UENV_TESTER,
+   UENV_TESTER_VISUAL,
+   UENV_OPTIMIZATION,
+   UENV_DEMO,
+   UENV_CONTEST,
+   UENV_LIVE
+};
+
+enum ENUM_ULTRA_ENV_READY
+{
+   UENV_INIT = 0,
+   UENV_READY,
+   UENV_DEGRADED,
+   UENV_BLOCKED
+};
+
+struct UltraEnvBrokerSpec
+{
+   string symbol;
+   string company;
+   long   login;
+   int    stopsLevel;
+   int    freezeLevel;
+   int    fillingMode;
+   int    execMode;          // SYMBOL_TRADE_EXEMODE
+   int    digits;
+   double point;
+   double tickSize;
+   double tickValue;
+   double contractSize;
+   double volumeMin;
+   double volumeMax;
+   double volumeStep;
+   double marginInitial;
+   bool   fillFOK;
+   bool   fillIOC;
+   bool   tradeAllowed;
+   bool   valid;
+   string fillingName;
+   string execModeName;
+};
+
+struct UltraEnvironmentIntelState
+{
+   bool   booted;
+   bool   strategyLocked;       // invariant — one strategy
+   bool   riskLocked;           // invariant — one risk engine
+   bool   thesisLocked;         // invariant — one thesis
+   bool   missionLocked;        // invariant — one Mission Control
+   bool   executionAdaptationOnly;
+
+   bool   structuralOK;
+   bool   dataOK;
+   bool   brokerOK;
+   bool   syncOK;
+   bool   envReady;
+   bool   indicatorsReady;
+   bool   strategyReady;
+
+   ENUM_ULTRA_ENV_MODE  mode;
+   ENUM_ULTRA_ENV_READY readiness;
+   string modeName;
+   string status;
+   string detail;
+   string syncStatus;
+   string compatStatus;
+
+   UltraEnvBrokerSpec broker;
+
+   int    openOrders;
+   int    openPositions;
+   double accountEquity;
+   double accountBalance;
+   double freeMargin;
+
+   ulong  syncCount;
+   ulong  readyCount;
+   ulong  rejectCount;
+   long   lastSyncMs;
+   long   lastMs;
+};
+
+UltraEnvironmentIntelState g_UltraEnvIntel;
+
+string UltraEnvIntel_ModeNameFromEnum(const ENUM_ULTRA_ENV_MODE m)
+{
+   switch(m)
+   {
+      case UENV_TESTER:        return "TESTER";
+      case UENV_TESTER_VISUAL: return "TESTER_VISUAL";
+      case UENV_OPTIMIZATION:  return "OPTIMIZATION";
+      case UENV_DEMO:          return "DEMO";
+      case UENV_CONTEST:       return "CONTEST";
+      case UENV_LIVE:          return "LIVE";
+      default:                 return "UNKNOWN";
+   }
+}
+
+string UltraEnvIntel_ReadyName(const ENUM_ULTRA_ENV_READY r)
+{
+   switch(r)
+   {
+      case UENV_READY:    return "READY";
+      case UENV_DEGRADED: return "DEGRADED";
+      case UENV_BLOCKED:  return "BLOCKED";
+      default:            return "INIT";
+   }
+}
+
+string UltraEnvIntel_ExecModeName(const int exe)
+{
+   // SYMBOL_TRADE_EXECUTION_* 
+   if(ex == SYMBOL_TRADE_EXECUTION_INSTANT) return "INSTANT";
+   if(ex == SYMBOL_TRADE_EXECUTION_REQUEST) return "REQUEST";
+   if(ex == SYMBOL_TRADE_EXECUTION_MARKET)  return "MARKET";
+   if(ex == SYMBOL_TRADE_EXECUTION_EXCHANGE) return "EXCHANGE";
+   return "UNKNOWN";
+}
+
+string UltraEnvIntel_FillingName(const bool fok, const bool ioc)
+{
+   if(fok) return "FOK";
+   if(ioc) return "IOC";
+   return "RETURN";
+}
+
+//--------------------------------------------------------------------//
+// §1 ENVIRONMENT DETECTION — automatic · no manual switch            //
+//--------------------------------------------------------------------//
+ENUM_ULTRA_ENV_MODE UltraEnvIntel_DetectMode()
+{
+   if(UltraBT_IsOptimization()) return UENV_OPTIMIZATION;
+   if(UltraBT_IsTester())
+   {
+      if(UltraBT_IsVisual()) return UENV_TESTER_VISUAL;
+      return UENV_TESTER;
+   }
+   ENUM_ACCOUNT_TRADE_MODE am = (ENUM_ACCOUNT_TRADE_MODE)AccountInfoInteger(ACCOUNT_TRADE_MODE);
+   if(am == ACCOUNT_TRADE_MODE_DEMO) return UENV_DEMO;
+   if(am == ACCOUNT_TRADE_MODE_CONTEST) return UENV_CONTEST;
+   if(am == ACCOUNT_TRADE_MODE_REAL) return UENV_LIVE;
+   return UENV_UNKNOWN;
+}
+
+//--------------------------------------------------------------------//
+// §7 BROKER COMPATIBILITY — read specs (execution layer only)        //
+//--------------------------------------------------------------------//
+bool UltraEnvIntel_RefreshBroker(const string s, string &why)
+{
+   why = "";
+   UltraEnvBrokerSpec b;
+   b.symbol = s;
+   b.company = AccountInfoString(ACCOUNT_COMPANY);
+   b.login = AccountInfoInteger(ACCOUNT_LOGIN);
+
+   long stops = 0, freeze = 0, fill = 0, ex = 0, dig = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL, stops);
+   SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL, freeze);
+   SymbolInfoInteger(s, SYMBOL_FILLING_MODE, fill);
+   SymbolInfoInteger(s, SYMBOL_TRADE_EXEMODE, ex);
+   SymbolInfoInteger(s, SYMBOL_DIGITS, dig);
+
+   b.stopsLevel = (int)stops;
+   b.freezeLevel = (int)freeze;
+   b.fillingMode = (int)fill;
+   b.execMode = (int)ex;
+   b.digits = (int)dig;
+   b.point = SymbolInfoDouble(s, SYMBOL_POINT);
+   b.tickSize = SymbolInfoDouble(s, SYMBOL_TRADE_TICK_SIZE);
+   b.tickValue = SymbolInfoDouble(s, SYMBOL_TRADE_TICK_VALUE);
+   b.contractSize = SymbolInfoDouble(s, SYMBOL_TRADE_CONTRACT_SIZE);
+   b.volumeMin = SymbolInfoDouble(s, SYMBOL_VOLUME_MIN);
+   b.volumeMax = SymbolInfoDouble(s, SYMBOL_VOLUME_MAX);
+   b.volumeStep = SymbolInfoDouble(s, SYMBOL_VOLUME_STEP);
+   b.marginInitial = SymbolInfoDouble(s, SYMBOL_MARGIN_INITIAL);
+   b.fillFOK = ((b.fillingMode & SYMBOL_FILLING_FOK) != 0);
+   b.fillIOC = ((b.fillingMode & SYMBOL_FILLING_IOC) != 0);
+   b.fillingName = UltraEnvIntel_FillingName(b.fillFOK, b.fillIOC);
+   b.execModeName = UltraEnvIntel_ExecModeName(b.execMode);
+
+   long tm = 0;
+   SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tm);
+   b.tradeAllowed = (tm != 0) || (UltraBT_CompatMode() && SymbolInfoDouble(s, SYMBOL_BID) > 0.0);
+   b.valid = (b.volumeMin > 0.0 && b.volumeMax >= b.volumeMin &&
+              b.volumeStep > 0.0 && b.point > 0.0 &&
+              SymbolInfoDouble(s, SYMBOL_BID) > 0.0);
+
+   // Keep legacy broker caps in sync (execution adaptation source)
+   UltraBrokerCaps caps;
+   UltraBroker_Detect(s, caps);
+
+   g_UltraEnvIntel.broker = b;
+   g_UltraEnvIntel.brokerOK = b.valid && b.tradeAllowed;
+   if(!b.valid)
+   {
+      why = "broker specs incomplete";
+      return false;
+   }
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// §8 SYNCHRONIZATION — orders · positions · account · broker         //
+//--------------------------------------------------------------------//
+void UltraEnvIntel_Synchronize(const string s)
+{
+   g_UltraEnvIntel.openOrders = OrdersTotal();
+   g_UltraEnvIntel.openPositions = 0;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0 || !PositionSelectByTicket(ticket)) continue;
+      if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+      g_UltraEnvIntel.openPositions++;
+   }
+   g_UltraEnvIntel.accountEquity = AccountInfoDouble(ACCOUNT_EQUITY);
+   g_UltraEnvIntel.accountBalance = AccountInfoDouble(ACCOUNT_BALANCE);
+   g_UltraEnvIntel.freeMargin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+   g_UltraEnvIntel.syncOK = UltraBT_ConnectedOK();
+   g_UltraEnvIntel.syncStatus = g_UltraEnvIntel.syncOK ? "SYNCED" : "DESYNC";
+   g_UltraEnvIntel.syncCount++;
+   g_UltraEnvIntel.lastSyncMs = (long)GetTickCount();
+
+   // Tester-aware broker health mirror
+   UltraHealth_Update(s);
+}
+
+//--------------------------------------------------------------------//
+// §4 / §9 DATA + READINESS VALIDATION                                //
+//--------------------------------------------------------------------//
+bool UltraEnvIntel_ValidateData(const string s, string &why)
+{
+   why = "";
+   string w = "";
+   if(!UltraBT_ValidateSymbolTF(s, w)) { why = w; return false; }
+   if(!UltraBT_ValidateHistory(s, w))  { why = w; return false; }
+   if(!UltraBT_ValidateBuffers(s, w))  { why = w; return false; }
+   if(!UltraBT_ValidateTick(s, w))     { why = w; return false; }
+   g_UltraEnvIntel.dataOK = true;
+   return true;
+}
+
+bool UltraEnvIntel_ValidateLocks(string &why)
+{
+   why = "";
+   // Hard invariants — never allow env layer to claim strategy forks
+   if(!g_UltraEnvIntel.strategyLocked || !g_UltraEnvIntel.riskLocked ||
+      !g_UltraEnvIntel.thesisLocked || !g_UltraEnvIntel.missionLocked ||
+      !g_UltraEnvIntel.executionAdaptationOnly)
+   {
+      why = "environment lock invariant broken";
+      return false;
+   }
+   g_UltraEnvIntel.strategyReady = true;
+   return true;
+}
+
+bool UltraEnvIntel_ValidateReadiness(const string s, string &why)
+{
+   why = "";
+   g_UltraEnvIntel.envReady = false;
+   g_UltraEnvIntel.dataOK = false;
+   g_UltraEnvIntel.indicatorsReady = false;
+
+   if(!UltraEnvIntel_ValidateLocks(why))
+   {
+      g_UltraEnvIntel.readiness = UENV_BLOCKED;
+      return false;
+   }
+
+   string w = "";
+   if(!UltraEnvIntel_ValidateData(s, w))
+   {
+      why = w;
+      g_UltraEnvIntel.readiness = UENV_BLOCKED;
+      g_UltraEnvIntel.detail = w;
+      return false;
+   }
+
+   if(!UltraBT_ValidateHandles(w))
+   {
+      why = w;
+      g_UltraEnvIntel.indicatorsReady = false;
+      g_UltraEnvIntel.readiness = UENV_BLOCKED;
+      g_UltraEnvIntel.detail = w;
+      return false;
+   }
+   g_UltraEnvIntel.indicatorsReady = true;
+
+   if(!UltraEnvIntel_RefreshBroker(s, w))
+   {
+      why = w;
+      g_UltraEnvIntel.readiness = UENV_BLOCKED;
+      g_UltraEnvIntel.detail = w;
+      return false;
+   }
+
+   if(!UltraBT_TradeAllowed())
+   {
+      why = "trade not allowed in environment";
+      g_UltraEnvIntel.readiness = UENV_BLOCKED;
+      g_UltraEnvIntel.detail = why;
+      return false;
+   }
+
+   if(!UltraBT_ConnectedOK())
+   {
+      why = "environment not connected/synced";
+      g_UltraEnvIntel.readiness = UENV_DEGRADED;
+      g_UltraEnvIntel.detail = why;
+      return false;
+   }
+
+   // Recovery Safe Mode — env ready structurally but new entries blocked upstream
+   if(g_UltraRecoveryIntel.booted && g_UltraRecoveryIntel.safeMode)
+   {
+      g_UltraEnvIntel.readiness = UENV_DEGRADED;
+      g_UltraEnvIntel.envReady = true;
+      g_UltraEnvIntel.detail = "env OK · recovery safe mode";
+      g_UltraEnvIntel.compatStatus = "DEGRADED_SAFE";
+      why = g_UltraEnvIntel.detail;
+      return true; // environment itself OK — gate is Recovery/TradeGate
+   }
+
+   g_UltraEnvIntel.envReady = true;
+   g_UltraEnvIntel.readiness = UENV_READY;
+   g_UltraEnvIntel.compatStatus = "COMPATIBLE";
+   g_UltraEnvIntel.detail = "READY " + g_UltraEnvIntel.modeName;
+   g_UltraEnvIntel.readyCount++;
+   why = g_UltraEnvIntel.detail;
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// PRE-TRADE — unified gate over BT + env/broker (never strategy)     //
+//--------------------------------------------------------------------//
+bool UltraEnvIntel_PreTradeReady(const string s, string &why)
+{
+   why = "";
+   UltraEnvIntel_Synchronize(s);
+
+   // One pipeline — same strategy path Tester/Demo/Live
+   if(!UltraBT_PreTradeReady(s, why))
+   {
+      g_UltraEnvIntel.rejectCount++;
+      g_UltraEnvIntel.readiness = UENV_BLOCKED;
+      g_UltraEnvIntel.detail = why;
+      g_UltraEnvIntel.compatStatus = "NOT_READY";
+      return false;
+   }
+
+   string w = "";
+   if(!UltraEnvIntel_ValidateReadiness(s, w))
+   {
+      // If BT ready but env degraded with safe mode, still allow structural ready
+      if(g_UltraEnvIntel.readiness == UENV_DEGRADED && g_UltraEnvIntel.envReady)
+      {
+         why = w;
+         return true;
+      }
+      g_UltraEnvIntel.rejectCount++;
+      why = w;
+      return false;
+   }
+
+   why = g_UltraEnvIntel.detail;
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// Thin execution-environment adapters (delegate UltraBT_*)           //
+//--------------------------------------------------------------------//
+bool UltraEnvIntel_ConnectedOK()   { return UltraBT_ConnectedOK(); }
+bool UltraEnvIntel_TradeAllowed()  { return UltraBT_TradeAllowed(); }
+bool UltraEnvIntel_SkipLiveOnly()  { return UltraBT_SkipLiveOnly(); }
+bool UltraEnvIntel_RelaxEntryDrift(){ return UltraBT_RelaxEntryDrift(); }
+bool UltraEnvIntel_CompatMode()    { return UltraBT_CompatMode(); }
+
+string UltraEnvIntel_ModeName()
+{
+   return g_UltraEnvIntel.modeName;
+}
+
+//--------------------------------------------------------------------//
+void UltraEnvIntel_Sync(const string s)
+{
+   if(!g_UltraEnvIntel.booted) return;
+
+   g_UltraEnvIntel.mode = UltraEnvIntel_DetectMode();
+   g_UltraEnvIntel.modeName = UltraEnvIntel_ModeNameFromEnum(g_UltraEnvIntel.mode);
+   // Keep BT mode string aligned
+   g_UltraBT.modeName = UltraBT_ModeName();
+
+   string why = "";
+   UltraEnvIntel_RefreshBroker(s, why);
+   UltraEnvIntel_Synchronize(s);
+
+   g_UltraEnvIntel.structuralOK =
+      g_UltraEnvIntel.strategyLocked &&
+      g_UltraEnvIntel.executionAdaptationOnly &&
+      g_UltraEnvIntel.booted;
+
+   if(g_UltraEnvIntel.brokerOK && g_UltraEnvIntel.syncOK)
+      g_UltraEnvIntel.status = "ACTIVE";
+   else if(!g_UltraEnvIntel.syncOK)
+      g_UltraEnvIntel.status = "DESYNC";
+   else
+      g_UltraEnvIntel.status = "DEGRADED";
+
+   g_UltraEnvIntel.lastMs = (long)GetTickCount();
+}
+
+void UltraEnvIntel_OnTick(const string s)
+{
+   if(!g_UltraEnvIntel.booted) return;
+   UltraEnvIntel_Sync(s);
+}
+
+void UltraEnvIntel_Boot(const string s)
+{
+   ZeroMemory(g_UltraEnvIntel);
+   g_UltraEnvIntel.booted = true;
+   // §2 UNIFIED STRATEGY — locked invariants (never forked by env)
+   g_UltraEnvIntel.strategyLocked = true;
+   g_UltraEnvIntel.riskLocked = true;
+   g_UltraEnvIntel.thesisLocked = true;
+   g_UltraEnvIntel.missionLocked = true;
+   g_UltraEnvIntel.executionAdaptationOnly = true;
+
+   g_UltraEnvIntel.mode = UltraEnvIntel_DetectMode();
+   g_UltraEnvIntel.modeName = UltraEnvIntel_ModeNameFromEnum(g_UltraEnvIntel.mode);
+   g_UltraEnvIntel.readiness = UENV_INIT;
+   g_UltraEnvIntel.status = "BOOT";
+   g_UltraEnvIntel.compatStatus = "INIT";
+   g_UltraEnvIntel.syncStatus = "INIT";
+   g_UltraEnvIntel.detail = "one strategy · exec adapts only · " + g_UltraEnvIntel.modeName;
+   g_UltraEnvIntel.structuralOK = true;
+
+   string why = "";
+   if(StringLen(s) > 0)
+   {
+      UltraEnvIntel_RefreshBroker(s, why);
+      UltraEnvIntel_Synchronize(s);
+   }
+
+   UltraLoggerIntel_LogSystem("ENV16",
+      "boot mode=" + g_UltraEnvIntel.modeName +
+      " compat=" + (UltraBT_CompatMode() ? "Y" : "N") +
+      " | strategy/risk/thesis/mission LOCKED · exec adaptation only");
+}
+
+string UltraEnvIntel_Dashboard()
+{
+   string t = "ENV16: ";
+   if(!g_UltraEnvIntel.booted) { t += "INIT"; return t; }
+   t += g_UltraEnvIntel.modeName;
+   t += " ";
+   t += UltraEnvIntel_ReadyName(g_UltraEnvIntel.readiness);
+   t += " ";
+   t += g_UltraEnvIntel.compatStatus;
+   t += " sync=";
+   t += g_UltraEnvIntel.syncStatus;
+   if(g_UltraEnvIntel.broker.valid)
+   {
+      t += " fill=";
+      t += g_UltraEnvIntel.broker.fillingName;
+      t += " ex=";
+      t += g_UltraEnvIntel.broker.execModeName;
+      t += " stops=";
+      t += IntegerToString(g_UltraEnvIntel.broker.stopsLevel);
+   }
+   t += " | locks=Y";
+   return t;
+}
+
+#endif // HITMAN_ULTRA_ENVIRONMENT_INTELLIGENCE_MQH
+//===== END UltraEnvironmentIntelligence.mqh =====
+
 //===== BEGIN UltraDashboardIntelligence.mqh =====
 #ifndef HITMAN_ULTRA_DASHBOARD_INTELLIGENCE_MQH
 #define HITMAN_ULTRA_DASHBOARD_INTELLIGENCE_MQH
@@ -20686,6 +21346,10 @@ string UltraDashboardIntel_PanelHealth()
    t += UltraResource_Monitor();
    t += "\n";
    t += UltraRecoveryIntel_Dashboard();
+   t += "\n";
+   t += UltraEnvIntel_Dashboard();
+   t += "\n";
+   t += UltraBT_Dashboard();
    t += "\n";
    t += UltraZFR_Dashboard();
    t += "\n";
@@ -21225,8 +21889,18 @@ void UltraMod_Refresh()
                    recOK, recDetail);
    }
 
-   // PHASE 16 — Backtest Compatibility
-   UltraMod_Reg("P16_BT_COMPAT", false, UltraBacktestCompatEnabled, true, UltraBT_ModeName());
+   // PHASE 16 — Environment Compatibility (Chapter 16)
+   {
+      bool envOK = g_UltraEnvIntel.booted && g_UltraEnvIntel.structuralOK &&
+                   g_UltraEnvIntel.readiness != UENV_BLOCKED;
+      string envDetail = g_UltraEnvIntel.modeName;
+      envDetail += " ";
+      envDetail += UltraEnvIntel_ReadyName(g_UltraEnvIntel.readiness);
+      envDetail += " ";
+      envDetail += g_UltraEnvIntel.compatStatus;
+      UltraMod_Reg("P16_ENV_COMPAT", true, UltraBacktestCompatEnabled,
+                   envOK, envDetail);
+   }
 
    // PHASE 17 — Low-Latency
    UltraMod_Reg("P17_LOW_LATENCY", false, UltraLowLatencyEnabled, UltraLowLatencyEnabled,
@@ -22428,168 +23102,6 @@ void CreateDashboard()
 #endif // HITMAN_ULTRA_24_DASHBOARD_MQH
 //===== END 24_Dashboard.mqh =====
 
-//===== BEGIN 32_BrokerCompatibility.mqh =====
-#ifndef HITMAN_ULTRA_32_BROKERCOMPAT_MQH
-#define HITMAN_ULTRA_32_BROKERCOMPAT_MQH
-//+------------------------------------------------------------------+
-//| 32_BrokerCompatibility — fill/exec modes · stops · freeze · caps |
-//+------------------------------------------------------------------+
-
-struct UltraBrokerCaps
-{
-   string company;
-   long   login;
-   int    stopsLevel;
-   int    freezeLevel;
-   int    fillingMode;
-   bool   fillFOK;
-   bool   fillIOC;
-   bool   fillRETURN;
-   bool   tradeAllowed;
-   bool   valid;
-};
-
-UltraBrokerCaps g_UltraBrokerCaps;
-
-void UltraBroker_ClearCaps(UltraBrokerCaps &c)
-{
-   c.company = "";
-   c.login = 0;
-   c.stopsLevel = 0;
-   c.freezeLevel = 0;
-   c.fillingMode = 0;
-   c.fillFOK = c.fillIOC = c.fillRETURN = false;
-   c.tradeAllowed = false;
-   c.valid = false;
-}
-
-bool UltraBroker_Detect(const string s, UltraBrokerCaps &c)
-{
-   UltraBroker_ClearCaps(c);
-   c.company = AccountInfoString(ACCOUNT_COMPANY);
-   c.login   = AccountInfoInteger(ACCOUNT_LOGIN);
-   long stopsLevel = 0, freezeLevel = 0, fillingMode = 0;
-   SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL, stopsLevel);
-   SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL, freezeLevel);
-   SymbolInfoInteger(s, SYMBOL_FILLING_MODE, fillingMode);
-   c.stopsLevel  = (int)stopsLevel;
-   c.freezeLevel = (int)freezeLevel;
-   c.fillingMode = (int)fillingMode;
-   c.fillFOK    = ((c.fillingMode & SYMBOL_FILLING_FOK) != 0);
-   c.fillIOC    = ((c.fillingMode & SYMBOL_FILLING_IOC) != 0);
-   c.fillRETURN = true;
-   long tmMode = 0;
-   SymbolInfoInteger(s, SYMBOL_TRADE_MODE, tmMode);
-   c.tradeAllowed = (tmMode != 0);
-   c.valid = (SymbolInfoDouble(s, SYMBOL_BID) > 0.0);
-   g_UltraBrokerCaps = c;
-   return c.valid;
-}
-
-ENUM_ORDER_TYPE_FILLING UltraBroker_PickFilling(const string s)
-{
-   UltraBrokerCaps c;
-   UltraBroker_Detect(s, c);
-   if(c.fillFOK) return ORDER_FILLING_FOK;
-   if(c.fillIOC) return ORDER_FILLING_IOC;
-   return ORDER_FILLING_RETURN;
-}
-
-bool UltraBroker_StopsOK(const string s, const double price, const double sl, const double tp, string &why)
-{
-   why = "";
-   long stops = 0;
-   SymbolInfoInteger(s, SYMBOL_TRADE_STOPS_LEVEL, stops);
-   double point = SymbolInfoDouble(s, SYMBOL_POINT);
-   if(point <= 0){ why = "bad point"; return false; }
-   double minDist = stops * point;
-   if(sl > 0 && MathAbs(price - sl) < minDist){ why = "SL inside stops level"; return false; }
-   if(tp > 0 && MathAbs(price - tp) < minDist){ why = "TP inside stops level"; return false; }
-   return true;
-}
-
-bool UltraBroker_FreezeOK(const string s, const double price, const double sl, const double tp, string &why)
-{
-   why = "";
-   long freeze = 0;
-   SymbolInfoInteger(s, SYMBOL_TRADE_FREEZE_LEVEL, freeze);
-   double point = SymbolInfoDouble(s, SYMBOL_POINT);
-   if(freeze <= 0 || point <= 0) return true;
-   double minDist = freeze * point;
-   if(sl > 0 && MathAbs(price - sl) < minDist){ why = "SL inside freeze level"; return false; }
-   if(tp > 0 && MathAbs(price - tp) < minDist){ why = "TP inside freeze level"; return false; }
-   return true;
-}
-
-string UltraBroker_Summary(const string s)
-{
-   UltraBrokerCaps c; UltraBroker_Detect(s, c);
-   string t = c.company;
-   t += " stops="; t += IntegerToString(c.stopsLevel);
-   t += " freeze="; t += IntegerToString(c.freezeLevel);
-   t += " FOK=";
-   if(c.fillFOK) t += "Y"; else t += "N";
-   t += " IOC=";
-   if(c.fillIOC) t += "Y"; else t += "N";
-   return t;
-}
-
-#endif
-//===== END 32_BrokerCompatibility.mqh =====
-
-//===== BEGIN 36_BrokerHealth.mqh =====
-#ifndef HITMAN_ULTRA_36_BROKERHEALTH_MQH
-#define HITMAN_ULTRA_36_BROKERHEALTH_MQH
-//+------------------------------------------------------------------+
-//| 36_BrokerHealth — connection · permissions · market · symbols    |
-//+------------------------------------------------------------------+
-
-struct UltraBrokerHealth
-{
-   bool connected;
-   bool tradeAllowed;
-   bool terminalTrade;
-   bool marketOpen;      // soft: has quotes
-   bool symbolOK;
-   long pingMs;          // TerminalInfoInteger TERMINAL_PING approx if available
-   string status;
-};
-
-UltraBrokerHealth g_UltraBrokerHealth;
-
-void UltraHealth_Update(const string s)
-{
-   g_UltraBrokerHealth.connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
-   g_UltraBrokerHealth.terminalTrade = (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED);
-   g_UltraBrokerHealth.tradeAllowed = (AccountInfoInteger(ACCOUNT_TRADE_ALLOWED) != 0);
-   long sel = 0;
-   SymbolInfoInteger(s, SYMBOL_SELECT, sel);
-   g_UltraBrokerHealth.symbolOK = (sel != 0);
-   double bid = SymbolInfoDouble(s, SYMBOL_BID);
-   g_UltraBrokerHealth.marketOpen = (bid > 0.0);
-   g_UltraBrokerHealth.pingMs = 0; // broker RTT probe reserved
-   if(!g_UltraBrokerHealth.connected) g_UltraBrokerHealth.status = "DISCONNECTED";
-   else if(!g_UltraBrokerHealth.terminalTrade || !g_UltraBrokerHealth.tradeAllowed) g_UltraBrokerHealth.status = "TRADE_BLOCKED";
-   else if(!g_UltraBrokerHealth.symbolOK) g_UltraBrokerHealth.status = "SYMBOL_BAD";
-   else if(!g_UltraBrokerHealth.marketOpen) g_UltraBrokerHealth.status = "NO_QUOTES";
-   else g_UltraBrokerHealth.status = "OK";
-}
-
-bool UltraHealth_OK(const string s)
-{
-   UltraHealth_Update(s);
-   return (g_UltraBrokerHealth.status == "OK");
-}
-
-string UltraHealth_Summary(const string s)
-{
-   UltraHealth_Update(s);
-   return g_UltraBrokerHealth.status + " pingMs=" + IntegerToString((int)g_UltraBrokerHealth.pingMs);
-}
-
-#endif
-//===== END 36_BrokerHealth.mqh =====
-
 //===== BEGIN 33_OrderManagement.mqh =====
 #ifndef HITMAN_ULTRA_33_ORDERMGMT_MQH
 #define HITMAN_ULTRA_33_ORDERMGMT_MQH
@@ -22940,9 +23452,10 @@ int OnInit()
       UltraBug_NoteHandles(bad, checked);
    }
    UltraTradeGate_Boot();   // P07 Risk Intelligence gate
+   UltraBT_Boot();          // P16 BT core (before Env facade + Module Manager)
+   UltraEnvIntel_Boot(BrokerSymbol); // P16 Environment Compatibility (Ch16)
    UltraQA_Boot();          // P18 Quality Assurance
-   UltraMod_Boot();         // Module Manager — Internal Standard v6+ P1-19
-   UltraBT_Boot();          // P16 Backtest Compatibility
+   UltraMod_Boot();         // Module Manager — after P16 boot for live status
    UltraMission_Init();     // P06 Mission Control
    UltraBug_AuditInit(BrokerSymbol); // P19 init / handles / broker / timer audit
    Print("INTERNAL STANDARD v6+: HA_ULTRA_93 | Phases 1-19 | one strategy · one signal · one thesis · one mission · one exit");
@@ -22965,9 +23478,11 @@ int OnInit()
          " ", g_UltraLL.summary);
    Print("ULTRA PERFORMANCE MISSION: market-read→signal→Mission→exec pipeline | min internal latency");
    Print("MODULE MANAGER: ", g_UltraMods.summary);
-   Print("P16 BT COMPAT ∞: Mode=", UltraBT_ModeName(),
+   Print("P16 BT/ENV COMPAT ∞: Mode=", UltraBT_ModeName(),
+         " Env=", g_UltraEnvIntel.modeName,
          " Compat=", UltraYN(g_UltraBT.compatMode),
-         " Enabled=", UltraYN(UltraBacktestCompatEnabled));
+         " Enabled=", UltraYN(UltraBacktestCompatEnabled),
+         " Sync=", g_UltraEnvIntel.syncStatus);
    Print("VALIDATION CHAIN: Enabled=", UltraYN(UltraVChainEnabled),
          " BlockInvalid=", UltraYN(UltraVChainBlockOnInvalid),
          " BlockWait=", UltraYN(UltraVChainBlockOnWait));
@@ -23017,8 +23532,14 @@ int OnInit()
          " SafeMode=", UltraYN(g_UltraRecoveryIntel.safeMode),
          " Outcome=", g_UltraRecoveryIntel.outcomeName,
          " (never changes strategy · never signals · restore only)");
+   Print("P16 ENV COMPAT (Ch16): Boot=", UltraYN(g_UltraEnvIntel.booted),
+         " Mode=", g_UltraEnvIntel.modeName,
+         " Compat=", UltraYN(UltraBT_CompatMode()),
+         " Ready=", UltraEnvIntel_ReadyName(g_UltraEnvIntel.readiness),
+         " Locks=strategy/risk/thesis/mission",
+         " (exec adapts only · never changes strategy)");
    UltraLoggerIntel_LogSystem("STARTUP", "OnInit complete Internal Standard v6+ HA_ULTRA_93");
-   Print("MAIN FLOW v6+: Foundation→Market→Strategy→Signal→News→Mission→Risk→Exec→Target→PosEvo→Exit→Analytics→Logger→Dashboard→Recovery");
+   Print("MAIN FLOW v6+: Foundation→Market→Strategy→Signal→News→Mission→Risk→Exec→Target→PosEvo→Exit→Analytics→Logger→Dashboard→Recovery→Env");
    Print("P07 RISK / TRADE GATE: Enabled=", UltraYN(UltraTradeGateEnabled),
          " RequireTargets=", UltraYN(UltraTradeGateRequireTargets),
          " — ANY validation fail = NO TRADE");
@@ -23955,6 +24476,8 @@ void RunTradingCycle(string symbol)
    UltraFoundation_OnTick(symbol);
    // P15 Recovery — always monitors (even when RED / degraded); wraps ZFR
    UltraRecoveryIntel_OnTick(symbol);
+   // P16 Environment Compatibility — sync/detect only (never changes strategy)
+   UltraEnvIntel_OnTick(symbol);
    if(UltraFoundationEnabled && g_UltraFoundation.status == "RED")
    {
       ManageOpenTrades(); // still protect open positions — never abandon risk
@@ -23967,6 +24490,7 @@ void RunTradingCycle(string symbol)
    if(UltraMarketIntelEnabled && !UltraMarketIntel_Approved())
    {
       UltraRecoveryIntel_OnTick(symbol); // keep recovering data path
+      UltraEnvIntel_OnTick(symbol);
       ManageOpenTrades(); // still protect open positions — never abandon risk
       UltraLL_OnTickEnd();
       return;
@@ -26272,9 +26796,9 @@ bool ExecuteBuy()
    // BACKTEST COMPAT — indicators/history/broker rules ready?
    {
       string btWhy = "";
-      if(!UltraBT_PreTradeReady(BrokerSymbol, btWhy))
+      if(!UltraEnvIntel_PreTradeReady(BrokerSymbol, btWhy))
       {
-         UltraBT_LogReject("UltraBacktestCompat", "UltraBT_PreTradeReady", btWhy);
+         UltraBT_LogReject("UltraEnvIntel", "UltraEnvIntel_PreTradeReady", btWhy);
          Print("NO TRADE — BT ready fail: ", btWhy, " on ", BrokerSymbol);
          return false;
       }
@@ -26757,9 +27281,9 @@ bool ExecuteSell()
    // BACKTEST COMPAT — indicators/history/broker rules ready?
    {
       string btWhy = "";
-      if(!UltraBT_PreTradeReady(BrokerSymbol, btWhy))
+      if(!UltraEnvIntel_PreTradeReady(BrokerSymbol, btWhy))
       {
-         UltraBT_LogReject("UltraBacktestCompat", "UltraBT_PreTradeReady", btWhy);
+         UltraBT_LogReject("UltraEnvIntel", "UltraEnvIntel_PreTradeReady", btWhy);
          Print("NO TRADE — BT ready fail: ", btWhy, " on ", BrokerSymbol);
          return false;
       }

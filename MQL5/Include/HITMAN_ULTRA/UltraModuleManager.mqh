@@ -248,8 +248,18 @@ void UltraMod_Refresh()
                    recOK, recDetail);
    }
 
-   // PHASE 16 — Backtest Compatibility
-   UltraMod_Reg("P16_BT_COMPAT", false, UltraBacktestCompatEnabled, true, UltraBT_ModeName());
+   // PHASE 16 — Environment Compatibility (Chapter 16)
+   {
+      bool envOK = g_UltraEnvIntel.booted && g_UltraEnvIntel.structuralOK &&
+                   g_UltraEnvIntel.readiness != UENV_BLOCKED;
+      string envDetail = g_UltraEnvIntel.modeName;
+      envDetail += " ";
+      envDetail += UltraEnvIntel_ReadyName(g_UltraEnvIntel.readiness);
+      envDetail += " ";
+      envDetail += g_UltraEnvIntel.compatStatus;
+      UltraMod_Reg("P16_ENV_COMPAT", true, UltraBacktestCompatEnabled,
+                   envOK, envDetail);
+   }
 
    // PHASE 17 — Low-Latency
    UltraMod_Reg("P17_LOW_LATENCY", false, UltraLowLatencyEnabled, UltraLowLatencyEnabled,

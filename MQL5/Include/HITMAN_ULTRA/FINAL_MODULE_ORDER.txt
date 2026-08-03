@@ -92,8 +92,12 @@ PHASE 15 — RECOVERY ENGINE
   LOCK: NEVER changes strategy · NEVER creates signals · restore only
         Protect open positions · TradeGate blocks entries in Safe Mode
 
-PHASE 16 — BACKTEST COMPATIBILITY ENGINE
-  UltraBacktestCompat.mqh
+PHASE 16 — ENVIRONMENT COMPATIBILITY ENGINE
+  UltraEnvironmentIntelligence · UltraBacktestCompat
+  32_BrokerCompatibility · 36_BrokerHealth
+  MASTER SPEC CHAPTER 16 — Tester/Demo/Live · one strategy
+  Detect · broker adapt · data validate · sync · readiness
+  LOCK: NEVER changes Strategy/Risk/Thesis/Mission — exec only
 
 PHASE 17 — LOW-LATENCY ENGINE
   UltraLowLatency.mqh · UltraPerf* inputs

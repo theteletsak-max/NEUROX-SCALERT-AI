@@ -105,10 +105,12 @@ OnInit → P1 Foundation → P2 Market → P3 Strategy → P4 Signal
       → P9 Target → P10 PosEvo → P11 Exit → P12 Analytics
       → P13 Logger → P14 Dashboard (display-only · never trades)
       → P15 Recovery (detect→recover→verify · Safe Mode blocks new entries)
-      → P16 BT · P17 Low-Latency · P18 QA · P19 Maintenance
+      → P16 Environment (Tester/Demo/Live · exec adapts only · strategy locked)
+      → P17 Low-Latency · P18 QA · P19 Maintenance
 Every Tick → same living path (Decide inside InstantExecution)
              P14 Refresh on tick/timer + immediate after trade/error/recovery
              P15 always monitors · never abandons open positions
+             P16 sync/detect environment · PreTradeReady before send
 
 ============================================================
 ENGINEERING RULES

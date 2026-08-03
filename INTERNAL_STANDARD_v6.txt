@@ -93,6 +93,7 @@ OnInit → P1 Foundation → P2 Market → P3 Strategy → P4 Signal
       → P9 Target → P10 PosEvo → P11 Exit → P12 Analytics
       → P13 Logger → P14 Dashboard (display-only)
       → P15 Recovery (safe-mode · never abandons positions)
+      → P16 Environment (Tester/Demo/Live · strategy locked · exec adapts)
       → P16 BT · P17 Low-Latency · P18 QA · P19 Maintenance
 Every Tick → same living path (Decide inside InstantExecution)
 

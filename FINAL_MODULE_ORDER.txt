@@ -58,8 +58,9 @@ PHASE 15 — RECOVERY ENGINE
   UltraRecoveryIntelligence · UltraZeroFailRecovery · 30_Recovery
   MASTER SPEC CHAPTER 15 — never changes strategy · safe mode blocks entries
 
-PHASE 16 — BACKTEST COMPATIBILITY ENGINE
-  UltraBacktestCompat.mqh
+PHASE 16 — ENVIRONMENT COMPATIBILITY ENGINE
+  UltraEnvironmentIntelligence · UltraBacktestCompat · BrokerCompat
+  MASTER SPEC CHAPTER 16 — one strategy · exec adapts only
 
 PHASE 17 — LOW-LATENCY ENGINE
   UltraLowLatency.mqh · UltraPerf* inputs

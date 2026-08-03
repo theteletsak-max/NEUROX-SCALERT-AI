@@ -3,8 +3,10 @@ from pathlib import Path
 root = Path("MQL5/Include/HITMAN_ULTRA")
 order = [
     "Shell_A_InputsGlobals.mqh","00_Types.mqh","31_Inputs.mqh","28_Utilities.mqh",
-    "27_Logger.mqh","30_Recovery.mqh","01_Core.mqh","UltraFoundation.mqh",
+    "27_Logger.mqh","30_Recovery.mqh","01_Core.mqh",    "UltraFoundation.mqh",
     "UltraBacktestCompat.mqh",
+    "32_BrokerCompatibility.mqh",  # broker specs early for Ch16 + exec
+    "36_BrokerHealth.mqh",
     "02_Data.mqh","11_Volatility.mqh",
     "03_MarketStructure.mqh","04_BOS.mqh","05_CHoCH.mqh","06_Liquidity.mqh",
     "07_Fibonacci.mqh","08_Institutional.mqh","09_Trend.mqh","10_Momentum.mqh",
@@ -40,13 +42,14 @@ order = [
     "UltraLoggerIntelligence.mqh",
     "UltraTradeGate.mqh",
     "UltraRecoveryIntelligence.mqh",  # Ch15 after Logger+ZFR; before Dashboard consumers
+    "UltraEnvironmentIntelligence.mqh",  # Ch16 env compat (BT+broker facade)
     "UltraDashboardIntelligence.mqh",  # after TradeGate (g_UltraTradeGate state)
     "UltraQualityAssurance.mqh",
     "UltraModuleManager.mqh",
     "UFSE_FastSignalEngine.mqh",
     "21_TradeManagement.mqh","22_MultiSymbol.mqh",
     "25_Statistics.mqh","37_Optimization.mqh","24_Dashboard.mqh",
-    "32_BrokerCompatibility.mqh","36_BrokerHealth.mqh","33_OrderManagement.mqh",
+    "33_OrderManagement.mqh",
     "34_PositionManagement.mqh",
     "38_Backtesting.mqh","40_DebugTools.mqh",
     "Shell_B_TradeSystem.mqh",

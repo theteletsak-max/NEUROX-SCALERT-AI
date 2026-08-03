@@ -99,9 +99,10 @@ int OnInit()
       UltraBug_NoteHandles(bad, checked);
    }
    UltraTradeGate_Boot();   // P07 Risk Intelligence gate
+   UltraBT_Boot();          // P16 BT core (before Env facade + Module Manager)
+   UltraEnvIntel_Boot(BrokerSymbol); // P16 Environment Compatibility (Ch16)
    UltraQA_Boot();          // P18 Quality Assurance
-   UltraMod_Boot();         // Module Manager — Internal Standard v6+ P1-19
-   UltraBT_Boot();          // P16 Backtest Compatibility
+   UltraMod_Boot();         // Module Manager — after P16 boot for live status
    UltraMission_Init();     // P06 Mission Control
    UltraBug_AuditInit(BrokerSymbol); // P19 init / handles / broker / timer audit
    Print("INTERNAL STANDARD v6+: HA_ULTRA_93 | Phases 1-19 | one strategy · one signal · one thesis · one mission · one exit");
@@ -124,9 +125,11 @@ int OnInit()
          " ", g_UltraLL.summary);
    Print("ULTRA PERFORMANCE MISSION: market-read→signal→Mission→exec pipeline | min internal latency");
    Print("MODULE MANAGER: ", g_UltraMods.summary);
-   Print("P16 BT COMPAT ∞: Mode=", UltraBT_ModeName(),
+   Print("P16 BT/ENV COMPAT ∞: Mode=", UltraBT_ModeName(),
+         " Env=", g_UltraEnvIntel.modeName,
          " Compat=", UltraYN(g_UltraBT.compatMode),
-         " Enabled=", UltraYN(UltraBacktestCompatEnabled));
+         " Enabled=", UltraYN(UltraBacktestCompatEnabled),
+         " Sync=", g_UltraEnvIntel.syncStatus);
    Print("VALIDATION CHAIN: Enabled=", UltraYN(UltraVChainEnabled),
          " BlockInvalid=", UltraYN(UltraVChainBlockOnInvalid),
          " BlockWait=", UltraYN(UltraVChainBlockOnWait));
@@ -176,8 +179,14 @@ int OnInit()
          " SafeMode=", UltraYN(g_UltraRecoveryIntel.safeMode),
          " Outcome=", g_UltraRecoveryIntel.outcomeName,
          " (never changes strategy · never signals · restore only)");
+   Print("P16 ENV COMPAT (Ch16): Boot=", UltraYN(g_UltraEnvIntel.booted),
+         " Mode=", g_UltraEnvIntel.modeName,
+         " Compat=", UltraYN(UltraBT_CompatMode()),
+         " Ready=", UltraEnvIntel_ReadyName(g_UltraEnvIntel.readiness),
+         " Locks=strategy/risk/thesis/mission",
+         " (exec adapts only · never changes strategy)");
    UltraLoggerIntel_LogSystem("STARTUP", "OnInit complete Internal Standard v6+ HA_ULTRA_93");
-   Print("MAIN FLOW v6+: Foundation→Market→Strategy→Signal→News→Mission→Risk→Exec→Target→PosEvo→Exit→Analytics→Logger→Dashboard→Recovery");
+   Print("MAIN FLOW v6+: Foundation→Market→Strategy→Signal→News→Mission→Risk→Exec→Target→PosEvo→Exit→Analytics→Logger→Dashboard→Recovery→Env");
    Print("P07 RISK / TRADE GATE: Enabled=", UltraYN(UltraTradeGateEnabled),
          " RequireTargets=", UltraYN(UltraTradeGateRequireTargets),
          " — ANY validation fail = NO TRADE");
@@ -1114,6 +1123,8 @@ void RunTradingCycle(string symbol)
    UltraFoundation_OnTick(symbol);
    // P15 Recovery — always monitors (even when RED / degraded); wraps ZFR
    UltraRecoveryIntel_OnTick(symbol);
+   // P16 Environment Compatibility — sync/detect only (never changes strategy)
+   UltraEnvIntel_OnTick(symbol);
    if(UltraFoundationEnabled && g_UltraFoundation.status == "RED")
    {
       ManageOpenTrades(); // still protect open positions — never abandon risk
@@ -1126,6 +1137,7 @@ void RunTradingCycle(string symbol)
    if(UltraMarketIntelEnabled && !UltraMarketIntel_Approved())
    {
       UltraRecoveryIntel_OnTick(symbol); // keep recovering data path
+      UltraEnvIntel_OnTick(symbol);
       ManageOpenTrades(); // still protect open positions — never abandon risk
       UltraLL_OnTickEnd();
       return;
@@ -3431,9 +3443,9 @@ bool ExecuteBuy()
    // BACKTEST COMPAT — indicators/history/broker rules ready?
    {
       string btWhy = "";
-      if(!UltraBT_PreTradeReady(BrokerSymbol, btWhy))
+      if(!UltraEnvIntel_PreTradeReady(BrokerSymbol, btWhy))
       {
-         UltraBT_LogReject("UltraBacktestCompat", "UltraBT_PreTradeReady", btWhy);
+         UltraBT_LogReject("UltraEnvIntel", "UltraEnvIntel_PreTradeReady", btWhy);
          Print("NO TRADE — BT ready fail: ", btWhy, " on ", BrokerSymbol);
          return false;
       }
@@ -3916,9 +3928,9 @@ bool ExecuteSell()
    // BACKTEST COMPAT — indicators/history/broker rules ready?
    {
       string btWhy = "";
-      if(!UltraBT_PreTradeReady(BrokerSymbol, btWhy))
+      if(!UltraEnvIntel_PreTradeReady(BrokerSymbol, btWhy))
       {
-         UltraBT_LogReject("UltraBacktestCompat", "UltraBT_PreTradeReady", btWhy);
+         UltraBT_LogReject("UltraEnvIntel", "UltraEnvIntel_PreTradeReady", btWhy);
          Print("NO TRADE — BT ready fail: ", btWhy, " on ", BrokerSymbol);
          return false;
       }

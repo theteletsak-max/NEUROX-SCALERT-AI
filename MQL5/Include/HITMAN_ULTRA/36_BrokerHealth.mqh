@@ -19,12 +19,18 @@ UltraBrokerHealth g_UltraBrokerHealth;
 
 void UltraHealth_Update(const string s)
 {
-   g_UltraBrokerHealth.connected = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
-   g_UltraBrokerHealth.terminalTrade = (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED);
-   g_UltraBrokerHealth.tradeAllowed = (AccountInfoInteger(ACCOUNT_TRADE_ALLOWED) != 0);
+   // Ch16 — tester-aware health (same strategy; env gates only)
+   bool tester = UltraBT_CompatMode();
+   g_UltraBrokerHealth.connected = tester ? true : (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
+   g_UltraBrokerHealth.terminalTrade = tester
+      ? (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0)
+      : (bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED);
+   g_UltraBrokerHealth.tradeAllowed = tester
+      ? (MQLInfoInteger(MQL_TRADE_ALLOWED) != 0)
+      : (AccountInfoInteger(ACCOUNT_TRADE_ALLOWED) != 0);
    long sel = 0;
    SymbolInfoInteger(s, SYMBOL_SELECT, sel);
-   g_UltraBrokerHealth.symbolOK = (sel != 0);
+   g_UltraBrokerHealth.symbolOK = (sel != 0) || tester;
    double bid = SymbolInfoDouble(s, SYMBOL_BID);
    g_UltraBrokerHealth.marketOpen = (bid > 0.0);
    g_UltraBrokerHealth.pingMs = 0; // broker RTT probe reserved

@@ -321,6 +321,10 @@ string UltraDashboardIntel_PanelHealth()
    t += "\n";
    t += UltraRecoveryIntel_Dashboard();
    t += "\n";
+   t += UltraEnvIntel_Dashboard();
+   t += "\n";
+   t += UltraBT_Dashboard();
+   t += "\n";
    t += UltraZFR_Dashboard();
    t += "\n";
    t += UltraLoggerIntel_Dashboard();
