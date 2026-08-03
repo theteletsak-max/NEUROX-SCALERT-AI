@@ -222,8 +222,16 @@ void UltraMod_Refresh()
       UltraMod_Reg("P13_LOGGER", true, UltraLoggingEnabled, logOK, logDetail);
    }
 
-   // PHASE 14 — Dashboard
-   UltraMod_Reg("P14_DASHBOARD", false, UltraDashboardEnabled, true, "OK");
+   // PHASE 14 — Dashboard (Chapter 14 — display only)
+   {
+      bool dashOK = g_UltraDashboardIntel.booted &&
+                    g_UltraDashboardIntel.state != UDASH_ERROR;
+      string dashDetail = g_UltraDashboardIntel.stateName;
+      dashDetail += " rf=";
+      dashDetail += IntegerToString((int)g_UltraDashboardIntel.refreshCount);
+      UltraMod_Reg("P14_DASHBOARD", true, UltraDashboardEnabled || EnableDashboard,
+                   dashOK, dashDetail);
+   }
 
    // PHASE 15 — Zero-Fail Recovery
    UltraMod_Reg("P15_ZERO_FAIL", false, UltraZFREnabled, UltraZFREnabled,

@@ -39,6 +39,7 @@ order = [
     "UltraPerfAnalytics.mqh",
     "UltraLoggerIntelligence.mqh",
     "UltraTradeGate.mqh",
+    "UltraDashboardIntelligence.mqh",  # after TradeGate (g_UltraTradeGate state)
     "UltraQualityAssurance.mqh",
     "UltraModuleManager.mqh",
     "UFSE_FastSignalEngine.mqh",

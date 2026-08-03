@@ -7,8 +7,9 @@
 //| ONLY executes Mission Control decisions                          |
 //+------------------------------------------------------------------+
 
-// Shell_B (defined later in assemble)
+// Shell_B / Dashboard (defined later in assemble)
 bool HasSufficientMargin(ENUM_ORDER_TYPE orderType, double lot, double price);
+void UltraDashboardIntel_NoteTradeRefresh();
 
 enum ENUM_ULTRA_EXEC_OUTCOME
 {
@@ -454,6 +455,7 @@ void UltraExecIntel_NoteSynced()
    if(g_UltraExecIntel.outcome != UEXEC_VERIFIED)
       UltraExecIntel_SetOutcome(UEXEC_VERIFIED, "position synchronized");
    UltraExecIntel_Log("SYNC");
+   UltraDashboardIntel_NoteTradeRefresh(); // Ch14 immediate after trade
 }
 
 string UltraExecIntel_Dashboard()

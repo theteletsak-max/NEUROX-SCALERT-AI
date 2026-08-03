@@ -6,6 +6,9 @@
 //| NEVER trades · NEVER executes · ONLY records                     |
 //+------------------------------------------------------------------+
 
+// Dashboard (assembled later) — display-only immediate refresh
+void UltraDashboardIntel_NoteErrorRefresh();
+
 #define ULTRA_LOG_HIST_MAX 64
 
 enum ENUM_ULTRA_LOG_CAT
@@ -196,10 +199,16 @@ void UltraLoggerIntel_LogPosition(const string verb, const string detail, const 
 { UltraLoggerIntel_LogEvent(ULOG_POSITION, verb, detail, ticket); }
 
 void UltraLoggerIntel_LogError(const string verb, const string detail, const ulong ticket = 0)
-{ UltraLoggerIntel_LogEvent(ULOG_ERROR, verb, detail, ticket); }
+{
+   UltraLoggerIntel_LogEvent(ULOG_ERROR, verb, detail, ticket);
+   UltraDashboardIntel_NoteErrorRefresh(); // Ch14 immediate after error
+}
 
 void UltraLoggerIntel_LogRecovery(const string verb, const string detail)
-{ UltraLoggerIntel_LogEvent(ULOG_RECOVERY, verb, detail); }
+{
+   UltraLoggerIntel_LogEvent(ULOG_RECOVERY, verb, detail);
+   UltraDashboardIntel_NoteErrorRefresh(); // Ch14 immediate after recovery
+}
 
 void UltraLoggerIntel_LogPerf(const string verb, const string detail)
 { UltraLoggerIntel_LogEvent(ULOG_PERF, verb, detail); }

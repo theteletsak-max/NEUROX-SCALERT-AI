@@ -51,7 +51,8 @@ PHASE 13 — LOGGER ENGINE
   LOCK: every WAIT has an explicit reason
 
 PHASE 14 — DASHBOARD ENGINE
-  24_Dashboard.mqh
+  UltraDashboardIntelligence · 24_Dashboard
+  MASTER SPEC CHAPTER 14 — display-only panels · never trades/executes
 
 PHASE 15 — ZERO-FAIL RECOVERY ENGINE
   UltraZeroFailRecovery.mqh

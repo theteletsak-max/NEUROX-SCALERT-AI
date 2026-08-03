@@ -15390,6 +15390,9 @@ string UltraMission_Dashboard()
 //| Mission Control remains SOLE PositionClose* owner                |
 //+------------------------------------------------------------------+
 
+// Dashboard (assembled later) — display-only immediate refresh
+void UltraDashboardIntel_NoteTradeRefresh();
+
 enum ENUM_ULTRA_EXIT_OUT
 {
    UEXIT_READY = 0,
@@ -15638,6 +15641,7 @@ void UltraExitIntel_NoteClosed(const ulong ticket, const string s, const bool is
    g_UltraExitIntel.closeCount++;
    UltraExitIntel_SetOutcome(UEXIT_CLOSED, "position closed · ready for next opportunity");
    UltraExitIntel_Log("CLOSED");
+   UltraDashboardIntel_NoteTradeRefresh(); // Ch14 immediate after trade
 }
 
 void UltraExitIntel_NoteFail(const ulong ticket, const string why)
@@ -18338,8 +18342,9 @@ string UltraRiskIntel_Dashboard()
 //| ONLY executes Mission Control decisions                          |
 //+------------------------------------------------------------------+
 
-// Shell_B (defined later in assemble)
+// Shell_B / Dashboard (defined later in assemble)
 bool HasSufficientMargin(ENUM_ORDER_TYPE orderType, double lot, double price);
+void UltraDashboardIntel_NoteTradeRefresh();
 
 enum ENUM_ULTRA_EXEC_OUTCOME
 {
@@ -18785,6 +18790,7 @@ void UltraExecIntel_NoteSynced()
    if(g_UltraExecIntel.outcome != UEXEC_VERIFIED)
       UltraExecIntel_SetOutcome(UEXEC_VERIFIED, "position synchronized");
    UltraExecIntel_Log("SYNC");
+   UltraDashboardIntel_NoteTradeRefresh(); // Ch14 immediate after trade
 }
 
 string UltraExecIntel_Dashboard()
@@ -19204,6 +19210,9 @@ double UltraPerfAnalytics_TargetScale(){ return UltraAdaptive_TargetScale(); }
 //| NEVER trades · NEVER executes · ONLY records                     |
 //+------------------------------------------------------------------+
 
+// Dashboard (assembled later) — display-only immediate refresh
+void UltraDashboardIntel_NoteErrorRefresh();
+
 #define ULTRA_LOG_HIST_MAX 64
 
 enum ENUM_ULTRA_LOG_CAT
@@ -19394,10 +19403,16 @@ void UltraLoggerIntel_LogPosition(const string verb, const string detail, const 
 { UltraLoggerIntel_LogEvent(ULOG_POSITION, verb, detail, ticket); }
 
 void UltraLoggerIntel_LogError(const string verb, const string detail, const ulong ticket = 0)
-{ UltraLoggerIntel_LogEvent(ULOG_ERROR, verb, detail, ticket); }
+{
+   UltraLoggerIntel_LogEvent(ULOG_ERROR, verb, detail, ticket);
+   UltraDashboardIntel_NoteErrorRefresh(); // Ch14 immediate after error
+}
 
 void UltraLoggerIntel_LogRecovery(const string verb, const string detail)
-{ UltraLoggerIntel_LogEvent(ULOG_RECOVERY, verb, detail); }
+{
+   UltraLoggerIntel_LogEvent(ULOG_RECOVERY, verb, detail);
+   UltraDashboardIntel_NoteErrorRefresh(); // Ch14 immediate after recovery
+}
 
 void UltraLoggerIntel_LogPerf(const string verb, const string detail)
 { UltraLoggerIntel_LogEvent(ULOG_PERF, verb, detail); }
@@ -19863,6 +19878,426 @@ string UltraTradeGate_Dashboard()
 #endif // HITMAN_ULTRA_TRADE_GATE_MQH
 //===== END UltraTradeGate.mqh =====
 
+//===== BEGIN UltraDashboardIntelligence.mqh =====
+#ifndef HITMAN_ULTRA_DASHBOARD_INTELLIGENCE_MQH
+#define HITMAN_ULTRA_DASHBOARD_INTELLIGENCE_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — MASTER SPEC CHAPTER 14 · DASHBOARD ENGINE            |
+//| Professional real-time interface — display only                  |
+//| NEVER trades · NEVER executes · ONLY displays information        |
+//+------------------------------------------------------------------+
+
+// Shell_B / UFSE / Optimization (assembled later)
+int    CountOpenTrades();
+string UltraUFSE_DebugExplain(const UltraSnap &u, const bool buySide, const bool approved);
+string UltraResource_Monitor();
+
+enum ENUM_ULTRA_DASH_STATE
+{
+   UDASH_INITIALIZING = 0,
+   UDASH_READY,
+   UDASH_SCANNING,
+   UDASH_VALIDATING,
+   UDASH_EXECUTING,
+   UDASH_MANAGING,
+   UDASH_RECOVERING,
+   UDASH_ERROR
+};
+
+struct UltraDashboardIntelState
+{
+   bool   booted;
+   ENUM_ULTRA_DASH_STATE state;
+   string stateName;
+   string detail;
+   ulong  refreshCount;
+   ulong  tradeRefresh;
+   ulong  errorRefresh;
+   long   lastMs;
+   string lastText;
+};
+
+UltraDashboardIntelState g_UltraDashboardIntel;
+
+string UltraDashboardIntel_StateName(const ENUM_ULTRA_DASH_STATE st)
+{
+   switch(st)
+   {
+      case UDASH_READY:       return "READY";
+      case UDASH_SCANNING:    return "SCANNING";
+      case UDASH_VALIDATING:  return "VALIDATING";
+      case UDASH_EXECUTING:   return "EXECUTING";
+      case UDASH_MANAGING:    return "MANAGING POSITION";
+      case UDASH_RECOVERING:  return "RECOVERING";
+      case UDASH_ERROR:       return "ERROR";
+      default:                return "INITIALIZING";
+   }
+}
+
+void UltraDashboardIntel_Boot()
+{
+   g_UltraDashboardIntel.booted = true;
+   g_UltraDashboardIntel.state = UDASH_INITIALIZING;
+   g_UltraDashboardIntel.stateName = "INITIALIZING";
+   g_UltraDashboardIntel.detail = "boot — display only · never trades · never executes";
+   g_UltraDashboardIntel.refreshCount = 0;
+   g_UltraDashboardIntel.tradeRefresh = 0;
+   g_UltraDashboardIntel.errorRefresh = 0;
+   g_UltraDashboardIntel.lastMs = 0;
+   g_UltraDashboardIntel.lastText = "";
+}
+
+void UltraDashboardIntel_SetState(const ENUM_ULTRA_DASH_STATE st, const string detail)
+{
+   g_UltraDashboardIntel.state = st;
+   g_UltraDashboardIntel.stateName = UltraDashboardIntel_StateName(st);
+   g_UltraDashboardIntel.detail = detail;
+   g_UltraDashboardIntel.lastMs = (long)GetTickCount();
+}
+
+void UltraDashboardIntel_ResolveState(const string s)
+{
+   if(!g_UltraDashboardIntel.booted)
+   {
+      UltraDashboardIntel_SetState(UDASH_INITIALIZING, "not booted");
+      return;
+   }
+   if(g_UltraZFR.recovering)
+   {
+      UltraDashboardIntel_SetState(UDASH_RECOVERING, g_UltraZFR.lastAction);
+      return;
+   }
+   if(!g_UltraCore.healthy || g_UltraLoggerIntel.diagHealth == "DEGRADED")
+   {
+      UltraDashboardIntel_SetState(UDASH_ERROR, "system/diag degraded");
+      return;
+   }
+   if(g_UltraExecIntel.status == "SUBMITTING")
+   {
+      UltraDashboardIntel_SetState(UDASH_EXECUTING, g_UltraExecIntel.outcomeName);
+      return;
+   }
+   int openN = CountOpenTrades();
+   if(openN > 0)
+   {
+      UltraDashboardIntel_SetState(UDASH_MANAGING, g_UltraPosEvoIntel.outputName);
+      return;
+   }
+   if(g_UltraTradeGate.failMask != 0 || g_UltraVChain.invalidN > 0)
+   {
+      UltraDashboardIntel_SetState(UDASH_VALIDATING, "gate/chain");
+      return;
+   }
+   if(g_UltraMissionLast.command == SUP_WAIT || g_UltraMissionLast.command == SUP_HOLD)
+   {
+      UltraDashboardIntel_SetState(UDASH_SCANNING, g_UltraMissionLast.reason);
+      return;
+   }
+   UltraDashboardIntel_SetState(UDASH_READY, "idle · watching market");
+}
+
+//--------------------------------------------------------------------//
+// PANELS — one source of truth from Chapter facades (display only)   //
+//--------------------------------------------------------------------//
+string UltraDashboardIntel_PanelSystem(const string s)
+{
+   string t = "— SYSTEM —\n";
+   t += "HITMAN AI HA_ULTRA_93 | ";
+   t += g_UltraDashboardIntel.stateName;
+   t += "\n";
+   t += s;
+   t += " ";
+   t += EnumToString(UltraETF());
+   t += " | ";
+   t += AccountInfoString(ACCOUNT_COMPANY);
+   t += "\nServer: ";
+   t += TimeToString(TimeCurrent(), TIME_DATE|TIME_SECONDS);
+   t += " | Local: ";
+   t += TimeToString(TimeLocal(), TIME_SECONDS);
+   t += "\nConn: ";
+   t += (TerminalInfoInteger(TERMINAL_CONNECTED) ? "ONLINE" : "OFFLINE");
+   t += " | Ping≈";
+   t += IntegerToString((int)g_UltraCore.lastLatencyMs);
+   t += "ms";
+   return t;
+}
+
+string UltraDashboardIntel_PanelMarket(const UltraSnap &u)
+{
+   string t = "— MARKET —\n";
+   t += UltraMarketIntel_Dashboard();
+   t += "\nTrend ";
+   t += (u.trend.bull ? "BULL" : (u.trend.bear ? "BEAR" : "FLAT"));
+   t += " str=";
+   t += IntegerToString(u.trend.strength);
+   t += " | Mom ";
+   t += (u.mom.momBuy ? "BUY" : (u.mom.momSell ? "SELL" : "-"));
+   t += " | Vol ";
+   t += (u.vol.expansion ? "EXPAND" : (u.vol.compression ? "COMPRESS" : "NORMAL"));
+   t += "\nLiq=";
+   t += g_UltraMarketIntel.outLiquidity;
+   t += " | Q=";
+   t += IntegerToString(g_UltraMarketIntel.marketQuality);
+   t += " | Spread=";
+   t += DoubleToString(u.ctx.spreadPts, 1);
+   t += " | Sess=";
+   t += u.ctx.session;
+   t += " | News=";
+   t += u.ctx.newsPhase;
+   t += " ";
+   t += u.ctx.eventClass;
+   return t;
+}
+
+string UltraDashboardIntel_PanelStrategy(const UltraSnap &u, const UltraSignal &sig)
+{
+   string t = "— STRATEGY —\n";
+   t += UltraPropStrategy_Dashboard();
+   t += "\n";
+   t += UltraSignalIntel_Dashboard();
+   t += "\n";
+   t += UltraMission_Dashboard();
+   t += "\nThesis: ";
+   t += UltraThesis_Dashboard();
+   t += " | Conf=";
+   t += IntegerToString(u.score.confidence);
+   t += " | Sig=";
+   if(sig.buy) t += "BUY";
+   else if(sig.sell) t += "SELL";
+   else t += "WAIT";
+   t += " [";
+   t += sig.tag;
+   t += "]";
+   return t;
+}
+
+string UltraDashboardIntel_PanelPosition(const string s)
+{
+   string t = "— POSITION —\n";
+   t += UltraPosEvo_Dashboard();
+   t += "\n";
+   t += UltraExitIntel_Dashboard();
+   t += "\n";
+   t += UltraTarget_Dashboard();
+
+   bool found = false;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0 || !PositionSelectByTicket(ticket)) continue;
+      if(PositionGetString(POSITION_SYMBOL) != s) continue;
+      if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+      found = true;
+      bool isBuy = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY);
+      double entry = PositionGetDouble(POSITION_PRICE_OPEN);
+      double sl = PositionGetDouble(POSITION_SL);
+      double tp = PositionGetDouble(POSITION_TP);
+      double profit = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+      double price = isBuy ? SymbolInfoDouble(s, SYMBOL_BID) : SymbolInfoDouble(s, SYMBOL_ASK);
+      int digits = (int)SymbolInfoInteger(s, SYMBOL_DIGITS);
+      datetime ot = (datetime)PositionGetInteger(POSITION_TIME);
+      int mins = (ot > 0) ? (int)((TimeCurrent() - ot) / 60) : 0;
+      t += "\n";
+      t += (isBuy ? "BUY" : "SELL");
+      t += " #";
+      t += IntegerToString((int)ticket);
+      t += " @";
+      t += DoubleToString(entry, digits);
+      t += " now=";
+      t += DoubleToString(price, digits);
+      t += "\nSL=";
+      t += DoubleToString(sl, digits);
+      t += " TP=";
+      t += DoubleToString(tp, digits);
+      if(g_UltraTargetLast.valid)
+      {
+         t += " | TP1/2/3=";
+         t += DoubleToString(g_UltraTargetLast.tp1, digits);
+         t += "/";
+         t += DoubleToString(g_UltraTargetLast.tp2, digits);
+         t += "/";
+         t += DoubleToString(g_UltraTargetLast.tp3, digits);
+      }
+      t += "\nFloatP=";
+      t += DoubleToString((profit > 0.0 ? profit : 0.0), 2);
+      t += " | FloatL=";
+      t += DoubleToString((profit < 0.0 ? -profit : 0.0), 2);
+      t += " | Dur=";
+      t += IntegerToString(mins);
+      t += "m";
+      break;
+   }
+   if(!found)
+   {
+      t += "\nOpen: ";
+      t += IntegerToString(CountOpenTrades());
+      t += "/";
+      t += IntegerToString(MaxOpenTrades);
+      t += " (flat)";
+   }
+   return t;
+}
+
+string UltraDashboardIntel_PanelRisk()
+{
+   string t = "— RISK —\n";
+   t += UltraRiskIntel_Dashboard();
+   t += "\nFreeM=";
+   t += DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_FREE), 2);
+   t += " | MLevel=";
+   double used = AccountInfoDouble(ACCOUNT_MARGIN);
+   double eq = AccountInfoDouble(ACCOUNT_EQUITY);
+   if(used > 0.0) t += DoubleToString((eq / used) * 100.0, 1);
+   else t += "—";
+   t += "% | Lot=";
+   t += DoubleToString(g_UltraRiskIntel.approvedLot, 2);
+   t += " | DD=";
+   t += DoubleToString(g_UltraRiskIntel.drawdownPct, 2);
+   t += "%";
+   return t;
+}
+
+string UltraDashboardIntel_PanelPerformance()
+{
+   string t = "— PERFORMANCE —\n";
+   t += UltraPerfAnalytics_Dashboard();
+   t += "\n";
+   t += UltraPerfAnalytics_TradingStats();
+   t += "\nWR=";
+   t += DoubleToString(g_UltraPerfAnalytics.winRate, 1);
+   t += "% PF=";
+   t += DoubleToString(g_UltraPerfAnalytics.profitFactor, 2);
+   t += " AW/AL=";
+   t += DoubleToString(g_UltraPerfAnalytics.avgWin, 2);
+   t += "/";
+   t += DoubleToString(g_UltraPerfAnalytics.avgLoss, 2);
+   return t;
+}
+
+string UltraDashboardIntel_PanelExecution()
+{
+   string t = "— EXECUTION —\n";
+   t += UltraExecIntel_Dashboard();
+   t += "\nVerify sync=";
+   t += (g_UltraExecIntel.synced ? "Y" : "N");
+   t += " | ticket=";
+   t += IntegerToString((int)g_UltraExecIntel.positionTicket);
+   t += " | ret=";
+   t += IntegerToString((int)g_UltraExecIntel.lastRetcode);
+   return t;
+}
+
+string UltraDashboardIntel_PanelHealth()
+{
+   string t = "— HEALTH —\n";
+   t += UltraSystemHealth_Dashboard();
+   t += " | ";
+   t += UltraResource_Monitor();
+   t += "\n";
+   t += UltraZFR_Dashboard();
+   t += "\n";
+   t += UltraLoggerIntel_Dashboard();
+   t += "\n";
+   t += UltraFoundation_Dashboard();
+   t += "\n";
+   t += UltraMod_Dashboard();
+   return t;
+}
+
+string UltraDashboardIntel_Dashboard(); // Q1/Q2/Q3 (defined below)
+
+string UltraDashboardIntel_Build(const string s)
+{
+   UltraSnap u = g_UltraLastSnap;
+   UltraSignal sig = g_UltraLastSignal;
+   UltraDashboardIntel_ResolveState(s);
+   g_UltraDashboardIntel.refreshCount++;
+
+   string explain = sig.explanation;
+   if(StringLen(explain) == 0)
+   {
+      bool leanBuy = !(sig.sell);
+      bool approved = (sig.buy || sig.sell);
+      explain = UltraUFSE_DebugExplain(u, leanBuy, approved);
+   }
+
+   string t = "======= HITMAN AI =======\n";
+   t += UltraDashboardIntel_Dashboard();
+   t += "\n";
+   t += UltraDashboardIntel_PanelSystem(s);
+   t += "\n";
+   t += UltraDashboardIntel_PanelMarket(u);
+   t += "\n";
+   t += UltraDashboardIntel_PanelStrategy(u, sig);
+   t += "\n";
+   t += UltraDashboardIntel_PanelPosition(s);
+   t += "\n";
+   t += UltraDashboardIntel_PanelRisk();
+   t += "\n";
+   t += UltraDashboardIntel_PanelPerformance();
+   t += "\n";
+   t += UltraDashboardIntel_PanelExecution();
+   t += "\n";
+   t += UltraDashboardIntel_PanelHealth();
+   t += "\n---- EXPLAIN ----\n";
+   t += explain;
+   t += "\n===============================";
+   g_UltraDashboardIntel.lastText = t;
+   g_UltraDashboardIntel.lastMs = (long)GetTickCount();
+   return t;
+}
+
+void UltraDashboardIntel_NoteTradeRefresh()
+{
+   g_UltraDashboardIntel.tradeRefresh++;
+   if(!g_UltraDashboardIntel.booted) return;
+   if(!EnableDashboard && !UltraDashboardEnabled) return;
+   string s = BrokerSymbol;
+   if(StringLen(s) == 0) s = _Symbol;
+   Comment(UltraDashboardIntel_Build(s));
+}
+
+void UltraDashboardIntel_NoteErrorRefresh()
+{
+   g_UltraDashboardIntel.errorRefresh++;
+   if(!g_UltraDashboardIntel.booted) return;
+   if(!EnableDashboard && !UltraDashboardEnabled) return;
+   string s = BrokerSymbol;
+   if(StringLen(s) == 0) s = _Symbol;
+   Comment(UltraDashboardIntel_Build(s));
+}
+
+string UltraDashboardIntel_Dashboard()
+{
+   // Answers instantly: market? thinking? doing?
+   string t = "AWARE: ";
+   if(!g_UltraDashboardIntel.booted) { t += "INIT"; return t; }
+   t += "Mkt=";
+   t += g_UltraMarketIntel.readerState;
+   t += "/";
+   t += g_UltraMarketIntel.outTrend;
+   t += " | Think=";
+   t += g_UltraMissionLast.reason;
+   t += " | Do=";
+   t += g_UltraDashboardIntel.stateName;
+   t += " rf=";
+   t += IntegerToString((int)g_UltraDashboardIntel.refreshCount);
+   t += " tr=";
+   t += IntegerToString((int)g_UltraDashboardIntel.tradeRefresh);
+   t += " | display-only";
+   return t;
+}
+
+void UltraDashboardIntel_Refresh(const string s)
+{
+   if(!EnableDashboard && !UltraDashboardEnabled)
+      return;
+   Comment(UltraDashboardIntel_Build(s));
+}
+
+#endif // HITMAN_ULTRA_DASHBOARD_INTELLIGENCE_MQH
+//===== END UltraDashboardIntelligence.mqh =====
+
 //===== BEGIN UltraQualityAssurance.mqh =====
 #ifndef HITMAN_ULTRA_QUALITY_ASSURANCE_MQH
 #define HITMAN_ULTRA_QUALITY_ASSURANCE_MQH
@@ -20271,8 +20706,16 @@ void UltraMod_Refresh()
       UltraMod_Reg("P13_LOGGER", true, UltraLoggingEnabled, logOK, logDetail);
    }
 
-   // PHASE 14 — Dashboard
-   UltraMod_Reg("P14_DASHBOARD", false, UltraDashboardEnabled, true, "OK");
+   // PHASE 14 — Dashboard (Chapter 14 — display only)
+   {
+      bool dashOK = g_UltraDashboardIntel.booted &&
+                    g_UltraDashboardIntel.state != UDASH_ERROR;
+      string dashDetail = g_UltraDashboardIntel.stateName;
+      dashDetail += " rf=";
+      dashDetail += IntegerToString((int)g_UltraDashboardIntel.refreshCount);
+      UltraMod_Reg("P14_DASHBOARD", true, UltraDashboardEnabled || EnableDashboard,
+                   dashOK, dashDetail);
+   }
 
    // PHASE 15 — Zero-Fail Recovery
    UltraMod_Reg("P15_ZERO_FAIL", false, UltraZFREnabled, UltraZFREnabled,
@@ -21464,155 +21907,20 @@ string UltraOpt_Summary()
 #ifndef HITMAN_ULTRA_24_DASHBOARD_MQH
 #define HITMAN_ULTRA_24_DASHBOARD_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — 24_DASHBOARD — Master · Regime · Thesis · Hold · Risk
+//| HITMAN AI — 24_DASHBOARD — Chapter 14 display surface            |
+//| NEVER trades · NEVER executes · ONLY displays (via Dash Intel)   |
 //+------------------------------------------------------------------+
 string UltraDashboardText(const string s)
 {
-   UltraSnap u = g_UltraLastSnap;
-   UltraSignal sig = g_UltraLastSignal;
-   string dir = "-";
-   if(sig.buy) dir = "BUY";
-   else if(sig.sell) dir = "SELL";
-   if(g_UltraBrainLast.decision == SUP_BUY) dir = "BUY";
-   else if(g_UltraBrainLast.decision == SUP_SELL) dir = "SELL";
-   else if(g_UltraBrainLast.decision == SUP_WAIT && !(sig.buy || sig.sell)) dir = "WAIT";
-
-   string bos = "-";
-   if(u.bos.buy) bos = "BUY";
-   else if(u.bos.sell) bos = "SELL";
-   if(u.bos.strong) bos += " STRONG";
-   else if(u.bos.weak) bos += " WEAK";
-   if(u.bos.failed) bos += " FAILED";
-
-   string choch = "-";
-   if(u.choch.buy) choch = "BUY";
-   else if(u.choch.sell) choch = "SELL";
-
-   string sweep = "-";
-   if(u.liq.sweepBuy) sweep = "BUY";
-   else if(u.liq.sweepSell) sweep = "SELL";
-
-   string vol = "NORMAL";
-   if(u.vol.expansion) vol = "EXPAND";
-   else if(u.vol.compression) vol = "COMPRESS";
-
-   string master = "-";
-   int md = UltraMTF_MasterDir(s);
-   if(md > 0) master = "BUY";
-   else if(md < 0) master = "SELL";
-
-   string explain = sig.explanation;
-   if(StringLen(explain) == 0)
-   {
-      bool leanBuy = (dir != "SELL");
-      bool approved = (dir == "BUY" || dir == "SELL");
-      explain = UltraUFSE_DebugExplain(u, leanBuy, approved);
-   }
-
-   string t = "======= HITMAN AI =======\n";
-   t += "BUILD: HA_ULTRA_93 MASTER | Comment: HITMAN AI\n";
-   t += "Symbol: "; t += s;
-   t += " | TF: "; t += EnumToString(UltraETF());
-   t += "\n"; t += UltraBrain_Dashboard();
-   t += "\n"; t += UltraMission_Dashboard();
-   t += "\n"; t += UltraPosEvo_Dashboard();
-   t += "\n"; t += UltraExitIntel_Dashboard();
-   t += "\n"; t += UltraInput_Dashboard();
-   t += " | "; t += UltraData_Dashboard();
-   t += "\nMaster Trend: "; t += master;
-   t += " | Regime: "; t += UltraRegimeName(u.regime);
-   t += " | Cycle: "; t += u.st.cycleName;
-   t += "\nOpen Trades: "; t += IntegerToString(CountOpenTrades());
-   t += " / "; t += IntegerToString(MaxOpenTrades);
-   t += "\nAI Conf: "; t += IntegerToString(u.score.confidence);
-   t += " | Prec: "; t += IntegerToString(u.score.precision);
-   t += " | Prob: "; t += IntegerToString(u.score.probability);
-   t += "\n"; t += UltraThesis_Dashboard();
-   t += " | "; t += UltraHold_Dashboard();
-   t += "\n"; t += UltraMTF_Dashboard(s);
-   t += "\nSession: "; t += u.ctx.session;
-   t += " ["; t += u.ctx.sessionRegion; t += "]";
-   t += " LH="; t += IntegerToString(u.ctx.londonHour);
-   t += " ★"; t += IntegerToString(u.ctx.sessionPriority);
-   t += " | bias="; t += IntegerToString(u.ctx.sessionBias);
-   t += " | Liq="; t += IntegerToString(u.ctx.sessionLiqScore);
-   t += " Tr="; t += IntegerToString(u.ctx.sessionTrendScore);
-   t += " | (24/7 never blocks)";
-   t += "\n"; t += UltraSession_Dashboard();
-   t += " | News: "; t += u.ctx.newsPhase;
-   t += "\n"; t += UltraNewsIntel_Dashboard();
-   t += "\nTrend votes B/S: "; t += IntegerToString(u.trend.mtfVotesBuy);
-   t += "/"; t += IntegerToString(u.trend.mtfVotesSell);
-   t += " | Str: "; t += IntegerToString(u.trend.strength);
-   t += "\nBOS: "; t += bos;
-   t += " CHoCH: "; t += choch;
-   t += " Sweep: "; t += sweep;
-   t += "\nFib zone B/S: "; if(u.fib.atBuyZone) t += "Y"; else t += "N";
-   t += "/"; if(u.fib.atSellZone) t += "Y"; else t += "N";
-   t += " | InstLiq B/S: "; if(u.ict.institutionalLiqBuy) t += "Y"; else t += "N";
-   t += "/"; if(u.ict.institutionalLiqSell) t += "Y"; else t += "N";
-   t += "\nSMI: "; t += DoubleToString(u.ind.smi, 1);
-   t += " | MEO: "; t += DoubleToString(u.ind.meo, 1);
-   t += " | IFI: "; t += DoubleToString(u.ind.ifi, 1);
-   t += "\nVol: "; t += vol;
-   long dig = 0; SymbolInfoInteger(s, SYMBOL_DIGITS, dig);
-   t += " ATR="; t += DoubleToString(u.vol.atr, (int)dig);
-   t += "\nExec: "; if(u.diag.brokerOK && u.diag.connectionOK) t += "READY"; else t += "CHECK";
-   t += " | Risk: "; if(u.score.riskProb < 70) t += "OK"; else t += "HIGH";
-   t += " | Capital: "; if(g_UltraCore.healthy) t += "OK"; else t += "CHECK";
-   t += "\n"; t += UltraFoundation_Dashboard();
-   t += "\n"; t += UltraMarketIntel_Dashboard();
-   t += "\n"; t += UltraVChain_Dashboard();
-   t += "\n"; t += UltraSystemHealth_Dashboard();
-   t += " | "; t += UltraResource_Monitor();
-   t += "\nWR: "; t += DoubleToString(g_UltraMem.winRate, 1); t += "%";
-   t += " PF: "; t += DoubleToString(g_UltraMem.profitFactor, 2);
-   t += " RR: "; t += DoubleToString(g_UltraMem.avgRR, 2);
-   t += "\n"; t += UltraPropStrategy_Dashboard();
-   t += "\n"; t += UltraSignalIntel_Dashboard();
-   t += "\n"; t += UltraRiskIntel_Dashboard();
-   t += "\n"; t += UltraExecIntel_Dashboard();
-   t += "\nSignal: "; t += dir; t += " ["; t += sig.tag; t += "] "; t += sig.reason;
-   if(StringLen(sig.candidate) > 0) { t += " | "; t += sig.candidate; }
-   if(sig.confidence > 0) { t += " conf="; t += IntegerToString(sig.confidence); }
-   if(sig.quality > 0) { t += " Q="; t += IntegerToString(sig.quality); }
-   t += "\n"; t += UltraDefense_DashboardLine();
-   t += " | "; t += UltraDiscipline_DashboardLine();
-   t += "\n"; t += UltraSupreme_Dashboard();
-   t += " | "; t += UltraMemory_Dashboard();
-   if(UltraUSM2Enabled && g_UltraUSM2Last.tradeScore > 0)
-   {
-      t += "\nUSM2: conf="; t += IntegerToString(g_UltraUSM2Last.confidence);
-      t += " score="; t += IntegerToString(g_UltraUSM2Last.tradeScore);
-      t += " "; t += g_UltraUSM2Last.grade;
-      t += " evo="; t += g_UltraSupremeLast.evo;
-   }
-   t += "\nUFSE: "; t += UltraUFSE_Stats(s);
-   t += "\n"; t += UltraEvent_Dashboard();
-   t += "\n"; t += UltraNewsExec_Dashboard();
-   t += "\n"; t += UltraTarget_Dashboard();
-   t += "\n"; t += UltraAdaptive_Dashboard();
-   t += "\n"; t += UltraPerfAnalytics_Dashboard();
-   t += "\n"; t += UltraBug_Dashboard();
-   t += "\n"; t += UltraLoggerIntel_Dashboard();
-   t += "\n"; t += UltraZFR_Dashboard();
-   t += "\n"; t += UltraTradeGate_Dashboard();
-   t += "\n"; t += UltraMod_Dashboard();
-   t += "\n"; t += UltraBT_Dashboard();
-   t += "\nEvent: "; t += u.ctx.eventClass;
-   t += " phase="; t += u.ctx.newsPhase;
-   t += " conf="; t += IntegerToString(u.ctx.eventConfidence);
-   t += " execQ="; t += IntegerToString(u.ctx.execQuality);
-   t += "\n---- EXPLAIN ----\n"; t += explain;
-   t += "\n===============================";
-   return t;
+   // Chapter 14 — one composition from Dashboard Intelligence panels
+   return UltraDashboardIntel_Build(s);
 }
 
 void CreateDashboard()
 {
    if(!EnableDashboard && !UltraDashboardEnabled)
       return;
-   Comment(UltraDashboardText(BrokerSymbol));
+   UltraDashboardIntel_Refresh(BrokerSymbol);
 }
 
 #endif // HITMAN_ULTRA_24_DASHBOARD_MQH
@@ -22110,6 +22418,7 @@ int OnInit()
    UltraPerfAnalytics_Boot(); // P12 Chapter 12 measure-only facade
    UltraBug_Boot();         // P19 Maintenance core (Bug Elimination)
    UltraLoggerIntel_Boot(); // P13 Logger & Diagnostics (record only)
+   UltraDashboardIntel_Boot(); // P14 Dashboard (display only)
    UltraStopEvo_Boot();     // P10 support — Stop Evolution
    UltraMaint_Boot();       // P19 Maintenance orchestrator
    UltraLL_Boot();          // P17 Low-Latency Engine
@@ -22196,6 +22505,10 @@ int OnInit()
          " Errors=", UltraYN(UltraErrorHandlingEnabled),
          " Diagnostics=", UltraYN(UltraDiagnosticsEnabled),
          " (record only · never trades · never executes · no silent errors)");
+   Print("P14 DASHBOARD INTEL (Ch14): Boot=", UltraYN(g_UltraDashboardIntel.booted),
+         " Enabled=", UltraYN(UltraDashboardEnabled || EnableDashboard),
+         " State=", g_UltraDashboardIntel.stateName,
+         " (display only · never trades · never executes)");
    UltraLoggerIntel_LogSystem("STARTUP", "OnInit complete Internal Standard v6+ HA_ULTRA_93");
    Print("MAIN FLOW v6+: Foundation→Market→Strategy→Signal→News→Mission→Risk→Exec→Target→PosEvo→Exit→Analytics→Logger→Dashboard→Recovery");
    Print("P07 RISK / TRADE GATE: Enabled=", UltraYN(UltraTradeGateEnabled),
@@ -22586,6 +22899,7 @@ void OnDeinit(const int reason)
       EventKillTimer();
 
    ObjectDelete(0, BG_OBJECT_NAME);
+   UltraLoggerIntel_LogSystem("SHUTDOWN", "OnDeinit reason=" + IntegerToString(reason));
    UltraBug_AuditDeinit(reason);     // P17 Maintenance — deinit / object / timer audit
    UltraFoundation_Shutdown(reason); // PHASE 1 — audited shutdown
 }

@@ -7,6 +7,9 @@
 //| Mission Control remains SOLE PositionClose* owner                |
 //+------------------------------------------------------------------+
 
+// Dashboard (assembled later) — display-only immediate refresh
+void UltraDashboardIntel_NoteTradeRefresh();
+
 enum ENUM_ULTRA_EXIT_OUT
 {
    UEXIT_READY = 0,
@@ -255,6 +258,7 @@ void UltraExitIntel_NoteClosed(const ulong ticket, const string s, const bool is
    g_UltraExitIntel.closeCount++;
    UltraExitIntel_SetOutcome(UEXIT_CLOSED, "position closed · ready for next opportunity");
    UltraExitIntel_Log("CLOSED");
+   UltraDashboardIntel_NoteTradeRefresh(); // Ch14 immediate after trade
 }
 
 void UltraExitIntel_NoteFail(const ulong ticket, const string why)

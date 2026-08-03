@@ -79,6 +79,7 @@ int OnInit()
    UltraPerfAnalytics_Boot(); // P12 Chapter 12 measure-only facade
    UltraBug_Boot();         // P19 Maintenance core (Bug Elimination)
    UltraLoggerIntel_Boot(); // P13 Logger & Diagnostics (record only)
+   UltraDashboardIntel_Boot(); // P14 Dashboard (display only)
    UltraStopEvo_Boot();     // P10 support — Stop Evolution
    UltraMaint_Boot();       // P19 Maintenance orchestrator
    UltraLL_Boot();          // P17 Low-Latency Engine
@@ -165,6 +166,10 @@ int OnInit()
          " Errors=", UltraYN(UltraErrorHandlingEnabled),
          " Diagnostics=", UltraYN(UltraDiagnosticsEnabled),
          " (record only · never trades · never executes · no silent errors)");
+   Print("P14 DASHBOARD INTEL (Ch14): Boot=", UltraYN(g_UltraDashboardIntel.booted),
+         " Enabled=", UltraYN(UltraDashboardEnabled || EnableDashboard),
+         " State=", g_UltraDashboardIntel.stateName,
+         " (display only · never trades · never executes)");
    UltraLoggerIntel_LogSystem("STARTUP", "OnInit complete Internal Standard v6+ HA_ULTRA_93");
    Print("MAIN FLOW v6+: Foundation→Market→Strategy→Signal→News→Mission→Risk→Exec→Target→PosEvo→Exit→Analytics→Logger→Dashboard→Recovery");
    Print("P07 RISK / TRADE GATE: Enabled=", UltraYN(UltraTradeGateEnabled),
