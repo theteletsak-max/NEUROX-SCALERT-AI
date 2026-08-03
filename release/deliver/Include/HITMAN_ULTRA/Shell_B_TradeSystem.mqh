@@ -118,6 +118,9 @@ int OnInit()
    Print("P05 NEWS INTEL ∞: Enabled=", UltraYN(UltraNewsExecEnabled),
          " InstantPath=", UltraYN(UltraNewsExecInstantPath),
          " ForceReanalyze=", UltraYN(UltraNewsExecForceReanalyze),
+         " Protocol=", UltraYN(UltraNewsExecProtocolEnabled),
+         " FastRetry=", UltraYN(UltraNewsExecProtocolFastRetry),
+         " RetryMs=", UltraNewsExecProtocolRetryMs,
          " MinConf=", UltraNewsExecMinConf);
    Print("P08 TARGET INTEL ∞: Enabled=", UltraYN(UltraTargetEnabled),
          " Strict=", UltraYN(UltraTargetStrict),
@@ -3403,15 +3406,19 @@ bool ExecuteBuy()
 
    for(int attempt = 1; attempt <= MAX_SEND_RETRIES; attempt++)
    {
-      // Quick re-validation immediately before sending (fix #5 from the
-      // signal-detection review): a signal confirmed a moment ago can
-      // stop being valid by the time we actually place the order,
-      // especially across retries after a requote. Re-check the cheap,
-      // fast-changing gates (spread widened, terminal disabled trading)
-      // right here rather than trusting the state from earlier in the
-      // function.
-      ResetLastError();
+      // ULTRA NEWS EXECUTION PROTOCOL — submit stamp (pre-validate exec ready)
+      {
+         string subWhy = "";
+         if(!UltraNewsExec_ProtocolSubmit(BrokerSymbol, true, subWhy))
+         {
+            Print("BUY cancelled by News Exec Protocol: ", subWhy);
+            UltraBug_Explain("EXEC_FAIL", "Shell_B", "ExecuteBuy",
+                             "NEWS_PROTO CANCEL " + subWhy, "BUY", 0);
+            return false;
+         }
+      }
 
+      ResetLastError();
       result = g_Trade.Buy(lot, BrokerSymbol, 0.0, sl, tp, TradeComment);
 
       if(result)
@@ -3421,10 +3428,23 @@ bool ExecuteBuy()
 
       if(IsTransientOrderRetcode(retcode))
       {
-         if(EnableVerboseLogging)
-            Print("BUY transient error (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES, " - refreshing price and retrying.");
+         // PROTOCOL — re-analyze before retry; cancel if setup no longer valid
+         string action = "";
+         if(!UltraNewsExec_RetryValidate(BrokerSymbol, retcode, true, action))
+         {
+            Print("BUY retry cancelled (", action, ") retcode=", retcode,
+                  " — ", g_Trade.ResultRetcodeDescription());
+            UltraBug_ExplainExecFail("ExecuteBuy", "BUY", retcode,
+                                     "NEWS_PROTO " + action + " " +
+                                     g_Trade.ResultRetcodeDescription());
+            return false;
+         }
 
-         // Phase 20 — analyse recoverable reject → correct → retry
+         if(EnableVerboseLogging || UltraNewsExecLog)
+            Print("BUY transient (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES,
+                  " action=", action, " — refreshing price and retrying.");
+
+         // Zero-Fail — recoverable reject → correct → retry
          {
             string zAct = "";
             UltraZFR_PrepareExecRetry(BrokerSymbol, retcode, zAct);
@@ -3432,7 +3452,10 @@ bool ExecuteBuy()
          if(retcode == TRADE_RETCODE_INVALID_FILL)
             ConfigureFillingMode(BrokerSymbol);
 
-         Sleep(200);
+         // Minimize internal processing — fast pause under news InstantPath
+         int pauseMs = UltraNewsExec_ProtocolRetryPauseMs();
+         if(pauseMs > 0)
+            Sleep(pauseMs);
 
          ask = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
 
@@ -3452,11 +3475,15 @@ bool ExecuteBuy()
       if(IsFatalOrderRetcode(retcode))
       {
          Print("BUY FAILED (fatal) | Retcode: ", retcode, " | ", DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
+         UltraNewsExec_ProtocolLog("FAIL", 0, true, retcode,
+                                   DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
+         UltraNewsExec_ProtocolDisarm("fatal");
          UltraBug_ExplainExecFail("ExecuteBuy", "BUY", retcode,
                                   DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
          return false; // no point trying the no-stops fallback either - the order itself is unplaceable right now
       }
 
+      UltraNewsExec_ProtocolLog("FAIL", 0, true, retcode, g_Trade.ResultRetcodeDescription());
       break; // any other error - fall through to the no-stops fallback / failure logging below
    }
 
@@ -3779,8 +3806,19 @@ bool ExecuteSell()
 
    for(int attempt = 1; attempt <= MAX_SEND_RETRIES; attempt++)
    {
-      ResetLastError();
+      // ULTRA NEWS EXECUTION PROTOCOL — submit stamp
+      {
+         string subWhy = "";
+         if(!UltraNewsExec_ProtocolSubmit(BrokerSymbol, false, subWhy))
+         {
+            Print("SELL cancelled by News Exec Protocol: ", subWhy);
+            UltraBug_Explain("EXEC_FAIL", "Shell_B", "ExecuteSell",
+                             "NEWS_PROTO CANCEL " + subWhy, "SELL", 0);
+            return false;
+         }
+      }
 
+      ResetLastError();
       result = g_Trade.Sell(lot, BrokerSymbol, 0.0, sl, tp, TradeComment);
 
       if(result)
@@ -3790,10 +3828,21 @@ bool ExecuteSell()
 
       if(IsTransientOrderRetcode(retcode))
       {
-         if(EnableVerboseLogging)
-            Print("SELL transient error (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES, " - refreshing price and retrying.");
+         string action = "";
+         if(!UltraNewsExec_RetryValidate(BrokerSymbol, retcode, false, action))
+         {
+            Print("SELL retry cancelled (", action, ") retcode=", retcode,
+                  " — ", g_Trade.ResultRetcodeDescription());
+            UltraBug_ExplainExecFail("ExecuteSell", "SELL", retcode,
+                                     "NEWS_PROTO " + action + " " +
+                                     g_Trade.ResultRetcodeDescription());
+            return false;
+         }
 
-         // Phase 20 — analyse recoverable reject → correct → retry
+         if(EnableVerboseLogging || UltraNewsExecLog)
+            Print("SELL transient (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES,
+                  " action=", action, " — refreshing price and retrying.");
+
          {
             string zAct = "";
             UltraZFR_PrepareExecRetry(BrokerSymbol, retcode, zAct);
@@ -3801,7 +3850,9 @@ bool ExecuteSell()
          if(retcode == TRADE_RETCODE_INVALID_FILL)
             ConfigureFillingMode(BrokerSymbol);
 
-         Sleep(200);
+         int pauseMs = UltraNewsExec_ProtocolRetryPauseMs();
+         if(pauseMs > 0)
+            Sleep(pauseMs);
 
          bid = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
 
@@ -3821,11 +3872,15 @@ bool ExecuteSell()
       if(IsFatalOrderRetcode(retcode))
       {
          Print("SELL FAILED (fatal) | Retcode: ", retcode, " | ", DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
+         UltraNewsExec_ProtocolLog("FAIL", 0, false, retcode,
+                                   DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
+         UltraNewsExec_ProtocolDisarm("fatal");
          UltraBug_ExplainExecFail("ExecuteSell", "SELL", retcode,
                                   DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
          return false;
       }
 
+      UltraNewsExec_ProtocolLog("FAIL", 0, false, retcode, g_Trade.ResultRetcodeDescription());
       break;
    }
 

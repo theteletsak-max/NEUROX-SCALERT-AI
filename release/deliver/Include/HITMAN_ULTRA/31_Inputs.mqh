@@ -135,6 +135,9 @@ input int    UltraNewsExecExecMonMs      = 50;     // execution monitoring inter
 input int    UltraNewsExecReanalyzeMs    = 0;      // 0 = every event decision rebuilds
 input int    UltraNewsExecMinConf        = 55;     // confidence floor during news (never reduced)
 input double UltraNewsExecHighVolRel     = 1.45;   // high-volatility news-mode trigger
+input bool   UltraNewsExecProtocolEnabled = true;  // prepare→submit→verify→retry protocol
+input bool   UltraNewsExecProtocolFastRetry = true; // minimize Sleep under InstantPath
+input int    UltraNewsExecProtocolRetryMs = 20;    // fast retry pause (ms); 0 = none
 
 input group "31 · ULTRA TARGET INTELLIGENCE ENGINE ∞"
 input bool   UltraTargetEnabled          = true;   // institutional TP/SL intelligence

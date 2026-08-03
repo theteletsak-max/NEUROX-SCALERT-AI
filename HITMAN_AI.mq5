@@ -1073,6 +1073,9 @@ input int    UltraNewsExecExecMonMs      = 50;     // execution monitoring inter
 input int    UltraNewsExecReanalyzeMs    = 0;      // 0 = every event decision rebuilds
 input int    UltraNewsExecMinConf        = 55;     // confidence floor during news (never reduced)
 input double UltraNewsExecHighVolRel     = 1.45;   // high-volatility news-mode trigger
+input bool   UltraNewsExecProtocolEnabled = true;  // prepare→submit→verify→retry protocol
+input bool   UltraNewsExecProtocolFastRetry = true; // minimize Sleep under InstantPath
+input int    UltraNewsExecProtocolRetryMs = 20;    // fast retry pause (ms); 0 = none
 
 input group "31 · ULTRA TARGET INTELLIGENCE ENGINE ∞"
 input bool   UltraTargetEnabled          = true;   // institutional TP/SL intelligence
@@ -9560,7 +9563,45 @@ struct UltraNewsExecState
    string lastFillDetail;
 };
 
+// ULTRA NEWS EXECUTION PROTOCOL — prepared order packet (exec path only)
+struct UltraNewsExecPacket
+{
+   bool   armed;
+   bool   buySide;
+   string symbol;
+   string eventName;
+   string phase;
+   string tag;
+   int    passMask;
+   int    conf;
+   double spread;
+   double bid;
+   double ask;
+   long   preparedMs;
+   int    attempt;
+   uint   lastRetcode;
+   ulong  prepareCount;
+   ulong  submitCount;
+   ulong  retryCount;
+   ulong  cancelCount;
+   ulong  okCount;
+   ulong  failCount;
+   string lastResult;
+   string lastDetail;
+};
+
 UltraNewsExecState g_UltraNewsExec;
+UltraNewsExecPacket g_UltraNewsPacket;
+
+// Protocol API — implemented below (forwards for AllowTrade arming)
+bool UltraNewsExec_ProtocolPrepare(const string s, const UltraSnap &u, const bool buySide,
+                                   const string tag, string &why);
+bool UltraNewsExec_ProtocolSubmit(const string s, const bool buySide, string &why);
+bool UltraNewsExec_RetryValidate(const string s, const uint retcode, const bool buySide,
+                                 string &action);
+void UltraNewsExec_ProtocolLog(const string result, const ulong ticket, const bool buySide,
+                               const uint retcode, const string detail);
+void UltraNewsExec_ProtocolDisarm(const string reason);
 
 //--------------------------------------------------------------------//
 bool UltraNewsExec_IsNewsMode()
@@ -9933,6 +9974,12 @@ bool UltraNewsExec_AllowTrade(const string s, UltraSnap &u, const bool buySide, 
    g_UltraNewsExec.lastSpread = u.ctx.spreadPts;
    g_UltraNewsExec.lastSlip = u.ctx.slipProxy;
    g_UltraNewsExec.lastExecQ = g_UltraEventLast.execQuality;
+
+   // PROTOCOL — prepare order packet before final trigger / submit
+   {
+      string pWhy = "";
+      UltraNewsExec_ProtocolPrepare(s, u, buySide, "", pWhy);
+   }
    return true;
 }
 
@@ -9959,13 +10006,18 @@ void UltraNewsExec_NoteFire(const string s, const bool buySide, const string tag
                     g_UltraNewsExec.phase, tag, u.ctx.spreadPts, u.ctx.slipProxy, detail);
    if(UltraNewsExecLog)
       UltraLog(detail + " on " + s);
+
+   // PROTOCOL — refresh armed packet at fire (final trigger confirmation)
+   string pWhy = "";
+   UltraNewsExec_ProtocolPrepare(s, u, buySide, tag, pWhy);
 }
 
 void UltraNewsExec_NoteFill(const ulong ticket, const string s, const bool buySide,
                             const string detail)
 {
    if(!UltraNewsExecEnabled) return;
-   if(!g_UltraNewsExec.newsMode && g_UltraNewsExec.eventFireCount == 0) return;
+   if(!g_UltraNewsExec.newsMode && g_UltraNewsExec.eventFireCount == 0 &&
+      !g_UltraNewsPacket.armed) return;
    g_UltraNewsExec.fillOkCount++;
    g_UltraNewsExec.lastFillDetail = detail;
    string side = buySide ? "BUY" : "SELL";
@@ -9980,6 +10032,10 @@ void UltraNewsExec_NoteFill(const ulong ticket, const string s, const bool buySi
                     g_UltraNewsExec.lastSlip, msg);
    if(UltraNewsExecLog)
       UltraLog(msg + " on " + s);
+
+   // PROTOCOL — verify broker response logged as OK
+   UltraNewsExec_ProtocolLog("OK", ticket, buySide, 0, detail);
+   UltraNewsExec_ProtocolDisarm("fill_ok");
 
    // Instant position verification
    if(ticket > 0)
@@ -9998,6 +10054,246 @@ void UltraNewsExec_MarkRebuildDone()
    g_UltraNewsExec.forceRebuild = false;
    g_UltraNewsExec.lastReanalyzeMs = (long)GetTickCount();
    g_UltraNewsExec.reanalyzeCount++;
+}
+
+//--------------------------------------------------------------------//
+// ULTRA NEWS EXECUTION PROTOCOL                                      //
+// Pre-validate · Prepare · Minimize latency · Submit · Verify        //
+// Retry recoverable only · Re-analyze before retry · Cancel if dead  //
+// Log every execution result                                         //
+//--------------------------------------------------------------------//
+void UltraNewsExec_ProtocolDisarm(const string reason)
+{
+   g_UltraNewsPacket.armed = false;
+   g_UltraNewsPacket.lastDetail = reason;
+}
+
+void UltraNewsExec_ProtocolLog(const string result, const ulong ticket, const bool buySide,
+                               const uint retcode, const string detail)
+{
+   g_UltraNewsPacket.lastResult = result;
+   g_UltraNewsPacket.lastDetail = detail;
+   g_UltraNewsPacket.lastRetcode = retcode;
+
+   if(result == "OK") g_UltraNewsPacket.okCount++;
+   else if(result == "RETRY") g_UltraNewsPacket.retryCount++;
+   else if(result == "CANCEL") g_UltraNewsPacket.cancelCount++;
+   else if(result == "FAIL") g_UltraNewsPacket.failCount++;
+
+   string side = buySide ? "BUY" : "SELL";
+   string msg = "NEWS_PROTO " + result +
+                " event=" + g_UltraNewsPacket.eventName +
+                " phase=" + g_UltraNewsPacket.phase +
+                " att=" + IntegerToString(g_UltraNewsPacket.attempt) +
+                " rc=" + IntegerToString((int)retcode) +
+                " " + detail;
+
+   // Always persist structured result (protocol requirement)
+   UltraLogDecision("NEWS_" + result, ticket, side,
+                    (StringLen(g_UltraNewsPacket.tag) > 0 ? g_UltraNewsPacket.tag : g_UltraNewsPacket.eventName),
+                    g_UltraNewsPacket.conf, g_UltraNewsPacket.passMask,
+                    g_UltraNewsPacket.phase, result,
+                    g_UltraNewsPacket.spread, 0.0, msg);
+
+   if(UltraNewsExecLog)
+      UltraLog(msg + " on " + g_UltraNewsPacket.symbol);
+}
+
+bool UltraNewsExec_ProtocolPrepare(const string s, const UltraSnap &u, const bool buySide,
+                                   const string tag, string &why)
+{
+   why = "";
+   if(!UltraNewsExecEnabled || !UltraNewsExecProtocolEnabled)
+   {
+      why = "protocol off";
+      return true; // pass-through
+   }
+   if(!g_UltraNewsExec.newsMode)
+   {
+      why = "not news mode";
+      return true;
+   }
+
+   // Pre-validate order parameters (exec readiness — never force trade)
+   string execWhy = "";
+   if(!UltraExecReady(s, execWhy))
+   {
+      why = "PREPARE blocked: " + execWhy;
+      g_UltraNewsPacket.armed = false;
+      UltraNewsExec_ProtocolLog("CANCEL", 0, buySide, 0, why);
+      return false;
+   }
+
+   g_UltraNewsPacket.armed = true;
+   g_UltraNewsPacket.buySide = buySide;
+   g_UltraNewsPacket.symbol = s;
+   g_UltraNewsPacket.eventName = g_UltraNewsExec.eventName;
+   g_UltraNewsPacket.phase = g_UltraNewsExec.phase;
+   g_UltraNewsPacket.tag = tag;
+   g_UltraNewsPacket.passMask = g_UltraNewsExec.passMask;
+   g_UltraNewsPacket.conf = u.score.confidence;
+   g_UltraNewsPacket.spread = u.ctx.spreadPts;
+   g_UltraNewsPacket.bid = SymbolInfoDouble(s, SYMBOL_BID);
+   g_UltraNewsPacket.ask = SymbolInfoDouble(s, SYMBOL_ASK);
+   g_UltraNewsPacket.preparedMs = (long)GetTickCount();
+   g_UltraNewsPacket.attempt = 0;
+   g_UltraNewsPacket.lastRetcode = 0;
+   g_UltraNewsPacket.prepareCount++;
+   why = "PREPARED event=" + g_UltraNewsPacket.eventName +
+         " conf=" + IntegerToString(g_UltraNewsPacket.conf) +
+         " mask=" + IntegerToString(g_UltraNewsPacket.passMask);
+   g_UltraNewsPacket.lastDetail = why;
+   return true;
+}
+
+bool UltraNewsExec_ProtocolSubmit(const string s, const bool buySide, string &why)
+{
+   why = "";
+   if(!UltraNewsExecEnabled || !UltraNewsExecProtocolEnabled)
+      return true; // pass-through outside protocol
+
+   // Outside news / not armed — allow normal execution path
+   if(!g_UltraNewsExec.newsMode && !g_UltraNewsPacket.armed)
+      return true;
+
+   if(g_UltraNewsPacket.armed)
+   {
+      if(g_UltraNewsPacket.symbol != s || g_UltraNewsPacket.buySide != buySide)
+      {
+         why = "packet mismatch symbol/side";
+         UltraNewsExec_ProtocolLog("CANCEL", 0, buySide, 0, why);
+         UltraNewsExec_ProtocolDisarm(why);
+         return false;
+      }
+   }
+
+   // Minimize latency: refresh quotes only — submit immediately after confirm
+   string execWhy = "";
+   if(!UltraExecReady(s, execWhy))
+   {
+      why = "SUBMIT blocked: " + execWhy;
+      UltraNewsExec_ProtocolLog("CANCEL", 0, buySide, 0, why);
+      UltraNewsExec_ProtocolDisarm(why);
+      return false;
+   }
+
+   g_UltraNewsPacket.attempt++;
+   g_UltraNewsPacket.submitCount++;
+   g_UltraNewsPacket.bid = SymbolInfoDouble(s, SYMBOL_BID);
+   g_UltraNewsPacket.ask = SymbolInfoDouble(s, SYMBOL_ASK);
+   why = "SUBMIT att=" + IntegerToString(g_UltraNewsPacket.attempt);
+   return true;
+}
+
+bool UltraNewsExec_RetryValidate(const string s, const uint retcode, const bool buySide,
+                                 string &action)
+{
+   action = "pass";
+   if(!UltraNewsExecEnabled || !UltraNewsExecProtocolEnabled)
+      return true; // Shell uses existing retry
+
+   // Protocol active only in news mode or when packet armed from news fire
+   if(!g_UltraNewsExec.newsMode && !g_UltraNewsPacket.armed)
+      return true;
+
+   // Fatal — never retry
+   if(retcode == TRADE_RETCODE_NO_MONEY ||
+      retcode == TRADE_RETCODE_MARKET_CLOSED ||
+      retcode == TRADE_RETCODE_TRADE_DISABLED ||
+      retcode == TRADE_RETCODE_INVALID_VOLUME ||
+      retcode == TRADE_RETCODE_CLIENT_DISABLES_AT ||
+      retcode == TRADE_RETCODE_SERVER_DISABLES_AT)
+   {
+      action = "fatal";
+      UltraNewsExec_ProtocolLog("FAIL", 0, buySide, retcode, "fatal retcode — no retry");
+      UltraNewsExec_ProtocolDisarm("fatal");
+      return false;
+   }
+
+   // Recoverable only
+   bool recoverable =
+      (retcode == TRADE_RETCODE_REQUOTE ||
+       retcode == TRADE_RETCODE_PRICE_OFF ||
+       retcode == TRADE_RETCODE_PRICE_CHANGED ||
+       retcode == TRADE_RETCODE_TIMEOUT ||
+       retcode == TRADE_RETCODE_CONNECTION ||
+       retcode == TRADE_RETCODE_INVALID_FILL ||
+       retcode == TRADE_RETCODE_INVALID_PRICE);
+   if(!recoverable)
+   {
+      action = "cancel";
+      UltraNewsExec_ProtocolLog("CANCEL", 0, buySide, retcode, "non-recoverable — cancel retry");
+      UltraNewsExec_ProtocolDisarm("non-recoverable");
+      return false;
+   }
+
+   UltraNewsExec_ProtocolLog("RETRY", 0, buySide, retcode, "recoverable — re-analyze");
+
+   // Re-analyze before every retry
+   UltraSnap fresh;
+   if(!UltraBuildSnapshot(s, fresh))
+   {
+      action = "cancel";
+      UltraNewsExec_ProtocolLog("CANCEL", 0, buySide, retcode,
+                                "re-analysis failed — " + g_UltraCore.lastError);
+      UltraNewsExec_ProtocolDisarm("reanalyze fail");
+      return false;
+   }
+   g_UltraLastSnap = fresh;
+   g_UltraNewsExec.reanalyzeCount++;
+
+   // Cancel retry if original setup no longer valid
+   if(!UltraNewsExec_DetectContext(fresh) && g_UltraNewsExec.newsMode)
+   {
+      // Context may still be news via packet — require signal still valid
+   }
+
+   string vWhy = "";
+   if(!UltraNewsExec_ValidateSignal(s, fresh, buySide, vWhy))
+   {
+      action = "cancel";
+      UltraNewsExec_ProtocolLog("CANCEL", 0, buySide, retcode,
+                                "setup invalid after re-analysis — " + vWhy);
+      UltraNewsExec_ProtocolDisarm(vWhy);
+      g_UltraNewsExec.eventFlatCount++;
+      return false;
+   }
+
+   string execWhy = "";
+   if(!UltraExecReady(s, execWhy))
+   {
+      action = "cancel";
+      UltraNewsExec_ProtocolLog("CANCEL", 0, buySide, retcode, "exec not ready — " + execWhy);
+      UltraNewsExec_ProtocolDisarm(execWhy);
+      return false;
+   }
+
+   // Refresh armed packet with fresh analysis
+   g_UltraNewsPacket.conf = fresh.score.confidence;
+   g_UltraNewsPacket.passMask = g_UltraNewsExec.passMask;
+   g_UltraNewsPacket.spread = fresh.ctx.spreadPts;
+   g_UltraNewsPacket.bid = SymbolInfoDouble(s, SYMBOL_BID);
+   g_UltraNewsPacket.ask = SymbolInfoDouble(s, SYMBOL_ASK);
+   g_UltraNewsPacket.armed = true;
+   g_UltraNewsPacket.buySide = buySide;
+   g_UltraNewsPacket.symbol = s;
+
+   action = "retry";
+   return true;
+}
+
+bool UltraNewsExec_ProtocolShouldFastRetry()
+{
+   if(!UltraNewsExecProtocolEnabled || !UltraNewsExecProtocolFastRetry)
+      return false;
+   return (UltraNewsExec_InstantPath() || g_UltraNewsPacket.armed || g_UltraNewsExec.newsMode);
+}
+
+int UltraNewsExec_ProtocolRetryPauseMs()
+{
+   if(UltraNewsExec_ProtocolShouldFastRetry())
+      return UltraNewsExecProtocolRetryMs; // default 20; 0 = none
+   return 200; // legacy pause outside news protocol
 }
 
 //--------------------------------------------------------------------//
@@ -10030,11 +10326,19 @@ void UltraNewsExec_Boot()
    g_UltraNewsExec.lastConf = 0;
    g_UltraNewsExec.lastWhy = "boot";
    g_UltraNewsExec.lastFillDetail = "";
+
+   ZeroMemory(g_UltraNewsPacket);
+   g_UltraNewsPacket.eventName = "NONE";
+   g_UltraNewsPacket.phase = "NONE";
+   g_UltraNewsPacket.lastResult = "boot";
+
    if(UltraNewsExecLog)
    {
       UltraLog("NEWS_EXEC ∞ boot Enabled=" + (UltraNewsExecEnabled ? "Y" : "N") +
                " InstantPath=" + (UltraNewsExecInstantPath ? "Y" : "N") +
                " ForceReanalyze=" + (UltraNewsExecForceReanalyze ? "Y" : "N") +
+               " Protocol=" + (UltraNewsExecProtocolEnabled ? "Y" : "N") +
+               " FastRetry=" + (UltraNewsExecProtocolFastRetry ? "Y" : "N") +
                " BUILD=HA_ULTRA_93");
    }
 }
@@ -10056,6 +10360,15 @@ string UltraNewsExec_Dashboard()
    t += IntegerToString((int)g_UltraNewsExec.reanalyzeCount);
    t += " fillV=";
    t += IntegerToString((int)g_UltraNewsExec.fillOkCount);
+   if(UltraNewsExecProtocolEnabled)
+   {
+      t += " proto=";
+      t += g_UltraNewsPacket.armed ? "ARMED" : "—";
+      t += " ok=";
+      t += IntegerToString((int)g_UltraNewsPacket.okCount);
+      t += " cancel=";
+      t += IntegerToString((int)g_UltraNewsPacket.cancelCount);
+   }
    if(g_UltraNewsExec.newsMode)
    {
       t += " mask=";
@@ -17035,6 +17348,9 @@ int OnInit()
    Print("P05 NEWS INTEL ∞: Enabled=", UltraYN(UltraNewsExecEnabled),
          " InstantPath=", UltraYN(UltraNewsExecInstantPath),
          " ForceReanalyze=", UltraYN(UltraNewsExecForceReanalyze),
+         " Protocol=", UltraYN(UltraNewsExecProtocolEnabled),
+         " FastRetry=", UltraYN(UltraNewsExecProtocolFastRetry),
+         " RetryMs=", UltraNewsExecProtocolRetryMs,
          " MinConf=", UltraNewsExecMinConf);
    Print("P08 TARGET INTEL ∞: Enabled=", UltraYN(UltraTargetEnabled),
          " Strict=", UltraYN(UltraTargetStrict),
@@ -20320,15 +20636,19 @@ bool ExecuteBuy()
 
    for(int attempt = 1; attempt <= MAX_SEND_RETRIES; attempt++)
    {
-      // Quick re-validation immediately before sending (fix #5 from the
-      // signal-detection review): a signal confirmed a moment ago can
-      // stop being valid by the time we actually place the order,
-      // especially across retries after a requote. Re-check the cheap,
-      // fast-changing gates (spread widened, terminal disabled trading)
-      // right here rather than trusting the state from earlier in the
-      // function.
-      ResetLastError();
+      // ULTRA NEWS EXECUTION PROTOCOL — submit stamp (pre-validate exec ready)
+      {
+         string subWhy = "";
+         if(!UltraNewsExec_ProtocolSubmit(BrokerSymbol, true, subWhy))
+         {
+            Print("BUY cancelled by News Exec Protocol: ", subWhy);
+            UltraBug_Explain("EXEC_FAIL", "Shell_B", "ExecuteBuy",
+                             "NEWS_PROTO CANCEL " + subWhy, "BUY", 0);
+            return false;
+         }
+      }
 
+      ResetLastError();
       result = g_Trade.Buy(lot, BrokerSymbol, 0.0, sl, tp, TradeComment);
 
       if(result)
@@ -20338,10 +20658,23 @@ bool ExecuteBuy()
 
       if(IsTransientOrderRetcode(retcode))
       {
-         if(EnableVerboseLogging)
-            Print("BUY transient error (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES, " - refreshing price and retrying.");
+         // PROTOCOL — re-analyze before retry; cancel if setup no longer valid
+         string action = "";
+         if(!UltraNewsExec_RetryValidate(BrokerSymbol, retcode, true, action))
+         {
+            Print("BUY retry cancelled (", action, ") retcode=", retcode,
+                  " — ", g_Trade.ResultRetcodeDescription());
+            UltraBug_ExplainExecFail("ExecuteBuy", "BUY", retcode,
+                                     "NEWS_PROTO " + action + " " +
+                                     g_Trade.ResultRetcodeDescription());
+            return false;
+         }
 
-         // Phase 20 — analyse recoverable reject → correct → retry
+         if(EnableVerboseLogging || UltraNewsExecLog)
+            Print("BUY transient (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES,
+                  " action=", action, " — refreshing price and retrying.");
+
+         // Zero-Fail — recoverable reject → correct → retry
          {
             string zAct = "";
             UltraZFR_PrepareExecRetry(BrokerSymbol, retcode, zAct);
@@ -20349,7 +20682,10 @@ bool ExecuteBuy()
          if(retcode == TRADE_RETCODE_INVALID_FILL)
             ConfigureFillingMode(BrokerSymbol);
 
-         Sleep(200);
+         // Minimize internal processing — fast pause under news InstantPath
+         int pauseMs = UltraNewsExec_ProtocolRetryPauseMs();
+         if(pauseMs > 0)
+            Sleep(pauseMs);
 
          ask = SymbolInfoDouble(BrokerSymbol, SYMBOL_ASK);
 
@@ -20369,11 +20705,15 @@ bool ExecuteBuy()
       if(IsFatalOrderRetcode(retcode))
       {
          Print("BUY FAILED (fatal) | Retcode: ", retcode, " | ", DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
+         UltraNewsExec_ProtocolLog("FAIL", 0, true, retcode,
+                                   DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
+         UltraNewsExec_ProtocolDisarm("fatal");
          UltraBug_ExplainExecFail("ExecuteBuy", "BUY", retcode,
                                   DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
          return false; // no point trying the no-stops fallback either - the order itself is unplaceable right now
       }
 
+      UltraNewsExec_ProtocolLog("FAIL", 0, true, retcode, g_Trade.ResultRetcodeDescription());
       break; // any other error - fall through to the no-stops fallback / failure logging below
    }
 
@@ -20696,8 +21036,19 @@ bool ExecuteSell()
 
    for(int attempt = 1; attempt <= MAX_SEND_RETRIES; attempt++)
    {
-      ResetLastError();
+      // ULTRA NEWS EXECUTION PROTOCOL — submit stamp
+      {
+         string subWhy = "";
+         if(!UltraNewsExec_ProtocolSubmit(BrokerSymbol, false, subWhy))
+         {
+            Print("SELL cancelled by News Exec Protocol: ", subWhy);
+            UltraBug_Explain("EXEC_FAIL", "Shell_B", "ExecuteSell",
+                             "NEWS_PROTO CANCEL " + subWhy, "SELL", 0);
+            return false;
+         }
+      }
 
+      ResetLastError();
       result = g_Trade.Sell(lot, BrokerSymbol, 0.0, sl, tp, TradeComment);
 
       if(result)
@@ -20707,10 +21058,21 @@ bool ExecuteSell()
 
       if(IsTransientOrderRetcode(retcode))
       {
-         if(EnableVerboseLogging)
-            Print("SELL transient error (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES, " - refreshing price and retrying.");
+         string action = "";
+         if(!UltraNewsExec_RetryValidate(BrokerSymbol, retcode, false, action))
+         {
+            Print("SELL retry cancelled (", action, ") retcode=", retcode,
+                  " — ", g_Trade.ResultRetcodeDescription());
+            UltraBug_ExplainExecFail("ExecuteSell", "SELL", retcode,
+                                     "NEWS_PROTO " + action + " " +
+                                     g_Trade.ResultRetcodeDescription());
+            return false;
+         }
 
-         // Phase 20 — analyse recoverable reject → correct → retry
+         if(EnableVerboseLogging || UltraNewsExecLog)
+            Print("SELL transient (", retcode, ") attempt ", attempt, "/", MAX_SEND_RETRIES,
+                  " action=", action, " — refreshing price and retrying.");
+
          {
             string zAct = "";
             UltraZFR_PrepareExecRetry(BrokerSymbol, retcode, zAct);
@@ -20718,7 +21080,9 @@ bool ExecuteSell()
          if(retcode == TRADE_RETCODE_INVALID_FILL)
             ConfigureFillingMode(BrokerSymbol);
 
-         Sleep(200);
+         int pauseMs = UltraNewsExec_ProtocolRetryPauseMs();
+         if(pauseMs > 0)
+            Sleep(pauseMs);
 
          bid = SymbolInfoDouble(BrokerSymbol, SYMBOL_BID);
 
@@ -20738,11 +21102,15 @@ bool ExecuteSell()
       if(IsFatalOrderRetcode(retcode))
       {
          Print("SELL FAILED (fatal) | Retcode: ", retcode, " | ", DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
+         UltraNewsExec_ProtocolLog("FAIL", 0, false, retcode,
+                                   DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
+         UltraNewsExec_ProtocolDisarm("fatal");
          UltraBug_ExplainExecFail("ExecuteSell", "SELL", retcode,
                                   DescribeOrderRetcode(retcode, g_Trade.ResultRetcodeDescription()));
          return false;
       }
 
+      UltraNewsExec_ProtocolLog("FAIL", 0, false, retcode, g_Trade.ResultRetcodeDescription());
       break;
    }
 

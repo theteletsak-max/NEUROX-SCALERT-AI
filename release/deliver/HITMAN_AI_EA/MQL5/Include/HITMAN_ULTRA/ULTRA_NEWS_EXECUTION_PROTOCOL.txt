@@ -1,0 +1,38 @@
+HITMAN AI ULTRA ∞ — ULTRA NEWS EXECUTION PROTOCOL
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+PROTOCOL (exec path refinement — Final Development Rule)
+  ✓ Pre-validate order parameters          → UltraExecReady + TradeGate
+  ✓ Prepare order before final trigger     → ProtocolPrepare (AllowTrade / NoteFire)
+  ✓ Minimize internal processing time      → InstantPath + FastRetry pause
+  ✓ Submit immediately after confirmation  → ProtocolSubmit then Buy/Sell
+  ✓ Verify broker response                 → fill select + NoteFill / ProtocolLog OK
+  ✓ Retry only for recoverable errors      → RetryValidate recoverable set
+  ✓ Re-analyze before every retry          → UltraBuildSnapshot + ValidateSignal
+  ✓ Cancel retry if setup no longer valid  → ProtocolLog CANCEL + disarm
+  ✓ Log every execution result             → NEWS_OK / RETRY / CANCEL / FAIL
+
+============================================================
+FLOW
+  AllowTrade PASS → ProtocolPrepare (arm packet)
+       ↓
+  NoteFire → refresh prepare
+       ↓
+  ExecuteBuy/Sell gates (lot/margin/TradeGate)
+       ↓
+  ProtocolSubmit → g_Trade.Buy/Sell
+       ↓
+  OK → NoteFill + ProtocolLog OK
+  Transient → RetryValidate (re-analyze) → retry or CANCEL
+  Fatal → ProtocolLog FAIL — no retry
+
+LOCKS
+  Never force trades · never news/spread-only reject · never reduce validation
+  Mission remains sole close authority
+  One proprietary strategy / one signal path unchanged
+
+INPUTS
+  UltraNewsExecProtocolEnabled = true
+  UltraNewsExecProtocolFastRetry = true
+  UltraNewsExecProtocolRetryMs = 20
