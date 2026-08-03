@@ -17,6 +17,9 @@
 #define ULTRA_GATE_MISSION 0x100
 #define ULTRA_GATE_ALL     0x1FF
 
+// Chapter 15 Recovery — assembled after TradeGate (forward)
+bool UltraRecoveryIntel_AllowNewEntries();
+
 struct UltraTradeGateState
 {
    bool   passed;
@@ -87,6 +90,14 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
       g_UltraTradeGate.passMask = ULTRA_GATE_ALL;
       g_UltraTradeGate.detail = "gate disabled-pass";
       return true;
+   }
+
+   // Ch15 Safe Mode — suspend new trade execution; positions still managed elsewhere
+   if(!UltraRecoveryIntel_AllowNewEntries())
+   {
+      UltraTradeGate_Fail(ULTRA_GATE_EXEC, "RECOVERY", "safe mode — new entries suspended");
+      why = g_UltraTradeGate.detail;
+      return false;
    }
 
    const UltraSnap u = g_UltraLastSnap;

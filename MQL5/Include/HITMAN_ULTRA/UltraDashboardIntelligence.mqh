@@ -81,9 +81,15 @@ void UltraDashboardIntel_ResolveState(const string s)
       UltraDashboardIntel_SetState(UDASH_INITIALIZING, "not booted");
       return;
    }
-   if(g_UltraZFR.recovering)
+   if(g_UltraRecoveryIntel.safeMode ||
+      g_UltraRecoveryIntel.outcome == UREC_SAFE_MODE ||
+      g_UltraRecoveryIntel.outcome == UREC_RECOVERING ||
+      g_UltraZFR.recovering ||
+      g_UltraRecoveryIntel.incidentOpen)
    {
-      UltraDashboardIntel_SetState(UDASH_RECOVERING, g_UltraZFR.lastAction);
+      string d = g_UltraRecoveryIntel.detail;
+      if(StringLen(d) == 0) d = g_UltraZFR.lastAction;
+      UltraDashboardIntel_SetState(UDASH_RECOVERING, d);
       return;
    }
    if(!g_UltraCore.healthy || g_UltraLoggerIntel.diagHealth == "DEGRADED")
@@ -312,6 +318,8 @@ string UltraDashboardIntel_PanelHealth()
    t += UltraSystemHealth_Dashboard();
    t += " | ";
    t += UltraResource_Monitor();
+   t += "\n";
+   t += UltraRecoveryIntel_Dashboard();
    t += "\n";
    t += UltraZFR_Dashboard();
    t += "\n";

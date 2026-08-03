@@ -39,6 +39,7 @@ order = [
     "UltraPerfAnalytics.mqh",
     "UltraLoggerIntelligence.mqh",
     "UltraTradeGate.mqh",
+    "UltraRecoveryIntelligence.mqh",  # Ch15 after Logger+ZFR; before Dashboard consumers
     "UltraDashboardIntelligence.mqh",  # after TradeGate (g_UltraTradeGate state)
     "UltraQualityAssurance.mqh",
     "UltraModuleManager.mqh",

@@ -83,7 +83,8 @@ int OnInit()
    UltraStopEvo_Boot();     // P10 support — Stop Evolution
    UltraMaint_Boot();       // P19 Maintenance orchestrator
    UltraLL_Boot();          // P17 Low-Latency Engine
-   UltraZFR_Boot();         // P15 Zero-Fail Recovery
+   UltraZFR_Boot();         // P15 Zero-Fail Recovery executor
+   UltraRecoveryIntel_Boot(); // P15 Recovery Intelligence (Ch15 facade)
    // Re-note handles after Boot zero (InitializeIndicators ran earlier)
    {
       int bad = 0, checked = 0;
@@ -170,6 +171,11 @@ int OnInit()
          " Enabled=", UltraYN(UltraDashboardEnabled || EnableDashboard),
          " State=", g_UltraDashboardIntel.stateName,
          " (display only · never trades · never executes)");
+   Print("P15 RECOVERY INTEL (Ch15): Boot=", UltraYN(g_UltraRecoveryIntel.booted),
+         " ZFR=", UltraYN(UltraZFREnabled),
+         " SafeMode=", UltraYN(g_UltraRecoveryIntel.safeMode),
+         " Outcome=", g_UltraRecoveryIntel.outcomeName,
+         " (never changes strategy · never signals · restore only)");
    UltraLoggerIntel_LogSystem("STARTUP", "OnInit complete Internal Standard v6+ HA_ULTRA_93");
    Print("MAIN FLOW v6+: Foundation→Market→Strategy→Signal→News→Mission→Risk→Exec→Target→PosEvo→Exit→Analytics→Logger→Dashboard→Recovery");
    Print("P07 RISK / TRADE GATE: Enabled=", UltraYN(UltraTradeGateEnabled),
@@ -213,12 +219,12 @@ int OnInit()
          " Exec=", UltraYN(UltraBugExecAudit),
          " Pos=", UltraYN(UltraBugPositionAudit),
          " ", g_UltraMaint.summary);
-   Print("P16 ZERO-FAIL RECOVERY ∞: Enabled=", UltraYN(UltraZFREnabled),
+   Print("P15 ZERO-FAIL / RECOVERY ∞: Enabled=", UltraYN(UltraZFREnabled),
          " MonitorMs=", UltraZFRMonitorMs,
          " Ind=", UltraYN(UltraZFRIndicatorRecovery),
          " Pos=", UltraYN(UltraZFRPositionRecovery),
          " Conn=", UltraYN(UltraZFRConnectionRecovery),
-         " NeverStop=Y");
+         " SafeModeGate=Y NeverStop=Y");
    Print("P10 POSITION EVOLUTION (Ch10): Enabled=", UltraYN(UltraPosEvoEnabled),
          " L3Close=", UltraYN(UltraPosEvoCloseOnL3),
          " L3Bars=", UltraPosEvoL3ConfirmBars,
@@ -1106,8 +1112,8 @@ void RunTradingCycle(string symbol)
    // Decide path: P3→P4→P5→P6→P7→P8→P9 inside InstantExecution
    // P01 Foundation
    UltraFoundation_OnTick(symbol);
-   // P15 Zero-Fail — always monitors (even when RED / degraded)
-   UltraZFR_OnTick(symbol);
+   // P15 Recovery — always monitors (even when RED / degraded); wraps ZFR
+   UltraRecoveryIntel_OnTick(symbol);
    if(UltraFoundationEnabled && g_UltraFoundation.status == "RED")
    {
       ManageOpenTrades(); // still protect open positions — never abandon risk
@@ -1119,7 +1125,7 @@ void RunTradingCycle(string symbol)
    UltraMarketIntel_OnTick(symbol);
    if(UltraMarketIntelEnabled && !UltraMarketIntel_Approved())
    {
-      UltraZFR_OnTick(symbol); // keep recovering data path
+      UltraRecoveryIntel_OnTick(symbol); // keep recovering data path
       ManageOpenTrades(); // still protect open positions — never abandon risk
       UltraLL_OnTickEnd();
       return;
@@ -3537,7 +3543,7 @@ bool ExecuteBuy()
          // Zero-Fail — recoverable reject → correct → retry
          {
             string zAct = "";
-            UltraZFR_PrepareExecRetry(BrokerSymbol, retcode, zAct);
+            UltraRecoveryIntel_PrepareExecRetry(BrokerSymbol, retcode, zAct);
          }
          if(retcode == TRADE_RETCODE_INVALID_FILL)
             ConfigureFillingMode(BrokerSymbol);
@@ -4012,7 +4018,7 @@ bool ExecuteSell()
          UltraExecIntel_NoteRetry(retcode);
          {
             string zAct = "";
-            UltraZFR_PrepareExecRetry(BrokerSymbol, retcode, zAct);
+            UltraRecoveryIntel_PrepareExecRetry(BrokerSymbol, retcode, zAct);
          }
          if(retcode == TRADE_RETCODE_INVALID_FILL)
             ConfigureFillingMode(BrokerSymbol);

@@ -233,11 +233,20 @@ void UltraMod_Refresh()
                    dashOK, dashDetail);
    }
 
-   // PHASE 15 — Zero-Fail Recovery
-   UltraMod_Reg("P15_ZERO_FAIL", false, UltraZFREnabled, UltraZFREnabled,
-                UltraZFREnabled
-                ? (g_UltraZFR.summary + " ok=" + IntegerToString(g_UltraZFR.recoverSuccess))
-                : "OFF");
+   // PHASE 15 — Recovery Engine (Chapter 15 facade over ZFR)
+   {
+      bool recOK = g_UltraRecoveryIntel.booted &&
+                   !g_UltraRecoveryIntel.safeMode &&
+                   g_UltraRecoveryIntel.outcome != UREC_FAILED;
+      string recDetail = g_UltraRecoveryIntel.outcomeName;
+      recDetail += " zfr=";
+      recDetail += g_UltraZFR.summary;
+      recDetail += " ok=";
+      recDetail += IntegerToString(g_UltraRecoveryIntel.successCount);
+      if(g_UltraRecoveryIntel.safeMode) recDetail += " SAFE";
+      UltraMod_Reg("P15_RECOVERY", true, UltraZFREnabled || UltraRecoveryEnabled,
+                   recOK, recDetail);
+   }
 
    // PHASE 16 — Backtest Compatibility
    UltraMod_Reg("P16_BT_COMPAT", false, UltraBacktestCompatEnabled, true, UltraBT_ModeName());

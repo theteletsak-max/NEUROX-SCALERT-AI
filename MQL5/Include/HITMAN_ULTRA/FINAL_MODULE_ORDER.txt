@@ -85,8 +85,12 @@ PHASE 14 — DASHBOARD ENGINE
   Refresh: tick · timer · immediate after trade/recovery/error
   LOCK: NEVER trades · NEVER executes · ONLY displays · one source of truth
 
-PHASE 15 — ZERO-FAIL RECOVERY ENGINE
-  UltraZeroFailRecovery.mqh
+PHASE 15 — RECOVERY ENGINE
+  UltraRecoveryIntelligence · UltraZeroFailRecovery · 30_Recovery
+  MASTER SPEC CHAPTER 15 — detect·classify·recover·verify·safe-mode
+  Outputs: success · failed · safe mode · resume · diagnostics
+  LOCK: NEVER changes strategy · NEVER creates signals · restore only
+        Protect open positions · TradeGate blocks entries in Safe Mode
 
 PHASE 16 — BACKTEST COMPATIBILITY ENGINE
   UltraBacktestCompat.mqh

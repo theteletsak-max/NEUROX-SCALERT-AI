@@ -54,8 +54,9 @@ PHASE 14 — DASHBOARD ENGINE
   UltraDashboardIntelligence · 24_Dashboard
   MASTER SPEC CHAPTER 14 — display-only panels · never trades/executes
 
-PHASE 15 — ZERO-FAIL RECOVERY ENGINE
-  UltraZeroFailRecovery.mqh
+PHASE 15 — RECOVERY ENGINE
+  UltraRecoveryIntelligence · UltraZeroFailRecovery · 30_Recovery
+  MASTER SPEC CHAPTER 15 — never changes strategy · safe mode blocks entries
 
 PHASE 16 — BACKTEST COMPATIBILITY ENGINE
   UltraBacktestCompat.mqh
