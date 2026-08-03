@@ -9011,6 +9011,22 @@ string PRISMGetTradeGrade(bool buy, const string strategyTag)
 
 bool PRISMFinalizeApproval(bool buy, const string strategyTag)
 {
+   // PHASE A — Mission Control already issued final BUY/SELL.
+   // Nothing here may flip that decision into WAIT/REJECT.
+   if(UltraPhaseA_MissionSoleAuthority && UltraMission_HasFinalEntry(buy))
+   {
+      if(EnableBeastMode && BeastDuplicateBarGuard && IsDuplicateSignal(buy))
+      {
+         if(UltraPhaseA_LogPostMissionWarn)
+            Print("PHASE_A: duplicate bar WARN only — Mission approved ",
+                  (buy ? "BUY" : "SELL"), " on ", BrokerSymbol);
+      }
+      UltraSetApprove(strategyTag, "A", 100, 100);
+      if(EnableBeastMode && BeastCaptureSignalSnapshot)
+         CapturePendingSignalSnapshot(buy, strategyTag);
+      return true;
+   }
+
    if(EnableBeastMode && BeastDuplicateBarGuard && IsDuplicateSignal(buy))
    {
       UltraSetReject("duplicate bar guard");
@@ -11436,20 +11452,34 @@ void InstantExecution()
    string strategyTag;
    EvaluateStrategySignals(buySignal, sellSignal, strategyTag);
 
-   // Correlation confirmation filter (Part 15f) - applies to whichever
-   // strategy fired above, regardless of which one it was. Off by default
-   // (EnableCorrelationFilter=false), so no behavior change unless
-   // deliberately turned on.
+   // Correlation confirmation filter (Part 15f).
+   // PHASE A — if Mission already approved, correlation is WARN only (never BUY→WAIT).
    if(buySignal && !CorrelationFilterOK(true))
    {
-      UltraSetReject("correlation filter blocked BUY");
-      buySignal = false;
+      if(UltraPhaseA_MissionSoleAuthority && UltraMission_HasFinalEntry(true))
+      {
+         if(UltraPhaseA_LogPostMissionWarn)
+            Print("PHASE_A: correlation WARN only — Mission approved BUY on ", BrokerSymbol);
+      }
+      else
+      {
+         UltraSetReject("correlation filter blocked BUY");
+         buySignal = false;
+      }
    }
 
    if(sellSignal && !CorrelationFilterOK(false))
    {
-      UltraSetReject("correlation filter blocked SELL");
-      sellSignal = false;
+      if(UltraPhaseA_MissionSoleAuthority && UltraMission_HasFinalEntry(false))
+      {
+         if(UltraPhaseA_LogPostMissionWarn)
+            Print("PHASE_A: correlation WARN only — Mission approved SELL on ", BrokerSymbol);
+      }
+      else
+      {
+         UltraSetReject("correlation filter blocked SELL");
+         sellSignal = false;
+      }
    }
 
    if(buySignal)

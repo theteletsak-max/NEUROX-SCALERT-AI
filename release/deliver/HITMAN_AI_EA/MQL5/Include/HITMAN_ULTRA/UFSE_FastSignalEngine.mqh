@@ -782,17 +782,27 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       return;
    }
 
-   // Phase 19 — signal integrity audit (conflict / invalid conf / empty tag)
+   // PHASE A — Mission already approved in UltraAIDecide.
+   // Signal audit is advisory only; NEVER clear BUY/SELL after Mission.
    {
       string sigWhy = "";
       if(!UltraBug_AuditSignal(BrokerSymbol, best, sigWhy))
       {
-         g_UltraLastSnap = snap;
-         g_UltraLastSignal = best;
-         buySignal = false;
-         sellSignal = false;
-         strategyTag = "";
-         return;
+         if(UltraPhaseA_MissionSoleAuthority)
+         {
+            if(UltraPhaseA_LogPostMissionWarn || UltraBugLogExplain)
+               Print("PHASE_A: signal audit WARN only (Mission sole authority) ", sigWhy,
+                     " on ", BrokerSymbol);
+         }
+         else
+         {
+            g_UltraLastSnap = snap;
+            g_UltraLastSignal = best;
+            buySignal = false;
+            sellSignal = false;
+            strategyTag = "";
+            return;
+         }
       }
       UltraBug_AuditEvent(snap);
    }

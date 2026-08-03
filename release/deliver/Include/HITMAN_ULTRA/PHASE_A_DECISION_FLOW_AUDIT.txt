@@ -1,0 +1,54 @@
+HITMAN AI ULTRA ∞ — PHASE A
+DECISION FLOW AUDIT
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  1) Only ONE final WAIT authority → Mission Control
+  2) Remove duplicate post-Mission decision gates
+  3) Nothing AFTER Mission may flip BUY/SELL → WAIT
+
+============================================================
+SOLE FINAL AUTHORITY
+  Module: MissionControl.mqh
+  API:    UltraMission_ApproveEntry → UltraSupreme_FinalizeEntry
+  Sticky: g_UltraMissionEntryOK / UltraMission_HasFinalEntry(isBuy)
+
+  Final decisions: BUY | SELL | WAIT
+
+============================================================
+POST-MISSION GATES (Phase A demoted — cannot flip BUY→WAIT)
+
+  ✓ UltraBug_AuditSignal     → WARN log only after Mission approve
+  ✓ CorrelationFilterOK      → WARN log only when Mission sticky OK
+  ✓ PRISMFinalizeApproval    → auto-approve when Mission sticky OK
+                                (duplicate-bar warn only)
+  ✓ TradeGate THESIS         → WARN / Pass when Mission sticky OK
+  ✓ TradeGate MISSION        → assert sticky (exec without Mission still blocked)
+
+KEPT HARD AFTER MISSION (not decision flips)
+  ✓ Entry/SL/TP geometry (broker validity)
+  ✓ Lot / margin / broker retcode failures
+  ✓ UltraBT_PreTradeReady (tester readiness)
+
+============================================================
+PRE-MISSION (allowed — candidate formation / hard infra)
+
+  Hard abort (not soft WAIT): Foundation RED · MarketIntel deny ·
+    SystemHealth RED · snapshot fail · capital/exec terminal hard fails
+
+  Soft quality filters still feed UltraAIDecide → Mission (WAIT only
+  emitted by UltraMission_ApproveEntry as final decision WAIT)
+
+  Pre-eval throttles (before EvaluateStrategySignals):
+    FinalTradeCheck · CooldownFinished · smart-tick skip
+    → these never reverse a Mission BUY (they run before decide)
+
+============================================================
+INPUTS
+  UltraPhaseA_MissionSoleAuthority = true
+  UltraPhaseA_LogPostMissionWarn   = true
+
+LOCKS
+  TradeComment=HITMAN AI · BUILD=HA_ULTRA_93 · MaxOpen=3
+  Mission sole close authority unchanged

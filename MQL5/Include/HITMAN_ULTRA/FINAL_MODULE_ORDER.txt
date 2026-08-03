@@ -39,6 +39,9 @@ PHASE 6 — ULTRA MISSION CONTROL
   Strategy · Signal · Confidence · Risk · Execution validation → Final Decision
   Decisions: BUY | SELL | WAIT | REPLACE
   LOCK: only Mission may call g_Trade.PositionClose*
+  PHASE A: Mission is the ONLY final WAIT/BUY/SELL authority —
+    nothing after Mission may flip BUY/SELL → WAIT
+    (see PHASE_A_DECISION_FLOW_AUDIT.txt)
 
 PHASE 7 — ULTRA EXECUTION ENGINE
   Modules: Shell_B ExecuteBuy/Sell · 19_Execution · 32/36 Broker

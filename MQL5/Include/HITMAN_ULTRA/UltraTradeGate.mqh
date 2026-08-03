@@ -238,6 +238,7 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
    }
 
    // 8) TRADE THESIS VALIDATION
+   // PHASE A — if Mission already finalized BUY/SELL, thesis is advisory only
    {
       bool thesisOK = false;
       string thWhy = "";
@@ -257,13 +258,19 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
                       (u.trend.bear && (u.ict.instZoneSell || u.fib.atSellZone || u.st.lh || u.st.ll))));
          if(!thesisOK) thWhy = "SELL thesis shape invalid";
       }
-      if(!thesisOK)
+      if(!thesisOK && UltraPhaseA_MissionSoleAuthority && UltraMission_HasFinalEntry(isBuy))
+      {
+         UltraTradeGate_Pass(ULTRA_GATE_THESIS);
+         if(UltraTradeGateLog || UltraPhaseA_LogPostMissionWarn)
+            UltraLog("PHASE_A THESIS WARN only (Mission sole authority): " + thWhy);
+      }
+      else if(!thesisOK)
          UltraTradeGate_Fail(ULTRA_GATE_THESIS, "THESIS", thWhy);
       else
          UltraTradeGate_Pass(ULTRA_GATE_THESIS);
    }
 
-   // 9) MISSION CONTROL APPROVAL
+   // 9) MISSION CONTROL APPROVAL — assert sticky final decision (not a soft re-WAIT)
    {
       bool missionOK = true;
       string mWhy = "";
@@ -274,17 +281,11 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
       }
       else if(UltraUpgradeEnabled && UltraSupremeEnabled)
       {
-         // Use sticky entry approval (PositionCommand must not erase it)
-         if(!g_UltraMissionEntryOK || g_UltraMissionEntryBuy != isBuy)
+         if(!UltraMission_HasFinalEntry(isBuy))
          {
             missionOK = false;
             mWhy = "Mission Control not approved for ";
             mWhy += isBuy ? "BUY" : "SELL";
-         }
-         else if(g_UltraMissionEntryTs > 0 && (TimeCurrent() - g_UltraMissionEntryTs) > 120)
-         {
-            missionOK = false;
-            mWhy = "Mission entry approval expired";
          }
       }
       if(!missionOK)

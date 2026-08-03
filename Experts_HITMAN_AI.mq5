@@ -1261,6 +1261,10 @@ input bool   UltraSmartExitEnabled       = false; // L14 Smart Exit
 input bool   UltraMissionOnlyExits       = true;  // sole close path discipline
 input bool   UltraSystemHealthEnabled    = true;  // L15-17 System Health
 
+input group "31 · PHASE A DECISION FLOW AUDIT"
+input bool   UltraPhaseA_MissionSoleAuthority = true; // NOTHING after Mission may flip BUY→WAIT
+input bool   UltraPhaseA_LogPostMissionWarn   = true; // log demoted post-Mission gates
+
 input group "31 · POSITION EVOLUTION ENGINE"
 input bool   UltraPosEvoEnabled          = true;  // Intelligent Position Evolution
 input bool   UltraPosEvoCloseOnL3        = true;  // Mission may close on L3 invalidation
@@ -12491,9 +12495,10 @@ string UltraAdaptive_ReviewLine()
 #ifndef HITMAN_ULTRA_MISSION_CONTROL_MQH
 #define HITMAN_ULTRA_MISSION_CONTROL_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — LEVEL 8 MISSION CONTROL (SOLE CLOSE AUTHORITY)       |
+//| HITMAN AI — LEVEL 8 MISSION CONTROL                              |
+//| PHASE A: SOLE FINAL DECISION AUTHORITY for BUY · SELL · WAIT     |
 //| EXIT & HOLD FIX LIST — only this module may close trades         |
-//| Approves: BUY · SELL · WAIT · HOLD · MANAGE · EXIT               |
+//| Nothing AFTER Mission may flip BUY/SELL → WAIT (Phase A lock)    |
 //+------------------------------------------------------------------+
 
 // Forward — Bug Elimination / Maintenance assembled after Mission Control
@@ -12542,6 +12547,16 @@ bool              g_UltraMissionEntryOK = false;
 bool              g_UltraMissionEntryBuy = false;
 string            g_UltraMissionEntryTag = "";
 datetime          g_UltraMissionEntryTs = 0;
+
+// PHASE A — Mission already issued final BUY/SELL (post-Mission gates must not flip)
+bool UltraMission_HasFinalEntry(const bool isBuy)
+{
+   if(!g_UltraMissionEntryOK) return false;
+   if(g_UltraMissionEntryBuy != isBuy) return false;
+   if(g_UltraMissionEntryTs > 0 && (TimeCurrent() - g_UltraMissionEntryTs) > 120)
+      return false;
+   return true;
+}
 
 //--------------------------------------------------------------------//
 void UltraMission_Init()
@@ -15260,6 +15275,7 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
    }
 
    // 8) TRADE THESIS VALIDATION
+   // PHASE A — if Mission already finalized BUY/SELL, thesis is advisory only
    {
       bool thesisOK = false;
       string thWhy = "";
@@ -15279,13 +15295,19 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
                       (u.trend.bear && (u.ict.instZoneSell || u.fib.atSellZone || u.st.lh || u.st.ll))));
          if(!thesisOK) thWhy = "SELL thesis shape invalid";
       }
-      if(!thesisOK)
+      if(!thesisOK && UltraPhaseA_MissionSoleAuthority && UltraMission_HasFinalEntry(isBuy))
+      {
+         UltraTradeGate_Pass(ULTRA_GATE_THESIS);
+         if(UltraTradeGateLog || UltraPhaseA_LogPostMissionWarn)
+            UltraLog("PHASE_A THESIS WARN only (Mission sole authority): " + thWhy);
+      }
+      else if(!thesisOK)
          UltraTradeGate_Fail(ULTRA_GATE_THESIS, "THESIS", thWhy);
       else
          UltraTradeGate_Pass(ULTRA_GATE_THESIS);
    }
 
-   // 9) MISSION CONTROL APPROVAL
+   // 9) MISSION CONTROL APPROVAL — assert sticky final decision (not a soft re-WAIT)
    {
       bool missionOK = true;
       string mWhy = "";
@@ -15296,17 +15318,11 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
       }
       else if(UltraUpgradeEnabled && UltraSupremeEnabled)
       {
-         // Use sticky entry approval (PositionCommand must not erase it)
-         if(!g_UltraMissionEntryOK || g_UltraMissionEntryBuy != isBuy)
+         if(!UltraMission_HasFinalEntry(isBuy))
          {
             missionOK = false;
             mWhy = "Mission Control not approved for ";
             mWhy += isBuy ? "BUY" : "SELL";
-         }
-         else if(g_UltraMissionEntryTs > 0 && (TimeCurrent() - g_UltraMissionEntryTs) > 120)
-         {
-            missionOK = false;
-            mWhy = "Mission entry approval expired";
          }
       }
       if(!missionOK)
@@ -15468,8 +15484,11 @@ void UltraMod_Refresh()
    UltraMod_Reg("P05_NEWS_INTEL", false, UltraNewsExecEnabled, UltraNewsExecEnabled,
                 UltraNewsExecEnabled ? UltraNewsExec_Dashboard() : "OFF");
 
-   // PHASE 6 — Mission Control
-   UltraMod_Reg("P06_MISSION", true, true, true, "BUY|SELL|WAIT|REPLACE");
+   // PHASE 6 — Mission Control (Phase A: sole final WAIT/BUY/SELL authority)
+   UltraMod_Reg("P06_MISSION", true, true, true,
+                UltraPhaseA_MissionSoleAuthority
+                ? "SOLE_FINAL BUY|SELL|WAIT"
+                : "BUY|SELL|WAIT|REPLACE");
 
    // PHASE 7 — Execution (broker/filling live in Shell — present when TradeGate boots)
    UltraMod_Reg("P07_EXECUTION", true, true, true, "instant+fill+retry");
@@ -16360,17 +16379,27 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       return;
    }
 
-   // Phase 19 — signal integrity audit (conflict / invalid conf / empty tag)
+   // PHASE A — Mission already approved in UltraAIDecide.
+   // Signal audit is advisory only; NEVER clear BUY/SELL after Mission.
    {
       string sigWhy = "";
       if(!UltraBug_AuditSignal(BrokerSymbol, best, sigWhy))
       {
-         g_UltraLastSnap = snap;
-         g_UltraLastSignal = best;
-         buySignal = false;
-         sellSignal = false;
-         strategyTag = "";
-         return;
+         if(UltraPhaseA_MissionSoleAuthority)
+         {
+            if(UltraPhaseA_LogPostMissionWarn || UltraBugLogExplain)
+               Print("PHASE_A: signal audit WARN only (Mission sole authority) ", sigWhy,
+                     " on ", BrokerSymbol);
+         }
+         else
+         {
+            g_UltraLastSnap = snap;
+            g_UltraLastSignal = best;
+            buySignal = false;
+            sellSignal = false;
+            strategyTag = "";
+            return;
+         }
       }
       UltraBug_AuditEvent(snap);
    }
@@ -26324,6 +26353,22 @@ string PRISMGetTradeGrade(bool buy, const string strategyTag)
 
 bool PRISMFinalizeApproval(bool buy, const string strategyTag)
 {
+   // PHASE A — Mission Control already issued final BUY/SELL.
+   // Nothing here may flip that decision into WAIT/REJECT.
+   if(UltraPhaseA_MissionSoleAuthority && UltraMission_HasFinalEntry(buy))
+   {
+      if(EnableBeastMode && BeastDuplicateBarGuard && IsDuplicateSignal(buy))
+      {
+         if(UltraPhaseA_LogPostMissionWarn)
+            Print("PHASE_A: duplicate bar WARN only — Mission approved ",
+                  (buy ? "BUY" : "SELL"), " on ", BrokerSymbol);
+      }
+      UltraSetApprove(strategyTag, "A", 100, 100);
+      if(EnableBeastMode && BeastCaptureSignalSnapshot)
+         CapturePendingSignalSnapshot(buy, strategyTag);
+      return true;
+   }
+
    if(EnableBeastMode && BeastDuplicateBarGuard && IsDuplicateSignal(buy))
    {
       UltraSetReject("duplicate bar guard");
@@ -28749,20 +28794,34 @@ void InstantExecution()
    string strategyTag;
    EvaluateStrategySignals(buySignal, sellSignal, strategyTag);
 
-   // Correlation confirmation filter (Part 15f) - applies to whichever
-   // strategy fired above, regardless of which one it was. Off by default
-   // (EnableCorrelationFilter=false), so no behavior change unless
-   // deliberately turned on.
+   // Correlation confirmation filter (Part 15f).
+   // PHASE A — if Mission already approved, correlation is WARN only (never BUY→WAIT).
    if(buySignal && !CorrelationFilterOK(true))
    {
-      UltraSetReject("correlation filter blocked BUY");
-      buySignal = false;
+      if(UltraPhaseA_MissionSoleAuthority && UltraMission_HasFinalEntry(true))
+      {
+         if(UltraPhaseA_LogPostMissionWarn)
+            Print("PHASE_A: correlation WARN only — Mission approved BUY on ", BrokerSymbol);
+      }
+      else
+      {
+         UltraSetReject("correlation filter blocked BUY");
+         buySignal = false;
+      }
    }
 
    if(sellSignal && !CorrelationFilterOK(false))
    {
-      UltraSetReject("correlation filter blocked SELL");
-      sellSignal = false;
+      if(UltraPhaseA_MissionSoleAuthority && UltraMission_HasFinalEntry(false))
+      {
+         if(UltraPhaseA_LogPostMissionWarn)
+            Print("PHASE_A: correlation WARN only — Mission approved SELL on ", BrokerSymbol);
+      }
+      else
+      {
+         UltraSetReject("correlation filter blocked SELL");
+         sellSignal = false;
+      }
    }
 
    if(buySignal)

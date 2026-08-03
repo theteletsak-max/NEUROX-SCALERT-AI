@@ -82,8 +82,11 @@ void UltraMod_Refresh()
    UltraMod_Reg("P05_NEWS_INTEL", false, UltraNewsExecEnabled, UltraNewsExecEnabled,
                 UltraNewsExecEnabled ? UltraNewsExec_Dashboard() : "OFF");
 
-   // PHASE 6 — Mission Control
-   UltraMod_Reg("P06_MISSION", true, true, true, "BUY|SELL|WAIT|REPLACE");
+   // PHASE 6 — Mission Control (Phase A: sole final WAIT/BUY/SELL authority)
+   UltraMod_Reg("P06_MISSION", true, true, true,
+                UltraPhaseA_MissionSoleAuthority
+                ? "SOLE_FINAL BUY|SELL|WAIT"
+                : "BUY|SELL|WAIT|REPLACE");
 
    // PHASE 7 — Execution (broker/filling live in Shell — present when TradeGate boots)
    UltraMod_Reg("P07_EXECUTION", true, true, true, "instant+fill+retry");

@@ -1,9 +1,10 @@
 #ifndef HITMAN_ULTRA_MISSION_CONTROL_MQH
 #define HITMAN_ULTRA_MISSION_CONTROL_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — LEVEL 8 MISSION CONTROL (SOLE CLOSE AUTHORITY)       |
+//| HITMAN AI — LEVEL 8 MISSION CONTROL                              |
+//| PHASE A: SOLE FINAL DECISION AUTHORITY for BUY · SELL · WAIT     |
 //| EXIT & HOLD FIX LIST — only this module may close trades         |
-//| Approves: BUY · SELL · WAIT · HOLD · MANAGE · EXIT               |
+//| Nothing AFTER Mission may flip BUY/SELL → WAIT (Phase A lock)    |
 //+------------------------------------------------------------------+
 
 // Forward — Bug Elimination / Maintenance assembled after Mission Control
@@ -52,6 +53,16 @@ bool              g_UltraMissionEntryOK = false;
 bool              g_UltraMissionEntryBuy = false;
 string            g_UltraMissionEntryTag = "";
 datetime          g_UltraMissionEntryTs = 0;
+
+// PHASE A — Mission already issued final BUY/SELL (post-Mission gates must not flip)
+bool UltraMission_HasFinalEntry(const bool isBuy)
+{
+   if(!g_UltraMissionEntryOK) return false;
+   if(g_UltraMissionEntryBuy != isBuy) return false;
+   if(g_UltraMissionEntryTs > 0 && (TimeCurrent() - g_UltraMissionEntryTs) > 120)
+      return false;
+   return true;
+}
 
 //--------------------------------------------------------------------//
 void UltraMission_Init()

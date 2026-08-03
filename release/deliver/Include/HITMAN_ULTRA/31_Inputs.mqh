@@ -323,6 +323,10 @@ input bool   UltraSmartExitEnabled       = false; // L14 Smart Exit
 input bool   UltraMissionOnlyExits       = true;  // sole close path discipline
 input bool   UltraSystemHealthEnabled    = true;  // L15-17 System Health
 
+input group "31 · PHASE A DECISION FLOW AUDIT"
+input bool   UltraPhaseA_MissionSoleAuthority = true; // NOTHING after Mission may flip BUY→WAIT
+input bool   UltraPhaseA_LogPostMissionWarn   = true; // log demoted post-Mission gates
+
 input group "31 · POSITION EVOLUTION ENGINE"
 input bool   UltraPosEvoEnabled          = true;  // Intelligent Position Evolution
 input bool   UltraPosEvoCloseOnL3        = true;  // Mission may close on L3 invalidation
