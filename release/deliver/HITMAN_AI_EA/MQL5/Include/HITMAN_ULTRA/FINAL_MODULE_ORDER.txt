@@ -72,9 +72,11 @@ PHASE 12 — PERFORMANCE ANALYTICS ENGINE
   Outputs: perf/trading/strategy/risk/exec/system stats · D/W/M/Overall reports
   LOCK: NEVER trades · NEVER executes · NEVER modifies strategy · measure only
 
-PHASE 13 — LOGGER ENGINE
-  27_Logger · UltraBug_Explain · decision logs
-  LOCK: every WAIT has an explicit reason
+PHASE 13 — LOGGER & DIAGNOSTICS ENGINE
+  UltraLoggerIntelligence · 27_Logger · UltraBug_Explain · 26_Diagnostics
+  MASTER SPEC CHAPTER 13 — system/market/strategy/exec/position/error/recovery/perf
+  Outputs: runtime · trade · exec · error · recovery · diagnostics · event history
+  LOCK: NEVER trades · NEVER executes · ONLY records · no silent errors
 
 PHASE 14 — DASHBOARD ENGINE
   24_Dashboard.mqh

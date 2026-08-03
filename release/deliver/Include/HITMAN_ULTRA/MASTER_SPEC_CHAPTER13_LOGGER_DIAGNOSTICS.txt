@@ -1,0 +1,74 @@
+HITMAN AI — MASTER SPECIFICATION
+CHAPTER 13 — LOGGER & DIAGNOSTICS ENGINE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Record absolutely everything · nothing without a trace.
+  Every decision · calculation · execution · recovery · error.
+  NEVER trades · NEVER executes · ONLY records.
+
+============================================================
+1. LOGGER CORE
+  Events · Decisions · Errors · Warnings · Recovery · Perf · Diagnostics
+  API: UltraLoggerIntel_Boot · LogEvent · LogSystem/Market/Strategy/…
+       LogDecision · NoteDiagnostics · Sync · Dashboard
+
+2. SYSTEM LOGGER
+  Startup · Shutdown · Module init · Health · Timer · System state
+
+3. MARKET LOGGER
+  Trend · Momentum · Vol · Liq · Spread · Session · Event · Quality
+
+4. STRATEGY LOGGER
+  Thesis · Decision · Confidence · Entry/Exit validation · State
+
+5. EXECUTION LOGGER
+  Sent · Filled · Modified · Closed · Rejected · Broker · Time · Ticket
+  (also EXEC_INTEL / UltraLogExec / UltraLogDecision EXEC_OK)
+
+6. POSITION LOGGER
+  Open · Modified · SL/TP · Protect · Partial · Close
+  (POSEVO_INTEL · EXIT_INTEL · UltraLogTrade)
+
+7. ERROR LOGGER
+  Runtime · Trade · Broker · Indicator · Buffer · Sync · Memory
+  UltraSetError · UltraBug_Explain · LOG13 ERROR
+
+8. RECOVERY LOGGER
+  Started · Method · Success/Fail · Duration · Restart
+  ZFR ∞ · UltraRecover · LOG13 RECOVERY
+
+9. PERFORMANCE LOGGER
+  Latency · Module/cache stats · UltraLogPerf · PERF_ANALYTICS
+
+10. DIAGNOSTICS ENGINE
+  Engine/module health · sync · indicators · cache · memory · exec
+  UltraEngDiagnostics (gated UltraDiagnosticsEnabled) → NoteDiagnostics
+
+11. EVENT HISTORY
+  Ring buffer (64) — BUY/SELL/WAIT/EXIT/Recovery/Error/Restart traces
+  Nothing lost until rotation
+
+12. LOG OUTPUT
+  Runtime · Trade · Exec · Error · Recovery · Diagnostics · Perf
+
+============================================================
+RULES
+  ✔ Every decision/trade/error/recovery/warning/module/exec logged
+  ✔ No hidden failures · No silent errors
+  ✔ One Logger · One Source of Truth (UltraLog path)
+  ✔ Never trades · Never executes
+
+PHILOSOPHY
+  If something happens you should know what · when · why · which engine · how handled.
+
+FILES
+  UltraLoggerIntelligence.mqh
+  27_Logger.mqh · 26_Diagnostics.mqh · UltraBugElimination.mqh
+
+LOCKS
+  HITMAN AI · HA_ULTRA_93 · MaxOpen=3 · Mission sole close
+  Final Development Rule — refine only (facade over Logger+Bug+Diag)
+============================================================
+END OF CHAPTER 13

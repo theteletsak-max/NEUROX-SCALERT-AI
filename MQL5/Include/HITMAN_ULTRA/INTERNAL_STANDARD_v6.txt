@@ -67,9 +67,10 @@ PHASE 12 — PERFORMANCE ANALYTICS ENGINE
   MASTER SPEC CHAPTER 12 — UltraPerfAnalytics_* facade (measure only)
   LOCK: NEVER trades · NEVER executes · NEVER modifies strategy
 
-PHASE 13 — LOGGER ENGINE
+PHASE 13 — LOGGER & DIAGNOSTICS ENGINE
   Decision · Entry · Exit · Exec · Event · Recovery · Perf · Debug
-  LOCK: every WAIT / BUY / SELL / Exit / Recovery has a reason
+  MASTER SPEC CHAPTER 13 — UltraLoggerIntel_* · event history · diagnostics
+  LOCK: NEVER trades · NEVER executes · ONLY records · no silent errors
 
 PHASE 14 — DASHBOARD ENGINE
   Market · Trend · Thesis · Confidence · Signal · News

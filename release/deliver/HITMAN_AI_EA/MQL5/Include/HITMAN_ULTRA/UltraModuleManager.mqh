@@ -207,8 +207,20 @@ void UltraMod_Refresh()
       UltraMod_Reg("P12_PERF_ANALYTICS", true, UltraAdaptiveEnabled, perfOK, perfDetail);
    }
 
-   // PHASE 13 — Logger
-   UltraMod_Reg("P13_LOGGER", false, UltraLoggingEnabled, true, "OK");
+   // PHASE 13 — Logger & Diagnostics (Chapter 13 — never trades)
+   {
+      UltraLoggerIntel_Sync();
+      bool logOK = g_UltraLoggerIntel.booted &&
+                   (UltraLoggingEnabled || g_UltraLoggerIntel.status == "OFF");
+      string logDetail = g_UltraLoggerIntel.status;
+      logDetail += " evt=";
+      logDetail += IntegerToString((int)g_UltraLoggerIntel.totalEvents);
+      logDetail += " err=";
+      logDetail += IntegerToString((int)g_UltraLoggerIntel.errorCount);
+      logDetail += " diag=";
+      logDetail += g_UltraLoggerIntel.diagHealth;
+      UltraMod_Reg("P13_LOGGER", true, UltraLoggingEnabled, logOK, logDetail);
+   }
 
    // PHASE 14 — Dashboard
    UltraMod_Reg("P14_DASHBOARD", false, UltraDashboardEnabled, true, "OK");

@@ -37,6 +37,7 @@ order = [
     "UltraRiskIntelligence.mqh",
     "UltraExecutionIntelligence.mqh",
     "UltraPerfAnalytics.mqh",
+    "UltraLoggerIntelligence.mqh",
     "UltraTradeGate.mqh",
     "UltraQualityAssurance.mqh",
     "UltraModuleManager.mqh",
