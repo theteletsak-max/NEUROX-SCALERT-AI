@@ -71,6 +71,7 @@ int OnInit()
    UltraPropStrategy_Boot();// P03 Proprietary Strategy (never executes)
    UltraVChain_Boot();      // supporting validation (feeds Mission/Risk)
    UltraSignalIntel_Boot(); // P04 Signal Intelligence (never executes)
+   UltraRiskIntel_Boot();   // P07 Risk Intelligence (never executes)
    UltraNewsExec_Boot();    // P05 News Intelligence (+ Phase 23 protocol)
    UltraTarget_Boot();      // P09 Target Intelligence
    UltraAdaptive_Boot();    // P12 Performance Analytics (soft adaptive)
@@ -171,6 +172,9 @@ int OnInit()
          " Candidate=", g_UltraPropStrategy.candidate,
          " Ctx=", g_UltraPropStrategy.context,
          " (never executes)");
+   Print("P07 RISK INTEL: Boot=", UltraYN(g_UltraRiskIntel.booted),
+         " Status=", g_UltraRiskIntel.status,
+         " (never executes · Mission receives assessment)");
    {
       ENUM_TIMEFRAMES etf = (EntryTF == PERIOD_CURRENT) ? (ENUM_TIMEFRAMES)Period() : EntryTF;
       Print("OK93 ENTRY TF=", EnumToString(etf),
@@ -3409,6 +3413,9 @@ bool ExecuteBuy()
    }
 
    double lot = CalculateLotSize(actualSLDistance);
+   // CHAPTER 7 — prefer Risk Intel approved lot when validated this cycle
+   if(g_UltraRiskIntel.approved && g_UltraRiskIntel.approvedLot > 0.0)
+      lot = g_UltraRiskIntel.approvedLot;
 
    if(lot <= 0)
    {
@@ -3835,6 +3842,8 @@ bool ExecuteSell()
    }
 
    double lot = CalculateLotSize(actualSLDistance);
+   if(g_UltraRiskIntel.approved && g_UltraRiskIntel.approvedLot > 0.0)
+      lot = g_UltraRiskIntel.approvedLot;
 
    if(lot <= 0)
    {

@@ -574,8 +574,12 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       }
    }
 
-   string capWhy = "";
-   if(!UltraCapitalOK(capWhy)){ why = "capital: " + capWhy; return false; }
+   // MASTER SPEC CHAPTER 7 — Risk Intelligence (never signals / never executes)
+   {
+      string riskWhy = "";
+      if(!UltraRiskIntel_AssessPreMission(riskWhy))
+      { why = "risk: " + riskWhy; return false; }
+   }
    string exWhy = "";
    if(UltraFastSignalEnabled)
    {

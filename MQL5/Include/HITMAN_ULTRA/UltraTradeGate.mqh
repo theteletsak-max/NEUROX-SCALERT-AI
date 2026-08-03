@@ -204,22 +204,17 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
       }
    }
 
-   // 6) RISK VALIDATION
+   // 6) RISK VALIDATION — Chapter 7 Risk Intelligence (lot/margin/exposure/DD)
    {
-      string capWhy = "";
-      bool riskOK = UltraCapitalOK(capWhy);
-      if(MaxOpenTrades > 0 && UltraExec_OpenCountMagic() >= MaxOpenTrades)
-      {
-         riskOK = false;
-         capWhy = "max open trades reached";
-      }
+      string riskWhy = "";
+      bool riskOK = UltraRiskIntel_Validate(s, isBuy, entry, sl, riskWhy);
       if(g_UltraTradeGate.risk <= 0.0)
       {
          riskOK = false;
-         capWhy = "zero risk";
+         riskWhy = "zero risk distance";
       }
       if(!riskOK)
-         UltraTradeGate_Fail(ULTRA_GATE_RISK, "RISK", capWhy);
+         UltraTradeGate_Fail(ULTRA_GATE_RISK, "RISK", riskWhy);
       else
          UltraTradeGate_Pass(ULTRA_GATE_RISK);
    }

@@ -1,0 +1,80 @@
+HITMAN AI — MASTER SPECIFICATION
+CHAPTER 7 — RISK INTELLIGENCE ENGINE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Protect capital · control exposure · intelligent position size.
+  NEVER creates signals · NEVER reads market structure · NEVER executes.
+  Mission Control receives the final risk assessment.
+
+============================================================
+1. RISK CORE
+  Size · max risk · account/portfolio monitor · approve/reject
+  API: UltraRiskIntel_AssessPreMission · UltraRiskIntel_Validate
+
+2. ACCOUNT ANALYSIS
+  Balance · Equity · Free/Used Margin · Margin Level
+  Floating P/L · Daily loss % · Drawdown %
+
+3. POSITION SIZE ENGINE
+  Dynamic/fixed lot via Shell CalculateLotSize
+  Risk % · SL distance · instrument specs
+  Output: approvedLot · maxRiskMoney · riskPctEffective
+
+4. CAPITAL PROTECTION
+  UltraCapitalOK + free-margin floor
+  Never increase risk after wins (riskScale ≤ 1.0)
+
+5. EXPOSURE ENGINE
+  Open count · MaxOpenTrades · concentration status
+  OK | HIGH | BLOCKED
+
+6. MARGIN INTELLIGENCE
+  Free margin · OrderCalcMargin · margin level
+  OK | TIGHT | BLOCKED
+
+7. DRAWDOWN PROTECTION
+  Delegates RiskManagementOK (daily/weekly/monthly/peak DD)
+  Consecutive losses reduce adaptation scale
+
+8. PORTFOLIO INTELLIGENCE
+  PortfolioExposureOK · combined open risk
+  OK | HEAVY | BLOCKED
+
+9. RISK VALIDATION
+  Size · Margin · Exposure · Portfolio · Drawdown
+  → APPROVED | REJECTED
+
+10. RISK OUTPUT
+  approvedLot · maxRisk · exposure/margin/portfolio/dd status
+  Consumed by Mission (pre) + TradeGate RISK + Execute lot
+
+11. DYNAMIC RISK ADAPTATION
+  UltraAdaptive_RiskScale clamped ≤ 1.0
+  Consec losses scale down — never raise risk to recover
+
+12. RISK LOGGER
+  Every APPROVE / REJECT via UltraRiskIntel_Log
+
+============================================================
+RULES
+  ✔ Protect capital / equity / portfolio
+  ✔ One size · one risk · one exposure · one margin validation
+  ✔ No emotional / recovery risk increase
+  ✔ Every rejection & approval logged
+  ✔ Mission receives final risk status
+
+PHILOSOPHY
+  Maximize long-term survival while allowing high-quality
+  opportunities to trade consistently — not max trade size.
+
+FILES
+  UltraRiskIntelligence.mqh
+  20_CapitalProtection · UltraTradeGate · Shell_B risk helpers
+
+LOCKS
+  HITMAN AI · HA_ULTRA_93 · MaxOpen=3 · Mission sole close
+  Final Development Rule — refine only
+============================================================
+END OF CHAPTER 7

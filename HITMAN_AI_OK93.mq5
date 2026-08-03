@@ -14718,6 +14718,11 @@ bool UltraMission_AllowNewEntry(const string s)
 }
 
 //--------------------------------------------------------------------//
+// CHAPTER 7 — Risk Intel defined later in assemble (function forwards)
+bool   UltraRiskIntel_Approved();
+string UltraRiskIntel_Detail();
+string UltraRiskIntel_Status();
+
 bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, string &why)
 {
    if(!UltraMission_AllowNewEntry(s))
@@ -14741,6 +14746,17 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
          UltraMission_EmitWait(why, u.score.confidence);
          return false;
       }
+   }
+
+   // CHAPTER 7 — Mission receives final risk assessment (Risk never executes)
+   if(!UltraRiskIntel_Approved())
+   {
+      why = "MISSION: risk ";
+      why += UltraRiskIntel_Status();
+      why += " — ";
+      why += UltraRiskIntel_Detail();
+      UltraMission_EmitWait(why, u.score.confidence);
+      return false;
    }
 
    bool ok = UltraSupreme_FinalizeEntry(s, u, sig, why);
@@ -16922,6 +16938,526 @@ string UltraZFR_Dashboard()
 #endif // HITMAN_ULTRA_ZERO_FAIL_RECOVERY_MQH
 //===== END UltraZeroFailRecovery.mqh =====
 
+//===== BEGIN UltraRiskIntelligence.mqh =====
+#ifndef HITMAN_ULTRA_RISK_INTELLIGENCE_MQH
+#define HITMAN_ULTRA_RISK_INTELLIGENCE_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — MASTER SPEC CHAPTER 7 · RISK INTELLIGENCE ENGINE     |
+//| Protect capital · size · exposure · margin · drawdown · portfolio|
+//| NEVER creates signals · NEVER reads market structure             |
+//| NEVER executes trades — Mission receives final risk assessment   |
+//+------------------------------------------------------------------+
+
+// Shell_B deep risk (defined later in assemble — same pattern as CountOpenTrades)
+bool   RiskManagementOK();
+int    CountOpenTrades();
+double CalculateLotSize(const double slDistance = 0.0);
+bool   HasSufficientMargin(ENUM_ORDER_TYPE orderType, double lot, double price);
+bool   PortfolioExposureOK();
+bool   MarginLevelProtection();
+
+struct UltraRiskIntelState
+{
+   bool   booted;
+   bool   approved;
+   string status;              // APPROVED | REJECTED
+   string detail;
+   // Account analysis
+   double balance;
+   double equity;
+   double freeMargin;
+   double usedMargin;
+   double marginLevel;
+   double floatingPL;
+   double dailyLossPct;
+   double drawdownPct;
+   // Position size
+   double approvedLot;
+   double maxRiskMoney;
+   double riskPctEffective;
+   double slDistance;
+   // Status strings
+   string exposureStatus;      // OK | HIGH | BLOCKED
+   string marginStatus;        // OK | TIGHT | BLOCKED
+   string portfolioStatus;     // OK | HEAVY | BLOCKED
+   string ddStatus;            // OK | WARN | BLOCKED
+   // Flags
+   bool   capitalOK;
+   bool   sizeOK;
+   bool   marginOK;
+   bool   exposureOK;
+   bool   portfolioOK;
+   bool   ddOK;
+   int    openCount;
+   int    consecLoss;
+   double riskScale;           // adaptation ≤ 1.0 (never increase after wins)
+   long   lastMs;
+   ulong  approveCount;
+   ulong  rejectCount;
+};
+
+UltraRiskIntelState g_UltraRiskIntel;
+
+//--------------------------------------------------------------------//
+void UltraRiskIntel_Boot()
+{
+   g_UltraRiskIntel.booted = true;
+   g_UltraRiskIntel.approved = false;
+   g_UltraRiskIntel.status = "INIT";
+   g_UltraRiskIntel.detail = "boot";
+   g_UltraRiskIntel.balance = g_UltraRiskIntel.equity = 0.0;
+   g_UltraRiskIntel.freeMargin = g_UltraRiskIntel.usedMargin = 0.0;
+   g_UltraRiskIntel.marginLevel = g_UltraRiskIntel.floatingPL = 0.0;
+   g_UltraRiskIntel.dailyLossPct = g_UltraRiskIntel.drawdownPct = 0.0;
+   g_UltraRiskIntel.approvedLot = g_UltraRiskIntel.maxRiskMoney = 0.0;
+   g_UltraRiskIntel.riskPctEffective = g_UltraRiskIntel.slDistance = 0.0;
+   g_UltraRiskIntel.exposureStatus = "OK";
+   g_UltraRiskIntel.marginStatus = "OK";
+   g_UltraRiskIntel.portfolioStatus = "OK";
+   g_UltraRiskIntel.ddStatus = "OK";
+   g_UltraRiskIntel.capitalOK = g_UltraRiskIntel.sizeOK = false;
+   g_UltraRiskIntel.marginOK = g_UltraRiskIntel.exposureOK = false;
+   g_UltraRiskIntel.portfolioOK = g_UltraRiskIntel.ddOK = false;
+   g_UltraRiskIntel.openCount = g_UltraRiskIntel.consecLoss = 0;
+   g_UltraRiskIntel.riskScale = 1.0;
+   g_UltraRiskIntel.lastMs = 0;
+   g_UltraRiskIntel.approveCount = g_UltraRiskIntel.rejectCount = 0;
+}
+
+bool UltraRiskIntel_Approved()
+{
+   return g_UltraRiskIntel.approved;
+}
+
+string UltraRiskIntel_Detail()
+{
+   return g_UltraRiskIntel.detail;
+}
+
+string UltraRiskIntel_Status()
+{
+   return g_UltraRiskIntel.status;
+}
+
+double UltraRiskIntel_Lot()
+{
+   return g_UltraRiskIntel.approvedLot;
+}
+
+double UltraRiskIntel_MaxRisk()
+{
+   return g_UltraRiskIntel.maxRiskMoney;
+}
+
+void UltraRiskIntel_Log(const string verb)
+{
+   string line = "RISK_INTEL ";
+   line += verb;
+   line += " status=";
+   line += g_UltraRiskIntel.status;
+   line += " lot=";
+   line += DoubleToString(g_UltraRiskIntel.approvedLot, 2);
+   line += " risk$=";
+   line += DoubleToString(g_UltraRiskIntel.maxRiskMoney, 2);
+   line += " risk%=";
+   line += DoubleToString(g_UltraRiskIntel.riskPctEffective, 2);
+   line += " eq=";
+   line += DoubleToString(g_UltraRiskIntel.equity, 2);
+   line += " fm=";
+   line += DoubleToString(g_UltraRiskIntel.freeMargin, 2);
+   line += " ml=";
+   line += DoubleToString(g_UltraRiskIntel.marginLevel, 1);
+   line += " open=";
+   line += IntegerToString(g_UltraRiskIntel.openCount);
+   line += " exp=";
+   line += g_UltraRiskIntel.exposureStatus;
+   line += " mgn=";
+   line += g_UltraRiskIntel.marginStatus;
+   line += " port=";
+   line += g_UltraRiskIntel.portfolioStatus;
+   line += " dd=";
+   line += g_UltraRiskIntel.ddStatus;
+   line += " | ";
+   line += g_UltraRiskIntel.detail;
+   UltraLog(line);
+}
+
+void UltraRiskIntel_Reject(const string why)
+{
+   g_UltraRiskIntel.approved = false;
+   g_UltraRiskIntel.status = "REJECTED";
+   g_UltraRiskIntel.detail = why;
+   g_UltraRiskIntel.rejectCount++;
+   g_UltraRiskIntel.lastMs = (long)GetTickCount();
+   UltraRiskIntel_Log("REJECT");
+}
+
+void UltraRiskIntel_Approve(const string detail)
+{
+   g_UltraRiskIntel.approved = true;
+   g_UltraRiskIntel.status = "APPROVED";
+   g_UltraRiskIntel.detail = detail;
+   g_UltraRiskIntel.approveCount++;
+   g_UltraRiskIntel.lastMs = (long)GetTickCount();
+   UltraRiskIntel_Log("APPROVE");
+}
+
+//--------------------------------------------------------------------//
+// §2 ACCOUNT ANALYSIS                                                //
+//--------------------------------------------------------------------//
+void UltraRiskIntel_ReadAccount()
+{
+   g_UltraRiskIntel.balance = AccountInfoDouble(ACCOUNT_BALANCE);
+   g_UltraRiskIntel.equity = AccountInfoDouble(ACCOUNT_EQUITY);
+   g_UltraRiskIntel.freeMargin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+   g_UltraRiskIntel.usedMargin = AccountInfoDouble(ACCOUNT_MARGIN);
+   g_UltraRiskIntel.floatingPL = g_UltraRiskIntel.equity - g_UltraRiskIntel.balance;
+   if(g_UltraRiskIntel.usedMargin > 0.0)
+      g_UltraRiskIntel.marginLevel =
+         (g_UltraRiskIntel.equity / g_UltraRiskIntel.usedMargin) * 100.0;
+   else
+      g_UltraRiskIntel.marginLevel = 0.0;
+
+   // Daily performance proxy vs day's start (Shell tracks DailyStartBalance when DD on)
+   g_UltraRiskIntel.dailyLossPct = 0.0;
+   if(g_UltraRiskIntel.balance > 0.0 && g_UltraRiskIntel.floatingPL < 0.0)
+      g_UltraRiskIntel.dailyLossPct =
+         (-g_UltraRiskIntel.floatingPL / g_UltraRiskIntel.balance) * 100.0;
+
+   // Overall DD proxy from peak equity GV if present
+   g_UltraRiskIntel.drawdownPct = 0.0;
+   string peakKey = "HitmanAI_" + IntegerToString((int)MagicNumber) + "_PeakEquity";
+   if(GlobalVariableCheck(peakKey))
+   {
+      double peak = GlobalVariableGet(peakKey);
+      if(peak > 0.0 && g_UltraRiskIntel.equity < peak)
+         g_UltraRiskIntel.drawdownPct = ((peak - g_UltraRiskIntel.equity) / peak) * 100.0;
+   }
+
+   g_UltraRiskIntel.openCount = CountOpenTrades();
+   g_UltraRiskIntel.consecLoss = Stat_ConsecutiveLosses;
+}
+
+//--------------------------------------------------------------------//
+// §11 DYNAMIC RISK ADAPTATION — never increase after wins            //
+//--------------------------------------------------------------------//
+double UltraRiskIntel_AdaptScale()
+{
+   double scale = 1.0;
+   // Soft adaptive (P12) — clamp so profitable periods never raise risk
+   scale = UltraAdaptive_RiskScale();
+   if(scale > 1.0) scale = 1.0;
+   if(scale < 0.25) scale = 0.25;
+   // Floating profit → do not expand risk
+   if(g_UltraRiskIntel.floatingPL > 0.0 && scale > 1.0)
+      scale = 1.0;
+   // Consecutive losses → reduce (protect capital)
+   if(g_UltraRiskIntel.consecLoss >= 3)
+      scale = MathMin(scale, 0.70);
+   else if(g_UltraRiskIntel.consecLoss >= 2)
+      scale = MathMin(scale, 0.85);
+   g_UltraRiskIntel.riskScale = scale;
+   return scale;
+}
+
+//--------------------------------------------------------------------//
+// §3 POSITION SIZE (one calculation via Shell sizing)                //
+//--------------------------------------------------------------------//
+void UltraRiskIntel_ComputeSize(const string s, const double entry, const double sl)
+{
+   g_UltraRiskIntel.slDistance = 0.0;
+   if(entry > 0.0 && sl > 0.0)
+      g_UltraRiskIntel.slDistance = MathAbs(entry - sl);
+
+   double scale = UltraRiskIntel_AdaptScale();
+   double basePct = RiskPercent;
+   if(UseFixedLot) basePct = 0.0; // informational
+   g_UltraRiskIntel.riskPctEffective = basePct * scale;
+   if(g_UltraRiskIntel.riskPctEffective > RiskPercent)
+      g_UltraRiskIntel.riskPctEffective = RiskPercent; // never increase above input
+
+   g_UltraRiskIntel.maxRiskMoney =
+      g_UltraRiskIntel.equity * (g_UltraRiskIntel.riskPctEffective / 100.0);
+   if(UseFixedLot)
+   {
+      // Fixed lot — max risk is estimated from SL if known
+      g_UltraRiskIntel.approvedLot = CalculateLotSize(g_UltraRiskIntel.slDistance);
+      if(g_UltraRiskIntel.slDistance > 0.0)
+      {
+         double tickValue = SymbolInfoDouble(s, SYMBOL_TRADE_TICK_VALUE);
+         double tickSize  = SymbolInfoDouble(s, SYMBOL_TRADE_TICK_SIZE);
+         if(tickValue > 0.0 && tickSize > 0.0)
+            g_UltraRiskIntel.maxRiskMoney =
+               (g_UltraRiskIntel.slDistance / tickSize) * tickValue * g_UltraRiskIntel.approvedLot;
+      }
+   }
+   else
+   {
+      g_UltraRiskIntel.approvedLot = CalculateLotSize(g_UltraRiskIntel.slDistance);
+      // Re-assert money risk from effective %
+      g_UltraRiskIntel.maxRiskMoney =
+         g_UltraRiskIntel.equity * (g_UltraRiskIntel.riskPctEffective / 100.0);
+   }
+   g_UltraRiskIntel.sizeOK = (g_UltraRiskIntel.approvedLot > 0.0);
+}
+
+//--------------------------------------------------------------------//
+// §5–8 EXPOSURE · MARGIN · DRAWDOWN · PORTFOLIO                      //
+//--------------------------------------------------------------------//
+bool UltraRiskIntel_CheckExposure(string &why)
+{
+   why = "";
+   g_UltraRiskIntel.exposureStatus = "OK";
+   g_UltraRiskIntel.exposureOK = true;
+   if(EnforceOpenTradeCaps && MaxOpenTrades > 0 &&
+      g_UltraRiskIntel.openCount >= MaxOpenTrades)
+   {
+      g_UltraRiskIntel.exposureOK = false;
+      g_UltraRiskIntel.exposureStatus = "BLOCKED";
+      why = "symbol/account exposure: max open trades";
+      return false;
+   }
+   if(MaxOpenTrades > 0 &&
+      g_UltraRiskIntel.openCount >= MathMax(1, MaxOpenTrades - 1))
+      g_UltraRiskIntel.exposureStatus = "HIGH";
+   return true;
+}
+
+bool UltraRiskIntel_CheckMargin(const string s, const bool isBuy,
+                                const double price, string &why)
+{
+   why = "";
+   g_UltraRiskIntel.marginOK = true;
+   g_UltraRiskIntel.marginStatus = "OK";
+
+   if(g_UltraRiskIntel.equity > 0.0 &&
+      g_UltraRiskIntel.freeMargin / g_UltraRiskIntel.equity < 0.08)
+   {
+      g_UltraRiskIntel.marginOK = false;
+      g_UltraRiskIntel.marginStatus = "BLOCKED";
+      why = "free margin < 8% equity";
+      return false;
+   }
+
+   if(!MarginLevelProtection())
+   {
+      g_UltraRiskIntel.marginOK = false;
+      g_UltraRiskIntel.marginStatus = "BLOCKED";
+      why = "margin level protection";
+      return false;
+   }
+
+   if(g_UltraRiskIntel.approvedLot > 0.0 && price > 0.0)
+   {
+      ENUM_ORDER_TYPE ot = isBuy ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
+      if(!HasSufficientMargin(ot, g_UltraRiskIntel.approvedLot, price))
+      {
+         g_UltraRiskIntel.marginOK = false;
+         g_UltraRiskIntel.marginStatus = "BLOCKED";
+         why = "insufficient free margin for lot";
+         return false;
+      }
+   }
+
+   if(g_UltraRiskIntel.usedMargin > 0.0 && g_UltraRiskIntel.marginLevel > 0.0 &&
+      g_UltraRiskIntel.marginLevel < 250.0)
+      g_UltraRiskIntel.marginStatus = "TIGHT";
+
+   return true;
+}
+
+bool UltraRiskIntel_CheckDrawdown(string &why)
+{
+   why = "";
+   g_UltraRiskIntel.ddOK = true;
+   g_UltraRiskIntel.ddStatus = "OK";
+
+   // Delegate to Shell master risk (DD / daily / weekly / monthly)
+   if(!RiskManagementOK())
+   {
+      g_UltraRiskIntel.ddOK = false;
+      g_UltraRiskIntel.ddStatus = "BLOCKED";
+      why = "drawdown / period loss / portfolio risk block";
+      return false;
+   }
+
+   if(g_UltraRiskIntel.drawdownPct >= 5.0)
+      g_UltraRiskIntel.ddStatus = "WARN";
+   if(g_UltraRiskIntel.consecLoss >= 3)
+      g_UltraRiskIntel.ddStatus = "WARN";
+   return true;
+}
+
+bool UltraRiskIntel_CheckPortfolio(string &why)
+{
+   why = "";
+   g_UltraRiskIntel.portfolioOK = true;
+   g_UltraRiskIntel.portfolioStatus = "OK";
+
+   if(!PortfolioExposureOK())
+   {
+      g_UltraRiskIntel.portfolioOK = false;
+      g_UltraRiskIntel.portfolioStatus = "BLOCKED";
+      why = "portfolio exposure concentration";
+      return false;
+   }
+
+   if(MaxOpenTrades > 0 && g_UltraRiskIntel.openCount >= MaxOpenTrades)
+   {
+      g_UltraRiskIntel.portfolioOK = false;
+      g_UltraRiskIntel.portfolioStatus = "BLOCKED";
+      why = "portfolio max open";
+      return false;
+   }
+
+   if(g_UltraRiskIntel.openCount >= 2)
+      g_UltraRiskIntel.portfolioStatus = "HEAVY";
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// §1 / §9 PRE-MISSION RISK (no order · no market structure)          //
+//--------------------------------------------------------------------//
+bool UltraRiskIntel_AssessPreMission(string &why)
+{
+   why = "";
+   UltraRiskIntel_ReadAccount();
+   UltraRiskIntel_AdaptScale();
+
+   g_UltraRiskIntel.capitalOK = UltraCapitalOK(why);
+   if(!g_UltraRiskIntel.capitalOK)
+   {
+      UltraRiskIntel_Reject(why);
+      return false;
+   }
+
+   if(!UltraRiskIntel_CheckExposure(why))
+   {
+      UltraRiskIntel_Reject(why);
+      return false;
+   }
+
+   if(!UltraRiskIntel_CheckDrawdown(why))
+   {
+      UltraRiskIntel_Reject(why);
+      return false;
+   }
+
+   if(!UltraRiskIntel_CheckPortfolio(why))
+   {
+      UltraRiskIntel_Reject(why);
+      return false;
+   }
+
+   // Soft margin status without lot (lot finalized at exec)
+   g_UltraRiskIntel.marginOK = true;
+   g_UltraRiskIntel.marginStatus = "OK";
+   if(g_UltraRiskIntel.equity > 0.0 &&
+      g_UltraRiskIntel.freeMargin / g_UltraRiskIntel.equity < 0.12)
+      g_UltraRiskIntel.marginStatus = "TIGHT";
+
+   g_UltraRiskIntel.approvedLot = 0.0;
+   g_UltraRiskIntel.maxRiskMoney =
+      g_UltraRiskIntel.equity * (RiskPercent * g_UltraRiskIntel.riskScale / 100.0);
+   if(g_UltraRiskIntel.maxRiskMoney >
+      g_UltraRiskIntel.equity * (RiskPercent / 100.0))
+      g_UltraRiskIntel.maxRiskMoney =
+         g_UltraRiskIntel.equity * (RiskPercent / 100.0);
+   g_UltraRiskIntel.riskPctEffective = RiskPercent * g_UltraRiskIntel.riskScale;
+   if(g_UltraRiskIntel.riskPctEffective > RiskPercent)
+      g_UltraRiskIntel.riskPctEffective = RiskPercent;
+
+   UltraRiskIntel_Approve("pre-mission risk OK");
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// §9 / §10 FULL VALIDATION WITH LOT (exec path · still never executes)//
+//--------------------------------------------------------------------//
+bool UltraRiskIntel_Validate(const string s, const bool isBuy,
+                             const double entry, const double sl, string &why)
+{
+   why = "";
+   UltraRiskIntel_ReadAccount();
+
+   g_UltraRiskIntel.capitalOK = UltraCapitalOK(why);
+   if(!g_UltraRiskIntel.capitalOK)
+   {
+      UltraRiskIntel_Reject(why);
+      return false;
+   }
+
+   UltraRiskIntel_ComputeSize(s, entry, sl);
+   if(!g_UltraRiskIntel.sizeOK || g_UltraRiskIntel.approvedLot <= 0.0)
+   {
+      UltraRiskIntel_Reject("invalid position size");
+      why = g_UltraRiskIntel.detail;
+      return false;
+   }
+
+   if(!UltraRiskIntel_CheckExposure(why))
+   {
+      UltraRiskIntel_Reject(why);
+      return false;
+   }
+
+   double px = entry;
+   if(px <= 0.0)
+      px = isBuy ? SymbolInfoDouble(s, SYMBOL_ASK) : SymbolInfoDouble(s, SYMBOL_BID);
+
+   if(!UltraRiskIntel_CheckMargin(s, isBuy, px, why))
+   {
+      UltraRiskIntel_Reject(why);
+      return false;
+   }
+
+   if(!UltraRiskIntel_CheckDrawdown(why))
+   {
+      UltraRiskIntel_Reject(why);
+      return false;
+   }
+
+   if(!UltraRiskIntel_CheckPortfolio(why))
+   {
+      UltraRiskIntel_Reject(why);
+      return false;
+   }
+
+   UltraRiskIntel_Approve(StringFormat("lot=%.2f risk$=%.2f",
+                                       g_UltraRiskIntel.approvedLot,
+                                       g_UltraRiskIntel.maxRiskMoney));
+   return true;
+}
+
+string UltraRiskIntel_Dashboard()
+{
+   string t = "RISK: ";
+   t += g_UltraRiskIntel.status;
+   t += " lot=";
+   t += DoubleToString(g_UltraRiskIntel.approvedLot, 2);
+   t += " risk%=";
+   t += DoubleToString(g_UltraRiskIntel.riskPctEffective, 2);
+   t += " exp=";
+   t += g_UltraRiskIntel.exposureStatus;
+   t += " mgn=";
+   t += g_UltraRiskIntel.marginStatus;
+   t += " port=";
+   t += g_UltraRiskIntel.portfolioStatus;
+   t += " dd=";
+   t += g_UltraRiskIntel.ddStatus;
+   t += " open=";
+   t += IntegerToString(g_UltraRiskIntel.openCount);
+   if(StringLen(g_UltraRiskIntel.detail) > 0 && g_UltraRiskIntel.status == "REJECTED")
+   {
+      t += " | ";
+      t += g_UltraRiskIntel.detail;
+   }
+   return t;
+}
+
+#endif // HITMAN_ULTRA_RISK_INTELLIGENCE_MQH
+//===== END UltraRiskIntelligence.mqh =====
+
 //===== BEGIN UltraTradeGate.mqh =====
 #ifndef HITMAN_ULTRA_TRADE_GATE_MQH
 #define HITMAN_ULTRA_TRADE_GATE_MQH
@@ -17129,22 +17665,17 @@ bool UltraTradeGate_Validate(const string s, const bool isBuy,
       }
    }
 
-   // 6) RISK VALIDATION
+   // 6) RISK VALIDATION — Chapter 7 Risk Intelligence (lot/margin/exposure/DD)
    {
-      string capWhy = "";
-      bool riskOK = UltraCapitalOK(capWhy);
-      if(MaxOpenTrades > 0 && UltraExec_OpenCountMagic() >= MaxOpenTrades)
-      {
-         riskOK = false;
-         capWhy = "max open trades reached";
-      }
+      string riskWhy = "";
+      bool riskOK = UltraRiskIntel_Validate(s, isBuy, entry, sl, riskWhy);
       if(g_UltraTradeGate.risk <= 0.0)
       {
          riskOK = false;
-         capWhy = "zero risk";
+         riskWhy = "zero risk distance";
       }
       if(!riskOK)
-         UltraTradeGate_Fail(ULTRA_GATE_RISK, "RISK", capWhy);
+         UltraTradeGate_Fail(ULTRA_GATE_RISK, "RISK", riskWhy);
       else
          UltraTradeGate_Pass(ULTRA_GATE_RISK);
    }
@@ -17589,12 +18120,17 @@ void UltraMod_Refresh()
                 ? "SOLE_FINAL BUY|SELL|WAIT|REPLACE"
                 : "BUY|SELL|WAIT|REPLACE");
 
-   // PHASE 7 — Risk Intelligence (Capital + TradeGate)
-   bool gateOK = (!UltraTradeGateEnabled) || g_UltraTradeGate.passed ||
-                 (StringLen(g_UltraTradeGate.failStep) == 0);
-   UltraMod_Reg("P07_RISK_INTEL", true, UltraTradeGateEnabled, gateOK,
-                g_UltraTradeGate.passed ? "GATE_PASS" :
-                (StringLen(g_UltraTradeGate.failStep) > 0 ? g_UltraTradeGate.failStep : "—"));
+   // PHASE 7 — Risk Intelligence (Chapter 7 — never executes)
+   bool riskOK = g_UltraRiskIntel.booted &&
+                 (g_UltraRiskIntel.approved || g_UltraRiskIntel.status == "INIT");
+   string riskDetail = g_UltraRiskIntel.status;
+   riskDetail += " lot=";
+   riskDetail += DoubleToString(g_UltraRiskIntel.approvedLot, 2);
+   riskDetail += " exp=";
+   riskDetail += g_UltraRiskIntel.exposureStatus;
+   riskDetail += " mgn=";
+   riskDetail += g_UltraRiskIntel.marginStatus;
+   UltraMod_Reg("P07_RISK_INTEL", true, true, riskOK, riskDetail);
 
    // PHASE 8 — Execution Engine
    UltraMod_Reg("P08_EXECUTION", true, true, true,
@@ -18276,8 +18812,12 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       }
    }
 
-   string capWhy = "";
-   if(!UltraCapitalOK(capWhy)){ why = "capital: " + capWhy; return false; }
+   // MASTER SPEC CHAPTER 7 — Risk Intelligence (never signals / never executes)
+   {
+      string riskWhy = "";
+      if(!UltraRiskIntel_AssessPreMission(riskWhy))
+      { why = "risk: " + riskWhy; return false; }
+   }
    string exWhy = "";
    if(UltraFastSignalEnabled)
    {
@@ -18916,6 +19456,7 @@ string UltraDashboardText(const string s)
    t += " RR: "; t += DoubleToString(g_UltraMem.avgRR, 2);
    t += "\n"; t += UltraPropStrategy_Dashboard();
    t += "\n"; t += UltraSignalIntel_Dashboard();
+   t += "\n"; t += UltraRiskIntel_Dashboard();
    t += "\nSignal: "; t += dir; t += " ["; t += sig.tag; t += "] "; t += sig.reason;
    if(StringLen(sig.candidate) > 0) { t += " | "; t += sig.candidate; }
    if(sig.confidence > 0) { t += " conf="; t += IntegerToString(sig.confidence); }
@@ -19444,6 +19985,7 @@ int OnInit()
    UltraPropStrategy_Boot();// P03 Proprietary Strategy (never executes)
    UltraVChain_Boot();      // supporting validation (feeds Mission/Risk)
    UltraSignalIntel_Boot(); // P04 Signal Intelligence (never executes)
+   UltraRiskIntel_Boot();   // P07 Risk Intelligence (never executes)
    UltraNewsExec_Boot();    // P05 News Intelligence (+ Phase 23 protocol)
    UltraTarget_Boot();      // P09 Target Intelligence
    UltraAdaptive_Boot();    // P12 Performance Analytics (soft adaptive)
@@ -19544,6 +20086,9 @@ int OnInit()
          " Candidate=", g_UltraPropStrategy.candidate,
          " Ctx=", g_UltraPropStrategy.context,
          " (never executes)");
+   Print("P07 RISK INTEL: Boot=", UltraYN(g_UltraRiskIntel.booted),
+         " Status=", g_UltraRiskIntel.status,
+         " (never executes · Mission receives assessment)");
    {
       ENUM_TIMEFRAMES etf = (EntryTF == PERIOD_CURRENT) ? (ENUM_TIMEFRAMES)Period() : EntryTF;
       Print("OK93 ENTRY TF=", EnumToString(etf),
@@ -22782,6 +23327,9 @@ bool ExecuteBuy()
    }
 
    double lot = CalculateLotSize(actualSLDistance);
+   // CHAPTER 7 — prefer Risk Intel approved lot when validated this cycle
+   if(g_UltraRiskIntel.approved && g_UltraRiskIntel.approvedLot > 0.0)
+      lot = g_UltraRiskIntel.approvedLot;
 
    if(lot <= 0)
    {
@@ -23208,6 +23756,8 @@ bool ExecuteSell()
    }
 
    double lot = CalculateLotSize(actualSLDistance);
+   if(g_UltraRiskIntel.approved && g_UltraRiskIntel.approvedLot > 0.0)
+      lot = g_UltraRiskIntel.approvedLot;
 
    if(lot <= 0)
    {

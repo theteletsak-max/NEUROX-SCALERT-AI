@@ -36,7 +36,10 @@ PHASE 6  — MISSION CONTROL (ONLY FINAL DECISION)
   LOCK: sole close · Phase A sole WAIT emitter
 
 PHASE 7  — RISK INTELLIGENCE ENGINE
-  20_CapitalProtection · UltraTradeGate · Shell risk path
+  UltraRiskIntelligence · 20_CapitalProtection · UltraTradeGate · Shell risk
+  MASTER SPEC CHAPTER 7 — size · exposure · margin · DD · portfolio
+  Outputs: approvedLot · maxRisk · status (Mission receives assessment)
+  LOCK: never signals · never market-reads · never executes
 
 PHASE 8  — EXECUTION ENGINE
   Shell_B ExecuteBuy/Sell · 19_Execution · Broker 32/36

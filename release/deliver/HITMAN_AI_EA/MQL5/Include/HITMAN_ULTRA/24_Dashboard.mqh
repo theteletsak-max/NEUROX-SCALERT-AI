@@ -106,6 +106,7 @@ string UltraDashboardText(const string s)
    t += " RR: "; t += DoubleToString(g_UltraMem.avgRR, 2);
    t += "\n"; t += UltraPropStrategy_Dashboard();
    t += "\n"; t += UltraSignalIntel_Dashboard();
+   t += "\n"; t += UltraRiskIntel_Dashboard();
    t += "\nSignal: "; t += dir; t += " ["; t += sig.tag; t += "] "; t += sig.reason;
    if(StringLen(sig.candidate) > 0) { t += " | "; t += sig.candidate; }
    if(sig.confidence > 0) { t += " conf="; t += IntegerToString(sig.confidence); }

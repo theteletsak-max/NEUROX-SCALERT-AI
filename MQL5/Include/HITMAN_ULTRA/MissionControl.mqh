@@ -440,6 +440,11 @@ bool UltraMission_AllowNewEntry(const string s)
 }
 
 //--------------------------------------------------------------------//
+// CHAPTER 7 — Risk Intel defined later in assemble (function forwards)
+bool   UltraRiskIntel_Approved();
+string UltraRiskIntel_Detail();
+string UltraRiskIntel_Status();
+
 bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, string &why)
 {
    if(!UltraMission_AllowNewEntry(s))
@@ -463,6 +468,17 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
          UltraMission_EmitWait(why, u.score.confidence);
          return false;
       }
+   }
+
+   // CHAPTER 7 — Mission receives final risk assessment (Risk never executes)
+   if(!UltraRiskIntel_Approved())
+   {
+      why = "MISSION: risk ";
+      why += UltraRiskIntel_Status();
+      why += " — ";
+      why += UltraRiskIntel_Detail();
+      UltraMission_EmitWait(why, u.score.confidence);
+      return false;
    }
 
    bool ok = UltraSupreme_FinalizeEntry(s, u, sig, why);

@@ -39,6 +39,7 @@ PHASE 6  — MISSION CONTROL (ONLY FINAL DECISION MAKER)
 PHASE 7  — RISK INTELLIGENCE ENGINE
   Size · Exposure · Margin · Drawdown · Daily Loss
   Portfolio · Capital Protection · Dynamic Risk · TradeGate
+  MASTER SPEC CHAPTER 7 — protect capital (never signals/executes)
 
 PHASE 8  — EXECUTION ENGINE
   Instant detect/decision · Order prepare · Exec pipeline

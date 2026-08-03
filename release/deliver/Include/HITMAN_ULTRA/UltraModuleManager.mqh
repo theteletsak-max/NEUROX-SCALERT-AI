@@ -116,12 +116,17 @@ void UltraMod_Refresh()
                 ? "SOLE_FINAL BUY|SELL|WAIT|REPLACE"
                 : "BUY|SELL|WAIT|REPLACE");
 
-   // PHASE 7 — Risk Intelligence (Capital + TradeGate)
-   bool gateOK = (!UltraTradeGateEnabled) || g_UltraTradeGate.passed ||
-                 (StringLen(g_UltraTradeGate.failStep) == 0);
-   UltraMod_Reg("P07_RISK_INTEL", true, UltraTradeGateEnabled, gateOK,
-                g_UltraTradeGate.passed ? "GATE_PASS" :
-                (StringLen(g_UltraTradeGate.failStep) > 0 ? g_UltraTradeGate.failStep : "—"));
+   // PHASE 7 — Risk Intelligence (Chapter 7 — never executes)
+   bool riskOK = g_UltraRiskIntel.booted &&
+                 (g_UltraRiskIntel.approved || g_UltraRiskIntel.status == "INIT");
+   string riskDetail = g_UltraRiskIntel.status;
+   riskDetail += " lot=";
+   riskDetail += DoubleToString(g_UltraRiskIntel.approvedLot, 2);
+   riskDetail += " exp=";
+   riskDetail += g_UltraRiskIntel.exposureStatus;
+   riskDetail += " mgn=";
+   riskDetail += g_UltraRiskIntel.marginStatus;
+   UltraMod_Reg("P07_RISK_INTEL", true, true, riskOK, riskDetail);
 
    // PHASE 8 — Execution Engine
    UltraMod_Reg("P08_EXECUTION", true, true, true,
