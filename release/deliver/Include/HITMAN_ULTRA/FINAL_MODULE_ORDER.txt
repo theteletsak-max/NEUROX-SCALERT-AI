@@ -31,6 +31,8 @@ PHASE 5 — ULTRA NEWS INTELLIGENCE ENGINE
   Event Detection · News Awareness · High Volatility · High Spread
   Dynamic Re-analysis · Event Logging
   LOCK: news never forces trades; spread/news alone never hard-reject
+  PHASE 23 PROTOCOL ∞: News Mode · InstantPath · HighSpreadRule ·
+    Protocol Prepare/Submit/Retry · event/spread/slip/result logging
 
 PHASE 6 — ULTRA MISSION CONTROL
   Module: MissionControl.mqh

@@ -78,9 +78,9 @@ void UltraMod_Refresh()
    UltraMod_Reg("P04_SIGNAL_INTEL", true, UltraFastSignalEnabled, UltraFastSignalEnabled,
                 "BUY/SELL validate+filter");
 
-   // PHASE 5 — News Intelligence
+   // PHASE 5 / PHASE 23 — News Intelligence + Execution Protocol
    UltraMod_Reg("P05_NEWS_INTEL", false, UltraNewsExecEnabled, UltraNewsExecEnabled,
-                g_UltraNewsExec.newsMode ? "MODE_ON" : "idle");
+                UltraNewsExecEnabled ? UltraNewsExec_Dashboard() : "OFF");
 
    // PHASE 6 — Mission Control
    UltraMod_Reg("P06_MISSION", true, true, true, "BUY|SELL|WAIT|REPLACE");

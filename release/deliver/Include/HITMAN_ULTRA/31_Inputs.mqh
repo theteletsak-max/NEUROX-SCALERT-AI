@@ -122,13 +122,14 @@ input int    UltraEventExecQualityMin    = 40;     // min exec quality during ev
 input double UltraEventSpreadWarnPts     = 40.0;   // warn/log only — not a hard block
 input bool   UltraEventLogDecisions      = true;   // EVENT audit log lines
 
-input group "31 · ULTRA NEWS EXECUTION INTELLIGENCE ∞"
+input group "31 · PHASE 23 ULTRA NEWS EXECUTION PROTOCOL ∞"
 input bool   UltraNewsExecEnabled        = true;   // news mode + full validation path
 input bool   UltraNewsExecLog            = true;   // NEWS_MODE / NEWS_FIRE / NEWS_FILL logs
 input bool   UltraNewsExecInstantPath    = true;   // instant tick path during news mode
 input bool   UltraNewsExecForceReanalyze = true;   // complete re-analysis before event trade
 input bool   UltraNewsExecRequireVChain  = true;   // Mission-ready validation chain required
 input bool   UltraNewsExecAutoRecover    = true;   // exec/fill recovery under news mode
+input bool   UltraNewsExecPhase23Boost   = true;   // raise monitor/exec priority in News Mode
 input int    UltraNewsExecMonitorMs      = 50;     // market monitoring interval (news mode)
 input int    UltraNewsExecValidateMs     = 50;     // signal validation cadence (news mode)
 input int    UltraNewsExecExecMonMs      = 50;     // execution monitoring interval

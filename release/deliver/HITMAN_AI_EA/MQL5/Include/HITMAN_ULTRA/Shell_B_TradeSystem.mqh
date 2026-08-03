@@ -69,7 +69,7 @@ int OnInit()
    UltraEvent_OnBoot();
    UltraMarketIntel_Boot(); // P02 Market Intelligence
    UltraVChain_Boot();      // supporting validation (feeds Mission/Risk)
-   UltraNewsExec_Boot();    // P05 News Intelligence
+   UltraNewsExec_Boot();    // PHASE 23 — Ultra News Execution Protocol ∞
    UltraTarget_Boot();      // P08 Target Intelligence
    UltraAdaptive_Boot();    // P13 Performance Analytics (soft adaptive)
    UltraBug_Boot();         // P17 Maintenance core (Bug Elimination)
@@ -115,13 +115,15 @@ int OnInit()
    Print("VALIDATION CHAIN: Enabled=", UltraYN(UltraVChainEnabled),
          " BlockInvalid=", UltraYN(UltraVChainBlockOnInvalid),
          " BlockWait=", UltraYN(UltraVChainBlockOnWait));
-   Print("P05 NEWS INTEL ∞: Enabled=", UltraYN(UltraNewsExecEnabled),
+   Print("PHASE 23 NEWS EXEC PROTOCOL ∞: Enabled=", UltraYN(UltraNewsExecEnabled),
          " InstantPath=", UltraYN(UltraNewsExecInstantPath),
          " ForceReanalyze=", UltraYN(UltraNewsExecForceReanalyze),
+         " Phase23Boost=", UltraYN(UltraNewsExecPhase23Boost),
          " Protocol=", UltraYN(UltraNewsExecProtocolEnabled),
          " FastRetry=", UltraYN(UltraNewsExecProtocolFastRetry),
          " RetryMs=", UltraNewsExecProtocolRetryMs,
-         " MinConf=", UltraNewsExecMinConf);
+         " MinConf=", UltraNewsExecMinConf,
+         " HighSpread=NEVER_AUTO_REJECT");
    Print("P08 TARGET INTEL ∞: Enabled=", UltraYN(UltraTargetEnabled),
          " Strict=", UltraYN(UltraTargetStrict),
          " TP3=", UltraYN(UltraTargetEnableTP3),

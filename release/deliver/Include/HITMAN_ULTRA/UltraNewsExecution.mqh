@@ -1,10 +1,11 @@
 #ifndef HITMAN_ULTRA_NEWS_EXECUTION_MQH
 #define HITMAN_ULTRA_NEWS_EXECUTION_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — ULTRA NEWS EXECUTION INTELLIGENCE ENGINE ∞           |
-//| Extreme conditions · Full validation · Fast execution            |
-//| Never reduce validation. Never news/spread-only reject.          |
-//| Never force a trade. Complete re-analysis before every event trade.|
+//| HITMAN AI — PHASE 23 ULTRA NEWS EXECUTION PROTOCOL ∞             |
+//| Major events · Ultra News Mode · Instant detect/execute          |
+//| Never disable trading because of news alone                      |
+//| Never auto-reject on high spread — full analysis first           |
+//| Never force a trade · Never reduce validation under volatility   |
 //+------------------------------------------------------------------+
 
 // Forward — Adaptive Intelligence assembled after this module
@@ -45,12 +46,15 @@ struct UltraNewsExecState
    ulong  eventFlatCount;
    ulong  fillOkCount;
    ulong  execRecoverCount;
+   ulong  highSpreadContinue;    // Phase 23 — elevated spread continued (never auto-reject)
+   bool   execPriority;          // Phase 23 — elevated execution priority in News Mode
    double lastSpread;
    double lastSlip;
    int    lastExecQ;
    int    lastConf;
    string lastWhy;
    string lastFillDetail;
+   string lastSpreadNote;
 };
 
 // ULTRA NEWS EXECUTION PROTOCOL — prepared order packet (exec path only)
@@ -106,8 +110,46 @@ bool UltraNewsExec_ShouldForceRebuild()
 
 bool UltraNewsExec_InstantPath()
 {
-   // During news mode: skip unchanged-tick short-circuit for instant reaction
-   return UltraNewsExec_IsNewsMode() && UltraNewsExecInstantPath;
+   // Phase 23 — News Mode raises execution priority (skip smart-tick short-circuit)
+   if(!UltraNewsExec_IsNewsMode()) return false;
+   if(UltraNewsExecInstantPath) return true;
+   if(UltraNewsExecPhase23Boost && g_UltraNewsExec.execPriority) return true;
+   return false;
+}
+
+// Phase 23 — elevated execution priority flag
+bool UltraNewsExec_ExecPriority()
+{
+   return UltraNewsExec_InstantPath();
+}
+
+//--------------------------------------------------------------------//
+// PHASE 23 HIGH SPREAD RULE                                          //
+// High spread → DO NOT reject automatically → continue full analysis //
+// → thesis valid? → risk acceptable? → Execute / Wait                //
+//--------------------------------------------------------------------//
+bool UltraNewsExec_HighSpreadRule(const UltraSnap &u, string &note)
+{
+   // ALWAYS returns true (continue analysis). Never an auto-reject gate.
+   note = "";
+   double spr = u.ctx.spreadPts;
+   if(spr <= 0.0)
+      spr = (double)SymbolInfoInteger(_Symbol, SYMBOL_SPREAD);
+   g_UltraNewsExec.lastSpread = spr;
+   g_UltraNewsExec.lastSlip = u.ctx.slipProxy;
+
+   bool elevated = (spr >= UltraEventSpreadWarnPts);
+   if(elevated)
+   {
+      g_UltraNewsExec.highSpreadContinue++;
+      note = "HIGH_SPREAD spr=" + DoubleToString(spr, 0) +
+             " — continue full analysis (never auto-reject)";
+      g_UltraNewsExec.lastSpreadNote = note;
+      return true;
+   }
+   note = "spread ok spr=" + DoubleToString(spr, 0);
+   g_UltraNewsExec.lastSpreadNote = note;
+   return true;
 }
 
 //--------------------------------------------------------------------//
@@ -140,6 +182,7 @@ void UltraNewsExec_EnterMode(const UltraSnap &u)
 {
    bool was = g_UltraNewsExec.newsMode;
    g_UltraNewsExec.newsMode = true;
+   g_UltraNewsExec.execPriority = true; // Phase 23 — Increase Execution Priority
    g_UltraNewsExec.eventName = u.ctx.eventClass;
    if(StringLen(g_UltraNewsExec.eventName) == 0 || g_UltraNewsExec.eventName == "NONE")
       g_UltraNewsExec.eventName = "MAJOR";
@@ -150,17 +193,24 @@ void UltraNewsExec_EnterMode(const UltraSnap &u)
    g_UltraNewsExec.lastSlip = u.ctx.slipProxy;
    g_UltraNewsExec.lastExecQ = (int)u.ctx.execQuality;
    g_UltraNewsExec.lastConf = u.score.confidence;
+
+   // Phase 23 — high spread noted, never blocks mode activation
+   string sprNote = "";
+   UltraNewsExec_HighSpreadRule(u, sprNote);
+
    if(!was)
    {
       g_UltraNewsExec.modeEnterMs = (long)GetTickCount();
       g_UltraNewsExec.modeActivations++;
       if(UltraNewsExecLog)
       {
-         UltraLog("NEWS_MODE ON event=" + g_UltraNewsExec.eventName +
+         UltraLog("PHASE23 NEWS_MODE ON event=" + g_UltraNewsExec.eventName +
                   " phase=" + g_UltraNewsExec.phase +
                   " impact=" + IntegerToString(g_UltraNewsExec.impact) +
                   " atrRel=" + DoubleToString(u.vol.relative, 2) +
-                  " spr=" + DoubleToString(u.ctx.spreadPts, 0));
+                  " spr=" + DoubleToString(u.ctx.spreadPts, 0) +
+                  " slip=" + DoubleToString(u.ctx.slipProxy, 1) +
+                  " priority=Y | " + sprNote);
       }
    }
 }
@@ -169,9 +219,10 @@ void UltraNewsExec_ExitMode(const string why)
 {
    if(!g_UltraNewsExec.newsMode) return;
    if(UltraNewsExecLog)
-      UltraLog("NEWS_MODE OFF event=" + g_UltraNewsExec.eventName + " why=" + why);
+      UltraLog("PHASE23 NEWS_MODE OFF event=" + g_UltraNewsExec.eventName + " why=" + why);
    g_UltraNewsExec.newsMode = false;
    g_UltraNewsExec.forceRebuild = false;
+   g_UltraNewsExec.execPriority = false;
    g_UltraNewsExec.phase = "NONE";
 }
 
@@ -204,20 +255,28 @@ void UltraNewsExec_OnTick(const string s)
    if(!g_UltraNewsExec.newsMode) return;
 
    long now = (long)GetTickCount();
-   // PHASE 17 — soft adaptive monitor cadence (never reduces validation)
+   // Phase 23 — Increase Market Monitoring (adaptive may tighten; never relax past input)
    int monMs = UltraAdaptive_MonitorMs(UltraNewsExecMonitorMs);
+   if(UltraNewsExecPhase23Boost && monMs > UltraNewsExecMonitorMs)
+      monMs = UltraNewsExecMonitorMs;
    if(monMs < 25) monMs = 25;
 
-   // Increase Market Monitoring Frequency
    if(g_UltraNewsExec.lastMonitorMs <= 0 || (now - g_UltraNewsExec.lastMonitorMs) >= monMs)
    {
       g_UltraNewsExec.lastMonitorMs = now;
-      UltraMarketIntel_Validate(s);
+      UltraMarketIntel_Validate(s);   // instant price / market re-analysis
       UltraData_Refresh(s);
+      // High spread telemetry only — never blocks
+      UltraSnap uMon = g_UltraLastSnap;
+      uMon.ctx.spreadPts = UltraData_Spread(s);
+      string sprNote = "";
+      UltraNewsExec_HighSpreadRule(uMon, sprNote);
    }
 
-   // Increase Execution Monitoring
+   // Phase 23 — Increase Execution Monitoring / Recovery
    int exMs = UltraNewsExecExecMonMs;
+   if(UltraNewsExecPhase23Boost && exMs > UltraNewsExecMonitorMs)
+      exMs = UltraNewsExecMonitorMs;
    if(exMs < 25) exMs = 25;
    if(g_UltraNewsExec.lastExecMonMs <= 0 || (now - g_UltraNewsExec.lastExecMonMs) >= exMs)
    {
@@ -227,7 +286,7 @@ void UltraNewsExec_OnTick(const string s)
       if(!UltraExecReady(s, why) && UltraNewsExecAutoRecover)
       {
          g_UltraNewsExec.execRecoverCount++;
-         UltraRecover("NEWS_EXEC " + why);
+         UltraRecover("PHASE23 NEWS_EXEC " + why);
       }
    }
 }
@@ -327,7 +386,9 @@ bool UltraNewsExec_ValidateSignal(const string s, const UltraSnap &u,
    // 10) Execution Validation
    string exWhy = "";
    bool execOK = UltraExecReady(s, exWhy);
-   // Elevated spread NEVER sole-fails exec (product lock) — still require trade mode
+   // Phase 23 — elevated spread NEVER sole-fails exec; still require trade mode
+   string sprNote = "";
+   UltraNewsExec_HighSpreadRule(u, sprNote);
    if(execOK) g_UltraNewsExec.passMask |= ULTRA_NEWS_VAL_EXEC;
    else g_UltraNewsExec.failMask |= ULTRA_NEWS_VAL_EXEC;
 
@@ -365,9 +426,13 @@ bool UltraNewsExec_ValidateSignal(const string s, const UltraSnap &u,
       return false;
    }
 
-   why = "NEWS_VAL PASS event=" + g_UltraNewsExec.eventName +
+   why = "PHASE23 NEWS_VAL PASS event=" + g_UltraNewsExec.eventName +
          " phase=" + g_UltraNewsExec.phase +
-         " conf=" + IntegerToString(u.score.confidence);
+         " conf=" + IntegerToString(u.score.confidence) +
+         " spr=" + DoubleToString(g_UltraNewsExec.lastSpread, 0) +
+         " slip=" + DoubleToString(g_UltraNewsExec.lastSlip, 1);
+   if(StringLen(g_UltraNewsExec.lastSpreadNote) > 0)
+      why += " | " + g_UltraNewsExec.lastSpreadNote;
    g_UltraNewsExec.lastWhy = why;
    g_UltraNewsExec.lastSignalValid = true;
    g_UltraNewsExec.lastConf = u.score.confidence;
@@ -393,6 +458,12 @@ bool UltraNewsExec_AllowTrade(const string s, UltraSnap &u, const bool buySide, 
    }
 
    UltraNewsExec_EnterMode(u);
+
+   // Phase 23 HIGH SPREAD RULE — note + continue (never auto-reject here)
+   {
+      string sprNote = "";
+      UltraNewsExec_HighSpreadRule(u, sprNote);
+   }
 
    // Complete market re-analysis before every event trade
    long now = (long)GetTickCount();
@@ -571,19 +642,21 @@ void UltraNewsExec_ProtocolLog(const string result, const ulong ticket, const bo
    else if(result == "FAIL") g_UltraNewsPacket.failCount++;
 
    string side = buySide ? "BUY" : "SELL";
-   string msg = "NEWS_PROTO " + result +
+   string msg = "PHASE23 NEWS_PROTO " + result +
                 " event=" + g_UltraNewsPacket.eventName +
                 " phase=" + g_UltraNewsPacket.phase +
                 " att=" + IntegerToString(g_UltraNewsPacket.attempt) +
+                " spr=" + DoubleToString(g_UltraNewsPacket.spread, 0) +
+                " slip=" + DoubleToString(g_UltraNewsExec.lastSlip, 1) +
                 " rc=" + IntegerToString((int)retcode) +
                 " " + detail;
 
-   // Always persist structured result (protocol requirement)
+   // Always persist: event name, spread, slippage, execution result
    UltraLogDecision("NEWS_" + result, ticket, side,
                     (StringLen(g_UltraNewsPacket.tag) > 0 ? g_UltraNewsPacket.tag : g_UltraNewsPacket.eventName),
                     g_UltraNewsPacket.conf, g_UltraNewsPacket.passMask,
                     g_UltraNewsPacket.phase, result,
-                    g_UltraNewsPacket.spread, 0.0, msg);
+                    g_UltraNewsPacket.spread, g_UltraNewsExec.lastSlip, msg);
 
    if(UltraNewsExecLog)
       UltraLog(msg + " on " + g_UltraNewsPacket.symbol);
@@ -810,12 +883,15 @@ void UltraNewsExec_Boot()
    g_UltraNewsExec.eventFlatCount = 0;
    g_UltraNewsExec.fillOkCount = 0;
    g_UltraNewsExec.execRecoverCount = 0;
+   g_UltraNewsExec.highSpreadContinue = 0;
+   g_UltraNewsExec.execPriority = false;
    g_UltraNewsExec.lastSpread = 0;
    g_UltraNewsExec.lastSlip = 0;
    g_UltraNewsExec.lastExecQ = 100;
    g_UltraNewsExec.lastConf = 0;
    g_UltraNewsExec.lastWhy = "boot";
    g_UltraNewsExec.lastFillDetail = "";
+   g_UltraNewsExec.lastSpreadNote = "";
 
    ZeroMemory(g_UltraNewsPacket);
    g_UltraNewsPacket.eventName = "NONE";
@@ -824,18 +900,19 @@ void UltraNewsExec_Boot()
 
    if(UltraNewsExecLog)
    {
-      UltraLog("NEWS_EXEC ∞ boot Enabled=" + (UltraNewsExecEnabled ? "Y" : "N") +
+      UltraLog("PHASE23 NEWS_EXEC ∞ boot Enabled=" + (UltraNewsExecEnabled ? "Y" : "N") +
                " InstantPath=" + (UltraNewsExecInstantPath ? "Y" : "N") +
                " ForceReanalyze=" + (UltraNewsExecForceReanalyze ? "Y" : "N") +
                " Protocol=" + (UltraNewsExecProtocolEnabled ? "Y" : "N") +
                " FastRetry=" + (UltraNewsExecProtocolFastRetry ? "Y" : "N") +
-               " BUILD=HA_ULTRA_93");
+               " Phase23Boost=" + (UltraNewsExecPhase23Boost ? "Y" : "N") +
+               " HighSpread=NEVER_AUTO_REJECT BUILD=HA_ULTRA_93");
    }
 }
 
 string UltraNewsExec_Dashboard()
 {
-   string t = "NEWS_EXEC: ";
+   string t = "P23 NEWS: ";
    if(!UltraNewsExecEnabled) { t += "OFF"; return t; }
    if(g_UltraNewsExec.newsMode) t += "MODE_ON ";
    else t += "idle ";
@@ -850,6 +927,9 @@ string UltraNewsExec_Dashboard()
    t += IntegerToString((int)g_UltraNewsExec.reanalyzeCount);
    t += " fillV=";
    t += IntegerToString((int)g_UltraNewsExec.fillOkCount);
+   t += " hiSpr=";
+   t += IntegerToString((int)g_UltraNewsExec.highSpreadContinue);
+   if(g_UltraNewsExec.execPriority) t += " PRI";
    if(UltraNewsExecProtocolEnabled)
    {
       t += " proto=";
@@ -865,6 +945,8 @@ string UltraNewsExec_Dashboard()
       t += IntegerToString(g_UltraNewsExec.passMask);
       t += "/";
       t += IntegerToString(ULTRA_NEWS_VAL_ALL);
+      t += " spr=";
+      t += DoubleToString(g_UltraNewsExec.lastSpread, 0);
    }
    return t;
 }
