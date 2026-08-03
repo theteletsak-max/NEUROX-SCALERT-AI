@@ -7,6 +7,11 @@
 datetime g_UltraLastWaitBar = 0;
 string   g_UltraLastWaitSym = "";
 
+// PERF — one confluence pair per UltraPickBest (no per-strategy recalculation)
+int  g_UltraLastConfBuy = 0;
+int  g_UltraLastConfSell = 0;
+bool g_UltraLastConfValid = false;
+
 int UltraFireFloor()
 {
    // InstantQualityMode: softer live floor so charts actually trade
@@ -51,10 +56,9 @@ bool UltraPassScore(const int sc)
    return false;
 }
 
-UltraSignal UltraStrat_FlashSweep(const UltraSnap &u)
+UltraSignal UltraStrat_FlashSweep(const UltraSnap &u, const int sb, const int ss)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "FlashSweep"; r.reason = "";
-   int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
    bool biasB = (u.trend.htfBull || u.trend.bull || u.trend.macroBull || u.trend.mtfVotesBuy >= u.trend.mtfVotesSell);
    bool biasS = (u.trend.htfBear || u.trend.bear || u.trend.macroBear || u.trend.mtfVotesSell > u.trend.mtfVotesBuy);
    bool b = (u.liq.sweepBuy || u.liq.stopHuntBuy) && (u.ict.dispBuy || u.mom.momBuy || u.bos.buy) && biasB;
@@ -65,10 +69,9 @@ UltraSignal UltraStrat_FlashSweep(const UltraSnap &u)
    return r;
 }
 
-UltraSignal UltraStrat_ContSniper(const UltraSnap &u)
+UltraSignal UltraStrat_ContSniper(const UltraSnap &u, const int sb, const int ss)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "ContSniper"; r.reason = "";
-   int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
    bool biasB = (u.trend.htfBull || u.trend.bull || u.trend.macroBull || u.st.externalBull || u.st.internalBull);
    bool biasS = (u.trend.htfBear || u.trend.bear || u.trend.macroBear || u.st.externalBear || u.st.internalBear);
    bool zoneB = (u.bos.buy || u.ict.obBuy || u.ict.fvgBuy || u.fib.atBuyZone || u.ict.instZoneBuy);
@@ -91,10 +94,9 @@ UltraSignal UltraStrat_ContSniper(const UltraSnap &u)
    return r;
 }
 
-UltraSignal UltraStrat_RevSniper(const UltraSnap &u)
+UltraSignal UltraStrat_RevSniper(const UltraSnap &u, const int sb, const int ss)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "RevSniper"; r.reason = "";
-   int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
    bool b = (u.liq.sweepBuy || u.liq.stopHuntBuy) &&
             (u.choch.buy || u.ict.dispBuy || u.bos.buy) &&
             (u.ict.obBuy || u.ict.fvgBuy || u.ict.inDiscount || u.fib.atBuyZone);
@@ -108,10 +110,9 @@ UltraSignal UltraStrat_RevSniper(const UltraSnap &u)
    return r;
 }
 
-UltraSignal UltraStrat_FibSniper(const UltraSnap &u)
+UltraSignal UltraStrat_FibSniper(const UltraSnap &u, const int sb, const int ss)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "FibSniper"; r.reason = "";
-   int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
    bool biasB = (u.trend.htfBull || u.trend.bull || u.trend.macroBull || u.mom.momBuy);
    bool biasS = (u.trend.htfBear || u.trend.bear || u.trend.macroBear || u.mom.momSell);
    bool b = u.fib.atBuyZone && biasB && (u.ict.dispBuy || u.mom.momBuy || u.ict.obBuy || u.liq.sweepBuy || u.bos.buy);
@@ -122,10 +123,9 @@ UltraSignal UltraStrat_FibSniper(const UltraSnap &u)
    return r;
 }
 
-UltraSignal UltraStrat_BreakImpulse(const UltraSnap &u)
+UltraSignal UltraStrat_BreakImpulse(const UltraSnap &u, const int sb, const int ss)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "BreakImpulse"; r.reason = "";
-   int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
    bool b = u.bos.buy && (u.ict.dispBuy || u.mom.momBuy || u.vol.expansion) &&
             (u.trend.htfBull || u.trend.macroBull || u.trend.bull || u.st.externalBull);
    bool s = u.bos.sell && (u.ict.dispSell || u.mom.momSell || u.vol.expansion) &&
@@ -136,10 +136,9 @@ UltraSignal UltraStrat_BreakImpulse(const UltraSnap &u)
    return r;
 }
 
-UltraSignal UltraStrat_InstZone(const UltraSnap &u)
+UltraSignal UltraStrat_InstZone(const UltraSnap &u, const int sb, const int ss)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "InstZone"; r.reason = "";
-   int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
    bool b = (u.ict.instZoneBuy || ((u.ict.obBuy || u.ict.fvgBuy) && u.ict.inDiscount)) &&
             (u.ict.smConfluence || u.fib.atBuyZone || u.liq.sweepBuy || u.bos.buy);
    bool s = (u.ict.instZoneSell || ((u.ict.obSell || u.ict.fvgSell) && u.ict.inPremium)) &&
@@ -183,16 +182,25 @@ int UltraSymDir(const string s)
 UltraSignal UltraPickBest(const UltraSnap &u)
 {
    // LEVEL 1/2 — One proprietary strategy family · one best signal · no conflict
+   // PERF — one confluence calculation for all strategy evaluators
    UltraSignal best; best.buy = best.sell = false; best.score = -1; best.tag = "NONE";
    best.reason = "no setup"; best.explanation = "";
+   int sb = UltraConfluenceBuy(u);
+   int ss = UltraConfluenceSell(u);
+   if(UltraPerfCacheConfluence)
+   {
+      g_UltraLastConfBuy = sb;
+      g_UltraLastConfSell = ss;
+      g_UltraLastConfValid = true;
+   }
    UltraSignal arr[6];
    int n = 0;
-   if(UltraEnable_FlashSweep)   arr[n++] = UltraStrat_FlashSweep(u);
-   if(UltraEnable_ContSniper)   arr[n++] = UltraStrat_ContSniper(u);
-   if(UltraEnable_RevSniper)    arr[n++] = UltraStrat_RevSniper(u);
-   if(UltraEnable_FibSniper)    arr[n++] = UltraStrat_FibSniper(u);
-   if(UltraEnable_BreakImpulse) arr[n++] = UltraStrat_BreakImpulse(u);
-   if(UltraEnable_InstZone)     arr[n++] = UltraStrat_InstZone(u);
+   if(UltraEnable_FlashSweep)   arr[n++] = UltraStrat_FlashSweep(u, sb, ss);
+   if(UltraEnable_ContSniper)   arr[n++] = UltraStrat_ContSniper(u, sb, ss);
+   if(UltraEnable_RevSniper)    arr[n++] = UltraStrat_RevSniper(u, sb, ss);
+   if(UltraEnable_FibSniper)    arr[n++] = UltraStrat_FibSniper(u, sb, ss);
+   if(UltraEnable_BreakImpulse) arr[n++] = UltraStrat_BreakImpulse(u, sb, ss);
+   if(UltraEnable_InstZone)     arr[n++] = UltraStrat_InstZone(u, sb, ss);
    for(int i = 0; i < n; i++)
    {
       if(!(arr[i].buy || arr[i].sell)) continue;

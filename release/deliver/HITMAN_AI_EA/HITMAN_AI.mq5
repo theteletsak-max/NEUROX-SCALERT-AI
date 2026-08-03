@@ -1174,6 +1174,10 @@ input bool   UltraLowLatencyEarlySmartTick  = true;  // skip news/market prelude
 input bool   UltraLowLatencySkipHeavy       = true;  // cadence Adaptive/Bug/Maint only
 input int    UltraLowLatencyHeavyMs         = 50;    // min ms between heavy analytics passes
 input bool   UltraLowLatencyLogBoot         = true;  // boot summary line
+input bool   UltraPerfOneAnalysisPerCycle   = true;  // one market analysis / score / decision per cycle
+input bool   UltraPerfCacheConfluence       = true;  // compute buy/sell confluence once per PickBest
+input bool   UltraPerfReuseVChain           = true;  // reuse VChain base within same tick for Mission
+input bool   UltraPerfSkipDupMarketPrelude  = true;  // skip AnalyzeLiveMarket when snap already fresh
 
 input group "31 · ULTRA ZERO-FAIL RECOVERY ENGINE ∞ (Final Order P16)"
 input bool   UltraZFREnabled             = true;   // master — never stop on recoverable faults
@@ -5521,6 +5525,11 @@ string UltraMTF_Dashboard(const string s)
 datetime g_UltraLastWaitBar = 0;
 string   g_UltraLastWaitSym = "";
 
+// PERF — one confluence pair per UltraPickBest (no per-strategy recalculation)
+int  g_UltraLastConfBuy = 0;
+int  g_UltraLastConfSell = 0;
+bool g_UltraLastConfValid = false;
+
 int UltraFireFloor()
 {
    // InstantQualityMode: softer live floor so charts actually trade
@@ -5565,10 +5574,9 @@ bool UltraPassScore(const int sc)
    return false;
 }
 
-UltraSignal UltraStrat_FlashSweep(const UltraSnap &u)
+UltraSignal UltraStrat_FlashSweep(const UltraSnap &u, const int sb, const int ss)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "FlashSweep"; r.reason = "";
-   int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
    bool biasB = (u.trend.htfBull || u.trend.bull || u.trend.macroBull || u.trend.mtfVotesBuy >= u.trend.mtfVotesSell);
    bool biasS = (u.trend.htfBear || u.trend.bear || u.trend.macroBear || u.trend.mtfVotesSell > u.trend.mtfVotesBuy);
    bool b = (u.liq.sweepBuy || u.liq.stopHuntBuy) && (u.ict.dispBuy || u.mom.momBuy || u.bos.buy) && biasB;
@@ -5579,10 +5587,9 @@ UltraSignal UltraStrat_FlashSweep(const UltraSnap &u)
    return r;
 }
 
-UltraSignal UltraStrat_ContSniper(const UltraSnap &u)
+UltraSignal UltraStrat_ContSniper(const UltraSnap &u, const int sb, const int ss)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "ContSniper"; r.reason = "";
-   int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
    bool biasB = (u.trend.htfBull || u.trend.bull || u.trend.macroBull || u.st.externalBull || u.st.internalBull);
    bool biasS = (u.trend.htfBear || u.trend.bear || u.trend.macroBear || u.st.externalBear || u.st.internalBear);
    bool zoneB = (u.bos.buy || u.ict.obBuy || u.ict.fvgBuy || u.fib.atBuyZone || u.ict.instZoneBuy);
@@ -5605,10 +5612,9 @@ UltraSignal UltraStrat_ContSniper(const UltraSnap &u)
    return r;
 }
 
-UltraSignal UltraStrat_RevSniper(const UltraSnap &u)
+UltraSignal UltraStrat_RevSniper(const UltraSnap &u, const int sb, const int ss)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "RevSniper"; r.reason = "";
-   int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
    bool b = (u.liq.sweepBuy || u.liq.stopHuntBuy) &&
             (u.choch.buy || u.ict.dispBuy || u.bos.buy) &&
             (u.ict.obBuy || u.ict.fvgBuy || u.ict.inDiscount || u.fib.atBuyZone);
@@ -5622,10 +5628,9 @@ UltraSignal UltraStrat_RevSniper(const UltraSnap &u)
    return r;
 }
 
-UltraSignal UltraStrat_FibSniper(const UltraSnap &u)
+UltraSignal UltraStrat_FibSniper(const UltraSnap &u, const int sb, const int ss)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "FibSniper"; r.reason = "";
-   int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
    bool biasB = (u.trend.htfBull || u.trend.bull || u.trend.macroBull || u.mom.momBuy);
    bool biasS = (u.trend.htfBear || u.trend.bear || u.trend.macroBear || u.mom.momSell);
    bool b = u.fib.atBuyZone && biasB && (u.ict.dispBuy || u.mom.momBuy || u.ict.obBuy || u.liq.sweepBuy || u.bos.buy);
@@ -5636,10 +5641,9 @@ UltraSignal UltraStrat_FibSniper(const UltraSnap &u)
    return r;
 }
 
-UltraSignal UltraStrat_BreakImpulse(const UltraSnap &u)
+UltraSignal UltraStrat_BreakImpulse(const UltraSnap &u, const int sb, const int ss)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "BreakImpulse"; r.reason = "";
-   int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
    bool b = u.bos.buy && (u.ict.dispBuy || u.mom.momBuy || u.vol.expansion) &&
             (u.trend.htfBull || u.trend.macroBull || u.trend.bull || u.st.externalBull);
    bool s = u.bos.sell && (u.ict.dispSell || u.mom.momSell || u.vol.expansion) &&
@@ -5650,10 +5654,9 @@ UltraSignal UltraStrat_BreakImpulse(const UltraSnap &u)
    return r;
 }
 
-UltraSignal UltraStrat_InstZone(const UltraSnap &u)
+UltraSignal UltraStrat_InstZone(const UltraSnap &u, const int sb, const int ss)
 {
    UltraSignal r; r.buy = r.sell = false; r.score = 0; r.tag = "InstZone"; r.reason = "";
-   int sb = UltraConfluenceBuy(u), ss = UltraConfluenceSell(u);
    bool b = (u.ict.instZoneBuy || ((u.ict.obBuy || u.ict.fvgBuy) && u.ict.inDiscount)) &&
             (u.ict.smConfluence || u.fib.atBuyZone || u.liq.sweepBuy || u.bos.buy);
    bool s = (u.ict.instZoneSell || ((u.ict.obSell || u.ict.fvgSell) && u.ict.inPremium)) &&
@@ -5697,16 +5700,25 @@ int UltraSymDir(const string s)
 UltraSignal UltraPickBest(const UltraSnap &u)
 {
    // LEVEL 1/2 — One proprietary strategy family · one best signal · no conflict
+   // PERF — one confluence calculation for all strategy evaluators
    UltraSignal best; best.buy = best.sell = false; best.score = -1; best.tag = "NONE";
    best.reason = "no setup"; best.explanation = "";
+   int sb = UltraConfluenceBuy(u);
+   int ss = UltraConfluenceSell(u);
+   if(UltraPerfCacheConfluence)
+   {
+      g_UltraLastConfBuy = sb;
+      g_UltraLastConfSell = ss;
+      g_UltraLastConfValid = true;
+   }
    UltraSignal arr[6];
    int n = 0;
-   if(UltraEnable_FlashSweep)   arr[n++] = UltraStrat_FlashSweep(u);
-   if(UltraEnable_ContSniper)   arr[n++] = UltraStrat_ContSniper(u);
-   if(UltraEnable_RevSniper)    arr[n++] = UltraStrat_RevSniper(u);
-   if(UltraEnable_FibSniper)    arr[n++] = UltraStrat_FibSniper(u);
-   if(UltraEnable_BreakImpulse) arr[n++] = UltraStrat_BreakImpulse(u);
-   if(UltraEnable_InstZone)     arr[n++] = UltraStrat_InstZone(u);
+   if(UltraEnable_FlashSweep)   arr[n++] = UltraStrat_FlashSweep(u, sb, ss);
+   if(UltraEnable_ContSniper)   arr[n++] = UltraStrat_ContSniper(u, sb, ss);
+   if(UltraEnable_RevSniper)    arr[n++] = UltraStrat_RevSniper(u, sb, ss);
+   if(UltraEnable_FibSniper)    arr[n++] = UltraStrat_FibSniper(u, sb, ss);
+   if(UltraEnable_BreakImpulse) arr[n++] = UltraStrat_BreakImpulse(u, sb, ss);
+   if(UltraEnable_InstZone)     arr[n++] = UltraStrat_InstZone(u, sb, ss);
    for(int i = 0; i < n; i++)
    {
       if(!(arr[i].buy || arr[i].sell)) continue;
@@ -9426,9 +9438,26 @@ ENUM_ULTRA_VSTATE UltraVChain_Evaluate(const string s, const UltraSnap &u, strin
 }
 
 // Post-score recheck — Mission Control final gate (scores become critical)
+// PERF: reuse base chain evaluated earlier this tick (UltraAIDecide) when fresh
+ulong g_UltraVChainReuseN = 0;
+
 ENUM_ULTRA_VSTATE UltraVChain_EvaluateForMission(const string s, const UltraSnap &u, string &why)
 {
-   ENUM_ULTRA_VSTATE base = UltraVChain_Evaluate(s, u, why);
+   ENUM_ULTRA_VSTATE base = UV_WAIT;
+   if(UltraPerfReuseVChain &&
+      g_UltraVChain.n > 0 &&
+      g_UltraVChain.symbol == s &&
+      g_UltraVChain.lastMs > 0 &&
+      ((long)GetTickCount() - g_UltraVChain.lastMs) < 80)
+   {
+      base = g_UltraVChain.overall;
+      why = g_UltraVChain.blocker;
+      if(StringLen(why) == 0) why = g_UltraVChain.summary;
+      g_UltraVChainReuseN++;
+   }
+   else
+      base = UltraVChain_Evaluate(s, u, why);
+
    if(!UltraVChainEnabled) return UV_VALID;
    if(base == UV_INVALID) return UV_INVALID;
 
@@ -9499,6 +9528,11 @@ string UltraVChain_Dashboard()
    t += IntegerToString(g_UltraVChain.invalidN);
    t += " W=";
    t += IntegerToString(g_UltraVChain.waitN);
+   if(g_UltraVChainReuseN > 0)
+   {
+      t += " reuse=";
+      t += IntegerToString((int)g_UltraVChainReuseN);
+   }
    if(!g_UltraVChain.missionReady && StringLen(g_UltraVChain.blocker) > 0)
    {
       t += " | ";
@@ -9507,6 +9541,46 @@ string UltraVChain_Dashboard()
    else if(g_UltraVChain.missionReady)
       t += " | MISSION_READY";
    return t;
+}
+
+//--------------------------------------------------------------------//
+// ULTRA MARKET READING — 8-check fast OK from existing UltraSnap     //
+// Performance refinement only — no new strategy / never forces trade //
+//--------------------------------------------------------------------//
+bool UltraMarketRead_FastOK(const UltraSnap &u, const bool buySide, string &why)
+{
+   why = "";
+
+   // 1) Tick processing
+   if(!u.diag.tickOK)
+   { why = "READ:tick"; return false; }
+
+   // 2) Broker / connection (market classification prerequisite)
+   if(!u.diag.brokerOK || !u.diag.connectionOK)
+   { why = "READ:broker/connection"; return false; }
+
+   // 3) Structure engine ran (undecided structure is soft — Mission owns WAIT)
+   // 4) Trend detection fields present
+   // 5) Momentum detection fields present
+   // 6) Liquidity analysis fields present
+   // 7) Volatility analysis
+   if(u.vol.atr <= 0.0)
+   { why = "READ:volatility"; return false; }
+
+   // 8) Session / news / exec context (never hard-block on news/spread alone)
+   if(u.ctx.execQuality < 0)
+   { why = "READ:execContext"; return false; }
+
+   // Soft side note — does not fail; scoring + Mission decide
+   bool biasOK = buySide
+      ? (u.trend.bull || u.trend.htfBull || u.trend.macroBull || u.mom.momBuy ||
+         u.bos.buy || u.liq.genuineBuy)
+      : (u.trend.bear || u.trend.htfBear || u.trend.macroBear || u.mom.momSell ||
+         u.bos.sell || u.liq.genuineSell);
+   if(!biasOK)
+      why = "READ:soft-bias";
+
+   return true;
 }
 
 #endif // HITMAN_ULTRA_VALIDATION_CHAIN_MQH
@@ -12922,6 +12996,14 @@ bool UltraMission_AllowNewEntry(const string s)
       UltraMission_Log("WAIT", 0, "one decision per cycle — open blocked after close");
       return false;
    }
+
+   // PERF — one open decision per cycle (REPLACE arm may still reopen)
+   if(g_UltraMissionOpenedThisCycle &&
+      !(UltraPosEvoEnabled && UltraPosEvoReplaceEnabled && UltraPosEvo_ReplacePending(s)))
+   {
+      UltraMission_Log("WAIT", 0, "one decision per cycle — already opened");
+      return false;
+   }
    return true;
 }
 
@@ -12955,10 +13037,16 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
    if(ok)
    {
       ENUM_SUPREME_DECISION c = sig.buy ? SUP_BUY : SUP_SELL;
+      // REPLACE is first-class Mission surface when PosEvo arm is live
+      bool isReplace = (UltraPosEvoEnabled && UltraPosEvoReplaceEnabled &&
+                        UltraPosEvo_ReplacePending(s));
       UltraMission_Set(c, g_UltraSupremeLast.reason, g_UltraSupremeLast.confidence,
                        g_UltraSupremeLast.tradeScore, g_UltraSupremeLast.grade,
                        g_UltraSupremeLast.thesis, 0);
-      UltraMission_Log(UltraMission_Name(c), 0, g_UltraSupremeLast.reason);
+      if(isReplace)
+         UltraMission_Log("REPLACE", 0, g_UltraSupremeLast.reason);
+      else
+         UltraMission_Log(UltraMission_Name(c), 0, g_UltraSupremeLast.reason);
       g_UltraMissionEntryOK = true;
       g_UltraMissionEntryBuy = sig.buy;
       g_UltraMissionEntryTag = sig.tag;
@@ -14440,6 +14528,11 @@ struct UltraLowLatencyState
    ulong  skipEntry;
    ulong  skipHeavy;
    ulong  heavyRuns;
+   ulong  analysisRuns;
+   ulong  scoreRuns;
+   ulong  decisionRuns;
+   ulong  marketReadOK;
+   ulong  marketReadFail;
    long   lastTickStartMs;
    long   lastTickLatencyMs;
    long   peakTickLatencyMs;
@@ -14448,6 +14541,20 @@ struct UltraLowLatencyState
 };
 
 UltraLowLatencyState g_UltraLL;
+
+// Exec pipeline ticket handoff (fill → Mission NoteOpen — no position rescan)
+ulong  g_UltraLastExecTicket = 0;
+bool   g_UltraLastExecBuy = false;
+string g_UltraLastExecTag = "";
+int    g_UltraExecPipelineStage = 0; // 0..7 Signal→…→Protection
+
+// Time-gated WAIT (cooldown / FinalTradeCheck) — allow smart-tick re-eval
+bool g_UltraLL_TimeWait = false;
+
+void UltraLL_MarkTimeWait(const bool on)
+{
+   g_UltraLL_TimeWait = on;
+}
 
 //--------------------------------------------------------------------//
 void UltraLL_RefreshSummary()
@@ -14460,6 +14567,12 @@ void UltraLL_RefreshSummary()
    g_UltraLL.summary += IntegerToString((int)g_UltraLL.skipEntry);
    g_UltraLL.summary += " skipH=";
    g_UltraLL.summary += IntegerToString((int)g_UltraLL.skipHeavy);
+   g_UltraLL.summary += " a/s/d=";
+   g_UltraLL.summary += IntegerToString((int)g_UltraLL.analysisRuns);
+   g_UltraLL.summary += "/";
+   g_UltraLL.summary += IntegerToString((int)g_UltraLL.scoreRuns);
+   g_UltraLL.summary += "/";
+   g_UltraLL.summary += IntegerToString((int)g_UltraLL.decisionRuns);
    g_UltraLL.summary += " lat=";
    g_UltraLL.summary += IntegerToString((int)g_UltraLL.lastTickLatencyMs);
    g_UltraLL.summary += "ms peak=";
@@ -14471,11 +14584,17 @@ void UltraLL_Boot()
 {
    ZeroMemory(g_UltraLL);
    g_UltraLL.booted = true;
+   g_UltraLastExecTicket = 0;
+   g_UltraLastExecBuy = false;
+   g_UltraLastExecTag = "";
+   g_UltraExecPipelineStage = 0;
+   g_UltraLL_TimeWait = false;
    UltraLL_RefreshSummary();
    if(UltraLowLatencyLogBoot || UltraFoundationLogBoot)
       UltraLog("LOW-LATENCY ARCHITECTURE ∞ boot " + g_UltraLL.summary +
                " HeavyMs=" + IntegerToString(UltraLowLatencyHeavyMs) +
                " EarlySmartTick=" + (UltraLowLatencyEarlySmartTick ? "Y" : "N") +
+               " OneAnalysis=" + (UltraPerfOneAnalysisPerCycle ? "Y" : "N") +
                " BUILD=HA_ULTRA_93");
 }
 
@@ -14487,6 +14606,8 @@ void UltraLL_OnTickStart()
    UltraOpt_OnTickStart();
    g_UltraLL.tickStarts++;
    g_UltraLL.lastTickStartMs = (long)GetTickCount();
+   g_UltraLastExecTicket = 0;
+   g_UltraExecPipelineStage = 0;
 }
 
 void UltraLL_OnTickEnd()
@@ -14513,6 +14634,41 @@ void UltraLL_NoteSkipEntry()
    g_UltraLL.skipEntry++;
 }
 
+void UltraLL_NoteAnalysis()
+{
+   g_UltraLL.analysisRuns++;
+}
+
+void UltraLL_NoteScore()
+{
+   g_UltraLL.scoreRuns++;
+}
+
+void UltraLL_NoteDecision()
+{
+   g_UltraLL.decisionRuns++;
+}
+
+void UltraLL_SetExecTicket(const ulong ticket, const bool isBuy, const string tag)
+{
+   g_UltraLastExecTicket = ticket;
+   g_UltraLastExecBuy = isBuy;
+   g_UltraLastExecTag = tag;
+   g_UltraExecPipelineStage = 6; // Position Verified
+}
+
+void UltraLL_SetPipelineStage(const int stage)
+{
+   if(stage > g_UltraExecPipelineStage)
+      g_UltraExecPipelineStage = stage;
+}
+
+void UltraLL_NoteMarketRead(const bool ok)
+{
+   if(ok) g_UltraLL.marketReadOK++;
+   else   g_UltraLL.marketReadFail++;
+}
+
 //--------------------------------------------------------------------//
 // Heavy analytics / maintenance cadence (never position manage/exec) //
 //--------------------------------------------------------------------//
@@ -14533,6 +14689,7 @@ bool UltraLL_AllowMaintPass()
 //--------------------------------------------------------------------//
 // Entry eval: false = price unchanged + already decided (skip path)  //
 // News InstantPath always allows (maximum event responsiveness)      //
+// Time-based WAIT (cooldown / FinalTradeCheck) never blocks re-eval  //
 //--------------------------------------------------------------------//
 bool UltraLL_ShouldEarlySkipEntry()
 {
@@ -14541,6 +14698,9 @@ bool UltraLL_ShouldEarlySkipEntry()
    if(!EnableTickLevelSignalDetection)
       return false;
    if(UltraNewsExec_InstantPath())
+      return false;
+   // Never delay re-check when prior WAIT was time-gated
+   if(g_UltraLL_TimeWait)
       return false;
    return UltraSmartTickUnchanged();
 }
@@ -15500,14 +15660,15 @@ void UltraMod_Refresh()
    UltraMod_Reg("P05_NEWS_INTEL", false, UltraNewsExecEnabled, UltraNewsExecEnabled,
                 UltraNewsExecEnabled ? UltraNewsExec_Dashboard() : "OFF");
 
-   // PHASE 6 — Mission Control (Phase A: sole final WAIT/BUY/SELL authority)
+   // PHASE 6 — Mission Control (Phase A: sole final WAIT/BUY/SELL/REPLACE)
    UltraMod_Reg("P06_MISSION", true, true, true,
                 UltraPhaseA_MissionSoleAuthority
-                ? "SOLE_FINAL BUY|SELL|WAIT"
+                ? "SOLE_FINAL BUY|SELL|WAIT|REPLACE"
                 : "BUY|SELL|WAIT|REPLACE");
 
-   // PHASE 7 — Execution (broker/filling live in Shell — present when TradeGate boots)
-   UltraMod_Reg("P07_EXECUTION", true, true, true, "instant+fill+retry");
+   // PHASE 7 — Execution pipeline (Signal→Risk→Prepare→Submit→Fill→Pos→Protect)
+   UltraMod_Reg("P07_EXECUTION", true, true, true,
+                "pipe@" + IntegerToString(g_UltraExecPipelineStage));
 
    // PHASE 8 — Target Intelligence
    UltraMod_Reg("P08_TARGET_INTEL", true, UltraTargetEnabled, UltraTargetEnabled,
@@ -16169,6 +16330,9 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
    why = "";
    sig.buy = sig.sell = false; sig.tag = "NONE"; sig.reason = ""; sig.score = 0; sig.explanation = "";
 
+   if(UltraPerfOneAnalysisPerCycle)
+      UltraLL_NoteAnalysis();
+
    // ULTRA VALIDATION CHAIN — no guessing; stop on critical INVALID/WAIT
    if(UltraVChainEnabled)
    {
@@ -16196,6 +16360,7 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       if(!UltraExecReady(s, exWhy)){ why = "exec: " + exWhy; return false; }
    }
 
+   // ULTRA SIGNAL — Detect Immediately (one PickBest / cached confluence)
    sig = UltraPickBest(u);
    if(!(sig.buy || sig.sell) || sig.tag == "NONE")
    {
@@ -16203,7 +16368,21 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       return false;
    }
 
+   // ULTRA MARKET READING — 8-check from snap (soft; hard fails only)
+   {
+      string rWhy = "";
+      if(!UltraMarketRead_FastOK(u, sig.buy, rWhy))
+      {
+         why = rWhy;
+         UltraLL_NoteMarketRead(false);
+         return false;
+      }
+      UltraLL_NoteMarketRead(true);
+   }
+
    // LEVEL 2 — One Confidence Engine (USM2) owns scores before all gates
+   if(UltraPerfOneAnalysisPerCycle)
+      UltraLL_NoteScore();
    if(UltraUSM2Enabled)
    {
       UltraUSM2Scores usm;
@@ -16323,8 +16502,12 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
    }
 
    // ULTRA X — LEVEL 8 MISSION CONTROL (sole entry authority)
+   // ULTRA SIGNAL — Route Immediately → One Decision
    if(UltraUpgradeEnabled && UltraSupremeEnabled)
    {
+      if(UltraPerfOneAnalysisPerCycle)
+         UltraLL_NoteDecision();
+      UltraLL_SetPipelineStage(1); // Signal Confirmed pending Mission
       string supWhy = "";
       if(!UltraMission_ApproveEntry(s, u, sig, supWhy))
       {
@@ -16332,6 +16515,7 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
          else why = "MISSION WAIT";
          return false;
       }
+      UltraLL_SetPipelineStage(1); // Signal Confirmed
    }
    return true;
 }
@@ -16368,7 +16552,11 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    if(!UltraAIDecide(BrokerSymbol, snap, best, why))
    {
       g_UltraLastSnap = snap;
-      bool leanBuy = (UltraConfluenceBuy(snap) >= UltraConfluenceSell(snap));
+      bool leanBuy = true;
+      if(g_UltraLastConfValid)
+         leanBuy = (g_UltraLastConfBuy >= g_UltraLastConfSell);
+      else
+         leanBuy = (UltraConfluenceBuy(snap) >= UltraConfluenceSell(snap));
       best.explanation = UltraUFSE_DebugExplain(snap, leanBuy, false);
       g_UltraLastSignal = best;
       // PHASE A — only Mission Control emits decision-level WAIT
@@ -20587,15 +20775,23 @@ bool ExecuteBuy()
       return false;
 
    // Sanity: direction still agrees — skip abort in UltraAggressiveFire
-   // (path+engines already approved; price can wick without flipping EMA).
-   // Live gate is EvaluateStrategySignals (APEX → ContFallback only).
+   // PHASE A / PERF — Mission sticky BUY must not flip to WAIT/abort on EMA wick
    if(!IsBullTrend() && !(UltraAggressiveFire || NeverBlockValidSniperEntry))
    {
-      if(EnableVerboseLogging)
-         Print("BUY aborted: trend no longer bullish at execution time.");
-      return false;
+      if(UltraPhaseA_MissionSoleAuthority && UltraMission_HasFinalEntry(true))
+      {
+         if(UltraPhaseA_LogPostMissionWarn)
+            Print("PHASE_A: exec trend WARN only — Mission approved BUY on ", BrokerSymbol);
+      }
+      else
+      {
+         if(EnableVerboseLogging)
+            Print("BUY aborted: trend no longer bullish at execution time.");
+         return false;
+      }
    }
 
+   UltraLL_SetPipelineStage(2); // Risk Confirmed (capital/protection already checked)
    double ask = SymbolInfoDouble(BrokerSymbol,SYMBOL_ASK);
    double point = SymbolInfoDouble(BrokerSymbol,SYMBOL_POINT);
 
@@ -20881,6 +21077,9 @@ bool ExecuteBuy()
       MarkContFallbackFillIfNeeded();
       RegisterTradeState(posTicket, tp1Price, tp2Price, tp3Price, true);
       RecordSignalSnapshot(posTicket, true);
+      UltraLL_SetExecTicket(posTicket, true, g_PendingStrategyTag);
+      UltraLL_SetPipelineStage(7); // Protection Activated (state registered)
+      UltraLL_MarkTimeWait(false);
       UltraLogDecision("EXEC_OK", posTicket, "BUY", g_PendingStrategyTag,
                        g_UltraLastSnap.score.confidence, g_UltraUSM2Last.tradeScore,
                        "THESIS", g_UltraLastSnap.ctx.newsPhase,
@@ -20963,6 +21162,9 @@ bool ExecuteBuy()
          MarkContFallbackFillIfNeeded();
          RegisterTradeState(newTicket, tp1Price, tp2Price, tp3Price, true);
          RecordSignalSnapshot(newTicket, true);
+         UltraLL_SetExecTicket(newTicket, true, g_PendingStrategyTag);
+         UltraLL_SetPipelineStage(7);
+         UltraLL_MarkTimeWait(false);
          return true;
       }
    }
@@ -21005,14 +21207,23 @@ bool ExecuteSell()
 
    // See the matching comment in ExecuteBuy() - cheap re-check that the
    // basic trend direction hasn't already reversed between decision and
-   // execution.
+   // execution. PHASE A / PERF — Mission sticky SELL is not aborted by EMA wick.
    if(!IsBearTrend() && !(UltraAggressiveFire || NeverBlockValidSniperEntry))
    {
-      if(EnableVerboseLogging)
-         Print("SELL aborted: trend no longer bearish at execution time.");
-      return false;
+      if(UltraPhaseA_MissionSoleAuthority && UltraMission_HasFinalEntry(false))
+      {
+         if(UltraPhaseA_LogPostMissionWarn)
+            Print("PHASE_A: exec trend WARN only — Mission approved SELL on ", BrokerSymbol);
+      }
+      else
+      {
+         if(EnableVerboseLogging)
+            Print("SELL aborted: trend no longer bearish at execution time.");
+         return false;
+      }
    }
 
+   UltraLL_SetPipelineStage(2); // Risk Confirmed
    double bid = SymbolInfoDouble(BrokerSymbol,SYMBOL_BID);
    double point = SymbolInfoDouble(BrokerSymbol,SYMBOL_POINT);
 
@@ -21278,6 +21489,9 @@ bool ExecuteSell()
       MarkContFallbackFillIfNeeded();
       RegisterTradeState(posTicket, tp1Price, tp2Price, tp3Price, false);
       RecordSignalSnapshot(posTicket, false);
+      UltraLL_SetExecTicket(posTicket, false, g_PendingStrategyTag);
+      UltraLL_SetPipelineStage(7);
+      UltraLL_MarkTimeWait(false);
       UltraLogDecision("EXEC_OK", posTicket, "SELL", g_PendingStrategyTag,
                        g_UltraLastSnap.score.confidence, g_UltraUSM2Last.tradeScore,
                        "THESIS", g_UltraLastSnap.ctx.newsPhase,
@@ -21350,6 +21564,9 @@ bool ExecuteSell()
          MarkContFallbackFillIfNeeded();
          RegisterTradeState(newTicket, tp1Price, tp2Price, tp3Price, false);
          RecordSignalSnapshot(newTicket, false);
+         UltraLL_SetExecTicket(newTicket, false, g_PendingStrategyTag);
+         UltraLL_SetPipelineStage(7);
+         UltraLL_MarkTimeWait(false);
          return true;
       }
    }
@@ -25193,6 +25410,13 @@ void UltraSetWait(const string reason)
    // PHASE A — decision-level WAIT belongs to Mission Control only
    g_UltraLastReject = reason;
    g_UltraLastDecision = "WAIT";
+   // PERF — time-gated waits must not block smart-tick re-eval
+   if(StringFind(reason, "cooldown") >= 0 ||
+      StringFind(reason, "FinalTradeCheck") >= 0 ||
+      StringFind(reason, "trade cooldown") >= 0)
+      UltraLL_MarkTimeWait(true);
+   else
+      UltraLL_MarkTimeWait(false);
    if(UltraPhaseA_MissionSoleAuthority)
       UltraMission_EmitWait(reason, 0);
    else
@@ -28751,10 +28975,6 @@ void InstantExecution()
       EnableTickLevelSignalDetection && !UltraNewsExec_InstantPath())
       smartTickChecked = true; // ShouldEarlySkipEntry already ran UltraSmartTickUnchanged
 
-   // OK70: news aware + clean market analysis (never refuse on news/spread)
-   UpdateNewsAwareness();
-   AnalyzeLiveMarket(false);
-
    if(EnableUltraCore && UltraHealthMonitor)
       g_UltraDecisionStartMs = (long)GetTickCount();
 
@@ -28763,6 +28983,13 @@ void InstantExecution()
    // GetEMA()/GetADX()/GetATR() only re-fetch buffers once per symbol per
    // cycle instead of once per call.
    g_CycleCounter++;
+
+   // OK70: news aware + clean market analysis (never refuse on news/spread)
+   // PERF — one market analysis per cycle after counter bump
+   UpdateNewsAwareness();
+   if(!(UltraPerfSkipDupMarketPrelude && UltraPerfOneAnalysisPerCycle &&
+        g_LiveMktCycle == g_CycleCounter && g_LiveMkt.valid))
+      AnalyzeLiveMarket(false);
 
    datetime currentBarTime = iTime(BrokerSymbol, EntryTF, 0);
 
@@ -28860,14 +29087,16 @@ void InstantExecution()
 
       Print("BUY approved (", BrokerSymbol, ") [", strategyTag, "]");
       g_PendingStrategyTag = strategyTag;
+      UltraLL_SetPipelineStage(3); // Order Prepared
       if(ExecuteBuy())
       {
          UltraDiscipline_OnFill(BrokerSymbol, true, strategyTag, g_UltraLastSnap);
          UltraThesis_StoreLatest(BrokerSymbol, true, strategyTag, g_UltraLastSnap, g_UltraLastSignal.reason);
          UltraPosEvo_NoteReplacementFilled(BrokerSymbol, true, strategyTag);
-         // Position lock + decision log (Mission Control)
+         // PERF — use resolved exec ticket (no PositionsTotal rescan)
+         ulong tk = g_UltraLastExecTicket;
+         if(tk == 0 || !g_UltraLastExecBuy)
          {
-            ulong tk = 0;
             for(int i = PositionsTotal() - 1; i >= 0; i--)
             {
                ulong tix = PositionGetTicket(i);
@@ -28877,9 +29106,9 @@ void InstantExecution()
                if(PositionGetInteger(POSITION_TYPE) != POSITION_TYPE_BUY) continue;
                tk = tix; break;
             }
-            if(tk != 0)
-               UltraMission_NoteOpen(tk, BrokerSymbol, true, strategyTag);
          }
+         if(tk != 0)
+            UltraMission_NoteOpen(tk, BrokerSymbol, true, strategyTag);
          if(EnableBeastMode && BeastDuplicateBarGuard)
             MarkSignalApproved(true);
       }
@@ -28906,14 +29135,16 @@ void InstantExecution()
 
       Print("SELL approved (", BrokerSymbol, ") [", strategyTag, "]");
       g_PendingStrategyTag = strategyTag;
+      UltraLL_SetPipelineStage(3); // Order Prepared
       if(ExecuteSell())
       {
          UltraDiscipline_OnFill(BrokerSymbol, false, strategyTag, g_UltraLastSnap);
          UltraThesis_StoreLatest(BrokerSymbol, false, strategyTag, g_UltraLastSnap, g_UltraLastSignal.reason);
          UltraPosEvo_NoteReplacementFilled(BrokerSymbol, false, strategyTag);
-         // Position lock + decision log (Mission Control)
+         // PERF — use resolved exec ticket (no PositionsTotal rescan)
+         ulong tk = g_UltraLastExecTicket;
+         if(tk == 0 || g_UltraLastExecBuy)
          {
-            ulong tk = 0;
             for(int i = PositionsTotal() - 1; i >= 0; i--)
             {
                ulong tix = PositionGetTicket(i);
@@ -28923,9 +29154,9 @@ void InstantExecution()
                if(PositionGetInteger(POSITION_TYPE) != POSITION_TYPE_SELL) continue;
                tk = tix; break;
             }
-            if(tk != 0)
-               UltraMission_NoteOpen(tk, BrokerSymbol, false, strategyTag);
          }
+         if(tk != 0)
+            UltraMission_NoteOpen(tk, BrokerSymbol, false, strategyTag);
          if(EnableBeastMode && BeastDuplicateBarGuard)
             MarkSignalApproved(false);
       }
@@ -28942,7 +29173,9 @@ void InstantExecution()
 
    if(g_UltraLastReject == "" && EnableUltraCore)
    {
-      AnalyzeLiveMarket(false);
+      // PERF — reuse live market summary if already built this cycle
+      if(!(UltraPerfSkipDupMarketPrelude && g_LiveMktCycle == g_CycleCounter && g_LiveMkt.valid))
+         AnalyzeLiveMarket(false);
       string wait = StringFormat("ULTRA WAIT | %s | ContB=%s ContS=%s | conf=%d prec=%d prob=%d | %s",
                              g_LiveMkt.summary,
                              g_LiveMkt.contBuyOK ? "READY" : g_LiveMkt.contBuyDetail,
@@ -28951,6 +29184,9 @@ void InstantExecution()
                              g_UltraLastSnap.score.precision,
                              g_UltraLastSnap.score.probability,
                              g_UltraLastSignal.reason == "" ? UltraRegimeName(g_UltraLastSnap.regime) : g_UltraLastSignal.reason);
+      // PHASE A — sole WAIT surface is Mission (no duplicate dashboard WAIT)
+      if(UltraPhaseA_MissionSoleAuthority)
+         UltraMission_EmitWait(wait, g_UltraLastSnap.score.confidence);
       g_UltraLastReject = wait;
       g_UltraLastDecision = "WAIT";
    }

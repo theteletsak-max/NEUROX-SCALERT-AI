@@ -428,6 +428,14 @@ bool UltraMission_AllowNewEntry(const string s)
       UltraMission_Log("WAIT", 0, "one decision per cycle — open blocked after close");
       return false;
    }
+
+   // PERF — one open decision per cycle (REPLACE arm may still reopen)
+   if(g_UltraMissionOpenedThisCycle &&
+      !(UltraPosEvoEnabled && UltraPosEvoReplaceEnabled && UltraPosEvo_ReplacePending(s)))
+   {
+      UltraMission_Log("WAIT", 0, "one decision per cycle — already opened");
+      return false;
+   }
    return true;
 }
 
@@ -461,10 +469,16 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
    if(ok)
    {
       ENUM_SUPREME_DECISION c = sig.buy ? SUP_BUY : SUP_SELL;
+      // REPLACE is first-class Mission surface when PosEvo arm is live
+      bool isReplace = (UltraPosEvoEnabled && UltraPosEvoReplaceEnabled &&
+                        UltraPosEvo_ReplacePending(s));
       UltraMission_Set(c, g_UltraSupremeLast.reason, g_UltraSupremeLast.confidence,
                        g_UltraSupremeLast.tradeScore, g_UltraSupremeLast.grade,
                        g_UltraSupremeLast.thesis, 0);
-      UltraMission_Log(UltraMission_Name(c), 0, g_UltraSupremeLast.reason);
+      if(isReplace)
+         UltraMission_Log("REPLACE", 0, g_UltraSupremeLast.reason);
+      else
+         UltraMission_Log(UltraMission_Name(c), 0, g_UltraSupremeLast.reason);
       g_UltraMissionEntryOK = true;
       g_UltraMissionEntryBuy = sig.buy;
       g_UltraMissionEntryTag = sig.tag;

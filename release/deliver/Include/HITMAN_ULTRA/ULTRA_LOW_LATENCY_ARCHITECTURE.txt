@@ -74,13 +74,19 @@ SAFE TO DEFER (cadenced)
 
 ============================================================
 INPUTS (31_Inputs)
-  UltraLowLatencyEnabled        = true
-  UltraLowLatencyEarlySmartTick = true
-  UltraLowLatencySkipHeavy      = true
-  UltraLowLatencyHeavyMs        = 50
+  UltraLowLatencyEnabled         = true
+  UltraLowLatencyEarlySmartTick  = true
+  UltraLowLatencySkipHeavy       = true
+  UltraLowLatencyHeavyMs         = 50
+  UltraPerfOneAnalysisPerCycle   = true
+  UltraPerfCacheConfluence       = true
+  UltraPerfReuseVChain           = true
+  UltraPerfSkipDupMarketPrelude  = true
+
+See also: ULTRA_PERFORMANCE_MISSION.txt
 
 ============================================================
 ULTIMATE OBJECTIVE
-  Ultra Low Latency · High Efficiency · Fast Decision /
-  Analysis · Signal · Risk · Execution · Position Management
-  Ultra Stable Performance
+  Maximum Internal Speed · Maximum Decision Quality
+  Minimum Processing Latency · High-Probability Setups
+  Professional Execution · Stable Behaviour

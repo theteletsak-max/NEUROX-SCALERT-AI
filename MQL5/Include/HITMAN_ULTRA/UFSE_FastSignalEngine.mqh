@@ -556,6 +556,9 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
    why = "";
    sig.buy = sig.sell = false; sig.tag = "NONE"; sig.reason = ""; sig.score = 0; sig.explanation = "";
 
+   if(UltraPerfOneAnalysisPerCycle)
+      UltraLL_NoteAnalysis();
+
    // ULTRA VALIDATION CHAIN — no guessing; stop on critical INVALID/WAIT
    if(UltraVChainEnabled)
    {
@@ -583,6 +586,7 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       if(!UltraExecReady(s, exWhy)){ why = "exec: " + exWhy; return false; }
    }
 
+   // ULTRA SIGNAL — Detect Immediately (one PickBest / cached confluence)
    sig = UltraPickBest(u);
    if(!(sig.buy || sig.sell) || sig.tag == "NONE")
    {
@@ -590,7 +594,21 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
       return false;
    }
 
+   // ULTRA MARKET READING — 8-check from snap (soft; hard fails only)
+   {
+      string rWhy = "";
+      if(!UltraMarketRead_FastOK(u, sig.buy, rWhy))
+      {
+         why = rWhy;
+         UltraLL_NoteMarketRead(false);
+         return false;
+      }
+      UltraLL_NoteMarketRead(true);
+   }
+
    // LEVEL 2 — One Confidence Engine (USM2) owns scores before all gates
+   if(UltraPerfOneAnalysisPerCycle)
+      UltraLL_NoteScore();
    if(UltraUSM2Enabled)
    {
       UltraUSM2Scores usm;
@@ -710,8 +728,12 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
    }
 
    // ULTRA X — LEVEL 8 MISSION CONTROL (sole entry authority)
+   // ULTRA SIGNAL — Route Immediately → One Decision
    if(UltraUpgradeEnabled && UltraSupremeEnabled)
    {
+      if(UltraPerfOneAnalysisPerCycle)
+         UltraLL_NoteDecision();
+      UltraLL_SetPipelineStage(1); // Signal Confirmed pending Mission
       string supWhy = "";
       if(!UltraMission_ApproveEntry(s, u, sig, supWhy))
       {
@@ -719,6 +741,7 @@ bool UltraAIDecide(const string s, UltraSnap &u, UltraSignal &sig, string &why)
          else why = "MISSION WAIT";
          return false;
       }
+      UltraLL_SetPipelineStage(1); // Signal Confirmed
    }
    return true;
 }
@@ -755,7 +778,11 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
    if(!UltraAIDecide(BrokerSymbol, snap, best, why))
    {
       g_UltraLastSnap = snap;
-      bool leanBuy = (UltraConfluenceBuy(snap) >= UltraConfluenceSell(snap));
+      bool leanBuy = true;
+      if(g_UltraLastConfValid)
+         leanBuy = (g_UltraLastConfBuy >= g_UltraLastConfSell);
+      else
+         leanBuy = (UltraConfluenceBuy(snap) >= UltraConfluenceSell(snap));
       best.explanation = UltraUFSE_DebugExplain(snap, leanBuy, false);
       g_UltraLastSignal = best;
       // PHASE A — only Mission Control emits decision-level WAIT

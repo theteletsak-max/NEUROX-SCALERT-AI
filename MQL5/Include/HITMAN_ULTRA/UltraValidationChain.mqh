@@ -386,9 +386,26 @@ ENUM_ULTRA_VSTATE UltraVChain_Evaluate(const string s, const UltraSnap &u, strin
 }
 
 // Post-score recheck — Mission Control final gate (scores become critical)
+// PERF: reuse base chain evaluated earlier this tick (UltraAIDecide) when fresh
+ulong g_UltraVChainReuseN = 0;
+
 ENUM_ULTRA_VSTATE UltraVChain_EvaluateForMission(const string s, const UltraSnap &u, string &why)
 {
-   ENUM_ULTRA_VSTATE base = UltraVChain_Evaluate(s, u, why);
+   ENUM_ULTRA_VSTATE base = UV_WAIT;
+   if(UltraPerfReuseVChain &&
+      g_UltraVChain.n > 0 &&
+      g_UltraVChain.symbol == s &&
+      g_UltraVChain.lastMs > 0 &&
+      ((long)GetTickCount() - g_UltraVChain.lastMs) < 80)
+   {
+      base = g_UltraVChain.overall;
+      why = g_UltraVChain.blocker;
+      if(StringLen(why) == 0) why = g_UltraVChain.summary;
+      g_UltraVChainReuseN++;
+   }
+   else
+      base = UltraVChain_Evaluate(s, u, why);
+
    if(!UltraVChainEnabled) return UV_VALID;
    if(base == UV_INVALID) return UV_INVALID;
 
@@ -459,6 +476,11 @@ string UltraVChain_Dashboard()
    t += IntegerToString(g_UltraVChain.invalidN);
    t += " W=";
    t += IntegerToString(g_UltraVChain.waitN);
+   if(g_UltraVChainReuseN > 0)
+   {
+      t += " reuse=";
+      t += IntegerToString((int)g_UltraVChainReuseN);
+   }
    if(!g_UltraVChain.missionReady && StringLen(g_UltraVChain.blocker) > 0)
    {
       t += " | ";
@@ -467,6 +489,46 @@ string UltraVChain_Dashboard()
    else if(g_UltraVChain.missionReady)
       t += " | MISSION_READY";
    return t;
+}
+
+//--------------------------------------------------------------------//
+// ULTRA MARKET READING — 8-check fast OK from existing UltraSnap     //
+// Performance refinement only — no new strategy / never forces trade //
+//--------------------------------------------------------------------//
+bool UltraMarketRead_FastOK(const UltraSnap &u, const bool buySide, string &why)
+{
+   why = "";
+
+   // 1) Tick processing
+   if(!u.diag.tickOK)
+   { why = "READ:tick"; return false; }
+
+   // 2) Broker / connection (market classification prerequisite)
+   if(!u.diag.brokerOK || !u.diag.connectionOK)
+   { why = "READ:broker/connection"; return false; }
+
+   // 3) Structure engine ran (undecided structure is soft — Mission owns WAIT)
+   // 4) Trend detection fields present
+   // 5) Momentum detection fields present
+   // 6) Liquidity analysis fields present
+   // 7) Volatility analysis
+   if(u.vol.atr <= 0.0)
+   { why = "READ:volatility"; return false; }
+
+   // 8) Session / news / exec context (never hard-block on news/spread alone)
+   if(u.ctx.execQuality < 0)
+   { why = "READ:execContext"; return false; }
+
+   // Soft side note — does not fail; scoring + Mission decide
+   bool biasOK = buySide
+      ? (u.trend.bull || u.trend.htfBull || u.trend.macroBull || u.mom.momBuy ||
+         u.bos.buy || u.liq.genuineBuy)
+      : (u.trend.bear || u.trend.htfBear || u.trend.macroBear || u.mom.momSell ||
+         u.bos.sell || u.liq.genuineSell);
+   if(!biasOK)
+      why = "READ:soft-bias";
+
+   return true;
 }
 
 #endif // HITMAN_ULTRA_VALIDATION_CHAIN_MQH

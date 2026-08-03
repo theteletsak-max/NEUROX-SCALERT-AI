@@ -236,6 +236,10 @@ input bool   UltraLowLatencyEarlySmartTick  = true;  // skip news/market prelude
 input bool   UltraLowLatencySkipHeavy       = true;  // cadence Adaptive/Bug/Maint only
 input int    UltraLowLatencyHeavyMs         = 50;    // min ms between heavy analytics passes
 input bool   UltraLowLatencyLogBoot         = true;  // boot summary line
+input bool   UltraPerfOneAnalysisPerCycle   = true;  // one market analysis / score / decision per cycle
+input bool   UltraPerfCacheConfluence       = true;  // compute buy/sell confluence once per PickBest
+input bool   UltraPerfReuseVChain           = true;  // reuse VChain base within same tick for Mission
+input bool   UltraPerfSkipDupMarketPrelude  = true;  // skip AnalyzeLiveMarket when snap already fresh
 
 input group "31 · ULTRA ZERO-FAIL RECOVERY ENGINE ∞ (Final Order P16)"
 input bool   UltraZFREnabled             = true;   // master — never stop on recoverable faults

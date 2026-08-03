@@ -1,0 +1,69 @@
+HITMAN AI ULTRA ∞ — ULTRA PERFORMANCE MISSION
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Read the market with minimum latency.
+  Execute validated opportunities with minimum internal latency.
+  Never delay a valid setup because of unnecessary processing.
+
+============================================================
+ULTRA MARKET READING (from UltraSnap — one analysis per cycle)
+  ✓ Ultra Fast Tick Processing          → UFSE ScanTick + Data cache
+  ✓ Ultra Fast Market Classification    → Regime + MarketIntel
+  ✓ Ultra Fast Trend Detection          → UltraEngTrend + MasterTrend
+  ✓ Ultra Fast Momentum Detection       → UltraEngMomentum
+  ✓ Ultra Fast Liquidity Analysis       → UltraEngLiquidity
+  ✓ Ultra Fast Volatility Analysis      → UltraEngVolatility
+  ✓ Ultra Fast Proprietary Strategy     → UltraPickBest (cached confluence)
+  ✓ Ultra Fast Trade Thesis             → Discipline / Thesis on Mission path
+
+  Checklist API: UltraMarketRead_FastOK(snap, side, why)
+
+============================================================
+ULTRA SIGNAL
+  Detect Immediately   → UltraPickBest
+  Validate Immediately → VChain + Defense + Discipline + NewsExec
+  Score Immediately    → USM2 once (g_UltraUSM2Last)
+  Route Immediately    → UltraMission_ApproveEntry
+
+============================================================
+ULTRA DECISION (Phase A)
+  One Mission Control → One Decision
+  BUY | SELL | WAIT | REPLACE
+  Sole WAIT emitter: UltraMission_EmitWait
+  Nothing after Mission may flip BUY → WAIT
+
+============================================================
+ULTRA EXECUTION PIPELINE
+  Signal Confirmed → Risk Confirmed → Order Prepared → Order Submitted
+  → Fill Verified → Position Verified → Protection Activated
+  Ticket handoff: g_UltraLastExecTicket → UltraMission_NoteOpen (no rescan)
+
+============================================================
+ULTRA QUALITY CONTROL (every trade)
+  ✓ Proprietary Strategy · Trade Thesis · Confidence Threshold
+  ✓ Market Validation · Risk Validation · Execution Validation
+
+============================================================
+ULTRA PERFORMANCE RULES
+  ✓ One Market Analysis Per Cycle   (UltraPerfOneAnalysisPerCycle)
+  ✓ One Confidence Calculation      (USM2 once)
+  ✓ One Final Score                 (g_UltraUSM2Last)
+  ✓ One Final Decision              (Mission)
+  ✓ Cached Data                     (UFSE snap + confluence cache)
+  ✓ No Duplicate Calculations       (PickBest confluence once)
+  ✓ No Duplicate Loops              (exec ticket handoff)
+  ✓ No Duplicate WAIT Decisions     (EmitWait de-dupe)
+
+============================================================
+INPUTS
+  UltraLowLatencyEnabled / EarlySmartTick / SkipHeavy / HeavyMs
+  UltraPerfOneAnalysisPerCycle = true
+  UltraPerfCacheConfluence     = true
+  UltraPerfReuseVChain         = true
+  UltraPerfSkipDupMarketPrelude= true
+
+LOCKS
+  Final Development Rule · HITMAN AI · HA_ULTRA_93 · MaxOpen=3
+  Mission sole close authority · Phase A sole WAIT authority
