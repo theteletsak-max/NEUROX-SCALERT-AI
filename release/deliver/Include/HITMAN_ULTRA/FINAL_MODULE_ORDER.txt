@@ -55,7 +55,10 @@ PHASE 9  — TARGET INTELLIGENCE ENGINE
   Profit protect / partials: advisory hints → P10 StopEvo · Shell ladder
 
 PHASE 10 — POSITION EVOLUTION ENGINE
-  PositionEvolution · UltraStopEvolution (profit protect)
+  PositionEvolution · UltraStopEvolution · UltraPosEvoIntel_* facade
+  MASTER SPEC CHAPTER 10 — continuous market/thesis/trend/mom/SL/target/news/risk
+  Outputs: CONTINUE · MODIFY_SL · MODIFY_TARGETS · PROTECT_PROFIT · PREPARE_EXIT → Exit
+  LOCK: never widen SL · never protect too early · Mission sole close · one PosEvo engine
 
 PHASE 11 — EXIT INTELLIGENCE ENGINE
   Mission EXIT · SmartExit · UltraExitValidation

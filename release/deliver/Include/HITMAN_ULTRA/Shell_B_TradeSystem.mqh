@@ -205,13 +205,18 @@ int OnInit()
          " Pos=", UltraYN(UltraZFRPositionRecovery),
          " Conn=", UltraYN(UltraZFRConnectionRecovery),
          " NeverStop=Y");
-   Print("P10 POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
+   Print("P10 POSITION EVOLUTION (Ch10): Enabled=", UltraYN(UltraPosEvoEnabled),
          " L3Close=", UltraYN(UltraPosEvoCloseOnL3),
          " L3Bars=", UltraPosEvoL3ConfirmBars,
          " Replace=", UltraYN(UltraPosEvoReplaceEnabled),
          " NextBarOnly=", UltraYN(UltraPosEvoReplaceNextBarOnly),
-         " ReplaceMinConf=", UltraPosEvoReplaceMinConf);
+         " ReplaceMinConf=", UltraPosEvoReplaceMinConf,
+         " StopEvo=", UltraYN(UltraStopEvoEnabled),
+         " (continuous manage · never widen SL · Mission sole close)");
    UltraPosEvo_Init();
+   Print("P10 POS INTEL: Boot=", UltraYN(g_UltraPosEvoIntel.booted),
+         " Out=", g_UltraPosEvoIntel.outputName,
+         " (CONTINUE|MODIFY_SL|MODIFY_TARGETS|PROTECT_PROFIT|PREPARE_EXIT)");
    Print("UFSE: FastSignal=", UltraYN(UltraFastSignalEnabled),
          " MasterTrendLock=", UltraYN(UltraMasterTrendLock),
          " SignalLock=", UltraYN(UltraSignalLockEnabled),
@@ -4744,9 +4749,10 @@ void ManageOpenTrades()
 
          //================ ULTRA STOP EVOLUTION ∞ =================//
          // Protect profits with room for trends — tighten-only, validated
+         bool stopEvoMod = false;
          if(UltraStopEvoEnabled && (mission == SUP_HOLD || mission == SUP_MANAGE))
          {
-            UltraStopEvo_OnManage(ticket, BrokerSymbol, isBuyPos,
+            stopEvoMod = UltraStopEvo_OnManage(ticket, BrokerSymbol, isBuyPos,
                                  openPrice, price, currentSL, currentTP,
                                  barsHeld, sxSnap);
          }
@@ -4754,6 +4760,14 @@ void ManageOpenTrades()
          // CHAPTER 9 — Target Evolution advisory (never executes / never closes)
          UltraTargetIntel_EvaluateActive(ticket, BrokerSymbol, isBuyPos,
                                          openPrice, price, sxSnap);
+
+         // CHAPTER 10 — Position Evolution Intel publish (outputs → Exit Engine)
+         UltraPosEvoIntel_PublishCycle(ticket, BrokerSymbol, isBuyPos, mission,
+                                       stopEvoMod,
+                                       g_UltraTargetIntel.profitProtectReady,
+                                       (g_UltraTargetIntel.evoStatus == "ADJUST_ADVISORY"),
+                                       UltraNewsExec_IsNewsMode(),
+                                       sxSnap);
 
          if(!PositionSelectByTicket(ticket))
             continue;
@@ -4764,12 +4778,20 @@ void ManageOpenTrades()
       {
          // PosEvo/SmartExit off — still evolve stops with last snap
          bool isBuyPos2 = (type == POSITION_TYPE_BUY);
-         UltraStopEvo_OnManage(ticket, BrokerSymbol, isBuyPos2,
+         bool stopEvoMod2 = UltraStopEvo_OnManage(ticket, BrokerSymbol, isBuyPos2,
                               openPrice, price, currentSL, currentTP,
                               barsHeld, g_UltraLastSnap);
          // CHAPTER 9 — Target Evolution advisory
          UltraTargetIntel_EvaluateActive(ticket, BrokerSymbol, isBuyPos2,
                                          openPrice, price, g_UltraLastSnap);
+         // CHAPTER 10 — Position Evolution Intel publish
+         UltraPosEvoIntel_PublishCycle(ticket, BrokerSymbol, isBuyPos2,
+                                       stopEvoMod2 ? SUP_MANAGE : SUP_HOLD,
+                                       stopEvoMod2,
+                                       g_UltraTargetIntel.profitProtectReady,
+                                       (g_UltraTargetIntel.evoStatus == "ADJUST_ADVISORY"),
+                                       UltraNewsExec_IsNewsMode(),
+                                       g_UltraLastSnap);
          if(!PositionSelectByTicket(ticket))
             continue;
          currentSL = PositionGetDouble(POSITION_SL);
@@ -4777,10 +4799,16 @@ void ManageOpenTrades()
       }
       else
       {
-         // Still refresh Target Intel evolution status for dashboard / PosEvo
+         // Still refresh Target Intel + PosEvo Intel for dashboard
          bool isBuyPos3 = (type == POSITION_TYPE_BUY);
          UltraTargetIntel_EvaluateActive(ticket, BrokerSymbol, isBuyPos3,
                                          openPrice, price, g_UltraLastSnap);
+         UltraPosEvoIntel_PublishCycle(ticket, BrokerSymbol, isBuyPos3, SUP_HOLD,
+                                       false,
+                                       g_UltraTargetIntel.profitProtectReady,
+                                       (g_UltraTargetIntel.evoStatus == "ADJUST_ADVISORY"),
+                                       UltraNewsExec_IsNewsMode(),
+                                       g_UltraLastSnap);
       }
 
 

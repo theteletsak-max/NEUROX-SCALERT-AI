@@ -9188,10 +9188,10 @@ UltraSmartExit UltraSmartExit_Decide(const UltraHoldScore &hold, const UltraCorr
 #ifndef HITMAN_ULTRA_POSITION_EVOLUTION_MQH
 #define HITMAN_ULTRA_POSITION_EVOLUTION_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — INTELLIGENT POSITION EVOLUTION ENGINE                |
-//| Evolve with the market — never panic, never random reverse       |
-//| L1 KEEP HOLDING · L2 MANAGE · L3 INVALIDATION (+ optional replace)|
-//| Decision authority remains Mission Control only                  |
+//| HITMAN AI — MASTER SPEC CHAPTER 10 · POSITION EVOLUTION ENGINE   |
+//| Continuous manage: market · thesis · trend · mom · SL · targets  |
+//| L1 HOLD · L2 MANAGE · L3 INVALIDATE (+ optional replace)         |
+//| Mission sole close · never widen SL · never unmanaged            |
 //+------------------------------------------------------------------+
 
 enum ENUM_POS_EVO_LEVEL
@@ -9240,6 +9240,13 @@ int                 g_UltraPosEvoL3Streak = 0;
 datetime            g_UltraPosEvoL3Bar = 0;
 ulong               g_UltraPosEvoL3Ticket = 0;
 
+// Chapter 10 facade (definitions below)
+void UltraPosEvoIntel_Boot();
+void UltraPosEvoIntel_SyncFromDecision(const UltraPosEvoDecision &d);
+void UltraPosEvoIntel_Log(const string verb);
+string UltraPosEvoIntel_Dashboard();
+UltraPosEvoDecision UltraPosEvo_Finish(const UltraPosEvoDecision &d);
+
 //--------------------------------------------------------------------//
 void UltraPosEvo_Init()
 {
@@ -9273,6 +9280,7 @@ void UltraPosEvo_Init()
    g_UltraPosEvoL3Streak = 0;
    g_UltraPosEvoL3Bar = 0;
    g_UltraPosEvoL3Ticket = 0;
+   UltraPosEvoIntel_Boot();
 }
 
 string UltraPosEvo_LevelName(const ENUM_POS_EVO_LEVEL lv)
@@ -9554,8 +9562,7 @@ UltraPosEvoDecision UltraPosEvo_Evaluate(const ulong ticket, const string s, con
       d.level = PEVO_HOLD;
       d.command = SUP_HOLD;
       d.reason = "PosEvo off — defer";
-      g_UltraPosEvoLast = d;
-      return d;
+      return UltraPosEvo_Finish(d);
    }
 
    //======== ANTI-WHIPSAW: never invalidate on noise ========//
@@ -9574,8 +9581,7 @@ UltraPosEvoDecision UltraPosEvo_Evaluate(const ulong ticket, const string s, con
          g_UltraPosEvoL3Streak = 0;
          g_UltraPosEvoL3Bar = 0;
       }
-      g_UltraPosEvoLast = d;
-      return d;
+      return UltraPosEvo_Finish(d);
    }
 
    //======== LEVEL 3 candidate: multi-confirm invalidation ========//
@@ -9620,8 +9626,7 @@ UltraPosEvoDecision UltraPosEvo_Evaluate(const ulong ticket, const string s, con
          d.wantReplace = UltraPosEvoReplaceEnabled;
          if(d.wantReplace)
             d.replaceReason = "rebuild analysis → score → Mission REPLACE opposite";
-         g_UltraPosEvoLast = d;
-         return d;
+         return UltraPosEvo_Finish(d);
       }
 
       // Not enough confirm bars — manage, do not panic close
@@ -9629,8 +9634,7 @@ UltraPosEvoDecision UltraPosEvo_Evaluate(const ulong ticket, const string s, con
       d.command = SUP_MANAGE;
       d.reason = StringFormat("L2 MANAGE — invalidation forming %d/%d bars (anti-whipsaw)",
                               d.l3Streak, need);
-      g_UltraPosEvoLast = d;
-      return d;
+      return UltraPosEvo_Finish(d);
    }
 
    // Reset streak when not invalidating
@@ -9652,8 +9656,7 @@ UltraPosEvoDecision UltraPosEvo_Evaluate(const ulong ticket, const string s, con
       d.reason = "L2 MANAGE — protect through pullback/volatility (thesis still alive)";
       if(!d.masterTrendValid) d.reason = "L2 MANAGE — master softening, protect profit";
       if(!d.confidenceOk) d.reason = "L2 MANAGE — confidence soft, hold with protection";
-      g_UltraPosEvoLast = d;
-      return d;
+      return UltraPosEvo_Finish(d);
    }
 
    //======== LEVEL 1: keep holding ========//
@@ -9662,21 +9665,250 @@ UltraPosEvoDecision UltraPosEvo_Evaluate(const ulong ticket, const string s, con
    d.reason = "L1 HOLD — thesis/structure/trend/confidence maintained";
    if(d.thesisValid && d.structureValid && d.masterTrendValid && d.confidenceOk)
       d.reason = "L1 HOLD — highest-probability path still intact";
-   g_UltraPosEvoLast = d;
-   return d;
+   return UltraPosEvo_Finish(d);
 }
 
 string UltraPosEvo_Dashboard()
 {
+   return UltraPosEvoIntel_Dashboard();
+}
+
+UltraPosEvoDecision UltraPosEvo_Finish(const UltraPosEvoDecision &d)
+{
+   g_UltraPosEvoLast = d;
+   UltraPosEvoIntel_SyncFromDecision(d);
+   return d;
+}
+
+//====================================================================//
+// CHAPTER 10 FACADE — UltraPosEvoIntel_* (one engine · Mission close) //
+//====================================================================//
+enum ENUM_ULTRA_POSEVO_OUT
+{
+   UPOSEVO_CONTINUE = 0,
+   UPOSEVO_MODIFY_SL,
+   UPOSEVO_MODIFY_TARGETS,
+   UPOSEVO_PROTECT_PROFIT,
+   UPOSEVO_PREPARE_EXIT
+};
+
+struct UltraPosEvoIntelState
+{
+   bool   booted;
+   ENUM_POS_EVO_LEVEL level;
+   ENUM_SUPREME_DECISION command;
+   ENUM_ULTRA_POSEVO_OUT output;
+   string outputName;
+   string levelName;
+   string detail;
+   string symbol;
+   ulong  ticket;
+   bool   isBuy;
+   bool   thesisValid;
+   bool   trendValid;
+   bool   momentumOk;
+   bool   liquidityOk;
+   bool   structureValid;
+   bool   newsMode;
+   bool   continuePos;
+   bool   modifySL;
+   bool   modifyTargets;
+   bool   protectProfit;
+   bool   prepareExit;
+   int    confidence;
+   int    holdScore;
+   int    quality;             // 0..100 position quality
+   int    l3Streak;
+   ulong  cycleCount;
+   ulong  exitPrepCount;
+   long   lastMs;
+};
+
+UltraPosEvoIntelState g_UltraPosEvoIntel;
+
+string UltraPosEvoIntel_OutputName(const ENUM_ULTRA_POSEVO_OUT o)
+{
+   switch(o)
+   {
+      case UPOSEVO_MODIFY_SL:       return "MODIFY_STOP_LOSS";
+      case UPOSEVO_MODIFY_TARGETS:  return "MODIFY_TARGETS";
+      case UPOSEVO_PROTECT_PROFIT:  return "PROTECT_PROFIT";
+      case UPOSEVO_PREPARE_EXIT:    return "PREPARE_EXIT";
+      default:                      return "CONTINUE_POSITION";
+   }
+}
+
+void UltraPosEvoIntel_Boot()
+{
+   g_UltraPosEvoIntel.booted = true;
+   g_UltraPosEvoIntel.level = PEVO_HOLD;
+   g_UltraPosEvoIntel.command = SUP_HOLD;
+   g_UltraPosEvoIntel.output = UPOSEVO_CONTINUE;
+   g_UltraPosEvoIntel.outputName = "CONTINUE_POSITION";
+   g_UltraPosEvoIntel.levelName = "L1 HOLD";
+   g_UltraPosEvoIntel.detail = "boot — continuous manage · Mission sole close";
+   g_UltraPosEvoIntel.symbol = "";
+   g_UltraPosEvoIntel.ticket = 0;
+   g_UltraPosEvoIntel.isBuy = true;
+   g_UltraPosEvoIntel.thesisValid = true;
+   g_UltraPosEvoIntel.trendValid = true;
+   g_UltraPosEvoIntel.momentumOk = true;
+   g_UltraPosEvoIntel.liquidityOk = true;
+   g_UltraPosEvoIntel.structureValid = true;
+   g_UltraPosEvoIntel.newsMode = false;
+   g_UltraPosEvoIntel.continuePos = true;
+   g_UltraPosEvoIntel.modifySL = false;
+   g_UltraPosEvoIntel.modifyTargets = false;
+   g_UltraPosEvoIntel.protectProfit = false;
+   g_UltraPosEvoIntel.prepareExit = false;
+   g_UltraPosEvoIntel.confidence = 0;
+   g_UltraPosEvoIntel.holdScore = 0;
+   g_UltraPosEvoIntel.quality = 50;
+   g_UltraPosEvoIntel.l3Streak = 0;
+   g_UltraPosEvoIntel.cycleCount = 0;
+   g_UltraPosEvoIntel.exitPrepCount = 0;
+   g_UltraPosEvoIntel.lastMs = 0;
+}
+
+void UltraPosEvoIntel_Log(const string verb)
+{
+   string line = "POSEVO_INTEL ";
+   line += verb;
+   line += " ";
+   line += g_UltraPosEvoIntel.outputName;
+   line += " ";
+   line += g_UltraPosEvoIntel.levelName;
+   line += " Q=";
+   line += IntegerToString(g_UltraPosEvoIntel.quality);
+   line += " conf=";
+   line += IntegerToString(g_UltraPosEvoIntel.confidence);
+   line += " ticket=";
+   line += IntegerToString((int)g_UltraPosEvoIntel.ticket);
+   line += " | ";
+   line += g_UltraPosEvoIntel.detail;
+   UltraLog(line);
+}
+
+void UltraPosEvoIntel_SyncFromDecision(const UltraPosEvoDecision &d)
+{
+   g_UltraPosEvoIntel.level = d.level;
+   g_UltraPosEvoIntel.command = d.command;
+   g_UltraPosEvoIntel.levelName = UltraPosEvo_LevelName(d.level);
+   g_UltraPosEvoIntel.thesisValid = d.thesisValid;
+   g_UltraPosEvoIntel.trendValid = d.masterTrendValid;
+   g_UltraPosEvoIntel.liquidityOk = d.liquidityOk;
+   g_UltraPosEvoIntel.structureValid = d.structureValid;
+   g_UltraPosEvoIntel.confidence = d.confidence;
+   g_UltraPosEvoIntel.holdScore = d.holdScore;
+   g_UltraPosEvoIntel.l3Streak = d.l3Streak;
+   g_UltraPosEvoIntel.detail = d.reason;
+   g_UltraPosEvoIntel.lastMs = (long)GetTickCount();
+
+   // Primary output from thesis/command (cycle publish may refine)
+   g_UltraPosEvoIntel.continuePos = (d.command == SUP_HOLD);
+   g_UltraPosEvoIntel.prepareExit = (d.command == SUP_EXIT || d.allowClose);
+   g_UltraPosEvoIntel.modifySL = (d.command == SUP_MANAGE);
+   g_UltraPosEvoIntel.protectProfit = (d.command == SUP_MANAGE && d.thesisValid);
+   g_UltraPosEvoIntel.modifyTargets = false;
+
+   if(g_UltraPosEvoIntel.prepareExit)
+      g_UltraPosEvoIntel.output = UPOSEVO_PREPARE_EXIT;
+   else if(g_UltraPosEvoIntel.protectProfit)
+      g_UltraPosEvoIntel.output = UPOSEVO_PROTECT_PROFIT;
+   else if(g_UltraPosEvoIntel.modifySL)
+      g_UltraPosEvoIntel.output = UPOSEVO_MODIFY_SL;
+   else
+      g_UltraPosEvoIntel.output = UPOSEVO_CONTINUE;
+   g_UltraPosEvoIntel.outputName = UltraPosEvoIntel_OutputName(g_UltraPosEvoIntel.output);
+
+   // Position quality 0..100
+   int q = 40;
+   if(d.thesisValid) q += 15;
+   if(d.structureValid) q += 10;
+   if(d.masterTrendValid) q += 10;
+   if(d.liquidityOk) q += 5;
+   if(d.confidenceOk) q += 10;
+   if(d.holdScore >= 60) q += 10;
+   if(d.healthyNoise) q -= 5;
+   if(d.trueReversal) q -= 20;
+   if(d.command == SUP_EXIT) q = MathMin(q, 25);
+   if(q < 0) q = 0;
+   if(q > 100) q = 100;
+   g_UltraPosEvoIntel.quality = q;
+}
+
+// Publish after StopEvo + TargetIntel in ManageOpenTrades (params avoid assemble-order deps)
+void UltraPosEvoIntel_PublishCycle(const ulong ticket, const string s, const bool isBuy,
+                                   const ENUM_SUPREME_DECISION cmd,
+                                   const bool stopEvoModified,
+                                   const bool targetProtectReady,
+                                   const bool targetAdjustAdvisory,
+                                   const bool newsMode,
+                                   const UltraSnap &u)
+{
+   g_UltraPosEvoIntel.ticket = ticket;
+   g_UltraPosEvoIntel.symbol = s;
+   g_UltraPosEvoIntel.isBuy = isBuy;
+   g_UltraPosEvoIntel.newsMode = newsMode;
+   g_UltraPosEvoIntel.cycleCount++;
+   g_UltraPosEvoIntel.command = cmd;
+   g_UltraPosEvoIntel.momentumOk = isBuy ? (u.mom.momBuy || u.mom.impulse || !u.mom.momSell)
+                                         : (u.mom.momSell || u.mom.impulse || !u.mom.momBuy);
+   if(u.trend.bull || u.trend.bear)
+      g_UltraPosEvoIntel.trendValid = isBuy ? u.trend.bull : u.trend.bear;
+
+   // News alone never forces exit (Chapter 10 §9)
+   if(newsMode && cmd != SUP_EXIT)
+      g_UltraPosEvoIntel.detail = g_UltraPosEvoLast.reason + " | news monitor (no force exit)";
+
+   g_UltraPosEvoIntel.modifySL = stopEvoModified || (cmd == SUP_MANAGE);
+   g_UltraPosEvoIntel.protectProfit = targetProtectReady ||
+                                      (cmd == SUP_MANAGE && g_UltraPosEvoLast.thesisValid);
+   g_UltraPosEvoIntel.modifyTargets = targetAdjustAdvisory;
+   g_UltraPosEvoIntel.prepareExit = (cmd == SUP_EXIT);
+   g_UltraPosEvoIntel.continuePos = (cmd == SUP_HOLD || cmd == SUP_MANAGE);
+
+   if(g_UltraPosEvoIntel.prepareExit)
+   {
+      g_UltraPosEvoIntel.output = UPOSEVO_PREPARE_EXIT;
+      g_UltraPosEvoIntel.exitPrepCount++;
+   }
+   else if(g_UltraPosEvoIntel.modifyTargets && !g_UltraPosEvoIntel.protectProfit)
+      g_UltraPosEvoIntel.output = UPOSEVO_MODIFY_TARGETS;
+   else if(g_UltraPosEvoIntel.protectProfit)
+      g_UltraPosEvoIntel.output = UPOSEVO_PROTECT_PROFIT;
+   else if(g_UltraPosEvoIntel.modifySL)
+      g_UltraPosEvoIntel.output = UPOSEVO_MODIFY_SL;
+   else
+      g_UltraPosEvoIntel.output = UPOSEVO_CONTINUE;
+   g_UltraPosEvoIntel.outputName = UltraPosEvoIntel_OutputName(g_UltraPosEvoIntel.output);
+   g_UltraPosEvoIntel.lastMs = (long)GetTickCount();
+
+   if(UltraUpgradeLog && (g_UltraPosEvoIntel.prepareExit || stopEvoModified || targetAdjustAdvisory))
+      UltraPosEvoIntel_Log("CYCLE");
+}
+
+string UltraPosEvoIntel_Dashboard()
+{
    string t = "POSEVO: ";
-   t += UltraPosEvo_LevelName(g_UltraPosEvoLast.level);
-   t += " ";
-   t += g_UltraPosEvoLast.reason;
+   if(!g_UltraPosEvoIntel.booted) { t += "INIT"; return t; }
+   t += g_UltraPosEvoIntel.levelName;
+   t += " → ";
+   t += g_UltraPosEvoIntel.outputName;
+   t += " Q=";
+   t += IntegerToString(g_UltraPosEvoIntel.quality);
+   if(StringLen(g_UltraPosEvoLast.reason) > 0)
+   {
+      t += " ";
+      t += g_UltraPosEvoLast.reason;
+   }
    if(g_UltraPosEvoReplace.pending)
    {
       t += " | REPLACE→";
       t += (g_UltraPosEvoReplace.wantBuy ? "BUY" : "SELL");
    }
+   if(g_UltraPosEvoIntel.newsMode)
+      t += " | NEWS";
    return t;
 }
 
@@ -18902,8 +19134,17 @@ void UltraMod_Refresh()
       UltraMod_Reg("P09_TARGET_INTEL", true, UltraTargetEnabled, tgtOK, tgtDetail);
    }
 
-   // PHASE 10 — Position Evolution (+ Stop Evolution support)
-   UltraMod_Reg("P10_POS_EVO", false, UltraPosEvoEnabled, UltraPosEvoEnabled, "L1/L2/L3");
+   // PHASE 10 — Position Evolution (Chapter 10 — continuous manage)
+   {
+      bool pevoOK = g_UltraPosEvoIntel.booted &&
+                    (UltraPosEvoEnabled || UltraStopEvoEnabled);
+      string pevoDetail = g_UltraPosEvoIntel.levelName;
+      pevoDetail += " → ";
+      pevoDetail += g_UltraPosEvoIntel.outputName;
+      pevoDetail += " Q=";
+      pevoDetail += IntegerToString(g_UltraPosEvoIntel.quality);
+      UltraMod_Reg("P10_POS_EVO", true, UltraPosEvoEnabled, pevoOK, pevoDetail);
+   }
    UltraMod_Reg("SUP_STOP_EVO", false, UltraStopEvoEnabled, UltraStopEvoEnabled,
                 UltraStopEvoEnabled ? UltraStopEvo_Dashboard() : "OFF");
 
@@ -20882,13 +21123,18 @@ int OnInit()
          " Pos=", UltraYN(UltraZFRPositionRecovery),
          " Conn=", UltraYN(UltraZFRConnectionRecovery),
          " NeverStop=Y");
-   Print("P10 POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
+   Print("P10 POSITION EVOLUTION (Ch10): Enabled=", UltraYN(UltraPosEvoEnabled),
          " L3Close=", UltraYN(UltraPosEvoCloseOnL3),
          " L3Bars=", UltraPosEvoL3ConfirmBars,
          " Replace=", UltraYN(UltraPosEvoReplaceEnabled),
          " NextBarOnly=", UltraYN(UltraPosEvoReplaceNextBarOnly),
-         " ReplaceMinConf=", UltraPosEvoReplaceMinConf);
+         " ReplaceMinConf=", UltraPosEvoReplaceMinConf,
+         " StopEvo=", UltraYN(UltraStopEvoEnabled),
+         " (continuous manage · never widen SL · Mission sole close)");
    UltraPosEvo_Init();
+   Print("P10 POS INTEL: Boot=", UltraYN(g_UltraPosEvoIntel.booted),
+         " Out=", g_UltraPosEvoIntel.outputName,
+         " (CONTINUE|MODIFY_SL|MODIFY_TARGETS|PROTECT_PROFIT|PREPARE_EXIT)");
    Print("UFSE: FastSignal=", UltraYN(UltraFastSignalEnabled),
          " MasterTrendLock=", UltraYN(UltraMasterTrendLock),
          " SignalLock=", UltraYN(UltraSignalLockEnabled),
@@ -25421,9 +25667,10 @@ void ManageOpenTrades()
 
          //================ ULTRA STOP EVOLUTION ∞ =================//
          // Protect profits with room for trends — tighten-only, validated
+         bool stopEvoMod = false;
          if(UltraStopEvoEnabled && (mission == SUP_HOLD || mission == SUP_MANAGE))
          {
-            UltraStopEvo_OnManage(ticket, BrokerSymbol, isBuyPos,
+            stopEvoMod = UltraStopEvo_OnManage(ticket, BrokerSymbol, isBuyPos,
                                  openPrice, price, currentSL, currentTP,
                                  barsHeld, sxSnap);
          }
@@ -25431,6 +25678,14 @@ void ManageOpenTrades()
          // CHAPTER 9 — Target Evolution advisory (never executes / never closes)
          UltraTargetIntel_EvaluateActive(ticket, BrokerSymbol, isBuyPos,
                                          openPrice, price, sxSnap);
+
+         // CHAPTER 10 — Position Evolution Intel publish (outputs → Exit Engine)
+         UltraPosEvoIntel_PublishCycle(ticket, BrokerSymbol, isBuyPos, mission,
+                                       stopEvoMod,
+                                       g_UltraTargetIntel.profitProtectReady,
+                                       (g_UltraTargetIntel.evoStatus == "ADJUST_ADVISORY"),
+                                       UltraNewsExec_IsNewsMode(),
+                                       sxSnap);
 
          if(!PositionSelectByTicket(ticket))
             continue;
@@ -25441,12 +25696,20 @@ void ManageOpenTrades()
       {
          // PosEvo/SmartExit off — still evolve stops with last snap
          bool isBuyPos2 = (type == POSITION_TYPE_BUY);
-         UltraStopEvo_OnManage(ticket, BrokerSymbol, isBuyPos2,
+         bool stopEvoMod2 = UltraStopEvo_OnManage(ticket, BrokerSymbol, isBuyPos2,
                               openPrice, price, currentSL, currentTP,
                               barsHeld, g_UltraLastSnap);
          // CHAPTER 9 — Target Evolution advisory
          UltraTargetIntel_EvaluateActive(ticket, BrokerSymbol, isBuyPos2,
                                          openPrice, price, g_UltraLastSnap);
+         // CHAPTER 10 — Position Evolution Intel publish
+         UltraPosEvoIntel_PublishCycle(ticket, BrokerSymbol, isBuyPos2,
+                                       stopEvoMod2 ? SUP_MANAGE : SUP_HOLD,
+                                       stopEvoMod2,
+                                       g_UltraTargetIntel.profitProtectReady,
+                                       (g_UltraTargetIntel.evoStatus == "ADJUST_ADVISORY"),
+                                       UltraNewsExec_IsNewsMode(),
+                                       g_UltraLastSnap);
          if(!PositionSelectByTicket(ticket))
             continue;
          currentSL = PositionGetDouble(POSITION_SL);
@@ -25454,10 +25717,16 @@ void ManageOpenTrades()
       }
       else
       {
-         // Still refresh Target Intel evolution status for dashboard / PosEvo
+         // Still refresh Target Intel + PosEvo Intel for dashboard
          bool isBuyPos3 = (type == POSITION_TYPE_BUY);
          UltraTargetIntel_EvaluateActive(ticket, BrokerSymbol, isBuyPos3,
                                          openPrice, price, g_UltraLastSnap);
+         UltraPosEvoIntel_PublishCycle(ticket, BrokerSymbol, isBuyPos3, SUP_HOLD,
+                                       false,
+                                       g_UltraTargetIntel.profitProtectReady,
+                                       (g_UltraTargetIntel.evoStatus == "ADJUST_ADVISORY"),
+                                       UltraNewsExec_IsNewsMode(),
+                                       g_UltraLastSnap);
       }
 
 

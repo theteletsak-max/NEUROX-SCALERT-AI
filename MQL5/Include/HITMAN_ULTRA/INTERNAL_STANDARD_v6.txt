@@ -53,6 +53,8 @@ PHASE 9  — TARGET INTELLIGENCE ENGINE
 PHASE 10 — POSITION EVOLUTION ENGINE
   Monitor · Re-analysis · Thesis validation · Stop Evolution
   Profit protect · Sync · Exit preparation
+  MASTER SPEC CHAPTER 10 — continuous loop · never widen SL · Mission sole close
+  Outputs → Exit Engine (CONTINUE | MODIFY_SL | PROTECT | PREPARE_EXIT)
 
 PHASE 11 — EXIT INTELLIGENCE ENGINE
   Thesis invalidation · Dynamic exit · Confirm · Verify · Diagnostics

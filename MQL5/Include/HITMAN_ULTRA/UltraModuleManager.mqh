@@ -162,8 +162,17 @@ void UltraMod_Refresh()
       UltraMod_Reg("P09_TARGET_INTEL", true, UltraTargetEnabled, tgtOK, tgtDetail);
    }
 
-   // PHASE 10 — Position Evolution (+ Stop Evolution support)
-   UltraMod_Reg("P10_POS_EVO", false, UltraPosEvoEnabled, UltraPosEvoEnabled, "L1/L2/L3");
+   // PHASE 10 — Position Evolution (Chapter 10 — continuous manage)
+   {
+      bool pevoOK = g_UltraPosEvoIntel.booted &&
+                    (UltraPosEvoEnabled || UltraStopEvoEnabled);
+      string pevoDetail = g_UltraPosEvoIntel.levelName;
+      pevoDetail += " → ";
+      pevoDetail += g_UltraPosEvoIntel.outputName;
+      pevoDetail += " Q=";
+      pevoDetail += IntegerToString(g_UltraPosEvoIntel.quality);
+      UltraMod_Reg("P10_POS_EVO", true, UltraPosEvoEnabled, pevoOK, pevoDetail);
+   }
    UltraMod_Reg("SUP_STOP_EVO", false, UltraStopEvoEnabled, UltraStopEvoEnabled,
                 UltraStopEvoEnabled ? UltraStopEvo_Dashboard() : "OFF");
 

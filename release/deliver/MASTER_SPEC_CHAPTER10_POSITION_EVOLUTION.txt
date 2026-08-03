@@ -1,0 +1,79 @@
+HITMAN AI — MASTER SPECIFICATION
+CHAPTER 10 — POSITION EVOLUTION ENGINE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Continuously manage every open position.
+  Never stop analysing · protecting · validating.
+  Evolve every trade from entry until exit.
+  Mission Control remains sole close authority.
+
+============================================================
+1. POSITION CORE
+  Monitor: position · market · strategy · thesis · risk
+  profit · SL · targets · exit conditions
+  API: UltraPosEvo_Evaluate · UltraPosEvoIntel_PublishCycle
+
+2. CONTINUOUS MARKET ANALYSIS
+  Every tick (ManageOpenTrades never skipped):
+  Read market · trend · momentum · volatility · liquidity · events
+
+3. TRADE THESIS EVOLUTION
+  Still deserve to stay open? YES→Continue · NO→Prepare Exit
+
+4. TREND EVOLUTION
+  Strength · continuation · weakening · reversal → management
+
+5. MOMENTUM EVOLUTION
+  Increase · decrease · exhaustion → adapt behaviour
+
+6. STOP LOSS EVOLUTION (UltraStopEvo)
+  Never widen risk · never random moves
+  Only when thesis valid · progressed · structure supports
+  → Protect profit · never choke winners
+
+7. PROFIT EVOLUTION
+  Floating P/L · unrealized risk/reward · trade quality
+
+8. TARGET EVOLUTION (Ch9 advisory)
+  TP1→TP2→TP3 only if thesis AND strategy support
+
+9. NEWS EVOLUTION
+  Continue analysis during news — news alone never forces exit
+
+10. RISK EVOLUTION
+  Current/remaining risk · portfolio · margin — adapt if required
+
+11. POSITION QUALITY
+  Health · quality · confidence · profit stability → g_UltraPosEvoIntel.quality
+
+12. EXIT PREPARATION
+  Thesis fails → PREPARE_EXIT → Exit Engine / Mission validate → close
+
+13. POSITION LOGGER
+  SL/target/protect/thesis/trend/exit via POSEVO_INTEL + Mission logs
+
+14. POSITION OUTPUT
+  CONTINUE_POSITION · MODIFY_STOP_LOSS · MODIFY_TARGETS
+  PROTECT_PROFIT · PREPARE_EXIT → Exit Engine
+
+============================================================
+RULES
+  ✔ Continuous market / strategy / thesis / profit / risk / news
+  ✔ Dynamic SL evolution (never widen) · Target evolution (advisory)
+  ✔ Never protect too early · Never ignore thesis/trend
+  ✔ One Position Evolution Engine · Mission-only closes
+
+PHILOSOPHY
+  Opening is only the beginning. Evolve intelligently — never leave unmanaged.
+
+FILES
+  PositionEvolution.mqh (UltraPosEvo_* · UltraPosEvoIntel_*)
+  UltraStopEvolution.mqh · UltraTargetIntelligence (Ch9) · MissionControl · Shell ManageOpenTrades
+
+LOCKS
+  HITMAN AI · HA_ULTRA_93 · MaxOpen=3 · Mission sole close
+  Final Development Rule — refine only (facade over existing PosEvo)
+============================================================
+END OF CHAPTER 10
