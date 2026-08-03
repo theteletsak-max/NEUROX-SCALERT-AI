@@ -1,0 +1,52 @@
+HITMAN AI ULTRA ∞ — ULTRA STOP EVOLUTION
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Protect profits while allowing winning trades room to continue.
+  Never tighten the stop-loss without a valid reason.
+  SL modify only — Mission remains sole close authority.
+
+============================================================
+FLOW
+  Trade Open → Initial SL → Profit → Re-analyse → Thesis Valid?
+  → YES → Calculate Protective Stop → Move SL → Continue Monitoring
+
+============================================================
+PROFIT LEVELS (R-multiples of initial risk)
+  L1 Small        — keep initial stop
+  L2 Moderate     — break-even (optional, UltraStopEvoBreakEven)
+  L3 Strong       — lock partial MFE (UltraStopEvoL3LockFrac)
+  L4 Large        — dynamic ATR trail (UltraStopEvoL4TrailATR)
+  L5 Exceptional  — wider trail + floor lock (never cut trend early)
+
+============================================================
+VALIDATION (before any modify)
+  ✓ Trade thesis still valid (PosEvo)
+  ✓ Trend still valid
+  ✓ Position still healthy (not EXIT / holdScore floor)
+  ✓ New stop better than current (tighten only)
+  ✓ Broker stops/freeze allow modification
+  ✓ Level confirmed for ConfirmBars (anti one-candle)
+  ✓ Min bars held
+  ✓ Modify verified + safe retry
+
+============================================================
+RULES
+  ✓ Never move stop farther from risk (no widen)
+  ✓ Only move toward protecting profit
+  ✓ Never modify on one candle
+  ✓ Never tighten without objective confirmation
+  ✓ Re-evaluate after meaningful market moves (ManageOpenTrades)
+  ✓ Verify modification succeeded
+  ✓ If modify fails, retry safely
+
+============================================================
+WIRING
+  Module: UltraStopEvolution.mqh
+  Hook: ManageOpenTrades after Mission HOLD/MANAGE
+  Works with classic BE / TP ladder / trail (all tighten-only)
+
+ULTIMATE OBJECTIVE
+  Protect growing profits · reduce giveback · let strong trends run
+  Intelligent dynamic stop management

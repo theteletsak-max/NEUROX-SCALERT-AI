@@ -28,6 +28,7 @@ order = [
     "UltraAdaptiveIntelligence.mqh",
     "MissionControl.mqh",
     "UltraBugElimination.mqh",
+    "UltraStopEvolution.mqh",
     "UltraMaintenance.mqh",
     "UltraLowLatency.mqh",
     "UltraZeroFailRecovery.mqh",

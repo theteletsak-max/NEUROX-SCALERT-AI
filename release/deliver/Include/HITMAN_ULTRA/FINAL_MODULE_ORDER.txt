@@ -48,9 +48,10 @@ PHASE 8 — ULTRA TARGET INTELLIGENCE ENGINE
   Dynamic SL · TP1 · TP2 · TP3 · Risk:Reward Validation
 
 PHASE 9 — ULTRA POSITION EVOLUTION ENGINE
-  Module: PositionEvolution.mqh
+  Module: PositionEvolution.mqh (+ UltraStopEvolution.mqh profit protect)
   Position Monitoring · Thesis Monitoring · Re-analysis · Replacement
   Protection · Profit Management (L1/L2/L3)
+  Stop Evolution: L1–L5 tighten-only SL (thesis/trend validated)
 
 PHASE 10 — ULTRA EXIT INTELLIGENCE ENGINE
   Modules: MissionControl EXIT · SmartExit · UltraExitValidation (00_Types)

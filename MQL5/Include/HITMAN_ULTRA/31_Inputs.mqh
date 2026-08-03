@@ -200,6 +200,32 @@ input int    UltraBugPositionAuditMs     = 1000;   // position sync cadence
 input int    UltraBugPerfWarnMs          = 50;     // tick latency warn threshold
 input bool   UltraMaintenanceEnabled     = true;   // Final Order P17 — orchestrates Bug+resources
 
+input group "31 · ULTRA STOP EVOLUTION ∞ (profit protect)"
+input bool   UltraStopEvoEnabled         = true;   // master — intelligent SL evolution
+input bool   UltraStopEvoLog             = true;   // STOP EVO modify logs
+input bool   UltraStopEvoLogBoot         = true;   // boot line
+input bool   UltraStopEvoBreakEven       = true;   // L2 optional BE
+input bool   UltraStopEvoRequireTrend    = true;   // trend must still agree
+input bool   UltraStopEvoRequireHealthy  = true;   // block tighten on EXIT/weak hold
+input bool   UltraStopEvoL5GiveRoom      = true;   // exceptional profit — wider trail
+input double UltraStopEvoRiskATR         = 1.0;    // fallback R unit when no initial SL
+input double UltraStopEvoL2R             = 0.80;   // moderate → BE
+input double UltraStopEvoL3R             = 1.50;   // strong → lock partial
+input double UltraStopEvoL4R             = 2.50;   // large → dynamic trail
+input double UltraStopEvoL5R             = 4.00;   // exceptional → wide protect
+input double UltraStopEvoL3LockFrac      = 0.35;   // lock fraction of MFE at L3
+input double UltraStopEvoL5LockFrac      = 0.55;   // floor lock fraction at L5
+input double UltraStopEvoL4TrailATR      = 1.20;   // L4 trail distance (ATR)
+input double UltraStopEvoL5TrailATR      = 1.80;   // L5 wider trail (ATR)
+input double UltraStopEvoBufferATR       = 0.08;   // buffer under lock
+input int    UltraStopEvoMinBars         = 2;      // never one-candle tighten
+input int    UltraStopEvoConfirmBars     = 2;      // level must persist
+input int    UltraStopEvoMinModifySec    = 3;      // modify throttle
+input int    UltraStopEvoMaxRetry        = 2;      // verify retry count
+input int    UltraStopEvoRetryMs         = 50;     // retry pause
+input int    UltraStopEvoMinHoldScore    = 30;     // below → give room (no tighten)
+input int    UltraStopEvoL5HoldSkip      = 70;     // strong hold → prefer wide L5 trail
+
 input group "31 · ULTRA LOW-LATENCY ARCHITECTURE ∞ (perf only)"
 input bool   UltraLowLatencyEnabled         = true;  // master — tick budget / early skip
 input bool   UltraLowLatencyEarlySmartTick  = true;  // skip news/market prelude when price unchanged

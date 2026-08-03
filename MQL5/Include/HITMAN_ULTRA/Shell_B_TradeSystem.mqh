@@ -73,6 +73,7 @@ int OnInit()
    UltraTarget_Boot();      // P08 Target Intelligence
    UltraAdaptive_Boot();    // P13 Performance Analytics (soft adaptive)
    UltraBug_Boot();         // P17 Maintenance core (Bug Elimination)
+   UltraStopEvo_Boot();     // ULTRA STOP EVOLUTION ∞
    UltraMaint_Boot();       // P17 Maintenance orchestrator
    UltraLL_Boot();          // ULTRA LOW-LATENCY ARCHITECTURE ∞
    UltraZFR_Boot();         // P16 Zero-Fail Recovery
@@ -95,6 +96,13 @@ int OnInit()
    UltraMission_Init();     // P06 Mission Control
    UltraBug_AuditInit(BrokerSymbol); // P17 init / handles / broker / timer audit
    Print("FINAL MODULE ORDER: HA_ULTRA_93 | Phases 1-17 | one strategy · one signal · one thesis · one mission · one exit");
+   Print("ULTRA STOP EVOLUTION ∞: Enabled=", UltraYN(UltraStopEvoEnabled),
+         " BE=", UltraYN(UltraStopEvoBreakEven),
+         " L2/L3/L4/L5 R=", DoubleToString(UltraStopEvoL2R, 2), "/",
+         DoubleToString(UltraStopEvoL3R, 2), "/",
+         DoubleToString(UltraStopEvoL4R, 2), "/",
+         DoubleToString(UltraStopEvoL5R, 2),
+         " ConfirmBars=", UltraStopEvoConfirmBars);
    Print("ULTRA LOW-LATENCY ∞: Enabled=", UltraYN(UltraLowLatencyEnabled),
          " EarlySmartTick=", UltraYN(UltraLowLatencyEarlySmartTick),
          " SkipHeavy=", UltraYN(UltraLowLatencySkipHeavy),
@@ -4470,6 +4478,28 @@ void ManageOpenTrades()
             }
          }
          // SUP_HOLD → no exit, thesis still valid
+
+         //================ ULTRA STOP EVOLUTION ∞ =================//
+         // Protect profits with room for trends — tighten-only, validated
+         if(UltraStopEvoEnabled && (mission == SUP_HOLD || mission == SUP_MANAGE))
+         {
+            UltraStopEvo_OnManage(ticket, BrokerSymbol, isBuyPos,
+                                 openPrice, price, currentSL, currentTP,
+                                 barsHeld, sxSnap);
+         }
+
+         if(!PositionSelectByTicket(ticket))
+            continue;
+         currentSL = PositionGetDouble(POSITION_SL);
+         currentTP = PositionGetDouble(POSITION_TP);
+      }
+      else if(UltraStopEvoEnabled)
+      {
+         // PosEvo/SmartExit off — still evolve stops with last snap
+         bool isBuyPos2 = (type == POSITION_TYPE_BUY);
+         UltraStopEvo_OnManage(ticket, BrokerSymbol, isBuyPos2,
+                              openPrice, price, currentSL, currentTP,
+                              barsHeld, g_UltraLastSnap);
          if(!PositionSelectByTicket(ticket))
             continue;
          currentSL = PositionGetDouble(POSITION_SL);

@@ -98,6 +98,10 @@ void UltraMod_Refresh()
    // PHASE 10 — Exit Intelligence (Mission-only closes)
    UltraMod_Reg("P10_EXIT_INTEL", true, true, UltraMissionOnlyExits, "Mission-only closes");
 
+   // Stop Evolution — profit protect (SL tighten only; supports P9/P10)
+   UltraMod_Reg("SUP_STOP_EVO", false, UltraStopEvoEnabled, UltraStopEvoEnabled,
+                UltraStopEvoEnabled ? UltraStopEvo_Dashboard() : "OFF");
+
    // PHASE 11 — Risk Intelligence (Capital + TradeGate)
    bool gateOK = (!UltraTradeGateEnabled) || g_UltraTradeGate.passed ||
                  (StringLen(g_UltraTradeGate.failStep) == 0);
