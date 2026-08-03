@@ -176,8 +176,21 @@ void UltraMod_Refresh()
    UltraMod_Reg("SUP_STOP_EVO", false, UltraStopEvoEnabled, UltraStopEvoEnabled,
                 UltraStopEvoEnabled ? UltraStopEvo_Dashboard() : "OFF");
 
-   // PHASE 11 — Exit Intelligence (Mission-only closes)
-   UltraMod_Reg("P11_EXIT_INTEL", true, true, UltraMissionOnlyExits, "Mission-only closes");
+   // PHASE 11 — Exit Intelligence (Chapter 11 — Mission sole close)
+   {
+      bool exitOK = g_UltraExitIntel.booted && UltraMissionOnlyExits;
+      string exitDetail = g_UltraExitIntel.status;
+      exitDetail += " ";
+      exitDetail += g_UltraExitIntel.outcomeName;
+      if(StringLen(g_UltraExitIntel.exitMethod) > 0)
+      {
+         exitDetail += " ";
+         exitDetail += g_UltraExitIntel.exitMethod;
+      }
+      exitDetail += " closes=";
+      exitDetail += IntegerToString((int)g_UltraExitIntel.closeCount);
+      UltraMod_Reg("P11_EXIT_INTEL", true, true, exitOK, exitDetail);
+   }
 
    // PHASE 12 — Performance Analytics
    UltraMod_Reg("P12_PERF_ANALYTICS", false, UltraAdaptiveEnabled, UltraAdaptiveEnabled,

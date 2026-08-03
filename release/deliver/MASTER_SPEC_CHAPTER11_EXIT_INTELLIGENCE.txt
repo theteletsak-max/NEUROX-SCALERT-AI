@@ -1,0 +1,73 @@
+HITMAN AI — MASTER SPECIFICATION
+CHAPTER 11 — EXIT INTELLIGENCE ENGINE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Close trades only when the proprietary strategy objectively
+  determines the opportunity has ended.
+  Never exit emotionally · never exit randomly.
+  Every exit must have a logical reason.
+
+============================================================
+1. EXIT CORE
+  Monitor · Validate · Protect profit · Minimize unnecessary loss
+  Coordinate final closure
+  API: UltraExitIntel_PublishMonitor · Validate · RequestClose · Verify
+
+2. EXIT THESIS
+  Original thesis still exist? YES→Remain · NO→Continue validation
+
+3. TREND EXIT
+  Weakening · exhaustion · reversal → support remaining?
+
+4. MOMENTUM EXIT
+  Loss · reversal · exhaustion → energy still supports?
+
+5. TARGET EXIT
+  TP1 → TP2 → TP3 → final objective complete?
+
+6. STOP LOSS EXIT
+  If SL triggered → record reason/stats → complete
+  Never move SL to increase risk
+
+7. STRATEGY EXIT
+  Only: strategy/thesis invalidated · quality lost · objective complete
+
+8. NEWS EXIT
+  Continue evaluation during news — news alone does NOT exit
+
+9. EXIT VALIDATION
+  Before close: reason · position · broker · strategy → Approved
+  Wraps UltraMission_ValidateExit (+ PosEvo L3 honor)
+
+10. POSITION CLOSE
+  Mission Control → Exit Approved → Close → Verify closed → Stats
+  Facade NEVER calls g_Trade.PositionClose* — Mission sole owner
+
+11. EXIT LOGGER
+  Time · symbol · ticket · reason · P/L · thesis · method · duration
+  EXIT_INTEL REQUEST/APPROVE/HOLD/CLOSED/FAIL
+
+12. EXIT OUTPUT
+  POSITION_CLOSED · Statistics Updated · Analytics Updated · Ready Next
+
+============================================================
+RULES
+  ✔ Every exit has a reason · Never emotional · Never ignore thesis
+  ✔ Never increase risk · Verify every close · Log every exit
+  ✔ One exit decision · One position close · One final verification
+  ✔ Mission sole PositionClose* authority
+
+PHILOSOPHY
+  Success is consistent enter · manage · exit by strategy — not emotion.
+
+FILES
+  UltraExitIntelligence.mqh
+  MissionControl (ValidateExit · ClosePosition) · SmartExit · Shell ManageOpenTrades
+
+LOCKS
+  HITMAN AI · HA_ULTRA_93 · MaxOpen=3 · Mission sole close
+  Final Development Rule — refine only (facade over Mission close path)
+============================================================
+END OF CHAPTER 11

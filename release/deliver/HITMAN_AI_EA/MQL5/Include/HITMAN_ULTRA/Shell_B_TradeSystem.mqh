@@ -217,6 +217,11 @@ int OnInit()
    Print("P10 POS INTEL: Boot=", UltraYN(g_UltraPosEvoIntel.booted),
          " Out=", g_UltraPosEvoIntel.outputName,
          " (CONTINUE|MODIFY_SL|MODIFY_TARGETS|PROTECT_PROFIT|PREPARE_EXIT)");
+   UltraExitIntel_Boot();   // P11 Exit Intelligence (Mission sole close)
+   Print("P11 EXIT INTEL (Ch11): Boot=", UltraYN(g_UltraExitIntel.booted),
+         " Status=", g_UltraExitIntel.status,
+         " MissionOnlyExits=", UltraYN(UltraMissionOnlyExits),
+         " (never emotional · never news-alone · every exit has a reason)");
    Print("UFSE: FastSignal=", UltraYN(UltraFastSignalEnabled),
          " MasterTrendLock=", UltraYN(UltraMasterTrendLock),
          " SignalLock=", UltraYN(UltraSignalLockEnabled),
@@ -1897,7 +1902,7 @@ void CloseAllEAPositions()
       if(PositionGetInteger(POSITION_MAGIC) != MagicNumber)
          continue;
 
-      if(UltraMission_ClosePosition(ticket, "EMERGENCY CloseAllEAPositions", true))
+      if(UltraExitIntel_RequestClose(ticket, "EMERGENCY CloseAllEAPositions", true))
          Print("Emergency close: closed ticket ", ticket);
       else
          Print("Emergency close FAILED/held on ticket ", ticket);
@@ -3693,7 +3698,7 @@ bool ExecuteBuy()
          {
             Print("BUY: could not attach SL/TP after fallback - closing the unprotected position for safety (ticket ", newTicket, ").");
             UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "could not attach SL/TP");
-            UltraMission_ClosePosition(newTicket, "EXEC cleanup invalid stops", true);
+            UltraExitIntel_RequestClose(newTicket, "EXEC cleanup invalid stops", true);
             return false;
          }
 
@@ -4157,7 +4162,7 @@ bool ExecuteSell()
          {
             Print("SELL: could not attach SL/TP after fallback - closing the unprotected position for safety (ticket ", newTicket, ").");
             UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "could not attach SL/TP");
-            UltraMission_ClosePosition(newTicket, "EXEC cleanup invalid stops", true);
+            UltraExitIntel_RequestClose(newTicket, "EXEC cleanup invalid stops", true);
             return false;
          }
 
@@ -4630,7 +4635,7 @@ void ManageOpenTrades()
       if(EnableMaxHoldBars && barsHeld >= MaxHoldBars)
       {
          Print("Max hold time reached (", barsHeld, " bars) - Mission close ticket ", ticket);
-         UltraMission_ClosePosition(ticket, "RISK max hold bars", true);
+         UltraExitIntel_RequestClose(ticket, "RISK max hold bars", true);
          continue;
       }
 
@@ -4709,7 +4714,11 @@ void ManageOpenTrades()
             string exitWhy = sxWhy;
             if(StringFind(exitWhy, "EXIT:") < 0)
                exitWhy = "EXIT: " + sxWhy;
-            if(UltraMission_ClosePosition(ticket, exitWhy, false))
+            // CHAPTER 11 — Exit Intelligence (Mission sole close underneath)
+            UltraExitIntel_PublishMonitor(ticket, BrokerSymbol, isBuyPos, mission, true,
+                                          g_UltraTargetIntel.partialTP2Ready || g_UltraTargetIntel.partialTP1Ready,
+                                          UltraNewsExec_IsNewsMode(), sxSnap, exitWhy);
+            if(UltraExitIntel_RequestClose(ticket, exitWhy, false))
             {
                // Ultra Reversal Engine: arm replace only after confirmed invalidation close
                if(UltraPosEvoEnabled && UltraPosEvoReplaceEnabled)
@@ -4768,6 +4777,12 @@ void ManageOpenTrades()
                                        (g_UltraTargetIntel.evoStatus == "ADJUST_ADVISORY"),
                                        UltraNewsExec_IsNewsMode(),
                                        sxSnap);
+         // CHAPTER 11 — Exit Intelligence monitor (never closes here)
+         UltraExitIntel_PublishMonitor(ticket, BrokerSymbol, isBuyPos, mission,
+                                       g_UltraPosEvoIntel.prepareExit,
+                                       g_UltraTargetIntel.partialTP2Ready,
+                                       UltraNewsExec_IsNewsMode(), sxSnap,
+                                       g_UltraPosEvoLast.reason);
 
          if(!PositionSelectByTicket(ticket))
             continue;
@@ -4792,6 +4807,11 @@ void ManageOpenTrades()
                                        (g_UltraTargetIntel.evoStatus == "ADJUST_ADVISORY"),
                                        UltraNewsExec_IsNewsMode(),
                                        g_UltraLastSnap);
+         UltraExitIntel_PublishMonitor(ticket, BrokerSymbol, isBuyPos2,
+                                       stopEvoMod2 ? SUP_MANAGE : SUP_HOLD,
+                                       false, g_UltraTargetIntel.partialTP2Ready,
+                                       UltraNewsExec_IsNewsMode(), g_UltraLastSnap,
+                                       "StopEvo path");
          if(!PositionSelectByTicket(ticket))
             continue;
          currentSL = PositionGetDouble(POSITION_SL);
@@ -4809,6 +4829,9 @@ void ManageOpenTrades()
                                        (g_UltraTargetIntel.evoStatus == "ADJUST_ADVISORY"),
                                        UltraNewsExec_IsNewsMode(),
                                        g_UltraLastSnap);
+         UltraExitIntel_PublishMonitor(ticket, BrokerSymbol, isBuyPos3, SUP_HOLD,
+                                       false, false, UltraNewsExec_IsNewsMode(),
+                                       g_UltraLastSnap, "monitor");
       }
 
 
@@ -4907,7 +4930,7 @@ void ManageOpenTrades()
             }
             else if(remainder < minVolume && currentVolume >= minVolume && closeVolume >= minVolume)
             {
-               if(UltraMission_ClosePosition(ticket, "TP ladder full close", true))
+               if(UltraExitIntel_RequestClose(ticket, "TP ladder full close", true))
                {
                   Print("TP1 hit but position too small to split - closed in full: ", ticket);
                   TradeStates[stateIndex].tp1Taken = true;
@@ -5028,7 +5051,7 @@ void ManageOpenTrades()
             else if(remainder2 < minVolume2 && currentVolume2 >= minVolume2 && closeVolume2 >= minVolume2)
             {
                // BUGFIX40: mirror TP1 — can't leave dust remainder
-               if(UltraMission_ClosePosition(ticket, "TP ladder full close", true))
+               if(UltraExitIntel_RequestClose(ticket, "TP ladder full close", true))
                {
                   Print("TP2 hit but position too small to split - closed in full: ", ticket);
                   TradeStates[stateIndex].tp2Taken = true;
@@ -5192,7 +5215,7 @@ void ManageOpenTrades()
             {
                Print("Stagnation exit: ticket ", ticket, " has made no real progress after ",
                      barsHeld, " bars - Mission close.");
-               UltraMission_ClosePosition(ticket, "RISK stagnation exit", true);
+               UltraExitIntel_RequestClose(ticket, "RISK stagnation exit", true);
                continue;
             }
          }
@@ -5214,7 +5237,7 @@ void ManageOpenTrades()
          if(GetADX() < TrendExitADXLevel)
          {
             Print("Trend exit: ADX below ", TrendExitADXLevel, ", Mission close ticket ", ticket);
-            UltraMission_ClosePosition(ticket, "RISK trend exit ADX", true);
+            UltraExitIntel_RequestClose(ticket, "RISK trend exit ADX", true);
             continue;
          }
       }
@@ -8989,7 +9012,7 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
             Print("DEFEND MAE: adverse ", DoubleToString(adverseMove / atr, 2),
                   " ATR ≥ ", DoubleToString(DefenseMAE_ATR, 2),
                   " — Mission close ticket ", ticket);
-         return UltraMission_ClosePosition(ticket, "RISK DEFEND MAE", true);
+         return UltraExitIntel_RequestClose(ticket, "RISK DEFEND MAE", true);
       }
    }
 
@@ -9025,7 +9048,7 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
          if(DefenseLogActions)
             Print("DEFEND CLOSE request: hard opposite reversal vs ", (isBuy ? "BUY" : "SELL"),
                   " ticket ", ticket, " — ", detail);
-         return UltraMission_ClosePosition(ticket, "DEFEND hard reversal "+detail, false);
+         return UltraExitIntel_RequestClose(ticket, "DEFEND hard reversal "+detail, false);
       }
    }
 
@@ -9037,7 +9060,7 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
          if(DefenseLogActions)
             Print("DEFEND CLOSE request: fake-breakout trap against ", (isBuy ? "BUY" : "SELL"),
                   " ticket ", ticket);
-         return UltraMission_ClosePosition(ticket, "DEFEND trap against", false);
+         return UltraExitIntel_RequestClose(ticket, "DEFEND trap against", false);
       }
       // After TP1: lock at least BE instead of full close
       if(inProfit)

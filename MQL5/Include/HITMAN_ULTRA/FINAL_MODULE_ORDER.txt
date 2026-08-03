@@ -61,8 +61,10 @@ PHASE 10 — POSITION EVOLUTION ENGINE
   LOCK: never widen SL · never protect too early · Mission sole close · one PosEvo engine
 
 PHASE 11 — EXIT INTELLIGENCE ENGINE
-  Mission EXIT · SmartExit · UltraExitValidation
-  LOCK: Mission-only closes
+  UltraExitIntelligence · Mission ValidateExit/ClosePosition · SmartExit · UltraExitValidation
+  MASTER SPEC CHAPTER 11 — thesis/trend/mom/target · validate · close · verify · log
+  Outputs: POSITION_CLOSED · STATS · ANALYTICS · READY_NEXT
+  LOCK: Mission sole PositionClose* · never emotional · never news-alone · every exit has reason
 
 PHASE 12 — PERFORMANCE ANALYTICS ENGINE
   UltraAdaptiveIntelligence · 25_Statistics

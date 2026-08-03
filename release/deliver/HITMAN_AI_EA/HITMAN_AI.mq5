@@ -15368,6 +15368,382 @@ string UltraMission_Dashboard()
 #endif
 //===== END MissionControl.mqh =====
 
+//===== BEGIN UltraExitIntelligence.mqh =====
+#ifndef HITMAN_ULTRA_EXIT_INTELLIGENCE_MQH
+#define HITMAN_ULTRA_EXIT_INTELLIGENCE_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — MASTER SPEC CHAPTER 11 · EXIT INTELLIGENCE ENGINE    |
+//| Close only when strategy objectively ends the opportunity        |
+//| NEVER emotional / random · NEVER news-alone · NEVER widen risk   |
+//| Mission Control remains SOLE PositionClose* owner                |
+//+------------------------------------------------------------------+
+
+enum ENUM_ULTRA_EXIT_OUT
+{
+   UEXIT_READY = 0,
+   UEXIT_HOLD,
+   UEXIT_VALIDATING,
+   UEXIT_PREPARE,
+   UEXIT_CLOSED,
+   UEXIT_CLOSE_FAIL
+};
+
+struct UltraExitIntelState
+{
+   bool   booted;
+   ENUM_ULTRA_EXIT_OUT outcome;
+   string outcomeName;
+   string status;              // READY | HOLD | VALIDATING | PREPARE_EXIT | CLOSED | FAIL
+   string detail;
+   string symbol;
+   ulong  ticket;
+   bool   isBuy;
+   string exitReason;
+   string exitMethod;          // MISSION | RISK | TP_LADDER | POSEVO | DEFEND | EMERGENCY
+   string thesisState;
+   bool   thesisValid;
+   bool   trendSupports;
+   bool   momentumSupports;
+   bool   targetComplete;
+   bool   stopTriggered;
+   bool   newsMode;
+   bool   approved;
+   bool   verifiedClosed;
+   bool   statsUpdated;
+   bool   analyticsUpdated;
+   bool   readyNext;
+   double profit;
+   int    durationBars;
+   ulong  closeCount;
+   ulong  holdCount;
+   ulong  failCount;
+   long   lastMs;
+};
+
+UltraExitIntelState g_UltraExitIntel;
+
+string UltraExitIntel_OutcomeName(const ENUM_ULTRA_EXIT_OUT o)
+{
+   switch(o)
+   {
+      case UEXIT_HOLD:       return "HOLD";
+      case UEXIT_VALIDATING: return "VALIDATING";
+      case UEXIT_PREPARE:    return "PREPARE_EXIT";
+      case UEXIT_CLOSED:     return "POSITION_CLOSED";
+      case UEXIT_CLOSE_FAIL: return "CLOSE_FAIL";
+      default:               return "READY";
+   }
+}
+
+void UltraExitIntel_Boot()
+{
+   g_UltraExitIntel.booted = true;
+   g_UltraExitIntel.outcome = UEXIT_READY;
+   g_UltraExitIntel.outcomeName = "READY";
+   g_UltraExitIntel.status = "READY";
+   g_UltraExitIntel.detail = "boot — Mission sole close · every exit needs a reason";
+   g_UltraExitIntel.symbol = "";
+   g_UltraExitIntel.ticket = 0;
+   g_UltraExitIntel.isBuy = true;
+   g_UltraExitIntel.exitReason = "";
+   g_UltraExitIntel.exitMethod = "";
+   g_UltraExitIntel.thesisState = "";
+   g_UltraExitIntel.thesisValid = true;
+   g_UltraExitIntel.trendSupports = true;
+   g_UltraExitIntel.momentumSupports = true;
+   g_UltraExitIntel.targetComplete = false;
+   g_UltraExitIntel.stopTriggered = false;
+   g_UltraExitIntel.newsMode = false;
+   g_UltraExitIntel.approved = false;
+   g_UltraExitIntel.verifiedClosed = false;
+   g_UltraExitIntel.statsUpdated = false;
+   g_UltraExitIntel.analyticsUpdated = false;
+   g_UltraExitIntel.readyNext = true;
+   g_UltraExitIntel.profit = 0.0;
+   g_UltraExitIntel.durationBars = 0;
+   g_UltraExitIntel.closeCount = g_UltraExitIntel.holdCount = 0;
+   g_UltraExitIntel.failCount = 0;
+   g_UltraExitIntel.lastMs = 0;
+}
+
+void UltraExitIntel_SetOutcome(const ENUM_ULTRA_EXIT_OUT o, const string detail)
+{
+   g_UltraExitIntel.outcome = o;
+   g_UltraExitIntel.outcomeName = UltraExitIntel_OutcomeName(o);
+   g_UltraExitIntel.detail = detail;
+   g_UltraExitIntel.lastMs = (long)GetTickCount();
+   if(o == UEXIT_READY) g_UltraExitIntel.status = "READY";
+   else if(o == UEXIT_HOLD) g_UltraExitIntel.status = "HOLD";
+   else if(o == UEXIT_VALIDATING) g_UltraExitIntel.status = "VALIDATING";
+   else if(o == UEXIT_PREPARE) g_UltraExitIntel.status = "PREPARE_EXIT";
+   else if(o == UEXIT_CLOSED) g_UltraExitIntel.status = "CLOSED";
+   else if(o == UEXIT_CLOSE_FAIL) g_UltraExitIntel.status = "FAIL";
+}
+
+void UltraExitIntel_Log(const string verb)
+{
+   string line = "EXIT_INTEL ";
+   line += verb;
+   line += " ";
+   line += g_UltraExitIntel.outcomeName;
+   line += " ";
+   line += g_UltraExitIntel.symbol;
+   line += (g_UltraExitIntel.isBuy ? " BUY" : " SELL");
+   line += " ticket=";
+   line += IntegerToString((int)g_UltraExitIntel.ticket);
+   line += " pnl=";
+   line += DoubleToString(g_UltraExitIntel.profit, 2);
+   line += " method=";
+   line += g_UltraExitIntel.exitMethod;
+   line += " | ";
+   line += g_UltraExitIntel.exitReason;
+   if(StringLen(g_UltraExitIntel.detail) > 0)
+   {
+      line += " | ";
+      line += g_UltraExitIntel.detail;
+   }
+   UltraLog(line);
+}
+
+//--------------------------------------------------------------------//
+// §2–8 MONITOR — thesis · trend · mom · target · news (never alone)  //
+//--------------------------------------------------------------------//
+void UltraExitIntel_PublishMonitor(const ulong ticket, const string s, const bool isBuy,
+                                   const ENUM_SUPREME_DECISION cmd,
+                                   const bool prepareExit,
+                                   const bool targetComplete,
+                                   const bool newsMode,
+                                   const UltraSnap &u,
+                                   const string why)
+{
+   g_UltraExitIntel.ticket = ticket;
+   g_UltraExitIntel.symbol = s;
+   g_UltraExitIntel.isBuy = isBuy;
+   g_UltraExitIntel.newsMode = newsMode;
+   g_UltraExitIntel.targetComplete = targetComplete;
+   g_UltraExitIntel.thesisValid = g_UltraPosEvoLast.thesisValid;
+   g_UltraExitIntel.trendSupports = g_UltraPosEvoLast.masterTrendValid;
+   g_UltraExitIntel.momentumSupports = isBuy ? (u.mom.momBuy || u.mom.impulse || !u.mom.momSell)
+                                           : (u.mom.momSell || u.mom.impulse || !u.mom.momBuy);
+   g_UltraExitIntel.thesisState = g_UltraExitIntel.thesisValid ? "VALID" : "INVALID";
+   g_UltraExitIntel.exitReason = why;
+   g_UltraExitIntel.readyNext = false;
+   g_UltraExitIntel.approved = false;
+   g_UltraExitIntel.verifiedClosed = false;
+
+   // News alone NEVER triggers exit (Chapter 11 §8)
+   if(newsMode && !prepareExit && cmd != SUP_EXIT)
+   {
+      UltraExitIntel_SetOutcome(UEXIT_HOLD, "news monitor — no force exit");
+      g_UltraExitIntel.holdCount++;
+      return;
+   }
+
+   if(prepareExit || cmd == SUP_EXIT)
+   {
+      UltraExitIntel_SetOutcome(UEXIT_PREPARE, "exit required — awaiting validation/close");
+      g_UltraExitIntel.exitMethod = "POSEVO";
+   }
+   else if(cmd == SUP_MANAGE)
+   {
+      UltraExitIntel_SetOutcome(UEXIT_HOLD, "manage/protect — remain in trade");
+      g_UltraExitIntel.holdCount++;
+   }
+   else
+   {
+      UltraExitIntel_SetOutcome(UEXIT_READY, "thesis supports remain open");
+      g_UltraExitIntel.readyNext = false;
+   }
+}
+
+//--------------------------------------------------------------------//
+// §9 VALIDATION — wraps Mission ValidateExit (never bypasses)        //
+//--------------------------------------------------------------------//
+bool UltraExitIntel_Validate(const ulong ticket, const string s, const bool isBuy,
+                             const UltraSnap &u, const bool riskForced, string &why)
+{
+   why = "";
+   UltraExitIntel_SetOutcome(UEXIT_VALIDATING, "validating exit conditions");
+   UltraExitValidation v = UltraMission_ValidateExit(ticket, s, isBuy, u, riskForced);
+
+   // Honor PosEvo L3 soft invalidation (same as Mission ClosePosition)
+   if(!v.allowClose && !riskForced && UltraPosEvoEnabled && UltraPosEvoCloseOnL3 &&
+      g_UltraPosEvoLast.allowClose && g_UltraPosEvoLast.command == SUP_EXIT &&
+      g_UltraPosEvoL3Ticket == ticket)
+   {
+      v.allowClose = true;
+      v.reason = (StringLen(g_UltraPosEvoLast.exitReason) > 0)
+                 ? g_UltraPosEvoLast.exitReason
+                 : "POSEVO L3 soft invalidation confirmed";
+   }
+
+   g_UltraExitIntel.thesisValid = !v.thesisBroken;
+   g_UltraExitIntel.trendSupports = !v.masterTrendChanged;
+   g_UltraExitIntel.thesisState = v.thesisBroken ? "INVALID" : "VALID";
+   g_UltraExitIntel.approved = v.allowClose;
+   why = v.reason;
+   g_UltraExitIntel.exitReason = why;
+
+   if(!v.allowClose)
+   {
+      UltraExitIntel_SetOutcome(UEXIT_HOLD, why);
+      g_UltraExitIntel.holdCount++;
+      UltraExitIntel_Log("HOLD");
+      return false;
+   }
+   UltraExitIntel_SetOutcome(UEXIT_PREPARE, why);
+   UltraExitIntel_Log("APPROVE");
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// §10 CLOSE — Mission only (facade NEVER calls g_Trade.PositionClose) //
+//--------------------------------------------------------------------//
+bool UltraExitIntel_VerifyClosed(const ulong ticket)
+{
+   if(ticket == 0) return true;
+   bool gone = !PositionSelectByTicket(ticket);
+   g_UltraExitIntel.verifiedClosed = gone;
+   return gone;
+}
+
+void UltraExitIntel_NoteClosed(const ulong ticket, const string s, const bool isBuy,
+                               const string why, const string method,
+                               const double profit, const int durationBars)
+{
+   g_UltraExitIntel.ticket = ticket;
+   g_UltraExitIntel.symbol = s;
+   g_UltraExitIntel.isBuy = isBuy;
+   g_UltraExitIntel.exitReason = why;
+   g_UltraExitIntel.exitMethod = method;
+   g_UltraExitIntel.profit = profit;
+   g_UltraExitIntel.durationBars = durationBars;
+   g_UltraExitIntel.approved = true;
+   g_UltraExitIntel.verifiedClosed = true;
+   g_UltraExitIntel.statsUpdated = true;
+   g_UltraExitIntel.analyticsUpdated = true;
+   g_UltraExitIntel.readyNext = true;
+   g_UltraExitIntel.closeCount++;
+   UltraExitIntel_SetOutcome(UEXIT_CLOSED, "position closed · ready for next opportunity");
+   UltraExitIntel_Log("CLOSED");
+}
+
+void UltraExitIntel_NoteFail(const ulong ticket, const string why)
+{
+   g_UltraExitIntel.ticket = ticket;
+   g_UltraExitIntel.exitReason = why;
+   g_UltraExitIntel.failCount++;
+   g_UltraExitIntel.verifiedClosed = false;
+   g_UltraExitIntel.readyNext = false;
+   UltraExitIntel_SetOutcome(UEXIT_CLOSE_FAIL, why);
+   UltraExitIntel_Log("FAIL");
+}
+
+// Classify method from why string (logging only)
+string UltraExitIntel_ClassifyMethod(const string why, const bool riskForced)
+{
+   if(riskForced)
+   {
+      if(StringFind(why, "max hold") >= 0) return "RISK";
+      if(StringFind(why, "stagnation") >= 0) return "RISK";
+      if(StringFind(why, "TP ladder") >= 0) return "TP_LADDER";
+      if(StringFind(why, "EMERGENCY") >= 0) return "EMERGENCY";
+      if(StringFind(why, "EXEC cleanup") >= 0) return "EXEC";
+      if(StringFind(why, "DEFEND") >= 0 || StringFind(why, "DEFENSE") >= 0) return "DEFEND";
+      return "RISK";
+   }
+   if(StringFind(why, "POSEVO") >= 0 || StringFind(why, "L3") >= 0) return "POSEVO";
+   if(StringFind(why, "EXIT:") >= 0) return "MISSION";
+   return "MISSION";
+}
+
+bool UltraExitIntel_RequestClose(const ulong ticket, const string whyIn, const bool riskForced)
+{
+   if(ticket == 0) return false;
+   if(!PositionSelectByTicket(ticket))
+   {
+      UltraExitIntel_NoteFail(ticket, "position already gone");
+      return false;
+   }
+
+   string s = PositionGetString(POSITION_SYMBOL);
+   bool isBuy = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY);
+   double profit = PositionGetDouble(POSITION_PROFIT) + PositionGetDouble(POSITION_SWAP);
+   datetime openTime = (datetime)PositionGetInteger(POSITION_TIME);
+   int durationBars = 0;
+   if(openTime > 0)
+   {
+      datetime bar0 = iTime(s, UltraETF(), 0);
+      if(bar0 > 0)
+         durationBars = (int)((bar0 - openTime) / PeriodSeconds(UltraETF()));
+      if(durationBars < 0) durationBars = 0;
+   }
+
+   g_UltraExitIntel.ticket = ticket;
+   g_UltraExitIntel.symbol = s;
+   g_UltraExitIntel.isBuy = isBuy;
+   g_UltraExitIntel.profit = profit;
+   g_UltraExitIntel.durationBars = durationBars;
+   g_UltraExitIntel.exitMethod = UltraExitIntel_ClassifyMethod(whyIn, riskForced);
+   g_UltraExitIntel.exitReason = whyIn;
+   g_UltraExitIntel.stopTriggered = (StringFind(whyIn, "SL") >= 0 || StringFind(whyIn, "stop") >= 0);
+   UltraExitIntel_SetOutcome(UEXIT_VALIDATING, "Mission close requested");
+   UltraExitIntel_Log("REQUEST");
+
+   // SOLE CLOSE PATH — Mission Control only
+   bool ok = UltraMission_ClosePosition(ticket, whyIn, riskForced);
+   if(ok)
+   {
+      if(!UltraExitIntel_VerifyClosed(ticket))
+      {
+         // Broker lag — brief recheck
+         Sleep(20);
+         if(!UltraExitIntel_VerifyClosed(ticket))
+         {
+            UltraExitIntel_NoteFail(ticket, "close reported OK but position still open");
+            return false;
+         }
+      }
+      UltraExitIntel_NoteClosed(ticket, s, isBuy, whyIn, g_UltraExitIntel.exitMethod,
+                                profit, durationBars);
+      return true;
+   }
+
+   UltraExitIntel_NoteFail(ticket, (StringLen(whyIn) > 0) ? whyIn : "Mission denied close");
+   return false;
+}
+
+string UltraExitIntel_Dashboard()
+{
+   string t = "EXIT: ";
+   if(!g_UltraExitIntel.booted) { t += "INIT"; return t; }
+   t += g_UltraExitIntel.status;
+   t += " ";
+   t += g_UltraExitIntel.outcomeName;
+   if(g_UltraExitIntel.ticket > 0)
+   {
+      t += " #";
+      t += IntegerToString((int)g_UltraExitIntel.ticket);
+   }
+   if(StringLen(g_UltraExitIntel.exitMethod) > 0)
+   {
+      t += " ";
+      t += g_UltraExitIntel.exitMethod;
+   }
+   if(g_UltraExitIntel.outcome == UEXIT_CLOSED)
+   {
+      t += " pnl=";
+      t += DoubleToString(g_UltraExitIntel.profit, 2);
+   }
+   if(g_UltraExitIntel.newsMode) t += " | NEWS";
+   if(g_UltraExitIntel.readyNext && g_UltraExitIntel.outcome == UEXIT_CLOSED)
+      t += " | READY";
+   return t;
+}
+
+#endif // HITMAN_ULTRA_EXIT_INTELLIGENCE_MQH
+//===== END UltraExitIntelligence.mqh =====
+
 //===== BEGIN UltraBugElimination.mqh =====
 #ifndef HITMAN_ULTRA_BUG_ELIMINATION_MQH
 #define HITMAN_ULTRA_BUG_ELIMINATION_MQH
@@ -19148,8 +19524,21 @@ void UltraMod_Refresh()
    UltraMod_Reg("SUP_STOP_EVO", false, UltraStopEvoEnabled, UltraStopEvoEnabled,
                 UltraStopEvoEnabled ? UltraStopEvo_Dashboard() : "OFF");
 
-   // PHASE 11 — Exit Intelligence (Mission-only closes)
-   UltraMod_Reg("P11_EXIT_INTEL", true, true, UltraMissionOnlyExits, "Mission-only closes");
+   // PHASE 11 — Exit Intelligence (Chapter 11 — Mission sole close)
+   {
+      bool exitOK = g_UltraExitIntel.booted && UltraMissionOnlyExits;
+      string exitDetail = g_UltraExitIntel.status;
+      exitDetail += " ";
+      exitDetail += g_UltraExitIntel.outcomeName;
+      if(StringLen(g_UltraExitIntel.exitMethod) > 0)
+      {
+         exitDetail += " ";
+         exitDetail += g_UltraExitIntel.exitMethod;
+      }
+      exitDetail += " closes=";
+      exitDetail += IntegerToString((int)g_UltraExitIntel.closeCount);
+      UltraMod_Reg("P11_EXIT_INTEL", true, true, exitOK, exitDetail);
+   }
 
    // PHASE 12 — Performance Analytics
    UltraMod_Reg("P12_PERF_ANALYTICS", false, UltraAdaptiveEnabled, UltraAdaptiveEnabled,
@@ -20406,6 +20795,7 @@ string UltraDashboardText(const string s)
    t += "\n"; t += UltraBrain_Dashboard();
    t += "\n"; t += UltraMission_Dashboard();
    t += "\n"; t += UltraPosEvo_Dashboard();
+   t += "\n"; t += UltraExitIntel_Dashboard();
    t += "\n"; t += UltraInput_Dashboard();
    t += " | "; t += UltraData_Dashboard();
    t += "\nMaster Trend: "; t += master;
@@ -21135,6 +21525,11 @@ int OnInit()
    Print("P10 POS INTEL: Boot=", UltraYN(g_UltraPosEvoIntel.booted),
          " Out=", g_UltraPosEvoIntel.outputName,
          " (CONTINUE|MODIFY_SL|MODIFY_TARGETS|PROTECT_PROFIT|PREPARE_EXIT)");
+   UltraExitIntel_Boot();   // P11 Exit Intelligence (Mission sole close)
+   Print("P11 EXIT INTEL (Ch11): Boot=", UltraYN(g_UltraExitIntel.booted),
+         " Status=", g_UltraExitIntel.status,
+         " MissionOnlyExits=", UltraYN(UltraMissionOnlyExits),
+         " (never emotional · never news-alone · every exit has a reason)");
    Print("UFSE: FastSignal=", UltraYN(UltraFastSignalEnabled),
          " MasterTrendLock=", UltraYN(UltraMasterTrendLock),
          " SignalLock=", UltraYN(UltraSignalLockEnabled),
@@ -22815,7 +23210,7 @@ void CloseAllEAPositions()
       if(PositionGetInteger(POSITION_MAGIC) != MagicNumber)
          continue;
 
-      if(UltraMission_ClosePosition(ticket, "EMERGENCY CloseAllEAPositions", true))
+      if(UltraExitIntel_RequestClose(ticket, "EMERGENCY CloseAllEAPositions", true))
          Print("Emergency close: closed ticket ", ticket);
       else
          Print("Emergency close FAILED/held on ticket ", ticket);
@@ -24611,7 +25006,7 @@ bool ExecuteBuy()
          {
             Print("BUY: could not attach SL/TP after fallback - closing the unprotected position for safety (ticket ", newTicket, ").");
             UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "could not attach SL/TP");
-            UltraMission_ClosePosition(newTicket, "EXEC cleanup invalid stops", true);
+            UltraExitIntel_RequestClose(newTicket, "EXEC cleanup invalid stops", true);
             return false;
          }
 
@@ -25075,7 +25470,7 @@ bool ExecuteSell()
          {
             Print("SELL: could not attach SL/TP after fallback - closing the unprotected position for safety (ticket ", newTicket, ").");
             UltraExecIntel_NoteFailed(g_Trade.ResultRetcode(), "could not attach SL/TP");
-            UltraMission_ClosePosition(newTicket, "EXEC cleanup invalid stops", true);
+            UltraExitIntel_RequestClose(newTicket, "EXEC cleanup invalid stops", true);
             return false;
          }
 
@@ -25548,7 +25943,7 @@ void ManageOpenTrades()
       if(EnableMaxHoldBars && barsHeld >= MaxHoldBars)
       {
          Print("Max hold time reached (", barsHeld, " bars) - Mission close ticket ", ticket);
-         UltraMission_ClosePosition(ticket, "RISK max hold bars", true);
+         UltraExitIntel_RequestClose(ticket, "RISK max hold bars", true);
          continue;
       }
 
@@ -25627,7 +26022,11 @@ void ManageOpenTrades()
             string exitWhy = sxWhy;
             if(StringFind(exitWhy, "EXIT:") < 0)
                exitWhy = "EXIT: " + sxWhy;
-            if(UltraMission_ClosePosition(ticket, exitWhy, false))
+            // CHAPTER 11 — Exit Intelligence (Mission sole close underneath)
+            UltraExitIntel_PublishMonitor(ticket, BrokerSymbol, isBuyPos, mission, true,
+                                          g_UltraTargetIntel.partialTP2Ready || g_UltraTargetIntel.partialTP1Ready,
+                                          UltraNewsExec_IsNewsMode(), sxSnap, exitWhy);
+            if(UltraExitIntel_RequestClose(ticket, exitWhy, false))
             {
                // Ultra Reversal Engine: arm replace only after confirmed invalidation close
                if(UltraPosEvoEnabled && UltraPosEvoReplaceEnabled)
@@ -25686,6 +26085,12 @@ void ManageOpenTrades()
                                        (g_UltraTargetIntel.evoStatus == "ADJUST_ADVISORY"),
                                        UltraNewsExec_IsNewsMode(),
                                        sxSnap);
+         // CHAPTER 11 — Exit Intelligence monitor (never closes here)
+         UltraExitIntel_PublishMonitor(ticket, BrokerSymbol, isBuyPos, mission,
+                                       g_UltraPosEvoIntel.prepareExit,
+                                       g_UltraTargetIntel.partialTP2Ready,
+                                       UltraNewsExec_IsNewsMode(), sxSnap,
+                                       g_UltraPosEvoLast.reason);
 
          if(!PositionSelectByTicket(ticket))
             continue;
@@ -25710,6 +26115,11 @@ void ManageOpenTrades()
                                        (g_UltraTargetIntel.evoStatus == "ADJUST_ADVISORY"),
                                        UltraNewsExec_IsNewsMode(),
                                        g_UltraLastSnap);
+         UltraExitIntel_PublishMonitor(ticket, BrokerSymbol, isBuyPos2,
+                                       stopEvoMod2 ? SUP_MANAGE : SUP_HOLD,
+                                       false, g_UltraTargetIntel.partialTP2Ready,
+                                       UltraNewsExec_IsNewsMode(), g_UltraLastSnap,
+                                       "StopEvo path");
          if(!PositionSelectByTicket(ticket))
             continue;
          currentSL = PositionGetDouble(POSITION_SL);
@@ -25727,6 +26137,9 @@ void ManageOpenTrades()
                                        (g_UltraTargetIntel.evoStatus == "ADJUST_ADVISORY"),
                                        UltraNewsExec_IsNewsMode(),
                                        g_UltraLastSnap);
+         UltraExitIntel_PublishMonitor(ticket, BrokerSymbol, isBuyPos3, SUP_HOLD,
+                                       false, false, UltraNewsExec_IsNewsMode(),
+                                       g_UltraLastSnap, "monitor");
       }
 
 
@@ -25825,7 +26238,7 @@ void ManageOpenTrades()
             }
             else if(remainder < minVolume && currentVolume >= minVolume && closeVolume >= minVolume)
             {
-               if(UltraMission_ClosePosition(ticket, "TP ladder full close", true))
+               if(UltraExitIntel_RequestClose(ticket, "TP ladder full close", true))
                {
                   Print("TP1 hit but position too small to split - closed in full: ", ticket);
                   TradeStates[stateIndex].tp1Taken = true;
@@ -25946,7 +26359,7 @@ void ManageOpenTrades()
             else if(remainder2 < minVolume2 && currentVolume2 >= minVolume2 && closeVolume2 >= minVolume2)
             {
                // BUGFIX40: mirror TP1 — can't leave dust remainder
-               if(UltraMission_ClosePosition(ticket, "TP ladder full close", true))
+               if(UltraExitIntel_RequestClose(ticket, "TP ladder full close", true))
                {
                   Print("TP2 hit but position too small to split - closed in full: ", ticket);
                   TradeStates[stateIndex].tp2Taken = true;
@@ -26110,7 +26523,7 @@ void ManageOpenTrades()
             {
                Print("Stagnation exit: ticket ", ticket, " has made no real progress after ",
                      barsHeld, " bars - Mission close.");
-               UltraMission_ClosePosition(ticket, "RISK stagnation exit", true);
+               UltraExitIntel_RequestClose(ticket, "RISK stagnation exit", true);
                continue;
             }
          }
@@ -26132,7 +26545,7 @@ void ManageOpenTrades()
          if(GetADX() < TrendExitADXLevel)
          {
             Print("Trend exit: ADX below ", TrendExitADXLevel, ", Mission close ticket ", ticket);
-            UltraMission_ClosePosition(ticket, "RISK trend exit ADX", true);
+            UltraExitIntel_RequestClose(ticket, "RISK trend exit ADX", true);
             continue;
          }
       }
@@ -29907,7 +30320,7 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
             Print("DEFEND MAE: adverse ", DoubleToString(adverseMove / atr, 2),
                   " ATR ≥ ", DoubleToString(DefenseMAE_ATR, 2),
                   " — Mission close ticket ", ticket);
-         return UltraMission_ClosePosition(ticket, "RISK DEFEND MAE", true);
+         return UltraExitIntel_RequestClose(ticket, "RISK DEFEND MAE", true);
       }
    }
 
@@ -29943,7 +30356,7 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
          if(DefenseLogActions)
             Print("DEFEND CLOSE request: hard opposite reversal vs ", (isBuy ? "BUY" : "SELL"),
                   " ticket ", ticket, " — ", detail);
-         return UltraMission_ClosePosition(ticket, "DEFEND hard reversal "+detail, false);
+         return UltraExitIntel_RequestClose(ticket, "DEFEND hard reversal "+detail, false);
       }
    }
 
@@ -29955,7 +30368,7 @@ bool MarketDefendOpenPosition(const ulong ticket, const long type, const double 
          if(DefenseLogActions)
             Print("DEFEND CLOSE request: fake-breakout trap against ", (isBuy ? "BUY" : "SELL"),
                   " ticket ", ticket);
-         return UltraMission_ClosePosition(ticket, "DEFEND trap against", false);
+         return UltraExitIntel_RequestClose(ticket, "DEFEND trap against", false);
       }
       // After TP1: lock at least BE instead of full close
       if(inProfit)

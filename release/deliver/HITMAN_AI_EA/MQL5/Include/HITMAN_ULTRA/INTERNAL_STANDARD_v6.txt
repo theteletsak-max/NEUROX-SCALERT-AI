@@ -58,7 +58,8 @@ PHASE 10 — POSITION EVOLUTION ENGINE
 
 PHASE 11 — EXIT INTELLIGENCE ENGINE
   Thesis invalidation · Dynamic exit · Confirm · Verify · Diagnostics
-  LOCK: Mission-only closes
+  MASTER SPEC CHAPTER 11 — UltraExitIntel_* facade · Mission sole close
+  Never news-alone · never emotional · every exit has a reason · verify close
 
 PHASE 12 — PERFORMANCE ANALYTICS ENGINE
   Journal · Entry/Exit analysis · Symbol/Session/Event stats
