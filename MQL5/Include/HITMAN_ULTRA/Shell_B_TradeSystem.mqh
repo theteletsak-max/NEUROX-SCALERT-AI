@@ -64,19 +64,19 @@ int OnInit()
    Print("HITMAN AI Loaded BUILD_ID=HA_ULTRA_93 MaxOpen=", MaxOpenTrades);
    UltraCoreInit();
    UltraSystemController_Boot();
-   //======== FINAL MODULE ORDER — OnInit boot sequence ========//
-   UltraFoundation_Boot();  // P01 Foundation
+   //======== INTERNAL STANDARD v6+ — OnInit boot sequence ========//
+   UltraFoundation_Boot();  // P01 Core Foundation
    UltraEvent_OnBoot();
    UltraMarketIntel_Boot(); // P02 Market Intelligence
    UltraVChain_Boot();      // supporting validation (feeds Mission/Risk)
-   UltraNewsExec_Boot();    // PHASE 23 — Ultra News Execution Protocol ∞
-   UltraTarget_Boot();      // P08 Target Intelligence
-   UltraAdaptive_Boot();    // P13 Performance Analytics (soft adaptive)
-   UltraBug_Boot();         // P17 Maintenance core (Bug Elimination)
-   UltraStopEvo_Boot();     // ULTRA STOP EVOLUTION ∞
-   UltraMaint_Boot();       // P17 Maintenance orchestrator
-   UltraLL_Boot();          // ULTRA LOW-LATENCY ARCHITECTURE ∞
-   UltraZFR_Boot();         // P16 Zero-Fail Recovery
+   UltraNewsExec_Boot();    // P05 News Intelligence (+ Phase 23 protocol)
+   UltraTarget_Boot();      // P09 Target Intelligence
+   UltraAdaptive_Boot();    // P12 Performance Analytics (soft adaptive)
+   UltraBug_Boot();         // P19 Maintenance core (Bug Elimination)
+   UltraStopEvo_Boot();     // P10 support — Stop Evolution
+   UltraMaint_Boot();       // P19 Maintenance orchestrator
+   UltraLL_Boot();          // P17 Low-Latency Engine
+   UltraZFR_Boot();         // P15 Zero-Fail Recovery
    // Re-note handles after Boot zero (InitializeIndicators ran earlier)
    {
       int bad = 0, checked = 0;
@@ -90,12 +90,13 @@ int OnInit()
       }
       UltraBug_NoteHandles(bad, checked);
    }
-   UltraTradeGate_Boot();   // P11 Risk Intelligence gate
-   UltraMod_Boot();         // Module Manager — Final Module Order P1-17
-   UltraBT_Boot();          // P12 Backtest Compatibility
+   UltraTradeGate_Boot();   // P07 Risk Intelligence gate
+   UltraQA_Boot();          // P18 Quality Assurance
+   UltraMod_Boot();         // Module Manager — Internal Standard v6+ P1-19
+   UltraBT_Boot();          // P16 Backtest Compatibility
    UltraMission_Init();     // P06 Mission Control
-   UltraBug_AuditInit(BrokerSymbol); // P17 init / handles / broker / timer audit
-   Print("FINAL MODULE ORDER: HA_ULTRA_93 | Phases 1-17 | one strategy · one signal · one thesis · one mission · one exit");
+   UltraBug_AuditInit(BrokerSymbol); // P19 init / handles / broker / timer audit
+   Print("INTERNAL STANDARD v6+: HA_ULTRA_93 | Phases 1-19 | one strategy · one signal · one thesis · one mission · one exit");
    Print("PHASE A DECISION FLOW: MissionSoleAuthority=", UltraYN(UltraPhaseA_MissionSoleAuthority),
          " | Mission is ONLY final BUY/SELL/WAIT/REPLACE | post-Mission gates cannot flip BUY→WAIT");
    Print("ULTRA STOP EVOLUTION ∞: Enabled=", UltraYN(UltraStopEvoEnabled),
@@ -115,13 +116,13 @@ int OnInit()
          " ", g_UltraLL.summary);
    Print("ULTRA PERFORMANCE MISSION: market-read→signal→Mission→exec pipeline | min internal latency");
    Print("MODULE MANAGER: ", g_UltraMods.summary);
-   Print("P12 BT COMPAT ∞: Mode=", UltraBT_ModeName(),
+   Print("P16 BT COMPAT ∞: Mode=", UltraBT_ModeName(),
          " Compat=", UltraYN(g_UltraBT.compatMode),
          " Enabled=", UltraYN(UltraBacktestCompatEnabled));
    Print("VALIDATION CHAIN: Enabled=", UltraYN(UltraVChainEnabled),
          " BlockInvalid=", UltraYN(UltraVChainBlockOnInvalid),
          " BlockWait=", UltraYN(UltraVChainBlockOnWait));
-   Print("PHASE 23 NEWS EXEC PROTOCOL ∞: Enabled=", UltraYN(UltraNewsExecEnabled),
+   Print("P05 NEWS INTEL / PHASE 23 ∞: Enabled=", UltraYN(UltraNewsExecEnabled),
          " InstantPath=", UltraYN(UltraNewsExecInstantPath),
          " ForceReanalyze=", UltraYN(UltraNewsExecForceReanalyze),
          " Phase23Boost=", UltraYN(UltraNewsExecPhase23Boost),
@@ -135,14 +136,14 @@ int OnInit()
          " MinStab=", UltraNewsExecMinStabilityScore,
          " PacketAgeMs=", UltraNewsExecMaxPacketAgeMs,
          " StrongerOnWeakExec=", UltraYN(UltraNewsExecStrongerOnWeakExec),
-         " | Phases 1-6 detect→stabilize→validate→exec→manage");
-   Print("P08 TARGET INTEL ∞: Enabled=", UltraYN(UltraTargetEnabled),
+         " | detect→stabilize→validate→exec→manage");
+   Print("P09 TARGET INTEL ∞: Enabled=", UltraYN(UltraTargetEnabled),
          " Strict=", UltraYN(UltraTargetStrict),
          " TP3=", UltraYN(UltraTargetEnableTP3),
          " MinRR=", DoubleToString(UltraTargetMinRR1, 1), "/",
          DoubleToString(UltraTargetMinRR2, 1), "/",
          DoubleToString(UltraTargetMinRR3, 1));
-   Print("P13 PERF ANALYTICS ∞: Enabled=", UltraYN(UltraAdaptiveEnabled),
+   Print("P12 PERF ANALYTICS ∞: Enabled=", UltraYN(UltraAdaptiveEnabled),
          " Conf=", UltraYN(UltraAdaptiveConfEnabled),
          " Risk=", UltraYN(UltraAdaptiveRiskEnabled),
          " Pos=", UltraYN(UltraAdaptivePosEnabled),
@@ -150,10 +151,12 @@ int OnInit()
          " Reanalyze=", UltraYN(UltraAdaptiveReanalyzeEnabled),
          " SelfReview=", UltraYN(UltraAdaptiveSelfReviewEnabled),
          " Learn=STAT_ONLY NO_MORE_ENGINES");
-   Print("MAIN FLOW: Foundation→Market→Strategy→Signal→News→Mission→Exec→Target→PosEvo→Exit→Risk→Analytics→Logger→Dashboard→Recovery");
-   Print("P11 TRADE GATE: Enabled=", UltraYN(UltraTradeGateEnabled),
+   Print("MAIN FLOW v6+: Foundation→Market→Strategy→Signal→News→Mission→Risk→Exec→Target→PosEvo→Exit→Analytics→Logger→Dashboard→Recovery");
+   Print("P07 RISK / TRADE GATE: Enabled=", UltraYN(UltraTradeGateEnabled),
          " RequireTargets=", UltraYN(UltraTradeGateRequireTargets),
          " — ANY validation fail = NO TRADE");
+   Print("P18 QA: Enabled=", UltraYN(UltraQAEnabled), " ", g_UltraQA.summary);
+   Print("P17 LOW-LATENCY / P19 MAINTENANCE locked under Final Development Rule");
    Print("P01 FOUNDATION: Enabled=", UltraYN(UltraFoundationEnabled),
          " HealthTick=", UltraYN(UltraFoundationHealthTick),
          " Status=", g_UltraFoundation.status,
@@ -185,7 +188,7 @@ int OnInit()
          " Pos=", UltraYN(UltraZFRPositionRecovery),
          " Conn=", UltraYN(UltraZFRConnectionRecovery),
          " NeverStop=Y");
-   Print("P09 POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
+   Print("P10 POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
          " L3Close=", UltraYN(UltraPosEvoCloseOnL3),
          " L3Bars=", UltraPosEvoL3ConfirmBars,
          " Replace=", UltraYN(UltraPosEvoReplaceEnabled),
@@ -1057,10 +1060,11 @@ void RunTradingCycle(string symbol)
    // ULTRA LOW-LATENCY — tick budget (UltraOpt cycle + latency stamp)
    UltraLL_OnTickStart();
 
-   // FINAL MODULE ORDER — tick cycle (Decide path completes P3–P11 inside InstantExecution)
+   // INTERNAL STANDARD v6+ — tick cycle
+   // Decide path: P3→P4→P5→P6→P7→P8→P9 inside InstantExecution
    // P01 Foundation
    UltraFoundation_OnTick(symbol);
-   // P16 Zero-Fail — always monitors (even when RED / degraded)
+   // P15 Zero-Fail — always monitors (even when RED / degraded)
    UltraZFR_OnTick(symbol);
    if(UltraFoundationEnabled && g_UltraFoundation.status == "RED")
    {
@@ -1093,24 +1097,26 @@ void RunTradingCycle(string symbol)
       }
    }
 
-   // Cadenced heavy pass (Adaptive / Bug audit / Maint) — never blocks Manage/Exec
+   // Cadenced heavy pass (P12 Analytics / P18 QA / P19 Maint) — never blocks Manage/Exec
    bool heavyPass = UltraLL_AllowMaintPass();
    if(heavyPass)
    {
-      // P13 Performance Analytics — continuous soft re-analysis
+      // P12 Performance Analytics — continuous soft re-analysis
       UltraAdaptive_OnTick(symbol);
    }
 
-   // P17 Maintenance — bug audits + status mirror (perf wrap always for Instant path)
+   // P19 Maintenance — bug audits + status mirror (perf wrap always for Instant path)
    UltraBug_PerfBegin();
    if(heavyPass)
    {
       UltraBug_OnTick(symbol);
       UltraMaint_OnTick(symbol);
+      UltraQA_OnTick(symbol); // P18 Quality Assurance
+      UltraMod_Refresh();     // refresh module registry after QA
    }
 
-   // P09/P10/P11 — position/exit/risk via Manage; P3–P8 via InstantExecution→Decide
-   // LOW-LATENCY LOCK: ManageOpenTrades NEVER skipped
+   // P10/P11 — position/exit via Manage; P3–P9 via InstantExecution→Decide
+   // P17 LOW-LATENCY LOCK: ManageOpenTrades NEVER skipped
    ManageOpenTrades();
 
    if(TradingAllowed)
@@ -1140,8 +1146,8 @@ void OnTick()
 {
    UltraEvent_OnTickPulse();              // Event pulse (feeds P05 News / Market)
    UltraNewsExec_OnTick(PrimarySymbol);   // P05 News Intelligence — HF monitor
-   RunTradingCycle(PrimarySymbol);        // Final Module Order tick cycle
-   UpdateDashboard();                     // P15 Dashboard
+   RunTradingCycle(PrimarySymbol);        // Internal Standard v6+ tick cycle
+   UpdateDashboard();                     // P14 Dashboard
 }
 //+------------------------------------------------------------------+
 //|                 Sniper AI - Part 2                       |

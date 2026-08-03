@@ -2,133 +2,88 @@ HITMAN AI ULTRA ∞ — FINAL MODULE ORDER
 BUILD_ID: HA_ULTRA_93
 ============================================================
 
-Canonical phase numbering for the live EA.
-Historical Phase 17–20 docs remain as design notes; this file is the
-authoritative order for Module Manager, OnInit, and tick/decide flow.
+Authoritative numbering = INTERNAL STANDARD v6+ (Phases 1–19).
+See INTERNAL_STANDARD_v6.txt for the full checklist.
 
 ============================================================
-PHASE 1 — ULTRA FOUNDATION ENGINE
-  Module: UltraFoundation.mqh (+ 01_Core)
-  Init · Memory · Resources · Configuration · Timer · Health · Integrity
+PHASE 1  — CORE FOUNDATION ENGINE
+  UltraFoundation.mqh (+ 01_Core)
 
-PHASE 2 — ULTRA MARKET INTELLIGENCE ENGINE
-  Module: UltraMarketIntelligence.mqh (+ ticks/candles/MTF/session layers)
-  Tick · Candle · Market State · Trend · Momentum · Liquidity · Volatility
-  Spread · Session · Multi-Timeframe
+PHASE 2  — MARKET INTELLIGENCE ENGINE
+  UltraMarketIntelligence.mqh (+ tick/candle/MTF/session layers)
 
-PHASE 3 — ULTRA PROPRIETARY STRATEGY ENGINE
-  Modules: UFSE_FastSignalEngine · TradeThesis · 15_Confluence · MasterAIBrain
-  Proprietary Logic · Trade Thesis · Market Understanding · Confluence
-  Confidence Engine (USM2 scores feed confidence — sole confidence path)
+PHASE 3  — PROPRIETARY STRATEGY ENGINE
+  UFSE · TradeThesis · Confluence · USM2 confidence
 
-PHASE 4 — ULTRA SIGNAL INTELLIGENCE ENGINE
-  Modules: UFSE · SignalEvolution · UltraPickBest path in Shell_B
-  BUY Detection · SELL Detection · Signal Validation · False Signal Filter
-  Duplicate Prevention · Final Signal
+PHASE 4  — SIGNAL INTELLIGENCE ENGINE
+  UltraPickBest · SignalEvolution · false-signal / duplicate filters
 
-PHASE 5 — ULTRA NEWS INTELLIGENCE ENGINE
-  Modules: UltraNewsExecution.mqh · 18_NewsIntelligence.mqh · 39_EventEngine
-  Event Detection · News Awareness · High Volatility · High Spread
-  Dynamic Re-analysis · Event Logging
-  LOCK: news never forces trades; spread/news alone never hard-reject
-  PHASE 23 PROTOCOL ∞: News Mode · InstantPath · HighSpreadRule ·
-    Protocol Prepare/Submit/Retry · event/spread/slip/result logging
+PHASE 5  — NEWS INTELLIGENCE ENGINE
+  UltraNewsExecution · 18_NewsIntelligence · 39_EventEngine
+  LOCK: never force · never news/spread-only hard reject
 
-PHASE 6 — ULTRA MISSION CONTROL
-  Module: MissionControl.mqh
-  Strategy · Signal · Confidence · Risk · Execution validation → Final Decision
-  Decisions: BUY | SELL | WAIT | REPLACE
-  LOCK: only Mission may call g_Trade.PositionClose*
-  PHASE A: Mission is the ONLY final WAIT/BUY/SELL authority —
-    nothing after Mission may flip BUY/SELL → WAIT
-    (see PHASE_A_DECISION_FLOW_AUDIT.txt)
+PHASE 6  — MISSION CONTROL (ONLY FINAL DECISION)
+  MissionControl.mqh → BUY | SELL | WAIT | REPLACE
+  LOCK: sole close · Phase A sole WAIT emitter
 
-PHASE 7 — ULTRA EXECUTION ENGINE
-  Modules: Shell_B ExecuteBuy/Sell · 19_Execution · 32/36 Broker
-  Instant Detection · Instant Execution · Broker Intelligence · Fill Verify
-  Retry · Slippage · Execution Recovery (with Zero-Fail assist)
+PHASE 7  — RISK INTELLIGENCE ENGINE
+  20_CapitalProtection · UltraTradeGate · Shell risk path
 
-PHASE 8 — ULTRA TARGET INTELLIGENCE ENGINE
-  Module: UltraTargetIntelligence.mqh
-  Dynamic SL · TP1 · TP2 · TP3 · Risk:Reward Validation
+PHASE 8  — EXECUTION ENGINE
+  Shell_B ExecuteBuy/Sell · 19_Execution · Broker 32/36
 
-PHASE 9 — ULTRA POSITION EVOLUTION ENGINE
-  Module: PositionEvolution.mqh (+ UltraStopEvolution.mqh profit protect)
-  Position Monitoring · Thesis Monitoring · Re-analysis · Replacement
-  Protection · Profit Management (L1/L2/L3)
-  Stop Evolution: L1–L5 tighten-only SL (thesis/trend validated)
+PHASE 9  — TARGET INTELLIGENCE ENGINE
+  UltraTargetIntelligence.mqh
 
-PHASE 10 — ULTRA EXIT INTELLIGENCE ENGINE
-  Modules: MissionControl EXIT · SmartExit · UltraExitValidation (00_Types)
-  Exit Validation · Thesis Invalidation · Exit Confirmation · Exit Logging
+PHASE 10 — POSITION EVOLUTION ENGINE
+  PositionEvolution · UltraStopEvolution (profit protect)
+
+PHASE 11 — EXIT INTELLIGENCE ENGINE
+  Mission EXIT · SmartExit · UltraExitValidation
   LOCK: Mission-only closes
 
-PHASE 11 — ULTRA RISK INTELLIGENCE ENGINE
-  Modules: 20_CapitalProtection · UltraTradeGate · risk path in Shell_B
-  Position Size · Exposure · Margin · Drawdown · Capital Protection
-  Portfolio Risk
+PHASE 12 — PERFORMANCE ANALYTICS ENGINE
+  UltraAdaptiveIntelligence · 25_Statistics
+  LOCK: soft analytics only
 
-PHASE 12 — ULTRA BACKTEST COMPATIBILITY ENGINE
-  Module: UltraBacktestCompat.mqh
-  Tester Detection · Historical · Indicator · MTF · News Compat · Diagnostics
+PHASE 13 — LOGGER ENGINE
+  27_Logger · UltraBug_Explain · decision logs
+  LOCK: every WAIT has an explicit reason
 
-PHASE 13 — ULTRA PERFORMANCE ANALYTICS ENGINE
-  Modules: UltraAdaptiveIntelligence (analytics/review) · 25_Statistics
-  Trade Journal · Entry/Exit Analysis · Session/News/Symbol Stats
-  Win Rate · Profit Factor · Expectancy
-  LOCK: Adaptive is soft decision-quality only — never mutates strategy tag
+PHASE 14 — DASHBOARD ENGINE
+  24_Dashboard.mqh
 
-PHASE 14 — ULTRA LOGGER ENGINE
-  Modules: 27_Logger · UltraBug_Explain · decision/entry/exit logs
-  Decision · Entry · Exit · Error · Event · Debug
+PHASE 15 — ZERO-FAIL RECOVERY ENGINE
+  UltraZeroFailRecovery.mqh
 
-PHASE 15 — ULTRA DASHBOARD ENGINE
-  Module: 24_Dashboard.mqh
-  Market Status · Signal · Position · Event · Confidence · Risk · Health
+PHASE 16 — BACKTEST COMPATIBILITY ENGINE
+  UltraBacktestCompat.mqh
 
-PHASE 16 — ULTRA ZERO-FAIL RECOVERY ENGINE
-  Module: UltraZeroFailRecovery.mqh  (was historical Phase 20)
-  Indicator · Handle · Buffer · Position · Execution · Connection recovery
-  Continuous Monitoring — never abort the cycle
-
-PHASE 17 — ULTRA MAINTENANCE ENGINE
-  Module: UltraMaintenance.mqh (orchestrates UltraBugElimination + Opt)
-  Bug Detection · Performance · Memory · CPU · Stability
-  Broker Updates · Version Management
-  LOCK: maintenance only — not a new strategy (Final Development Rule)
-
-ULTRA LOW-LATENCY ARCHITECTURE ∞ (cross-cutting · perf only)
-  Module: UltraLowLatency.mqh — see ULTRA_LOW_LATENCY_ARCHITECTURE.txt
-  Tick budget · early smart-tick · heavy analytics cadence
+PHASE 17 — LOW-LATENCY ENGINE
+  UltraLowLatency.mqh · UltraPerf* inputs
   LOCK: never skips ManageOpenTrades / Mission / Execute on price change
+
+PHASE 18 — QUALITY ASSURANCE ENGINE
+  UltraQualityAssurance.mqh — consistency / integrity / conflict audit
+
+PHASE 19 — MAINTENANCE ENGINE
+  UltraMaintenance.mqh (+ UltraBugElimination)
+  LOCK: maintenance only — Final Development Rule
 
 ============================================================
 MAIN EXECUTION FLOW
 
 OnInit()
-  → Foundation (1)
-  → Market Intelligence (2)
-  → Supporting boots: VChain · News (5) · Targets (8) · Adaptive/Analytics (13)
-  → Bug / Maintenance (17) · Zero-Fail (16) · TradeGate (11) · Module Manager
-  → Backtest Compat (12) · Mission (6)
+  → P1 Foundation → P2 Market Intel
+  → Supporting: VChain · P5 News · P9 Target · P12 Analytics
+  → P19 Maint/Bug · P17 LL · P15 ZFR · P7 TradeGate · Module Mgr
+  → P16 BT · P18 QA · P6 Mission
 
-Every Tick (RunTradingCycle + Decide)
-  → Foundation (1)
-  → Zero-Fail monitor (16)
-  → Market Intelligence (2)
-  → Proprietary Strategy (3) + Signal (4)
-  → News Intelligence (5)
-  → Mission Control (6) → BUY / SELL / WAIT / REPLACE
-  → Execution (7)
-  → Target Intelligence (8)
-  → Position Evolution (9)
-  → Exit Intelligence (10)
-  → Risk Intelligence (11)
-  → Performance Analytics (13)
-  → Logger (14)
-  → Dashboard (15)
-  → Recovery (16) + Maintenance (17)
-  → Repeat Every Tick
+Every Tick
+  → P1 → P15 monitor → P2 → P17 cadence
+  → P10/P11 ManageOpenTrades (never skipped)
+  → InstantExecution: P3→P4→P5→P6→P7→P8→P9
+  → P12 analytics · P13 logger · P14 dashboard · P18 QA · P19 maint
 
 ============================================================
 PRODUCT LOCKS (unchanged)
@@ -137,4 +92,4 @@ PRODUCT LOCKS (unchanged)
   MaxOpen      = 3
   EntryTF      = PERIOD_CURRENT
   Global       = CTrade g_Trade
-  One proprietary strategy · one signal · one thesis · one mission · one exit
+  One strategy · one signal · one thesis · one mission · one exit

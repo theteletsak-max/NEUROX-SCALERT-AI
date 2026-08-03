@@ -196,7 +196,11 @@ input int    UltraAdaptiveSlipTightenPts    = 4;     // tighten deviation under 
 input int    UltraAdaptiveMonitorTightenMs  = 15;    // reduce monitor interval
 input int    UltraAdaptiveMonitorRelaxMs    = 10;    // relax monitor interval
 
-input group "31 · ULTRA MAINTENANCE / BUG ELIMINATION ∞ (Final Order P17)"
+input group "31 · ULTRA QUALITY ASSURANCE ∞ (Internal Standard v6+ P18)"
+input bool   UltraQAEnabled              = true;   // consistency / integrity / conflict audit
+input bool   UltraQALog                  = true;   // log QA FAIL lines
+
+input group "31 · ULTRA MAINTENANCE / BUG ELIMINATION ∞ (Internal Standard v6+ P19)"
 input bool   UltraBugEnabled             = true;   // master — stability / explain path
 input bool   UltraBugLogBoot             = true;   // boot / deinit audit lines
 input bool   UltraBugLogExplain          = true;   // structured ULTRA EXPLAIN blocks
@@ -208,7 +212,7 @@ input bool   UltraBugEventAudit          = true;   // news/session consistency
 input bool   UltraBugPerfAudit           = true;   // tick latency warn
 input int    UltraBugPositionAuditMs     = 1000;   // position sync cadence
 input int    UltraBugPerfWarnMs          = 50;     // tick latency warn threshold
-input bool   UltraMaintenanceEnabled     = true;   // Final Order P17 — orchestrates Bug+resources
+input bool   UltraMaintenanceEnabled     = true;   // P19 — orchestrates Bug+resources
 
 input group "31 · ULTRA STOP EVOLUTION ∞ (profit protect)"
 input bool   UltraStopEvoEnabled         = true;   // master — intelligent SL evolution
