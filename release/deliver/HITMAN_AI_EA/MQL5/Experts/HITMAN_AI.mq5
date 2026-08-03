@@ -774,12 +774,19 @@ struct UltraSessionNews
    bool   highImpactProxy, midImpactProxy, lowImpactProxy;
    bool   beforeNews, duringNews, afterNews; // context phases — NEVER block
    string newsPhase;                 // "BEFORE" | "DURING" | "AFTER" | "NONE"
-   string eventClass;                // NFP|FOMC|CPI|GDP|PMI|RATES|SPEECH|MAJOR|NONE
-   int    eventImpact;               // 0=none 1=low 2=mid 3=high
+   string eventClass;                // NFP|FOMC|CPI|GDP|PMI|RATES|SPEECH|EMP|MAJOR|NONE
+   int    eventImpact;               // 0=none 1=low 2=mid 3=high 4=extreme
    int    eventConfidence;           // 0..100 event-context confidence
    double spreadPts, slipProxy;
    double tickSpeed;                 // ticks/sec proxy
    int    execQuality;               // 0..100 broker/exec assessment
+   // MASTER SPEC CHAPTER 5 — News Intelligence outputs (context only)
+   string eventState;                // NORMAL | PRE_NEWS | LIVE_NEWS | POST_NEWS
+   string eventIntensity;            // NONE | LOW | MEDIUM | HIGH | EXTREME
+   string volatilityState;           // COMPRESS | NORMAL | EXPAND
+   string spreadState;               // STABLE | ELEVATED | EXTREME
+   string liquidityState;            // THIN | NORMAL | RICH
+   string newsContext;               // one-line intelligence summary
    // Session + News: CONTEXT ONLY · Trades 24/7 · never hard-block
 };
 
@@ -3285,10 +3292,10 @@ bool UltraCycle_SupportsSell(const UltraSnap &u)
 #ifndef HITMAN_ULTRA_18_NEWSINTELLIGENCE_MQH
 #define HITMAN_ULTRA_18_NEWSINTELLIGENCE_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — 18_NEWS_INTELLIGENCE                                 |
-//| Event classification · Volatility / Spread / Slippage proxies    |
-//| Supports: NFP · FOMC · CPI · GDP · PMI · Rates · Speeches        |
-//| Context Only · Trades Before / During / After · NEVER hard-block |
+//| HITMAN AI — MASTER SPEC CHAPTER 5 · NEWS INTELLIGENCE ENGINE     |
+//| Event detect · classify · mode · vol/spread/liq intelligence     |
+//| NEVER trades · NEVER executes · NEVER overrides strategy/Mission |
+//| ONLY provides market intelligence (context outputs)              |
 //+------------------------------------------------------------------+
 
 // Shared calendar awareness (set by Shell UpdateNewsAwareness; read by EngNews/Detect)
@@ -3308,45 +3315,162 @@ void UltraNews_SetCalendarContext(const bool inWindow, const int hitCount, const
 bool UltraNews_IsFirstFridayGMT(const MqlDateTime &t)
 {
    if(t.day_of_week != 5) return false; // Friday
-   // first Friday of month: day 1..7
    return (t.day >= 1 && t.day <= 7);
 }
 
-// Calendar-window proxy (no external calendar feed required).
-// Classifies likely high-impact US/EU release windows in GMT.
+//--------------------------------------------------------------------//
+// EVENT DETECTION — NFP · CPI · FOMC · Rates · GDP · PMI · EMP · Speech
+//--------------------------------------------------------------------//
 string UltraNews_ClassifyEvent(const MqlDateTime &t, const bool highImpact, const bool midImpact)
 {
    int h = t.hour;
    int dow = t.day_of_week; // 0=Sun .. 5=Fri
 
-   // NFP — first Friday ~12:30–15:00 GMT
+   // NFP / employment — first Friday ~12:30–15:00 GMT
    if(UltraNews_IsFirstFridayGMT(t) && h >= 12 && h <= 15)
       return "NFP";
 
-   // FOMC / rate decision window — Wed ~17:00–20:00 GMT (common)
+   // FOMC / interest rate decision — Wed ~17:00–20:00 GMT
    if(dow == 3 && h >= 17 && h <= 20 && (highImpact || midImpact))
       return "FOMC";
 
-   // US data dump window — CPI/PPI/Retail/Unemployment ~12:30 GMT
+   // US data dump — CPI / employment / retail ~12:30 GMT
    if(h >= 12 && h <= 14 && (highImpact || midImpact) && dow >= 1 && dow <= 5)
    {
       if(highImpact) return "CPI";
-      return "MAJOR";
+      return "EMP";
    }
 
    // EU PMI / GDP soft window ~08:00–10:00 GMT
-   if(h >= 8 && h <= 10 && midImpact && dow >= 1 && dow <= 5)
+   if(h >= 8 && h <= 10 && (midImpact || highImpact) && dow >= 1 && dow <= 5)
+   {
+      if(highImpact) return "GDP";
       return "PMI";
+   }
 
-   // Central bank speech / rates spillover — London/NY afternoon high vol
+   // Central bank speeches / rates spillover — London/NY afternoon
    if(h >= 14 && h <= 18 && highImpact)
-      return "RATES";
+      return "SPEECH";
 
+   // Emergency / extreme vol without calendar class
    if(highImpact) return "MAJOR";
    if(midImpact)  return "MAJOR";
    return "NONE";
 }
 
+//--------------------------------------------------------------------//
+// EVENT CLASSIFICATION — LOW → MEDIUM → HIGH → EXTREME (never blocks)
+//--------------------------------------------------------------------//
+string UltraNews_IntensityName(const int impact)
+{
+   if(impact >= 4) return "EXTREME";
+   if(impact == 3) return "HIGH";
+   if(impact == 2) return "MEDIUM";
+   if(impact == 1) return "LOW";
+   return "NONE";
+}
+
+int UltraNews_ClassifyIntensity(const UltraSnap &u, const bool calendarHit)
+{
+   // EXTREME — explosive vol + expansion (+ calendar or major class)
+   if(u.vol.relative >= 2.20 && u.vol.expansion &&
+      (calendarHit || u.ctx.eventClass == "NFP" || u.ctx.eventClass == "FOMC" ||
+       u.ctx.eventClass == "MAJOR"))
+      return 4;
+   if(u.ctx.highImpactProxy && u.vol.expansion) return 3;
+   if(u.ctx.midImpactProxy) return 2;
+   if(u.ctx.lowImpactProxy || (calendarHit && u.ctx.eventImpact >= 1)) return 1;
+   if(u.ctx.eventImpact > 0) return u.ctx.eventImpact;
+   return 0;
+}
+
+//--------------------------------------------------------------------//
+// NEWS MODE — Normal → Pre-News → Live News → Post-News
+//--------------------------------------------------------------------//
+string UltraNews_ModeFromPhase(const string phase)
+{
+   if(phase == "BEFORE") return "PRE_NEWS";
+   if(phase == "DURING") return "LIVE_NEWS";
+   if(phase == "AFTER")  return "POST_NEWS";
+   return "NORMAL";
+}
+
+//--------------------------------------------------------------------//
+// CHAPTER 5 OUTPUTS — Event / Intensity / Vol / Spread / Liq / Context
+//--------------------------------------------------------------------//
+void UltraNews_PublishOutputs(UltraSnap &u)
+{
+   // Event state (mode)
+   u.ctx.eventState = UltraNews_ModeFromPhase(u.ctx.newsPhase);
+
+   // Intensity
+   bool cal = (UltraNewsExecUseCalendarContext && g_UltraCalInWindow &&
+               g_UltraCalUpdated > 0 && (TimeCurrent() - g_UltraCalUpdated) <= 120);
+   int impact = UltraNews_ClassifyIntensity(u, cal);
+   if(impact > u.ctx.eventImpact) u.ctx.eventImpact = impact;
+   u.ctx.eventIntensity = UltraNews_IntensityName(u.ctx.eventImpact);
+
+   // Volatility state
+   if(u.vol.compression) u.ctx.volatilityState = "COMPRESS";
+   else if(u.vol.expansion || u.vol.relative >= 1.45) u.ctx.volatilityState = "EXPAND";
+   else u.ctx.volatilityState = "NORMAL";
+
+   // Spread state — informational only (never rejects)
+   double spr = u.ctx.spreadPts;
+   if(spr <= 0.0) spr = UltraData_Spread(_Symbol);
+   if(spr >= UltraEventSpreadWarnPts * 2.0) u.ctx.spreadState = "EXTREME";
+   else if(spr >= UltraEventSpreadWarnPts) u.ctx.spreadState = "ELEVATED";
+   else u.ctx.spreadState = "STABLE";
+
+   // Liquidity — snap/genuine liq only (EventEngine assembles later; never hard-reject)
+   if(u.liq.genuineBuy || u.liq.genuineSell || u.liq.confirmedBuy || u.liq.confirmedSell)
+      u.ctx.liquidityState = "RICH";
+   else if(u.liq.fakeBuy || u.liq.fakeSell || u.liq.quality < 35.0)
+      u.ctx.liquidityState = "THIN";
+   else
+      u.ctx.liquidityState = "NORMAL";
+
+   // News context one-liner (intelligence only)
+   u.ctx.newsContext = "NEWS ";
+   u.ctx.newsContext += u.ctx.eventState;
+   u.ctx.newsContext += " | ";
+   u.ctx.newsContext += u.ctx.eventClass;
+   u.ctx.newsContext += " | ";
+   u.ctx.newsContext += u.ctx.eventIntensity;
+   u.ctx.newsContext += " | vol=";
+   u.ctx.newsContext += u.ctx.volatilityState;
+   u.ctx.newsContext += " | spr=";
+   u.ctx.newsContext += u.ctx.spreadState;
+   u.ctx.newsContext += " | liq=";
+   u.ctx.newsContext += u.ctx.liquidityState;
+   if(cal && g_UltraCalHitCount > 0)
+   {
+      u.ctx.newsContext += " | cal=";
+      u.ctx.newsContext += IntegerToString(g_UltraCalHitCount);
+   }
+}
+
+string UltraNewsIntel_Dashboard()
+{
+   const UltraSnap u = g_UltraLastSnap;
+   string t = "NEWS INTEL: ";
+   if(!UltraNewsIntelEnabled) { t += "OFF"; return t; }
+   if(StringLen(u.ctx.newsContext) > 0)
+      t += u.ctx.newsContext;
+   else
+   {
+      t += UltraNews_ModeFromPhase(u.ctx.newsPhase);
+      t += " ";
+      t += u.ctx.eventClass;
+      t += " ";
+      t += UltraNews_IntensityName(u.ctx.eventImpact);
+   }
+   return t;
+}
+
+//--------------------------------------------------------------------//
+// NEWS CORE — fill UltraSnap news context (NEVER trades / NEVER blocks)
+//--------------------------------------------------------------------//
 void UltraEngNews(const string s, UltraSnap &u)
 {
    u.ctx.beforeNews = false;
@@ -3358,9 +3482,15 @@ void UltraEngNews(const string s, UltraSnap &u)
    u.ctx.eventConfidence = 0;
    u.ctx.tickSpeed = 0;
    u.ctx.execQuality = 100;
+   u.ctx.eventState = "NORMAL";
+   u.ctx.eventIntensity = "NONE";
+   u.ctx.volatilityState = "NORMAL";
+   u.ctx.spreadState = "STABLE";
+   u.ctx.liquidityState = "NORMAL";
+   u.ctx.newsContext = "NEWS NORMAL | idle";
    if(!UltraNewsIntelEnabled) return;
 
-   // Volatility / spread proxy for calendar impact
+   // VOLATILITY / SPREAD INTELLIGENCE (proxies — never sole reject)
    u.ctx.newsVol = u.vol.expansion && u.vol.relative >= 1.45;
    u.ctx.highImpactProxy = (u.vol.relative >= 1.80);
    u.ctx.midImpactProxy  = (u.vol.relative >= 1.45 && u.vol.relative < 1.80);
@@ -3371,25 +3501,25 @@ void UltraEngNews(const string s, UltraSnap &u)
    MqlDateTime gt; TimeToStruct(TimeGMT(), gt);
    u.ctx.eventClass = UltraNews_ClassifyEvent(gt, u.ctx.highImpactProxy, u.ctx.midImpactProxy);
 
-   // Phase classification from relative vol + expansion + calendar window
+   // NEWS MODE phases from vol + calendar window
    bool calWindow = (u.ctx.eventClass != "NONE");
    if((u.ctx.highImpactProxy && u.vol.expansion) || (calWindow && u.ctx.highImpactProxy))
    {
       u.ctx.duringNews = true;
-      u.ctx.newsPhase  = "DURING";
+      u.ctx.newsPhase  = "DURING"; // LIVE_NEWS
       u.ctx.eventImpact = 3;
    }
    else if(u.ctx.midImpactProxy && !u.vol.compression)
    {
       u.ctx.beforeNews = true;
-      u.ctx.newsPhase  = "BEFORE";
+      u.ctx.newsPhase  = "BEFORE"; // PRE_NEWS
       u.ctx.eventImpact = 2;
       if(u.ctx.eventClass == "NONE") u.ctx.eventClass = "MAJOR";
    }
    else if(u.vol.compression && u.vol.relative >= 1.10)
    {
       u.ctx.afterNews = true;
-      u.ctx.newsPhase = "AFTER";
+      u.ctx.newsPhase = "AFTER";   // POST_NEWS
       u.ctx.eventImpact = 1;
    }
    else if(calWindow && u.ctx.lowImpactProxy)
@@ -3399,7 +3529,7 @@ void UltraEngNews(const string s, UltraSnap &u)
       u.ctx.eventImpact = 1;
    }
 
-   // PHASE 1 — wire live MQL5 calendar window (never forces / never sole-blocks)
+   // Wire live MQL5 calendar window (never forces / never sole-blocks)
    if(UltraNewsExecUseCalendarContext && g_UltraCalInWindow &&
       g_UltraCalUpdated > 0 && (TimeCurrent() - g_UltraCalUpdated) <= 120)
    {
@@ -3407,7 +3537,6 @@ void UltraEngNews(const string s, UltraSnap &u)
          u.ctx.eventClass = "MAJOR";
       if(u.ctx.eventImpact < 2)
          u.ctx.eventImpact = 2;
-      // Upcoming calendar → BEFORE unless already in high-vol DURING
       if(!u.ctx.duringNews)
       {
          u.ctx.beforeNews = true;
@@ -3422,14 +3551,18 @@ void UltraEngNews(const string s, UltraSnap &u)
    else if(u.ctx.beforeNews) ec = 60;
    else if(u.ctx.afterNews) ec = 55;
    if(u.ctx.eventClass == "NFP" || u.ctx.eventClass == "FOMC") ec += 15;
-   if(u.ctx.eventClass == "CPI" || u.ctx.eventClass == "RATES") ec += 10;
+   if(u.ctx.eventClass == "CPI" || u.ctx.eventClass == "RATES" ||
+      u.ctx.eventClass == "SPEECH" || u.ctx.eventClass == "GDP") ec += 10;
+   if(u.ctx.eventClass == "EMP" || u.ctx.eventClass == "PMI") ec += 6;
    if(u.ctx.newsVol) ec += 5;
    if(g_UltraCalInWindow) ec += 8;
    if(ec > 100) ec = 100;
    u.ctx.eventConfidence = ec;
 
-   // Context only — trading continues before / during / after
-   // Never hard-block on news phase or elevated spread alone.
+   // CHAPTER 5 — publish structured intelligence outputs
+   UltraNews_PublishOutputs(u);
+
+   // LOCKS: continue analysis · never hard-block · never trade · never override Mission
 }
 
 #endif // HITMAN_ULTRA_18_NEWSINTELLIGENCE_MQH
@@ -4541,9 +4674,11 @@ string UltraEvent_Dashboard()
 #ifndef HITMAN_ULTRA_MARKET_INTELLIGENCE_MQH
 #define HITMAN_ULTRA_MARKET_INTELLIGENCE_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — ULTRA MARKET INTELLIGENCE ENGINE (Phase 2)           |
-//| Verify data before ANY analysis. Bad data = No trade.            |
-//| Spread/news alone NEVER hard-reject (product lock).              |
+//| HITMAN AI — MASTER SPEC CHAPTER 2 · MARKET INTELLIGENCE ENGINE   |
+//| Tick · Candle · Reader · Trend · Momentum · Vol · Liq · Spread   |
+//| Session · Event · MTF · Quality · Cache · Sync                   |
+//| NEVER opens/closes/manages trades — ONLY reads the market        |
+//| Spread/vol/session/event alone NEVER hard-reject (product lock)  |
 //+------------------------------------------------------------------+
 
 #define ULTRA_MKT_MIN_BARS     60
@@ -4565,7 +4700,7 @@ enum ENUM_ULTRA_MKT_STATE
 struct UltraMarketIntelState
 {
    bool   booted;
-   bool   approved;          // Mission Control: analysis allowed
+   bool   approved;          // data gate: analysis allowed (not a trade decision)
    bool   tickOK;
    bool   candleOK;
    bool   ohlcOK;
@@ -4600,17 +4735,41 @@ struct UltraMarketIntelState
    double atr;
    double atrRel;
    double tickSpeed;
+   double tickAccel;         // Chapter 2 — tick acceleration proxy
+   int    tickDirection;     // -1 / 0 / +1
    double lastBid;
    double lastAsk;
+   double lastTickSpeed;
    long   lastEvalMs;
    long   lastQuoteAgeSec;
+   long   cacheMs;           // Chapter 2 — picture cache stamp
    int    gapCount;
    int    badOhlcCount;
+   // Candle engine (Chapter 2 §2)
+   int    candleStrength;    // 0..100
+   int    candleMomentum;    // 0..100
+   int    candleDirection;   // -1 / 0 / +1
+   bool   candleRejection;
+   bool   candleExpansion;
+   bool   candleCompression;
    ENUM_ULTRA_MKT_STATE marketState;
    string status;            // APPROVED / DEGRADED / REJECTED
-   string stateName;
+   string stateName;         // legacy classifier name
    string detail;
    string symbol;
+   // MASTER SPEC CHAPTER 2 — canonical market picture (outputs only)
+   string readerState;       // TRENDING|RANGING|TRANSITION|EXPANSION|COMPRESSION|HIGH_MOMENTUM|LOW_MOMENTUM
+   string outTrend;          // BULLISH|BEARISH|NEUTRAL
+   int    outTrendConf;      // 0..100
+   string outMomentum;       // STRONG|MEDIUM|WEAK
+   string outVolatility;     // EXPAND|COMPRESS|NORMAL (+ event note via context)
+   string outLiquidity;      // RICH|NORMAL|THIN
+   string outSpread;         // STABLE|ELEVATED|EXTREME
+   string outSession;        // Asia|London|NewYork|Overlap|...
+   string outEvent;          // NORMAL|PRE_NEWS|LIVE_NEWS|POST_NEWS (+ class)
+   int    marketQuality;     // 0..100 — higher = better environment
+   string mtfPicture;        // H4→H1→M15→M5 unified bias
+   string marketContext;     // one-line picture for dashboard / sync consumers
 };
 
 UltraMarketIntelState g_UltraMarketIntel;
@@ -4636,6 +4795,306 @@ bool UltraMarketIntel_Approved()
 {
    if(!UltraMarketIntelEnabled) return true;
    return g_UltraMarketIntel.approved;
+}
+
+//--------------------------------------------------------------------//
+// CHAPTER 2 — MARKET READER (exactly one state)                      //
+//--------------------------------------------------------------------//
+string UltraMarketIntel_ReaderFromParts(const bool expansion, const bool compression,
+                                        const int momStrength, const int trendStrength,
+                                        const bool trending, const bool ranging)
+{
+   // Priority: expansion/compression → momentum extremes → trend/range → transition
+   if(expansion && !compression) return "EXPANSION";
+   if(compression && !expansion) return "COMPRESSION";
+   if(momStrength >= 75) return "HIGH_MOMENTUM";
+   if(momStrength > 0 && momStrength <= 35) return "LOW_MOMENTUM";
+   if(trending && trendStrength >= 55) return "TRENDING";
+   if(ranging) return "RANGING";
+   return "TRANSITION";
+}
+
+//--------------------------------------------------------------------//
+// CHAPTER 2 — MTF CORE LADDER H4 → H1 → M15 → M5 (one picture)       //
+//--------------------------------------------------------------------//
+string UltraMarketIntel_MTFCorePicture(const string s)
+{
+   ENUM_TIMEFRAMES tfs[4];
+   tfs[0] = PERIOD_H4; tfs[1] = PERIOD_H1; tfs[2] = PERIOD_M15; tfs[3] = PERIOD_M5;
+   string labels[4];
+   labels[0] = "H4"; labels[1] = "H1"; labels[2] = "M15"; labels[3] = "M5";
+   int bull = 0, bear = 0;
+   string bits = "";
+   for(int i = 0; i < 4; i++)
+   {
+      double sma = UltraSMA(s, tfs[i], 20, 1);
+      double c = iClose(s, tfs[i], 1);
+      string d = "-";
+      if(sma > 0.0 && c > 0.0)
+      {
+         if(c > sma){ d = "B"; bull++; }
+         else if(c < sma){ d = "S"; bear++; }
+      }
+      if(i > 0) bits += ">";
+      bits += labels[i];
+      bits += d;
+   }
+   string bias = "NEUTRAL";
+   if(bull >= 3 && bear == 0) bias = "BULLISH";
+   else if(bear >= 3 && bull == 0) bias = "BEARISH";
+   else if(bull > bear) bias = "BULL_LEAN";
+   else if(bear > bull) bias = "BEAR_LEAN";
+   return bits + "|" + bias;
+}
+
+//--------------------------------------------------------------------//
+// CHAPTER 2 — MARKET QUALITY SCORE 0..100                            //
+//--------------------------------------------------------------------//
+int UltraMarketIntel_ComposeQuality(const UltraMarketIntelState &m)
+{
+   int q = 50;
+   // Trend
+   if(m.outTrend == "BULLISH" || m.outTrend == "BEARISH")
+      q += MathMin(15, m.outTrendConf / 7);
+   else
+      q -= 5;
+   // Momentum
+   if(m.outMomentum == "STRONG") q += 12;
+   else if(m.outMomentum == "MEDIUM") q += 6;
+   else q -= 4;
+   // Liquidity
+   if(m.outLiquidity == "RICH") q += 10;
+   else if(m.outLiquidity == "THIN") q -= 10;
+   // Volatility — adapt, never block; mild prefer normal/expand over chaos
+   if(m.outVolatility == "NORMAL") q += 6;
+   else if(m.outVolatility == "EXPAND") q += 2;
+   else if(m.outVolatility == "COMPRESS") q += 1;
+   // Spread — informational; elevated/extreme soft-penalize only
+   if(m.outSpread == "STABLE") q += 8;
+   else if(m.outSpread == "ELEVATED") q -= 4;
+   else if(m.outSpread == "EXTREME") q -= 10;
+   // Session context
+   if(m.outSession == "Overlap" || m.outSession == "London" || m.outSession == "NewYork")
+      q += 6;
+   else if(m.outSession == "Tokyo" || m.outSession == "Asia" || m.outSession == "Sydney")
+      q += 2;
+   // Event — continue analysis; soft environment note
+   if(StringFind(m.outEvent, "LIVE") >= 0) q -= 6;
+   else if(StringFind(m.outEvent, "PRE") >= 0 || StringFind(m.outEvent, "POST") >= 0) q -= 2;
+   if(q < 0) q = 0;
+   if(q > 100) q = 100;
+   return q;
+}
+
+//--------------------------------------------------------------------//
+// CHAPTER 2 — PUBLISH LITE (from Validate — no trade path)           //
+//--------------------------------------------------------------------//
+void UltraMarketIntel_PublishLite(const string s)
+{
+   // Trend proxy from classifier
+   g_UltraMarketIntel.outTrend = "NEUTRAL";
+   g_UltraMarketIntel.outTrendConf = 40;
+   if(g_UltraMarketIntel.marketState == UMKT_STRONG_TREND ||
+      g_UltraMarketIntel.marketState == UMKT_DEVELOPING_TREND)
+   {
+      double c1 = iClose(s, UltraETF(), 1);
+      double sma = UltraSMA(s, UltraETF(), 50, 1);
+      if(sma > 0.0 && c1 > sma){ g_UltraMarketIntel.outTrend = "BULLISH"; g_UltraMarketIntel.outTrendConf = 70; }
+      else if(sma > 0.0 && c1 < sma){ g_UltraMarketIntel.outTrend = "BEARISH"; g_UltraMarketIntel.outTrendConf = 70; }
+      else g_UltraMarketIntel.outTrendConf = 55;
+   }
+   else if(g_UltraMarketIntel.marketState == UMKT_WEAK_TREND)
+      g_UltraMarketIntel.outTrendConf = 45;
+
+   // Momentum from candle engine
+   int ms = g_UltraMarketIntel.candleMomentum;
+   if(ms >= 70) g_UltraMarketIntel.outMomentum = "STRONG";
+   else if(ms >= 40) g_UltraMarketIntel.outMomentum = "MEDIUM";
+   else g_UltraMarketIntel.outMomentum = "WEAK";
+
+   // Volatility
+   if(g_UltraMarketIntel.candleExpansion ||
+      g_UltraMarketIntel.atrRel >= UltraMarketIntelExpandRel)
+      g_UltraMarketIntel.outVolatility = "EXPAND";
+   else if(g_UltraMarketIntel.candleCompression ||
+           g_UltraMarketIntel.atrRel <= UltraMarketIntelCompressRel)
+      g_UltraMarketIntel.outVolatility = "COMPRESS";
+   else
+      g_UltraMarketIntel.outVolatility = "NORMAL";
+
+   // Liquidity
+   if(!g_UltraMarketIntel.liquidityOK) g_UltraMarketIntel.outLiquidity = "THIN";
+   else if(g_UltraMarketIntel.volumeOK && g_UltraMarketIntel.spreadOK)
+      g_UltraMarketIntel.outLiquidity = "RICH";
+   else
+      g_UltraMarketIntel.outLiquidity = "NORMAL";
+
+   // Spread (never rejects)
+   double warn = UltraMarketIntelSpreadWarnPts;
+   if(warn <= 0.0) warn = UltraEventSpreadWarnPts;
+   if(g_UltraMarketIntel.spreadPts >= warn * 2.0)
+      g_UltraMarketIntel.outSpread = "EXTREME";
+   else if(g_UltraMarketIntel.spreadPts >= warn)
+      g_UltraMarketIntel.outSpread = "ELEVATED";
+   else
+      g_UltraMarketIntel.outSpread = "STABLE";
+
+   g_UltraMarketIntel.outSession = "OFF";
+   g_UltraMarketIntel.outEvent = "NORMAL";
+
+   bool trending = (g_UltraMarketIntel.marketState == UMKT_STRONG_TREND ||
+                    g_UltraMarketIntel.marketState == UMKT_DEVELOPING_TREND ||
+                    g_UltraMarketIntel.marketState == UMKT_WEAK_TREND);
+   bool ranging = (g_UltraMarketIntel.marketState == UMKT_CONSOLIDATION ||
+                   g_UltraMarketIntel.marketState == UMKT_NORMAL);
+   g_UltraMarketIntel.readerState = UltraMarketIntel_ReaderFromParts(
+      (g_UltraMarketIntel.outVolatility == "EXPAND"),
+      (g_UltraMarketIntel.outVolatility == "COMPRESS"),
+      ms, g_UltraMarketIntel.outTrendConf, trending, ranging);
+
+   g_UltraMarketIntel.mtfPicture = UltraMarketIntel_MTFCorePicture(s);
+   g_UltraMarketIntel.marketQuality = UltraMarketIntel_ComposeQuality(g_UltraMarketIntel);
+   g_UltraMarketIntel.marketContext = "MKT ";
+   g_UltraMarketIntel.marketContext += g_UltraMarketIntel.readerState;
+   g_UltraMarketIntel.marketContext += " | ";
+   g_UltraMarketIntel.marketContext += g_UltraMarketIntel.outTrend;
+   g_UltraMarketIntel.marketContext += " ";
+   g_UltraMarketIntel.marketContext += IntegerToString(g_UltraMarketIntel.outTrendConf);
+   g_UltraMarketIntel.marketContext += " | mom=";
+   g_UltraMarketIntel.marketContext += g_UltraMarketIntel.outMomentum;
+   g_UltraMarketIntel.marketContext += " | vol=";
+   g_UltraMarketIntel.marketContext += g_UltraMarketIntel.outVolatility;
+   g_UltraMarketIntel.marketContext += " | liq=";
+   g_UltraMarketIntel.marketContext += g_UltraMarketIntel.outLiquidity;
+   g_UltraMarketIntel.marketContext += " | spr=";
+   g_UltraMarketIntel.marketContext += g_UltraMarketIntel.outSpread;
+   g_UltraMarketIntel.marketContext += " | Q=";
+   g_UltraMarketIntel.marketContext += IntegerToString(g_UltraMarketIntel.marketQuality);
+   g_UltraMarketIntel.cacheMs = (long)GetTickCount();
+}
+
+//--------------------------------------------------------------------//
+// CHAPTER 2 — SYNC FROM SNAP (one unified picture · no duplicate)    //
+//--------------------------------------------------------------------//
+void UltraMarketIntel_SyncFromSnap(const UltraSnap &u)
+{
+   // Trend
+   if(u.trend.bull && !u.trend.bear)
+   {
+      g_UltraMarketIntel.outTrend = "BULLISH";
+      g_UltraMarketIntel.outTrendConf = MathMax(u.trend.strength, u.trend.persistence);
+   }
+   else if(u.trend.bear && !u.trend.bull)
+   {
+      g_UltraMarketIntel.outTrend = "BEARISH";
+      g_UltraMarketIntel.outTrendConf = MathMax(u.trend.strength, u.trend.persistence);
+   }
+   else
+   {
+      g_UltraMarketIntel.outTrend = "NEUTRAL";
+      g_UltraMarketIntel.outTrendConf = MathMin(50, u.trend.strength);
+   }
+   if(g_UltraMarketIntel.outTrendConf > 100) g_UltraMarketIntel.outTrendConf = 100;
+   if(g_UltraMarketIntel.outTrendConf < 0) g_UltraMarketIntel.outTrendConf = 0;
+
+   // Momentum
+   if(u.mom.strength >= 70 || u.mom.impulse) g_UltraMarketIntel.outMomentum = "STRONG";
+   else if(u.mom.strength >= 40) g_UltraMarketIntel.outMomentum = "MEDIUM";
+   else g_UltraMarketIntel.outMomentum = "WEAK";
+
+   // Volatility — never blocks
+   if(u.vol.expansion) g_UltraMarketIntel.outVolatility = "EXPAND";
+   else if(u.vol.compression) g_UltraMarketIntel.outVolatility = "COMPRESS";
+   else g_UltraMarketIntel.outVolatility = "NORMAL";
+
+   // Liquidity
+   if(u.liq.genuineBuy || u.liq.genuineSell || u.liq.quality >= 65.0)
+      g_UltraMarketIntel.outLiquidity = "RICH";
+   else if(u.liq.fakeBuy || u.liq.fakeSell || u.liq.quality < 35.0)
+      g_UltraMarketIntel.outLiquidity = "THIN";
+   else
+      g_UltraMarketIntel.outLiquidity = "NORMAL";
+
+   // Spread from snap / live
+   double spr = u.ctx.spreadPts;
+   if(spr <= 0.0) spr = g_UltraMarketIntel.spreadPts;
+   double warn = UltraMarketIntelSpreadWarnPts;
+   if(warn <= 0.0) warn = UltraEventSpreadWarnPts;
+   if(spr >= warn * 2.0) g_UltraMarketIntel.outSpread = "EXTREME";
+   else if(spr >= warn) g_UltraMarketIntel.outSpread = "ELEVATED";
+   else g_UltraMarketIntel.outSpread = "STABLE";
+
+   // Session — context only
+   if(StringLen(u.ctx.sessionRegion) > 0) g_UltraMarketIntel.outSession = u.ctx.sessionRegion;
+   else if(StringLen(u.ctx.session) > 0) g_UltraMarketIntel.outSession = u.ctx.session;
+   else g_UltraMarketIntel.outSession = "OFF";
+
+   // Event — continue analysing; never disable trading here
+   if(StringLen(u.ctx.eventState) > 0)
+   {
+      g_UltraMarketIntel.outEvent = u.ctx.eventState;
+      if(StringLen(u.ctx.eventClass) > 0 && u.ctx.eventClass != "NONE")
+      {
+         g_UltraMarketIntel.outEvent += "/";
+         g_UltraMarketIntel.outEvent += u.ctx.eventClass;
+      }
+   }
+   else if(u.ctx.duringNews) g_UltraMarketIntel.outEvent = "LIVE_NEWS";
+   else if(u.ctx.beforeNews) g_UltraMarketIntel.outEvent = "PRE_NEWS";
+   else if(u.ctx.afterNews)  g_UltraMarketIntel.outEvent = "POST_NEWS";
+   else g_UltraMarketIntel.outEvent = "NORMAL";
+
+   bool trending = (u.trend.bull || u.trend.bear) && u.trend.strength >= 55;
+   bool ranging = (u.regime == UREG_RANGE || u.regime == UREG_COMPRESSION);
+   g_UltraMarketIntel.readerState = UltraMarketIntel_ReaderFromParts(
+      u.vol.expansion, u.vol.compression, u.mom.strength, u.trend.strength,
+      trending, ranging);
+
+   // Prefer snap MTF votes; refresh core ladder when symbol known
+   string sym = g_UltraMarketIntel.symbol;
+   if(StringLen(sym) == 0) sym = _Symbol;
+   g_UltraMarketIntel.mtfPicture = UltraMarketIntel_MTFCorePicture(sym);
+   g_UltraMarketIntel.mtfPicture += " votesB/S=";
+   g_UltraMarketIntel.mtfPicture += IntegerToString(u.trend.mtfVotesBuy);
+   g_UltraMarketIntel.mtfPicture += "/";
+   g_UltraMarketIntel.mtfPicture += IntegerToString(u.trend.mtfVotesSell);
+
+   g_UltraMarketIntel.marketQuality = UltraMarketIntel_ComposeQuality(g_UltraMarketIntel);
+   g_UltraMarketIntel.marketContext = "MKT ";
+   g_UltraMarketIntel.marketContext += g_UltraMarketIntel.readerState;
+   g_UltraMarketIntel.marketContext += " | ";
+   g_UltraMarketIntel.marketContext += g_UltraMarketIntel.outTrend;
+   g_UltraMarketIntel.marketContext += " ";
+   g_UltraMarketIntel.marketContext += IntegerToString(g_UltraMarketIntel.outTrendConf);
+   g_UltraMarketIntel.marketContext += " | mom=";
+   g_UltraMarketIntel.marketContext += g_UltraMarketIntel.outMomentum;
+   g_UltraMarketIntel.marketContext += " | vol=";
+   g_UltraMarketIntel.marketContext += g_UltraMarketIntel.outVolatility;
+   g_UltraMarketIntel.marketContext += " | liq=";
+   g_UltraMarketIntel.marketContext += g_UltraMarketIntel.outLiquidity;
+   g_UltraMarketIntel.marketContext += " | spr=";
+   g_UltraMarketIntel.marketContext += g_UltraMarketIntel.outSpread;
+   g_UltraMarketIntel.marketContext += " | sess=";
+   g_UltraMarketIntel.marketContext += g_UltraMarketIntel.outSession;
+   g_UltraMarketIntel.marketContext += " | evt=";
+   g_UltraMarketIntel.marketContext += g_UltraMarketIntel.outEvent;
+   g_UltraMarketIntel.marketContext += " | Q=";
+   g_UltraMarketIntel.marketContext += IntegerToString(g_UltraMarketIntel.marketQuality);
+   g_UltraMarketIntel.cacheMs = (long)GetTickCount();
+
+   // Keep legacy stateName aligned to reader when useful
+   if(g_UltraMarketIntel.readerState == "TRENDING")
+      g_UltraMarketIntel.stateName = (g_UltraMarketIntel.outTrendConf >= 70) ? "STRONG_TREND" : "DEVELOPING_TREND";
+   else if(g_UltraMarketIntel.readerState == "RANGING")
+      g_UltraMarketIntel.stateName = "CONSOLIDATION";
+   else if(g_UltraMarketIntel.readerState == "EXPANSION")
+      g_UltraMarketIntel.stateName = "EXPANSION";
+   else if(g_UltraMarketIntel.readerState == "COMPRESSION")
+      g_UltraMarketIntel.stateName = "COMPRESSION";
+   else if(g_UltraMarketIntel.readerState == "HIGH_MOMENTUM")
+      g_UltraMarketIntel.stateName = "HIGH_VOLATILITY";
+   else if(g_UltraMarketIntel.readerState == "LOW_MOMENTUM")
+      g_UltraMarketIntel.stateName = "LOW_VOLATILITY";
 }
 
 //--------------------------------------------------------------------//
@@ -4761,6 +5220,19 @@ bool UltraMarketIntel_VerifyTick(const string s, string &why)
    if(UltraMarketIntelMinTickSpeed > 0.0 && g_UltraMarketIntel.tickSpeed > 0.0 &&
       g_UltraMarketIntel.tickSpeed < UltraMarketIntelMinTickSpeed)
       g_UltraMarketIntel.tickSpeedOK = false; // soft — never sole reject
+
+   // Tick direction + acceleration (Chapter 2 §1)
+   g_UltraMarketIntel.tickDirection = 0;
+   if(g_UltraMarketIntel.lastBid > 0.0)
+   {
+      if(g_UltraMarketIntel.bid > g_UltraMarketIntel.lastBid) g_UltraMarketIntel.tickDirection = 1;
+      else if(g_UltraMarketIntel.bid < g_UltraMarketIntel.lastBid) g_UltraMarketIntel.tickDirection = -1;
+   }
+   if(g_UltraMarketIntel.lastTickSpeed > 0.0 && g_UltraMarketIntel.tickSpeed > 0.0)
+      g_UltraMarketIntel.tickAccel = g_UltraMarketIntel.tickSpeed - g_UltraMarketIntel.lastTickSpeed;
+   else
+      g_UltraMarketIntel.tickAccel = 0.0;
+   g_UltraMarketIntel.lastTickSpeed = g_UltraMarketIntel.tickSpeed;
 
    // Consistency vs prior quote
    g_UltraMarketIntel.tickConsistOK = true;
@@ -4892,6 +5364,27 @@ void UltraMarketIntel_Behaviour(const string s)
    long vol = iTickVolume(s, tf, 1);
    if(vol <= 0) vol = iVolume(s, tf, 1);
    g_UltraMarketIntel.volumeOK = (vol >= 0); // zero volume = soft (some symbols)
+
+   // Candle engine — strength · momentum · direction · rejection · expand/compress
+   double o1 = iOpen(s, tf, 1), h1 = iHigh(s, tf, 1), l1 = iLow(s, tf, 1), c1 = iClose(s, tf, 1);
+   double range = h1 - l1;
+   double body = MathAbs(c1 - o1);
+   g_UltraMarketIntel.candleDirection = (c1 > o1) ? 1 : ((c1 < o1) ? -1 : 0);
+   g_UltraMarketIntel.candleStrength = (range > 0.0)
+      ? (int)MathRound(100.0 * body / range) : 0;
+   if(g_UltraMarketIntel.candleStrength > 100) g_UltraMarketIntel.candleStrength = 100;
+   g_UltraMarketIntel.candleMomentum = (int)MathRound(
+      0.55 * g_UltraMarketIntel.candleStrength +
+      0.45 * MathMin(100.0, g_UltraMarketIntel.atrRel * 50.0));
+   if(g_UltraMarketIntel.candleMomentum > 100) g_UltraMarketIntel.candleMomentum = 100;
+   double upperWick = h1 - MathMax(o1, c1);
+   double lowerWick = MathMin(o1, c1) - l1;
+   g_UltraMarketIntel.candleRejection =
+      (range > 0.0 && (upperWick >= range * 0.55 || lowerWick >= range * 0.55));
+   g_UltraMarketIntel.candleExpansion =
+      (avg > 0.0 && r1 >= avg * UltraMarketIntelExpandRel);
+   g_UltraMarketIntel.candleCompression =
+      (avg > 0.0 && r1 <= avg * UltraMarketIntelCompressRel);
 
    // Liquidity proxy: spread vs ATR in points
    double point = g_UltraMarketIntel.point;
@@ -5056,8 +5549,9 @@ bool UltraMarketIntel_Validate(const string s)
    UltraMarketIntel_Behaviour(s);
    UltraData_Refresh(s);
 
-   // 9) Classify market state
+   // 9) Classify market state + Chapter 2 lite picture/cache
    UltraMarketIntel_Classify(s);
+   UltraMarketIntel_PublishLite(s);
 
    // Compose APPROVED / DEGRADED
    bool soft = (!g_UltraMarketIntel.spreadOK || !g_UltraMarketIntel.tickSpeedOK ||
@@ -5090,7 +5584,8 @@ bool UltraMarketIntel_Validate(const string s)
    if(UltraMarketIntelLog && g_UltraMarketIntel.status != "APPROVED")
    {
       UltraLog("MARKET_INTEL " + g_UltraMarketIntel.status +
-               " state=" + g_UltraMarketIntel.stateName +
+               " reader=" + g_UltraMarketIntel.readerState +
+               " Q=" + IntegerToString(g_UltraMarketIntel.marketQuality) +
                " detail=" + g_UltraMarketIntel.detail +
                " spr=" + DoubleToString(g_UltraMarketIntel.spreadPts, 0) +
                " atrRel=" + DoubleToString(g_UltraMarketIntel.atrRel, 2));
@@ -5124,15 +5619,35 @@ void UltraMarketIntel_Boot()
    g_UltraMarketIntel.bid = g_UltraMarketIntel.ask = 0.0;
    g_UltraMarketIntel.spreadPts = g_UltraMarketIntel.atr = 0.0;
    g_UltraMarketIntel.atrRel = g_UltraMarketIntel.tickSpeed = 0.0;
+   g_UltraMarketIntel.tickAccel = 0.0;
+   g_UltraMarketIntel.tickDirection = 0;
    g_UltraMarketIntel.lastBid = g_UltraMarketIntel.lastAsk = 0.0;
+   g_UltraMarketIntel.lastTickSpeed = 0.0;
    g_UltraMarketIntel.lastEvalMs = 0;
    g_UltraMarketIntel.lastQuoteAgeSec = 0;
+   g_UltraMarketIntel.cacheMs = 0;
    g_UltraMarketIntel.gapCount = g_UltraMarketIntel.badOhlcCount = 0;
+   g_UltraMarketIntel.candleStrength = g_UltraMarketIntel.candleMomentum = 0;
+   g_UltraMarketIntel.candleDirection = 0;
+   g_UltraMarketIntel.candleRejection = false;
+   g_UltraMarketIntel.candleExpansion = g_UltraMarketIntel.candleCompression = false;
    g_UltraMarketIntel.marketState = UMKT_NORMAL;
    g_UltraMarketIntel.status = "INIT";
    g_UltraMarketIntel.stateName = "NORMAL";
    g_UltraMarketIntel.detail = "booting";
    g_UltraMarketIntel.symbol = "";
+   g_UltraMarketIntel.readerState = "TRANSITION";
+   g_UltraMarketIntel.outTrend = "NEUTRAL";
+   g_UltraMarketIntel.outTrendConf = 0;
+   g_UltraMarketIntel.outMomentum = "WEAK";
+   g_UltraMarketIntel.outVolatility = "NORMAL";
+   g_UltraMarketIntel.outLiquidity = "NORMAL";
+   g_UltraMarketIntel.outSpread = "STABLE";
+   g_UltraMarketIntel.outSession = "OFF";
+   g_UltraMarketIntel.outEvent = "NORMAL";
+   g_UltraMarketIntel.marketQuality = 0;
+   g_UltraMarketIntel.mtfPicture = "";
+   g_UltraMarketIntel.marketContext = "MKT INIT";
    g_UltraCore.marketOK = false;
 
    if(!UltraMarketIntelEnabled)
@@ -5172,13 +5687,21 @@ string UltraMarketIntel_Dashboard()
    string t = "MARKET: ";
    t += g_UltraMarketIntel.status;
    t += " ";
-   t += g_UltraMarketIntel.stateName;
+   if(StringLen(g_UltraMarketIntel.marketContext) > 0)
+      t += g_UltraMarketIntel.marketContext;
+   else
+   {
+      t += g_UltraMarketIntel.readerState;
+      t += " Q=";
+      t += IntegerToString(g_UltraMarketIntel.marketQuality);
+   }
    t += " | ";
    t += g_UltraMarketIntel.detail;
-   t += " spr=";
-   t += DoubleToString(g_UltraMarketIntel.spreadPts, 0);
-   t += " atrR=";
-   t += DoubleToString(g_UltraMarketIntel.atrRel, 2);
+   if(StringLen(g_UltraMarketIntel.mtfPicture) > 0)
+   {
+      t += " | ";
+      t += g_UltraMarketIntel.mtfPicture;
+   }
    if(g_UltraMarketIntel.weekend) t += " WEEKEND";
    if(g_UltraMarketIntel.holiday) t += " HOLIDAY";
    if(!g_UltraMarketIntel.marketOpen) t += " CLOSED";
@@ -6009,6 +6532,9 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
    // propagate session/news context into input surface
    g_UltraMarketInput.session = u.ctx.session;
    g_UltraMarketInput.newsPhase = u.ctx.newsPhase;
+
+   // CHAPTER 2 — one unified market picture cache (no duplicate engine calcs)
+   UltraMarketIntel_SyncFromSnap(u);
 
    g_UltraCore.lastLatencyMs = (long)GetTickCount() - t0;
    g_UltraCore.lastCycleMs = (long)GetTickCount();
@@ -9658,10 +10184,12 @@ bool UltraMarketRead_FastOK(const UltraSnap &u, const bool buySide, string &why)
 #define HITMAN_ULTRA_NEWS_EXECUTION_MQH
 //+------------------------------------------------------------------+
 //| HITMAN AI — PHASE 23 ULTRA NEWS EXECUTION PROTOCOL ∞             |
-//| Major events · Ultra News Mode · Instant detect/execute          |
+//| CHAPTER 5 LOCK: News Intelligence NEVER trades / NEVER executes  |
+//| This protocol assists Execution ONLY after Mission approval      |
 //| Never disable trading because of news alone                      |
 //| Never auto-reject on high spread — full analysis first           |
 //| Never force a trade · Never reduce validation under volatility   |
+//| Never override Mission Control or proprietary strategy           |
 //+------------------------------------------------------------------+
 
 // Forward — Adaptive Intelligence assembled after this module
@@ -16045,7 +16573,15 @@ void UltraMod_Refresh()
    // PHASE 2 — Market Intelligence
    bool mktOK = (!UltraMarketIntelEnabled) ||
                 (g_UltraMarketIntel.booted && g_UltraMarketIntel.approved);
-   UltraMod_Reg("P02_MARKET_INTEL", true, UltraMarketIntelEnabled, mktOK, g_UltraMarketIntel.status);
+   string mktDetail = g_UltraMarketIntel.status;
+   if(StringLen(g_UltraMarketIntel.readerState) > 0)
+   {
+      mktDetail += " ";
+      mktDetail += g_UltraMarketIntel.readerState;
+      mktDetail += " Q=";
+      mktDetail += IntegerToString(g_UltraMarketIntel.marketQuality);
+   }
+   UltraMod_Reg("P02_MARKET_INTEL", true, UltraMarketIntelEnabled, mktOK, mktDetail);
 
    // PHASE 3 — Proprietary Strategy
    UltraMod_Reg("P03_PROP_STRATEGY", true, UltraFastSignalEnabled, UltraFastSignalEnabled,
@@ -17336,6 +17872,7 @@ string UltraDashboardText(const string s)
    t += " | (24/7 never blocks)";
    t += "\n"; t += UltraSession_Dashboard();
    t += " | News: "; t += u.ctx.newsPhase;
+   t += "\n"; t += UltraNewsIntel_Dashboard();
    t += "\nTrend votes B/S: "; t += IntegerToString(u.trend.mtfVotesBuy);
    t += "/"; t += IntegerToString(u.trend.mtfVotesSell);
    t += " | Str: "; t += IntegerToString(u.trend.strength);
@@ -18145,7 +18682,7 @@ int OnInit()
          " Pos=", UltraYN(UltraZFRPositionRecovery),
          " Conn=", UltraYN(UltraZFRConnectionRecovery),
          " NeverStop=Y");
-   Print("P09 POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
+   Print("P10 POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
          " L3Close=", UltraYN(UltraPosEvoCloseOnL3),
          " L3Bars=", UltraPosEvoL3ConfirmBars,
          " Replace=", UltraYN(UltraPosEvoReplaceEnabled),

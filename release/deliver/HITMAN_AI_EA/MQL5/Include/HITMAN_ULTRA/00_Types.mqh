@@ -164,12 +164,19 @@ struct UltraSessionNews
    bool   highImpactProxy, midImpactProxy, lowImpactProxy;
    bool   beforeNews, duringNews, afterNews; // context phases — NEVER block
    string newsPhase;                 // "BEFORE" | "DURING" | "AFTER" | "NONE"
-   string eventClass;                // NFP|FOMC|CPI|GDP|PMI|RATES|SPEECH|MAJOR|NONE
-   int    eventImpact;               // 0=none 1=low 2=mid 3=high
+   string eventClass;                // NFP|FOMC|CPI|GDP|PMI|RATES|SPEECH|EMP|MAJOR|NONE
+   int    eventImpact;               // 0=none 1=low 2=mid 3=high 4=extreme
    int    eventConfidence;           // 0..100 event-context confidence
    double spreadPts, slipProxy;
    double tickSpeed;                 // ticks/sec proxy
    int    execQuality;               // 0..100 broker/exec assessment
+   // MASTER SPEC CHAPTER 5 — News Intelligence outputs (context only)
+   string eventState;                // NORMAL | PRE_NEWS | LIVE_NEWS | POST_NEWS
+   string eventIntensity;            // NONE | LOW | MEDIUM | HIGH | EXTREME
+   string volatilityState;           // COMPRESS | NORMAL | EXPAND
+   string spreadState;               // STABLE | ELEVATED | EXTREME
+   string liquidityState;            // THIN | NORMAL | RICH
+   string newsContext;               // one-line intelligence summary
    // Session + News: CONTEXT ONLY · Trades 24/7 · never hard-block
 };
 

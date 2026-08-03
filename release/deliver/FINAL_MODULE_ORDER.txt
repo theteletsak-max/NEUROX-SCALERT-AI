@@ -11,6 +11,9 @@ PHASE 1  — CORE FOUNDATION ENGINE
 
 PHASE 2  — MARKET INTELLIGENCE ENGINE
   UltraMarketIntelligence.mqh (+ tick/candle/MTF/session layers)
+  MASTER SPEC CHAPTER 2 — read-only market picture
+  Outputs: Trend·Momentum·Vol·Liq·Spread·Session·Event·Quality
+  LOCK: never trades / never executes / never manages positions
 
 PHASE 3  — PROPRIETARY STRATEGY ENGINE
   UFSE · TradeThesis · Confluence · USM2 confidence

@@ -68,7 +68,15 @@ void UltraMod_Refresh()
    // PHASE 2 — Market Intelligence
    bool mktOK = (!UltraMarketIntelEnabled) ||
                 (g_UltraMarketIntel.booted && g_UltraMarketIntel.approved);
-   UltraMod_Reg("P02_MARKET_INTEL", true, UltraMarketIntelEnabled, mktOK, g_UltraMarketIntel.status);
+   string mktDetail = g_UltraMarketIntel.status;
+   if(StringLen(g_UltraMarketIntel.readerState) > 0)
+   {
+      mktDetail += " ";
+      mktDetail += g_UltraMarketIntel.readerState;
+      mktDetail += " Q=";
+      mktDetail += IntegerToString(g_UltraMarketIntel.marketQuality);
+   }
+   UltraMod_Reg("P02_MARKET_INTEL", true, UltraMarketIntelEnabled, mktOK, mktDetail);
 
    // PHASE 3 — Proprietary Strategy
    UltraMod_Reg("P03_PROP_STRATEGY", true, UltraFastSignalEnabled, UltraFastSignalEnabled,

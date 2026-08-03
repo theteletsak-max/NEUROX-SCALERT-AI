@@ -2,10 +2,12 @@
 #define HITMAN_ULTRA_NEWS_EXECUTION_MQH
 //+------------------------------------------------------------------+
 //| HITMAN AI — PHASE 23 ULTRA NEWS EXECUTION PROTOCOL ∞             |
-//| Major events · Ultra News Mode · Instant detect/execute          |
+//| CHAPTER 5 LOCK: News Intelligence NEVER trades / NEVER executes  |
+//| This protocol assists Execution ONLY after Mission approval      |
 //| Never disable trading because of news alone                      |
 //| Never auto-reject on high spread — full analysis first           |
 //| Never force a trade · Never reduce validation under volatility   |
+//| Never override Mission Control or proprietary strategy           |
 //+------------------------------------------------------------------+
 
 // Forward — Adaptive Intelligence assembled after this module

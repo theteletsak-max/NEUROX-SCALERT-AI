@@ -1,18 +1,19 @@
 ══════════════════════════════════════════════════════════════════════
 PHASE 2 — ULTRA MARKET INTELLIGENCE ENGINE — APPLIED
-BUILD: HA_ULTRA_93 | Comment: HITMAN AI | MaxOpen=3
+MASTER SPEC CHAPTER 2 · BUILD: HA_ULTRA_93 | Comment: HITMAN AI
 ══════════════════════════════════════════════════════════════════════
 
 MISSION
-Understand the market before making a trading decision.
-Never analyse incomplete information. Never trade on assumptions.
-Bad data = No trade. Verified data = Continue analysis.
+Read the market with maximum precision · minimum latency.
+Produce one clean market picture for the entire EA.
+NEVER open/close/manage trades — ONLY read the market.
 
-PIPELINE (before every analysis)
+DATA GATE (integrity — not a trade decision)
 Verify Tick → Candle → Buffers → Indicators → Symbol
-→ Spread (info) → Market State → Trading Permissions → Begin Analysis
+→ Spread (info) → Behaviour → Classify → PublishLite
+Bad / missing prices = no new analysis. Verified = continue.
 
-HARD REJECT (no new analysis / no new trades)
+HARD REJECT (no new analysis path)
 ✗ Missing / invalid prices
 ✗ Corrupted OHLC / buffers
 ✗ Incomplete closed candle / thin history
@@ -21,24 +22,24 @@ HARD REJECT (no new analysis / no new trades)
 ✗ Weekend / holiday close (configurable)
 ✗ Stale live quote (configurable)
 
-DEGRADED (analysis continues)
-• Wide spread (never sole hard-reject — product lock)
-• Slow ticks / tick jumps
-• Gap noise / thin liquidity proxy
-• Soft indicator warnings
+DEGRADED (analysis continues — never sole hard-reject)
+• Wide spread · Slow ticks / jumps · Gap noise · Thin liq proxy
 
-MARKET STATE CLASSIFIER
-STRONG_TREND · DEVELOPING_TREND · WEAK_TREND · CONSOLIDATION
-EXPANSION · COMPRESSION · HIGH_VOLATILITY · LOW_VOLATILITY · NORMAL
+CHAPTER 2 MARKET PICTURE (g_UltraMarketIntel)
+readerState · outTrend/Conf · outMomentum · outVolatility
+outLiquidity · outSpread · outSession · outEvent
+marketQuality 0–100 · mtfPicture (H4>H1>M15>M5) · marketContext
+Synced from UltraSnap via UltraMarketIntel_SyncFromSnap
+(after UltraBuildSnapshot — no duplicate engine calcs)
 
-RUNTIME RULES
+RUNTIME
 • REJECTED → ManageOpenTrades only (never abandon risk)
 • DEGRADED / APPROVED → full analysis path
-• UltraBuildSnapshot + AnalyzeLiveMarket gated on approval
-• Assembler inserts UltraMarketIntelligence.mqh after EventEngine
+• Strategy Engine decides what to do with the picture
 
 FILE
 MQL5/Include/HITMAN_ULTRA/UltraMarketIntelligence.mqh
+MQL5/Include/HITMAN_ULTRA/MASTER_SPEC_CHAPTER2_MARKET_INTELLIGENCE.txt
 
 LOCKS
 TradeComment=HITMAN AI · BUILD=HA_ULTRA_93 · MaxOpen=3

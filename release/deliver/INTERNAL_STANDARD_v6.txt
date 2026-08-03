@@ -14,6 +14,7 @@ PHASE 1  — CORE FOUNDATION ENGINE
 PHASE 2  — MARKET INTELLIGENCE ENGINE
   Tick · Candle · Classification · Trend · Momentum · Liquidity
   Volatility · Spread · Session · Event · MTF · Market Quality
+  MASTER SPEC CHAPTER 2 — read-only unified picture (never trades)
 
 PHASE 3  — PROPRIETARY STRATEGY ENGINE
   Trend/Structure/Momentum/Liquidity logic · Confluence

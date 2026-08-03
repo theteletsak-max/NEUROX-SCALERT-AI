@@ -188,7 +188,7 @@ int OnInit()
          " Pos=", UltraYN(UltraZFRPositionRecovery),
          " Conn=", UltraYN(UltraZFRConnectionRecovery),
          " NeverStop=Y");
-   Print("P09 POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
+   Print("P10 POSITION EVOLUTION: Enabled=", UltraYN(UltraPosEvoEnabled),
          " L3Close=", UltraYN(UltraPosEvoCloseOnL3),
          " L3Bars=", UltraPosEvoL3ConfirmBars,
          " Replace=", UltraYN(UltraPosEvoReplaceEnabled),

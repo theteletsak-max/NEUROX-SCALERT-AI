@@ -425,6 +425,9 @@ bool UltraBuildSnapshot(const string s, UltraSnap &u)
    g_UltraMarketInput.session = u.ctx.session;
    g_UltraMarketInput.newsPhase = u.ctx.newsPhase;
 
+   // CHAPTER 2 — one unified market picture cache (no duplicate engine calcs)
+   UltraMarketIntel_SyncFromSnap(u);
+
    g_UltraCore.lastLatencyMs = (long)GetTickCount() - t0;
    g_UltraCore.lastCycleMs = (long)GetTickCount();
    g_UltraCore.dataOK = true;

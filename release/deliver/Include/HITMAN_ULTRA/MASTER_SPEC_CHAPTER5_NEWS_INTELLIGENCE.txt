@@ -1,0 +1,72 @@
+HITMAN AI — MASTER SPECIFICATION
+CHAPTER 5 — NEWS INTELLIGENCE ENGINE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Understand market events without automatically disabling trading.
+  The News Intelligence Engine NEVER trades.
+  It NEVER executes orders.
+  It NEVER overrides the proprietary strategy or Mission Control.
+  It ONLY provides market intelligence.
+
+============================================================
+1. NEWS CORE
+  Detect · Monitor · Analyze · Support · Continuous analysis
+  Module: 18_NewsIntelligence.mqh · UltraEngNews()
+
+2. EVENT DETECTION
+  NFP · CPI · FOMC · Rates · GDP · PMI · EMP · SPEECH · MAJOR
+  + MQL5 calendar window (g_UltraCal*) when enabled
+
+3. EVENT CLASSIFICATION (environment measure — never blocks)
+  NONE → LOW → MEDIUM → HIGH → EXTREME
+  API: UltraNews_ClassifyIntensity / UltraNews_IntensityName
+
+4. NEWS MODE
+  NORMAL → PRE_NEWS → LIVE_NEWS → POST_NEWS
+  (maps BEFORE / DURING / AFTER)
+  Strategy adapts via context · trading remains possible
+
+5. VOLATILITY INTELLIGENCE
+  Expansion · Compression · relative ATR · tick speed (EventEngine)
+
+6. SPREAD INTELLIGENCE
+  Current / elevated / extreme vs UltraEventSpreadWarnPts
+  Spread alone NEVER rejects a valid trade
+
+7. LIQUIDITY INTELLIGENCE
+  THIN · NORMAL · RICH (EventEngine liqScore + genuine liq)
+
+8. CONTINUOUS NEWS ANALYSIS
+  Nothing pauses automatically — market/strategy/signal/thesis continue
+
+9. NEWS EXECUTION READINESS
+  Strategy approves → Mission Control → Execution Engine
+  News NEVER decides BUY/SELL · NEVER submits orders
+  Phase 23 Protocol assists Execution only after Mission approval
+
+10. NEWS OUTPUT (and nothing else)
+  eventState · eventIntensity · volatilityState
+  spreadState · liquidityState · newsContext
+  Published on UltraSnap.ctx by UltraNews_PublishOutputs()
+
+============================================================
+RULES
+  ✔ Continue market / strategy / signal / thesis / confidence
+  ✔ Never automatically disable trading
+  ✔ Never override Mission Control
+  ✔ Never override proprietary strategy
+  ✔ Support intelligent decision making only
+
+FILES
+  18_NewsIntelligence.mqh
+  UltraNewsExecution.mqh (Phase 23 readiness / protocol — exec assist)
+  39_EventEngine.mqh (vol/spread/liq assessment)
+  ULTRA_EVENT_NEWS_TRADING_QUALITY.txt (quality mission)
+
+LOCKS
+  HITMAN AI · HA_ULTRA_93 · MaxOpen=3 · Mission sole close
+  Final Development Rule — refine only
+============================================================
+END OF CHAPTER 5

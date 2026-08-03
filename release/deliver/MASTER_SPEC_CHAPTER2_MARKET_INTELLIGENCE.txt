@@ -1,0 +1,102 @@
+HITMAN AI — MASTER SPECIFICATION
+CHAPTER 2 — MARKET INTELLIGENCE ENGINE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Read the market with maximum precision.
+  Process market information with minimum latency.
+  Produce one clean market picture for the entire EA.
+
+  The Market Intelligence Engine NEVER opens trades.
+  It NEVER closes trades.
+  It NEVER manages positions.
+  It ONLY reads and understands the market.
+
+============================================================
+1. TICK ENGINE
+  Receive · validate · filter corrupted · speed · direction
+  · acceleration · update market state / cache
+  API: UltraMarketIntel_VerifyTick · OnTick path
+
+2. CANDLE ENGINE
+  Build/validate · strength · momentum · direction
+  · rejection · expansion · compression
+  Filled in UltraMarketIntel_Behaviour
+
+3. MARKET READER (exactly one state)
+  TRENDING | RANGING | TRANSITION | EXPANSION
+  | COMPRESSION | HIGH_MOMENTUM | LOW_MOMENTUM
+  API: UltraMarketIntel_ReaderFromParts → readerState
+
+4. TREND INTELLIGENCE
+  Direction BULLISH|BEARISH|NEUTRAL · Confidence 0–100
+  Synced from UltraSnap.trend (one calculation)
+
+5. MOMENTUM INTELLIGENCE
+  STRONG | MEDIUM | WEAK (from UltraSnap.mom)
+
+6. VOLATILITY INTELLIGENCE
+  EXPAND | COMPRESS | NORMAL
+  Purpose: adapt strategy — never block trades alone
+
+7. LIQUIDITY INTELLIGENCE
+  RICH | NORMAL | THIN — improve trade quality
+
+8. SPREAD INTELLIGENCE
+  STABLE | ELEVATED | EXTREME
+  Supports strategy — does NOT automatically block
+
+9. SESSION INTELLIGENCE
+  Asia · London · NewYork · Overlap (context only)
+  Session alone never creates a signal
+
+10. EVENT INTELLIGENCE
+  NORMAL | PRE_NEWS | LIVE_NEWS | POST_NEWS (+ class)
+  Continue analysing — never auto-disable trading
+
+11. MULTI-TIMEFRAME ENGINE
+  H4 → H1 → M15 → M5 unified picture
+  API: UltraMarketIntel_MTFCorePicture
+  Never conflicting signals (master bias + votes)
+
+12. MARKET QUALITY ENGINE
+  Trend + Momentum + Liquidity + Volatility
+  + Spread + Session + Event → marketQuality 0–100
+
+13. MARKET SYNCHRONIZATION
+  UltraMarketIntel_SyncFromSnap(u) after UltraBuildSnapshot
+  All consumers read g_UltraMarketIntel outputs
+  No duplicated trend/momentum/vol/liq/spread calc
+
+14. MARKET CACHE
+  cacheMs · marketContext · canonical out* fields
+  Refresh on Validate interval + each full snapshot
+
+15. MARKET OUTPUT (and nothing else)
+  Trend · Momentum · Volatility · Liquidity
+  Spread · Session · Event · Market Quality
+  (+ readerState / mtfPicture / marketContext for sync)
+
+============================================================
+RULES
+  ✔ Read every tick (throttled full validate)
+  ✔ Minimum internal latency
+  ✔ No duplicate calculations after SyncFromSnap
+  ✔ One unified market picture
+  ✔ Market engine NEVER trades / executes / manages
+  ✔ Market engine ONLY reads the market
+
+FILES
+  UltraMarketIntelligence.mqh
+  UltraMarketInput.mqh · 09_Trend · 10_Momentum · 11_Volatility
+  06_Liquidity · 17_Session · 18_News · 23_MultiTimeframe
+  16_AI_Core (SyncFromSnap after snapshot build)
+  PHASE2_MARKET_INTELLIGENCE.txt (data-gate notes)
+
+LOCKS
+  HITMAN AI · HA_ULTRA_93 · MaxOpen=3 · Mission sole close
+  Spread/news alone NEVER hard-reject
+  Final Development Rule — refine only
+============================================================
+END OF CHAPTER 2

@@ -76,6 +76,7 @@ string UltraDashboardText(const string s)
    t += " | (24/7 never blocks)";
    t += "\n"; t += UltraSession_Dashboard();
    t += " | News: "; t += u.ctx.newsPhase;
+   t += "\n"; t += UltraNewsIntel_Dashboard();
    t += "\nTrend votes B/S: "; t += IntegerToString(u.trend.mtfVotesBuy);
    t += "/"; t += IntegerToString(u.trend.mtfVotesSell);
    t += " | Str: "; t += IntegerToString(u.trend.strength);
