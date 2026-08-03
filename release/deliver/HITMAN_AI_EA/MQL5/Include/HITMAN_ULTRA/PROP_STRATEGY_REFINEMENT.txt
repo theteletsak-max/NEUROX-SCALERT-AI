@@ -7,7 +7,7 @@ MISSION: One Strategy · One Brain · One Decision · One Mission
 Never mix external strategies. Refine only.
 
 LEVEL 1 Signal Precision          [DONE]
-  ✓ Removed stacked InstantQuality −8 soft passes
+  ✓ Removed stacked InstantQuality -8 soft passes
   ✓ ContSniper 2/3 requires impulse OR zone+BOS
   ✓ EntryTrigger 2/5 only genuine∧strong BOS
   ✓ UltraPickBest rejects conflicting BUY/SELL
@@ -15,7 +15,7 @@ LEVEL 1 Signal Precision          [DONE]
 
 LEVEL 2 Decision Intelligence     [DONE]
   ✓ USM2 scores once in UltraAIDecide (one confidence engine)
-  ✓ Supreme reuses USM2 (no re-score / no −8 soft)
+  ✓ Supreme reuses USM2 (no re-score / no -8 soft)
   ✓ Master trend lock not bypassed by InstantQuality
   ✓ PRISMFinalizeApproval live Ultra tags only
 

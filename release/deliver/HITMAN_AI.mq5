@@ -12558,6 +12558,22 @@ bool UltraMission_HasFinalEntry(const bool isBuy)
    return true;
 }
 
+// PHASE A — SOLE decision-level WAIT emitter (BUY/SELL/WAIT surface)
+// Soft pre-filters may still abort candidates, but WAIT is recorded only here.
+void UltraMission_EmitWait(const string why, const int conf)
+{
+   // de-dupe same-second identical WAIT (ApproveEntry + EvaluateStrategySignals)
+   if(g_UltraMissionLast.command == SUP_WAIT &&
+      g_UltraMissionLast.reason == why &&
+      g_UltraMissionLast.ts == TimeCurrent())
+      return;
+
+   UltraMission_Set(SUP_WAIT, why, conf, conf, "WAIT", "", 0);
+   g_UltraMissionEntryOK = false;
+   UltraMission_Log("WAIT", 0, why);
+   UltraBug_Explain("WAIT", "MissionControl", "UltraMission_EmitWait", why, "-", 0);
+}
+
 //--------------------------------------------------------------------//
 void UltraMission_Init()
 {
@@ -12915,7 +12931,7 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
    if(!UltraMission_AllowNewEntry(s))
    {
       why = "MISSION: one decision per cycle";
-      UltraMission_Set(SUP_WAIT, why, u.score.confidence, u.score.confidence, "WAIT", "", 0);
+      UltraMission_EmitWait(why, u.score.confidence);
       return false;
    }
 
@@ -12930,8 +12946,7 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
          why += UltraV_Name(vst);
          why += ": ";
          why += vWhy;
-         UltraMission_Set(SUP_WAIT, why, u.score.confidence, u.score.confidence, "WAIT", "", 0);
-         UltraMission_Log("WAIT", 0, why);
+         UltraMission_EmitWait(why, u.score.confidence);
          return false;
       }
    }
@@ -12951,8 +12966,9 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
    }
    else
    {
-      UltraMission_Set(SUP_WAIT, why, u.score.confidence, u.score.confidence, "IGNORE", "", 0);
-      g_UltraMissionEntryOK = false;
+      // PHASE A — sole WAIT authority (Supreme deny → Mission WAIT)
+      if(StringLen(why) == 0) why = "MISSION WAIT";
+      UltraMission_EmitWait(why, u.score.confidence);
    }
    return ok;
 }
@@ -16339,11 +16355,11 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       if(EnableVerboseLogging)
          Print("ULTRA snapshot failed: ", g_UltraCore.lastError, " on ", BrokerSymbol);
       g_UltraLastSnap = snap;
-      UltraBug_Explain("WAIT",
-         "UFSE",
-         "EvaluateStrategySignals",
-         "snapshot failed: " + g_UltraCore.lastError,
-         "-", 0);
+      string snapWhy = "snapshot failed: " + g_UltraCore.lastError;
+      if(UltraPhaseA_MissionSoleAuthority)
+         UltraMission_EmitWait(snapWhy, 0);
+      else
+         UltraBug_Explain("WAIT", "UFSE", "EvaluateStrategySignals", snapWhy, "-", 0);
       return;
    }
 
@@ -16355,8 +16371,11 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       bool leanBuy = (UltraConfluenceBuy(snap) >= UltraConfluenceSell(snap));
       best.explanation = UltraUFSE_DebugExplain(snap, leanBuy, false);
       g_UltraLastSignal = best;
-      // Phase 19 — every wait explains module/function/reason (throttled)
-      UltraBug_Explain("WAIT", "UFSE", "UltraAIDecide", why, "-", 0);
+      // PHASE A — only Mission Control emits decision-level WAIT
+      if(UltraPhaseA_MissionSoleAuthority)
+         UltraMission_EmitWait(why, snap.score.confidence);
+      else
+         UltraBug_Explain("WAIT", "UFSE", "UltraAIDecide", why, "-", 0);
       datetime bar = iTime(BrokerSymbol, UltraETF(), 0);
       bool logIt = (EnableVerboseLogging || ContStruct_LogDetail || UltraUFSE_ExplainLog) &&
                    (bar != g_UltraLastWaitBar || BrokerSymbol != g_UltraLastWaitSym);
@@ -25171,10 +25190,13 @@ void UltraSetReject(const string reason)
 
 void UltraSetWait(const string reason)
 {
-   // Phase 19 — no silent waits: structured explain (throttled inside UltraBug)
+   // PHASE A — decision-level WAIT belongs to Mission Control only
    g_UltraLastReject = reason;
    g_UltraLastDecision = "WAIT";
-   UltraBug_Explain("WAIT", "Shell_B", "UltraSetWait", reason, "-", 0);
+   if(UltraPhaseA_MissionSoleAuthority)
+      UltraMission_EmitWait(reason, 0);
+   else
+      UltraBug_Explain("WAIT", "Shell_B", "UltraSetWait", reason, "-", 0);
 }
 
 void UltraSetApprove(const string tag, const string grade, const int beast, const int confPct)

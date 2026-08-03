@@ -12,9 +12,26 @@ MISSION
 SOLE FINAL AUTHORITY
   Module: MissionControl.mqh
   API:    UltraMission_ApproveEntry → UltraSupreme_FinalizeEntry
+  WAIT:   UltraMission_EmitWait (SOLE decision-level WAIT emitter)
   Sticky: g_UltraMissionEntryOK / UltraMission_HasFinalEntry(isBuy)
 
   Final decisions: BUY | SELL | WAIT
+
+============================================================
+WAIT INVENTORY (decision surface)
+
+  ONLY emitter under UltraPhaseA_MissionSoleAuthority=true:
+    UltraMission_EmitWait → UltraMission_Set(SUP_WAIT) + MISSION WAIT log
+
+  Routed through EmitWait (no independent WAIT authority):
+    UltraMission_ApproveEntry (deny / VChain / one-decision)
+    EvaluateStrategySignals (UltraAIDecide soft fail / snapshot fail)
+    UltraSetWait (FinalTradeCheck / cooldown pre-eval)
+
+  NOT decision WAIT (hard infra / exec — may abort, cannot flip sticky BUY→WAIT):
+    Foundation RED · MarketIntel deny · SystemHealth RED
+    Entry/SL/TP geometry · lot/margin · broker retcode
+    UltraBT_PreTradeReady
 
 ============================================================
 POST-MISSION GATES (Phase A demoted — cannot flip BUY→WAIT)
@@ -32,17 +49,29 @@ KEPT HARD AFTER MISSION (not decision flips)
   ✓ UltraBT_PreTradeReady (tester readiness)
 
 ============================================================
-PRE-MISSION (allowed — candidate formation / hard infra)
+PRE-MISSION (candidate formation — may abort before ApproveEntry)
+
+  Soft quality filters still feed UltraAIDecide → on fail, Phase A
+  records WAIT only via UltraMission_EmitWait (Mission sole surface).
 
   Hard abort (not soft WAIT): Foundation RED · MarketIntel deny ·
-    SystemHealth RED · snapshot fail · capital/exec terminal hard fails
-
-  Soft quality filters still feed UltraAIDecide → Mission (WAIT only
-  emitted by UltraMission_ApproveEntry as final decision WAIT)
+    SystemHealth RED · capital/exec terminal hard fails
 
   Pre-eval throttles (before EvaluateStrategySignals):
     FinalTradeCheck · CooldownFinished · smart-tick skip
-    → these never reverse a Mission BUY (they run before decide)
+    → UltraSetWait → EmitWait under Phase A (never reverse Mission BUY)
+
+============================================================
+DUPLICATE GATES REMOVED / DEMOTIONS
+
+  return WAIT / UltraSetWait / UltraBug_Explain("WAIT") after Mission BUY
+    → demoted to WARN or routed to EmitWait (no BUY→WAIT flip)
+
+  return false after Mission sticky OK on soft gates
+    → Bug audit / Correlation / PRISM / TradeGate THESIS demoted
+
+  continue / break / Exit / Reject after Mission sticky OK
+    → soft Reject paths demoted; hard exec Reject kept
 
 ============================================================
 INPUTS
@@ -52,3 +81,4 @@ INPUTS
 LOCKS
   TradeComment=HITMAN AI · BUILD=HA_ULTRA_93 · MaxOpen=3
   Mission sole close authority unchanged
+  Final Development Rule: refine/validate only — no new engines

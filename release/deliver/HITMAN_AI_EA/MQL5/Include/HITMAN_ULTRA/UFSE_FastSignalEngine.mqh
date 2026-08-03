@@ -742,11 +742,11 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       if(EnableVerboseLogging)
          Print("ULTRA snapshot failed: ", g_UltraCore.lastError, " on ", BrokerSymbol);
       g_UltraLastSnap = snap;
-      UltraBug_Explain("WAIT",
-         "UFSE",
-         "EvaluateStrategySignals",
-         "snapshot failed: " + g_UltraCore.lastError,
-         "-", 0);
+      string snapWhy = "snapshot failed: " + g_UltraCore.lastError;
+      if(UltraPhaseA_MissionSoleAuthority)
+         UltraMission_EmitWait(snapWhy, 0);
+      else
+         UltraBug_Explain("WAIT", "UFSE", "EvaluateStrategySignals", snapWhy, "-", 0);
       return;
    }
 
@@ -758,8 +758,11 @@ void EvaluateStrategySignals(bool &buySignal, bool &sellSignal, string &strategy
       bool leanBuy = (UltraConfluenceBuy(snap) >= UltraConfluenceSell(snap));
       best.explanation = UltraUFSE_DebugExplain(snap, leanBuy, false);
       g_UltraLastSignal = best;
-      // Phase 19 — every wait explains module/function/reason (throttled)
-      UltraBug_Explain("WAIT", "UFSE", "UltraAIDecide", why, "-", 0);
+      // PHASE A — only Mission Control emits decision-level WAIT
+      if(UltraPhaseA_MissionSoleAuthority)
+         UltraMission_EmitWait(why, snap.score.confidence);
+      else
+         UltraBug_Explain("WAIT", "UFSE", "UltraAIDecide", why, "-", 0);
       datetime bar = iTime(BrokerSymbol, UltraETF(), 0);
       bool logIt = (EnableVerboseLogging || ContStruct_LogDetail || UltraUFSE_ExplainLog) &&
                    (bar != g_UltraLastWaitBar || BrokerSymbol != g_UltraLastWaitSym);

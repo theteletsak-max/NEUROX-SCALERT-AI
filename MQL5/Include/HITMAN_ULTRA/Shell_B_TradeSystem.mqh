@@ -7829,10 +7829,13 @@ void UltraSetReject(const string reason)
 
 void UltraSetWait(const string reason)
 {
-   // Phase 19 — no silent waits: structured explain (throttled inside UltraBug)
+   // PHASE A — decision-level WAIT belongs to Mission Control only
    g_UltraLastReject = reason;
    g_UltraLastDecision = "WAIT";
-   UltraBug_Explain("WAIT", "Shell_B", "UltraSetWait", reason, "-", 0);
+   if(UltraPhaseA_MissionSoleAuthority)
+      UltraMission_EmitWait(reason, 0);
+   else
+      UltraBug_Explain("WAIT", "Shell_B", "UltraSetWait", reason, "-", 0);
 }
 
 void UltraSetApprove(const string tag, const string grade, const int beast, const int confPct)

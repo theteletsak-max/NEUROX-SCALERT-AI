@@ -96,6 +96,8 @@ int OnInit()
    UltraMission_Init();     // P06 Mission Control
    UltraBug_AuditInit(BrokerSymbol); // P17 init / handles / broker / timer audit
    Print("FINAL MODULE ORDER: HA_ULTRA_93 | Phases 1-17 | one strategy · one signal · one thesis · one mission · one exit");
+   Print("PHASE A DECISION FLOW: MissionSoleAuthority=", UltraYN(UltraPhaseA_MissionSoleAuthority),
+         " | Mission is ONLY final BUY/SELL/WAIT | post-Mission gates cannot flip BUY→WAIT");
    Print("ULTRA STOP EVOLUTION ∞: Enabled=", UltraYN(UltraStopEvoEnabled),
          " BE=", UltraYN(UltraStopEvoBreakEven),
          " L2/L3/L4/L5 R=", DoubleToString(UltraStopEvoL2R, 2), "/",
@@ -7827,10 +7829,13 @@ void UltraSetReject(const string reason)
 
 void UltraSetWait(const string reason)
 {
-   // Phase 19 — no silent waits: structured explain (throttled inside UltraBug)
+   // PHASE A — decision-level WAIT belongs to Mission Control only
    g_UltraLastReject = reason;
    g_UltraLastDecision = "WAIT";
-   UltraBug_Explain("WAIT", "Shell_B", "UltraSetWait", reason, "-", 0);
+   if(UltraPhaseA_MissionSoleAuthority)
+      UltraMission_EmitWait(reason, 0);
+   else
+      UltraBug_Explain("WAIT", "Shell_B", "UltraSetWait", reason, "-", 0);
 }
 
 void UltraSetApprove(const string tag, const string grade, const int beast, const int confPct)

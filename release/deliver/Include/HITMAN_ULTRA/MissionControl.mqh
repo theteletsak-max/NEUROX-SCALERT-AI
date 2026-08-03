@@ -64,6 +64,22 @@ bool UltraMission_HasFinalEntry(const bool isBuy)
    return true;
 }
 
+// PHASE A — SOLE decision-level WAIT emitter (BUY/SELL/WAIT surface)
+// Soft pre-filters may still abort candidates, but WAIT is recorded only here.
+void UltraMission_EmitWait(const string why, const int conf)
+{
+   // de-dupe same-second identical WAIT (ApproveEntry + EvaluateStrategySignals)
+   if(g_UltraMissionLast.command == SUP_WAIT &&
+      g_UltraMissionLast.reason == why &&
+      g_UltraMissionLast.ts == TimeCurrent())
+      return;
+
+   UltraMission_Set(SUP_WAIT, why, conf, conf, "WAIT", "", 0);
+   g_UltraMissionEntryOK = false;
+   UltraMission_Log("WAIT", 0, why);
+   UltraBug_Explain("WAIT", "MissionControl", "UltraMission_EmitWait", why, "-", 0);
+}
+
 //--------------------------------------------------------------------//
 void UltraMission_Init()
 {
@@ -421,7 +437,7 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
    if(!UltraMission_AllowNewEntry(s))
    {
       why = "MISSION: one decision per cycle";
-      UltraMission_Set(SUP_WAIT, why, u.score.confidence, u.score.confidence, "WAIT", "", 0);
+      UltraMission_EmitWait(why, u.score.confidence);
       return false;
    }
 
@@ -436,8 +452,7 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
          why += UltraV_Name(vst);
          why += ": ";
          why += vWhy;
-         UltraMission_Set(SUP_WAIT, why, u.score.confidence, u.score.confidence, "WAIT", "", 0);
-         UltraMission_Log("WAIT", 0, why);
+         UltraMission_EmitWait(why, u.score.confidence);
          return false;
       }
    }
@@ -457,8 +472,9 @@ bool UltraMission_ApproveEntry(const string s, UltraSnap &u, UltraSignal &sig, s
    }
    else
    {
-      UltraMission_Set(SUP_WAIT, why, u.score.confidence, u.score.confidence, "IGNORE", "", 0);
-      g_UltraMissionEntryOK = false;
+      // PHASE A — sole WAIT authority (Supreme deny → Mission WAIT)
+      if(StringLen(why) == 0) why = "MISSION WAIT";
+      UltraMission_EmitWait(why, u.score.confidence);
    }
    return ok;
 }
