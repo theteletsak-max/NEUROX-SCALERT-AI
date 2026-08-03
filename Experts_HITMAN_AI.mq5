@@ -17438,6 +17438,8 @@ int OnInit()
    UltraMission_Init();     // P06 Mission Control
    UltraBug_AuditInit(BrokerSymbol); // P17 init / handles / broker / timer audit
    Print("FINAL MODULE ORDER: HA_ULTRA_93 | Phases 1-17 | one strategy · one signal · one thesis · one mission · one exit");
+   Print("PHASE A DECISION FLOW: MissionSoleAuthority=", UltraYN(UltraPhaseA_MissionSoleAuthority),
+         " | Mission is ONLY final BUY/SELL/WAIT | post-Mission gates cannot flip BUY→WAIT");
    Print("ULTRA STOP EVOLUTION ∞: Enabled=", UltraYN(UltraStopEvoEnabled),
          " BE=", UltraYN(UltraStopEvoBreakEven),
          " L2/L3/L4/L5 R=", DoubleToString(UltraStopEvoL2R, 2), "/",
