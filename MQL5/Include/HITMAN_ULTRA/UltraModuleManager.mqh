@@ -142,9 +142,25 @@ void UltraMod_Refresh()
       UltraMod_Reg("P08_EXECUTION", true, true, execOK, execDetail);
    }
 
-   // PHASE 9 — Target Intelligence
-   UltraMod_Reg("P09_TARGET_INTEL", true, UltraTargetEnabled, UltraTargetEnabled,
-                g_UltraTargetLast.valid ? "PLAN_OK" : "—");
+   // PHASE 9 — Target Intelligence (Chapter 9 — never executes/signals)
+   {
+      bool tgtOK = g_UltraTargetIntel.booted &&
+                   (g_UltraTargetIntel.approved || g_UltraTargetIntel.status == UTARGET_IDLE ||
+                    !UltraTargetEnabled);
+      string tgtDetail = g_UltraTargetIntel.statusName;
+      tgtDetail += " evo=";
+      tgtDetail += g_UltraTargetIntel.evoStatus;
+      if(g_UltraTargetLast.valid)
+      {
+         tgtDetail += " RR=";
+         tgtDetail += DoubleToString(g_UltraTargetIntel.rr1, 1);
+         tgtDetail += "/";
+         tgtDetail += DoubleToString(g_UltraTargetIntel.rr2, 1);
+      }
+      else
+         tgtDetail += UltraTargetEnabled ? " —" : " OFF";
+      UltraMod_Reg("P09_TARGET_INTEL", true, UltraTargetEnabled, tgtOK, tgtDetail);
+   }
 
    // PHASE 10 — Position Evolution (+ Stop Evolution support)
    UltraMod_Reg("P10_POS_EVO", false, UltraPosEvoEnabled, UltraPosEvoEnabled, "L1/L2/L3");

@@ -11728,9 +11728,10 @@ string UltraNewsExec_Dashboard()
 #ifndef HITMAN_ULTRA_TARGET_INTELLIGENCE_MQH
 #define HITMAN_ULTRA_TARGET_INTELLIGENCE_MQH
 //+------------------------------------------------------------------+
-//| HITMAN AI — ULTRA TARGET INTELLIGENCE ENGINE ∞                   |
-//| Institutional target management — every TP has a validated reason|
-//| Never random. Never fixed-only. Thesis + structure + momentum.   |
+//| HITMAN AI — MASTER SPEC CHAPTER 9 · TARGET INTELLIGENCE ENGINE   |
+//| SL · TP1 · TP2 · TP3 · R:R · validate · evolve (advisory)        |
+//| NEVER executes trades · NEVER generates signals                  |
+//| ONLY manages trade objectives → Position Evolution               |
 //+------------------------------------------------------------------+
 
 struct UltraTargetPlan
@@ -11758,6 +11759,12 @@ struct UltraTargetPlan
 };
 
 UltraTargetPlan g_UltraTargetLast;
+
+// Chapter 9 facade (definitions below) — forward decls for Build/Boot path
+void UltraTargetIntel_Boot();
+void UltraTargetIntel_Log(const string verb);
+void UltraTargetIntel_SyncFromPlan(const UltraTargetPlan &p, const string detail, const bool countEvent = false);
+string UltraTargetIntel_Dashboard();
 
 //--------------------------------------------------------------------//
 void UltraTarget_Clear(UltraTargetPlan &p)
@@ -12193,6 +12200,7 @@ bool UltraTarget_Build(const string s, const bool isBuy, const double entry,
                " RR=" + DoubleToString(p.rr1, 2) + "/" +
                DoubleToString(p.rr2, 2) + "/" + DoubleToString(p.rr3, 2);
    g_UltraTargetLast = p;
+   UltraTargetIntel_SyncFromPlan(p, "CALCULATED", true);
 
    if(UltraTargetLog)
    {
@@ -12200,6 +12208,7 @@ bool UltraTarget_Build(const string s, const bool isBuy, const double entry,
                        p.conf, (int)MathRound(p.rr2 * 100.0),
                        p.thesisTag, "TP_PLAN",
                        0.0, p.risk, p.summary);
+      UltraTargetIntel_Log("PLAN");
       UltraLog("TARGET SL: " + p.reasonSL +
                " @ " + DoubleToString(p.sl, (int)SymbolInfoInteger(s, SYMBOL_DIGITS)));
       UltraLog("TARGET TP1: " + p.reasonTP1 +
@@ -12302,26 +12311,267 @@ bool UltraTarget_Apply(const string s, const bool isBuy, const double entry,
 void UltraTarget_Boot()
 {
    UltraTarget_Clear(g_UltraTargetLast);
+   UltraTargetIntel_Boot();
    if(UltraTargetLog)
       UltraLog("TARGET INTEL ∞ boot Enabled=" + (UltraTargetEnabled ? "Y" : "N") +
                " Strict=" + (UltraTargetStrict ? "Y" : "N") +
                " TP3=" + (UltraTargetEnableTP3 ? "Y" : "N") +
-               " BUILD=HA_ULTRA_93");
+               " BUILD=HA_ULTRA_93 CHAPTER=9");
 }
 
 string UltraTarget_Dashboard()
 {
+   return UltraTargetIntel_Dashboard();
+}
+
+//====================================================================//
+// CHAPTER 9 FACADE — UltraTargetIntel_* (refine-only, never executes) //
+//====================================================================//
+enum ENUM_ULTRA_TARGET_STATUS
+{
+   UTARGET_IDLE = 0,
+   UTARGET_APPROVED,
+   UTARGET_REJECTED,
+   UTARGET_ACTIVE,
+   UTARGET_EVOLVING
+};
+
+struct UltraTargetIntelState
+{
+   bool   booted;
+   bool   approved;            // last plan validated
+   ENUM_ULTRA_TARGET_STATUS status;
+   string statusName;
+   string evoStatus;           // MAINTAIN | ADJUST_ADVISORY | IDLE
+   string detail;
+   string symbol;
+   bool   isBuy;
+   double sl;
+   double tp1;
+   double tp2;
+   double tp3;
+   double rr1;
+   double rr2;
+   double rr3;
+   bool   tp3Armed;
+   bool   profitProtectReady;  // advisory for P10 — Target never modifies
+   bool   partialTP1Ready;     // advisory for Shell ladder — never closes
+   bool   partialTP2Ready;
+   ulong  ticket;
+   ulong  planCount;
+   ulong  rejectCount;
+   ulong  evoCount;
+   long   lastMs;
+};
+
+UltraTargetIntelState g_UltraTargetIntel;
+
+string UltraTargetIntel_StatusName(const ENUM_ULTRA_TARGET_STATUS st)
+{
+   switch(st)
+   {
+      case UTARGET_APPROVED: return "APPROVED";
+      case UTARGET_REJECTED: return "REJECTED";
+      case UTARGET_ACTIVE:   return "ACTIVE";
+      case UTARGET_EVOLVING: return "EVOLVING";
+      default:               return "IDLE";
+   }
+}
+
+void UltraTargetIntel_Boot()
+{
+   g_UltraTargetIntel.booted = true;
+   g_UltraTargetIntel.approved = false;
+   g_UltraTargetIntel.status = UTARGET_IDLE;
+   g_UltraTargetIntel.statusName = "IDLE";
+   g_UltraTargetIntel.evoStatus = "IDLE";
+   g_UltraTargetIntel.detail = "boot — objectives only · never executes · never signals";
+   g_UltraTargetIntel.symbol = "";
+   g_UltraTargetIntel.isBuy = true;
+   g_UltraTargetIntel.sl = g_UltraTargetIntel.tp1 = 0.0;
+   g_UltraTargetIntel.tp2 = g_UltraTargetIntel.tp3 = 0.0;
+   g_UltraTargetIntel.rr1 = g_UltraTargetIntel.rr2 = g_UltraTargetIntel.rr3 = 0.0;
+   g_UltraTargetIntel.tp3Armed = false;
+   g_UltraTargetIntel.profitProtectReady = false;
+   g_UltraTargetIntel.partialTP1Ready = false;
+   g_UltraTargetIntel.partialTP2Ready = false;
+   g_UltraTargetIntel.ticket = 0;
+   g_UltraTargetIntel.planCount = g_UltraTargetIntel.rejectCount = 0;
+   g_UltraTargetIntel.evoCount = 0;
+   g_UltraTargetIntel.lastMs = 0;
+}
+
+void UltraTargetIntel_Log(const string verb)
+{
+   string line = "TARGET_INTEL ";
+   line += verb;
+   line += " ";
+   line += g_UltraTargetIntel.statusName;
+   line += " evo=";
+   line += g_UltraTargetIntel.evoStatus;
+   line += " ";
+   line += g_UltraTargetIntel.symbol;
+   line += (g_UltraTargetIntel.isBuy ? " BUY" : " SELL");
+   line += " SL=";
+   line += DoubleToString(g_UltraTargetIntel.sl, 5);
+   line += " TP1=";
+   line += DoubleToString(g_UltraTargetIntel.tp1, 5);
+   line += " TP2=";
+   line += DoubleToString(g_UltraTargetIntel.tp2, 5);
+   line += " TP3=";
+   line += DoubleToString(g_UltraTargetIntel.tp3, 5);
+   line += " RR=";
+   line += DoubleToString(g_UltraTargetIntel.rr1, 2);
+   line += "/";
+   line += DoubleToString(g_UltraTargetIntel.rr2, 2);
+   line += "/";
+   line += DoubleToString(g_UltraTargetIntel.rr3, 2);
+   line += " | ";
+   line += g_UltraTargetIntel.detail;
+   UltraLog(line);
+}
+
+void UltraTargetIntel_SyncFromPlan(const UltraTargetPlan &p, const string detail, const bool countEvent)
+{
+   g_UltraTargetIntel.approved = p.valid;
+   g_UltraTargetIntel.status = p.valid ? UTARGET_APPROVED : UTARGET_REJECTED;
+   g_UltraTargetIntel.statusName = UltraTargetIntel_StatusName(g_UltraTargetIntel.status);
+   g_UltraTargetIntel.evoStatus = p.valid ? "MAINTAIN" : "IDLE";
+   g_UltraTargetIntel.detail = detail;
+   if(StringLen(p.summary) > 0)
+      g_UltraTargetIntel.detail = detail + " · " + p.summary;
+   g_UltraTargetIntel.isBuy = p.isBuy;
+   g_UltraTargetIntel.sl = p.sl;
+   g_UltraTargetIntel.tp1 = p.tp1;
+   g_UltraTargetIntel.tp2 = p.tp2;
+   g_UltraTargetIntel.tp3 = p.tp3;
+   g_UltraTargetIntel.rr1 = p.rr1;
+   g_UltraTargetIntel.rr2 = p.rr2;
+   g_UltraTargetIntel.rr3 = p.rr3;
+   g_UltraTargetIntel.tp3Armed = p.tp3Armed;
+   g_UltraTargetIntel.lastMs = (long)GetTickCount();
+   if(countEvent)
+   {
+      if(p.valid) g_UltraTargetIntel.planCount++;
+      else        g_UltraTargetIntel.rejectCount++;
+   }
+}
+
+// §1 / §2 / §3 / §4 — Calculate = Build (SL · TP1 · TP2 · TP3 · R:R)
+bool UltraTargetIntel_Calculate(const string s, const bool isBuy, const double entry,
+                                const UltraSnap &u, const string thesisTag,
+                                UltraTargetPlan &p)
+{
+   return UltraTarget_Build(s, isBuy, entry, u, thesisTag, p);
+}
+
+bool UltraTargetIntel_Apply(const string s, const bool isBuy, const double entry,
+                            double &sl, double &tp1, double &tp2, double &tp3,
+                            double &slDist, double &tp1Dist, double &tp2Dist, double &tp3Dist,
+                            string &why)
+{
+   bool ok = UltraTarget_Apply(s, isBuy, entry, sl, tp1, tp2, tp3,
+                               slDist, tp1Dist, tp2Dist, tp3Dist, why);
+   g_UltraTargetIntel.symbol = s;
+   if(ok)
+      UltraTargetIntel_SyncFromPlan(g_UltraTargetLast, "APPLIED", false);
+   else if(UltraTargetEnabled)
+   {
+      g_UltraTargetIntel.approved = false;
+      g_UltraTargetIntel.status = UTARGET_REJECTED;
+      g_UltraTargetIntel.statusName = "REJECTED";
+      g_UltraTargetIntel.detail = why;
+      g_UltraTargetIntel.rejectCount++;
+      UltraTargetIntel_Log("REJECT");
+   }
+   return ok;
+}
+
+bool UltraTargetIntel_Validate(const UltraTargetPlan &p, string &why)
+{
+   return UltraTarget_ValidatePlan(p, why);
+}
+
+bool UltraTargetIntel_Approved()
+{
+   return g_UltraTargetIntel.approved && g_UltraTargetLast.valid;
+}
+
+// §6 TARGET EVOLUTION — advisory only (P10 StopEvo / PosEvo apply changes)
+// Never modifies SL/TP · never closes · never signals
+void UltraTargetIntel_EvaluateActive(const ulong ticket, const string s, const bool isBuy,
+                                     const double openPrice, const double price,
+                                     const UltraSnap &u)
+{
+   if(!UltraTargetEnabled || !g_UltraTargetLast.valid)
+   {
+      g_UltraTargetIntel.evoStatus = "IDLE";
+      return;
+   }
+   if(ticket == 0 || openPrice <= 0.0 || price <= 0.0)
+      return;
+
+   g_UltraTargetIntel.ticket = ticket;
+   g_UltraTargetIntel.symbol = s;
+   g_UltraTargetIntel.status = UTARGET_ACTIVE;
+   g_UltraTargetIntel.statusName = "ACTIVE";
+
+   const double risk = MathAbs(openPrice - g_UltraTargetLast.sl);
+   const double favor = isBuy ? (price - openPrice) : (openPrice - price);
+   const double rMultiple = (risk > 0.0) ? (favor / risk) : 0.0;
+
+   bool thesisOK = true;
+   if(isBuy && u.trend.bear && !u.trend.bull) thesisOK = false;
+   if(!isBuy && u.trend.bull && !u.trend.bear) thesisOK = false;
+   bool momOK = true;
+   if(isBuy && u.mom.momSell && !u.mom.momBuy) momOK = false;
+   if(!isBuy && u.mom.momBuy && !u.mom.momSell) momOK = false;
+
+   // Progress gates — never protect / partial-hint too early
+   g_UltraTargetIntel.profitProtectReady = (thesisOK && rMultiple >= 1.0);
+   g_UltraTargetIntel.partialTP1Ready = (rMultiple + 1e-9 >= g_UltraTargetLast.rr1 * 0.95);
+   g_UltraTargetIntel.partialTP2Ready = (rMultiple + 1e-9 >= g_UltraTargetLast.rr2 * 0.95);
+
+   if(thesisOK && momOK)
+   {
+      g_UltraTargetIntel.evoStatus = "MAINTAIN";
+      g_UltraTargetIntel.detail = "targets remain valid · thesis/trend support";
+   }
+   else
+   {
+      g_UltraTargetIntel.status = UTARGET_EVOLVING;
+      g_UltraTargetIntel.statusName = "EVOLVING";
+      g_UltraTargetIntel.evoStatus = "ADJUST_ADVISORY";
+      g_UltraTargetIntel.detail = "objective pressure — P10 may tighten (Target never executes)";
+      g_UltraTargetIntel.evoCount++;
+      if(UltraTargetLog)
+         UltraTargetIntel_Log("EVOLVE");
+   }
+   g_UltraTargetIntel.lastMs = (long)GetTickCount();
+}
+
+string UltraTargetIntel_Dashboard()
+{
    string t = "TARGET: ";
    if(!UltraTargetEnabled) { t += "OFF"; return t; }
-   if(!g_UltraTargetLast.valid) { t += "—"; return t; }
-   t += g_UltraTargetLast.isBuy ? "BUY" : "SELL";
+   if(!g_UltraTargetIntel.booted) { t += "INIT"; return t; }
+   t += g_UltraTargetIntel.statusName;
+   t += " evo=";
+   t += g_UltraTargetIntel.evoStatus;
+   if(!g_UltraTargetLast.valid && g_UltraTargetIntel.status == UTARGET_IDLE)
+   { t += " —"; return t; }
+   t += " ";
+   t += g_UltraTargetIntel.isBuy ? "BUY" : "SELL";
    t += " RR=";
-   t += DoubleToString(g_UltraTargetLast.rr1, 1);
+   t += DoubleToString(g_UltraTargetIntel.rr1, 1);
    t += "/";
-   t += DoubleToString(g_UltraTargetLast.rr2, 1);
+   t += DoubleToString(g_UltraTargetIntel.rr2, 1);
    t += "/";
-   t += DoubleToString(g_UltraTargetLast.rr3, 1);
-   t += g_UltraTargetLast.tp3Armed ? " TP3:Y" : " TP3:N";
+   t += DoubleToString(g_UltraTargetIntel.rr3, 1);
+   t += g_UltraTargetIntel.tp3Armed ? " TP3:Y" : " TP3:N";
+   if(g_UltraTargetIntel.profitProtectReady) t += " PROT";
+   if(g_UltraTargetIntel.partialTP1Ready) t += " P1";
+   if(g_UltraTargetIntel.partialTP2Ready) t += " P2";
    return t;
 }
 
@@ -18632,9 +18882,25 @@ void UltraMod_Refresh()
       UltraMod_Reg("P08_EXECUTION", true, true, execOK, execDetail);
    }
 
-   // PHASE 9 — Target Intelligence
-   UltraMod_Reg("P09_TARGET_INTEL", true, UltraTargetEnabled, UltraTargetEnabled,
-                g_UltraTargetLast.valid ? "PLAN_OK" : "—");
+   // PHASE 9 — Target Intelligence (Chapter 9 — never executes/signals)
+   {
+      bool tgtOK = g_UltraTargetIntel.booted &&
+                   (g_UltraTargetIntel.approved || g_UltraTargetIntel.status == UTARGET_IDLE ||
+                    !UltraTargetEnabled);
+      string tgtDetail = g_UltraTargetIntel.statusName;
+      tgtDetail += " evo=";
+      tgtDetail += g_UltraTargetIntel.evoStatus;
+      if(g_UltraTargetLast.valid)
+      {
+         tgtDetail += " RR=";
+         tgtDetail += DoubleToString(g_UltraTargetIntel.rr1, 1);
+         tgtDetail += "/";
+         tgtDetail += DoubleToString(g_UltraTargetIntel.rr2, 1);
+      }
+      else
+         tgtDetail += UltraTargetEnabled ? " —" : " OFF";
+      UltraMod_Reg("P09_TARGET_INTEL", true, UltraTargetEnabled, tgtOK, tgtDetail);
+   }
 
    // PHASE 10 — Position Evolution (+ Stop Evolution support)
    UltraMod_Reg("P10_POS_EVO", false, UltraPosEvoEnabled, UltraPosEvoEnabled, "L1/L2/L3");
@@ -20552,12 +20818,14 @@ int OnInit()
          " PacketAgeMs=", UltraNewsExecMaxPacketAgeMs,
          " StrongerOnWeakExec=", UltraYN(UltraNewsExecStrongerOnWeakExec),
          " | detect→stabilize→validate→exec→manage");
-   Print("P09 TARGET INTEL ∞: Enabled=", UltraYN(UltraTargetEnabled),
+   Print("P09 TARGET INTEL (Ch9): Boot=", UltraYN(g_UltraTargetIntel.booted),
+         " Enabled=", UltraYN(UltraTargetEnabled),
          " Strict=", UltraYN(UltraTargetStrict),
          " TP3=", UltraYN(UltraTargetEnableTP3),
          " MinRR=", DoubleToString(UltraTargetMinRR1, 1), "/",
          DoubleToString(UltraTargetMinRR2, 1), "/",
-         DoubleToString(UltraTargetMinRR3, 1));
+         DoubleToString(UltraTargetMinRR3, 1),
+         " (never executes · never signals · objectives only)");
    Print("P12 PERF ANALYTICS ∞: Enabled=", UltraYN(UltraAdaptiveEnabled),
          " Conf=", UltraYN(UltraAdaptiveConfEnabled),
          " Risk=", UltraYN(UltraAdaptiveRiskEnabled),
@@ -25160,6 +25428,10 @@ void ManageOpenTrades()
                                  barsHeld, sxSnap);
          }
 
+         // CHAPTER 9 — Target Evolution advisory (never executes / never closes)
+         UltraTargetIntel_EvaluateActive(ticket, BrokerSymbol, isBuyPos,
+                                         openPrice, price, sxSnap);
+
          if(!PositionSelectByTicket(ticket))
             continue;
          currentSL = PositionGetDouble(POSITION_SL);
@@ -25172,10 +25444,20 @@ void ManageOpenTrades()
          UltraStopEvo_OnManage(ticket, BrokerSymbol, isBuyPos2,
                               openPrice, price, currentSL, currentTP,
                               barsHeld, g_UltraLastSnap);
+         // CHAPTER 9 — Target Evolution advisory
+         UltraTargetIntel_EvaluateActive(ticket, BrokerSymbol, isBuyPos2,
+                                         openPrice, price, g_UltraLastSnap);
          if(!PositionSelectByTicket(ticket))
             continue;
          currentSL = PositionGetDouble(POSITION_SL);
          currentTP = PositionGetDouble(POSITION_TP);
+      }
+      else
+      {
+         // Still refresh Target Intel evolution status for dashboard / PosEvo
+         bool isBuyPos3 = (type == POSITION_TYPE_BUY);
+         UltraTargetIntel_EvaluateActive(ticket, BrokerSymbol, isBuyPos3,
+                                         openPrice, price, g_UltraLastSnap);
       }
 
 

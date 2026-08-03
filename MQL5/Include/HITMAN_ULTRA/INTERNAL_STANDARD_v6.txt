@@ -46,7 +46,9 @@ PHASE 8  — EXECUTION ENGINE
   Broker compat · Order/Fill verify · Retry · Recovery · Sync
 
 PHASE 9  — TARGET INTELLIGENCE ENGINE
-  Dynamic SL · TP1 · TP2 · TP3 · R:R · Target validation · Evolution
+  Dynamic SL · TP1 · TP2 · TP3 · R:R · Target validation · Evolution advisory
+  MASTER SPEC CHAPTER 9 — never executes · never signals · objectives only
+  Profit-protect / partial hints → P10 (Target never closes)
 
 PHASE 10 — POSITION EVOLUTION ENGINE
   Monitor · Re-analysis · Thesis validation · Stop Evolution

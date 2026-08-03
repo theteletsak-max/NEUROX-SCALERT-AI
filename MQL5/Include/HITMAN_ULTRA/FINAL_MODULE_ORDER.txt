@@ -48,7 +48,11 @@ PHASE 8  — EXECUTION INTELLIGENCE ENGINE
   LOCK: never creates signals · never changes strategy · Mission decisions only
 
 PHASE 9  — TARGET INTELLIGENCE ENGINE
-  UltraTargetIntelligence.mqh
+  UltraTargetIntelligence.mqh (UltraTarget_* · UltraTargetIntel_* facade)
+  MASTER SPEC CHAPTER 9 — SL · TP1 · TP2 · TP3 · R:R · validate · evolve advisory
+  Outputs: SL · TP1 · TP2 · TP3 · Target Status · Evolution Status → PosEvo
+  LOCK: never executes · never generates signals · objectives only
+  Profit protect / partials: advisory hints → P10 StopEvo · Shell ladder
 
 PHASE 10 — POSITION EVOLUTION ENGINE
   PositionEvolution · UltraStopEvolution (profit protect)

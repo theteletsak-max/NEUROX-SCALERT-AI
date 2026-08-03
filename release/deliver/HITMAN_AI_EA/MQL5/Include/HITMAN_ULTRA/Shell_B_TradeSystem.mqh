@@ -141,12 +141,14 @@ int OnInit()
          " PacketAgeMs=", UltraNewsExecMaxPacketAgeMs,
          " StrongerOnWeakExec=", UltraYN(UltraNewsExecStrongerOnWeakExec),
          " | detect→stabilize→validate→exec→manage");
-   Print("P09 TARGET INTEL ∞: Enabled=", UltraYN(UltraTargetEnabled),
+   Print("P09 TARGET INTEL (Ch9): Boot=", UltraYN(g_UltraTargetIntel.booted),
+         " Enabled=", UltraYN(UltraTargetEnabled),
          " Strict=", UltraYN(UltraTargetStrict),
          " TP3=", UltraYN(UltraTargetEnableTP3),
          " MinRR=", DoubleToString(UltraTargetMinRR1, 1), "/",
          DoubleToString(UltraTargetMinRR2, 1), "/",
-         DoubleToString(UltraTargetMinRR3, 1));
+         DoubleToString(UltraTargetMinRR3, 1),
+         " (never executes · never signals · objectives only)");
    Print("P12 PERF ANALYTICS ∞: Enabled=", UltraYN(UltraAdaptiveEnabled),
          " Conf=", UltraYN(UltraAdaptiveConfEnabled),
          " Risk=", UltraYN(UltraAdaptiveRiskEnabled),
@@ -4749,6 +4751,10 @@ void ManageOpenTrades()
                                  barsHeld, sxSnap);
          }
 
+         // CHAPTER 9 — Target Evolution advisory (never executes / never closes)
+         UltraTargetIntel_EvaluateActive(ticket, BrokerSymbol, isBuyPos,
+                                         openPrice, price, sxSnap);
+
          if(!PositionSelectByTicket(ticket))
             continue;
          currentSL = PositionGetDouble(POSITION_SL);
@@ -4761,10 +4767,20 @@ void ManageOpenTrades()
          UltraStopEvo_OnManage(ticket, BrokerSymbol, isBuyPos2,
                               openPrice, price, currentSL, currentTP,
                               barsHeld, g_UltraLastSnap);
+         // CHAPTER 9 — Target Evolution advisory
+         UltraTargetIntel_EvaluateActive(ticket, BrokerSymbol, isBuyPos2,
+                                         openPrice, price, g_UltraLastSnap);
          if(!PositionSelectByTicket(ticket))
             continue;
          currentSL = PositionGetDouble(POSITION_SL);
          currentTP = PositionGetDouble(POSITION_TP);
+      }
+      else
+      {
+         // Still refresh Target Intel evolution status for dashboard / PosEvo
+         bool isBuyPos3 = (type == POSITION_TYPE_BUY);
+         UltraTargetIntel_EvaluateActive(ticket, BrokerSymbol, isBuyPos3,
+                                         openPrice, price, g_UltraLastSnap);
       }
 
 
