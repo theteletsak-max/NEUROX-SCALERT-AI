@@ -200,6 +200,13 @@ input int    UltraBugPositionAuditMs     = 1000;   // position sync cadence
 input int    UltraBugPerfWarnMs          = 50;     // tick latency warn threshold
 input bool   UltraMaintenanceEnabled     = true;   // Final Order P17 — orchestrates Bug+resources
 
+input group "31 · ULTRA LOW-LATENCY ARCHITECTURE ∞ (perf only)"
+input bool   UltraLowLatencyEnabled         = true;  // master — tick budget / early skip
+input bool   UltraLowLatencyEarlySmartTick  = true;  // skip news/market prelude when price unchanged
+input bool   UltraLowLatencySkipHeavy       = true;  // cadence Adaptive/Bug/Maint only
+input int    UltraLowLatencyHeavyMs         = 50;    // min ms between heavy analytics passes
+input bool   UltraLowLatencyLogBoot         = true;  // boot summary line
+
 input group "31 · ULTRA ZERO-FAIL RECOVERY ENGINE ∞ (Final Order P16)"
 input bool   UltraZFREnabled             = true;   // master — never stop on recoverable faults
 input bool   UltraZFRLog                 = true;   // recovery action logs

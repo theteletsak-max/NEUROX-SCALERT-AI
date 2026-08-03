@@ -1,0 +1,86 @@
+HITMAN AI ULTRA ∞ — ULTRA LOW-LATENCY ARCHITECTURE
+BUILD_ID: HA_ULTRA_93
+============================================================
+
+MISSION
+  Every module operates with minimum possible latency.
+  Maximum speed · efficiency · responsiveness.
+  Performance only — Final Development Rule (no new strategies).
+
+============================================================
+ULTRA INSTANT FOUNDATION
+  Instant init / config / memory / resources / recovery
+  → UltraFoundation + UltraLL_Boot + UltraZFR
+
+ULTRA INSTANT MARKET ENGINE
+  Instant tick / candle / trend / momentum / volatility /
+  liquidity / spread / session / news awareness
+  → UltraMarketIntelligence + Event + NewsExec (HF monitor)
+  → Existing ms throttles preserved; never block on spread/news alone
+
+ULTRA INSTANT SIGNAL ENGINE
+  Instant BUY/SELL detect · validate · confidence · decision
+  → UFSE cache (fromCache) + UltraCycleCache + UltraSmartTickFilter
+  → UltraLL early smart-tick short-circuit (skip redundant prelude)
+
+ULTRA INSTANT MISSION CONTROL
+  Instant validation · decision · approval · routing
+  → MissionControl (sole close authority unchanged)
+
+ULTRA INSTANT RISK ENGINE
+  Instant sizing · risk · margin · exposure
+  → CapitalProtection + TradeGate (never skipped on live price)
+
+ULTRA INSTANT EXECUTION ENGINE
+  Fast prepare · submit · fill verify · position verify · retry
+  → ExecuteBuy/Sell + Zero-Fail exec recovery
+
+ULTRA INSTANT TARGET ENGINE
+  Instant SL / TP1 / TP2 / TP3
+  → UltraTargetIntelligence
+
+ULTRA INSTANT POSITION / EXIT
+  Instant monitor · re-analysis · protect · exit
+  → ManageOpenTrades ALWAYS runs (never skipped by LL)
+  → PositionEvolution + Mission EXIT
+
+ULTRA INSTANT LOGGER / RECOVERY
+  Instant diagnostics · error report · recover · sync
+  → UltraBug explain (throttled) + UltraZFR continuous monitor
+
+============================================================
+ORCHESTRATION (UltraLowLatency.mqh)
+
+  UltraLL_OnTickStart()     — every RunTradingCycle (UltraOpt cycle++)
+  UltraLL_AllowMaintPass()  — skip Adaptive/Bug/Maint micro-ticks only
+  UltraLL_ShouldEarlySkipEntry() — smart-tick before news/market prelude
+  UltraLL_OnTickEnd()       — tick latency + peak
+  UltraLL_NoteDecisionLatency() — decision path latency
+
+NEVER SKIPPED BY LOW-LATENCY LAYER
+  ✓ Foundation health (critical)
+  ✓ Zero-Fail Recovery monitor
+  ✓ Market Intelligence gate
+  ✓ Defense Line 9 Emergency
+  ✓ System Health (entry integrity)
+  ✓ ManageOpenTrades (positions / exits / protection)
+  ✓ InstantExecution when price/bar changed or News InstantPath
+  ✓ Mission / TradeGate / ExecuteBuy/Sell
+
+SAFE TO DEFER (cadenced)
+  ✓ Adaptive soft re-analysis
+  ✓ Bug position audit tick
+  ✓ Maintenance status mirror
+
+============================================================
+INPUTS (31_Inputs)
+  UltraLowLatencyEnabled        = true
+  UltraLowLatencyEarlySmartTick = true
+  UltraLowLatencySkipHeavy      = true
+  UltraLowLatencyHeavyMs        = 50
+
+============================================================
+ULTIMATE OBJECTIVE
+  Ultra Low Latency · High Efficiency · Fast Decision /
+  Analysis · Signal · Risk · Execution · Position Management
+  Ultra Stable Performance

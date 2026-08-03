@@ -1138,6 +1138,13 @@ input int    UltraBugPositionAuditMs     = 1000;   // position sync cadence
 input int    UltraBugPerfWarnMs          = 50;     // tick latency warn threshold
 input bool   UltraMaintenanceEnabled     = true;   // Final Order P17 — orchestrates Bug+resources
 
+input group "31 · ULTRA LOW-LATENCY ARCHITECTURE ∞ (perf only)"
+input bool   UltraLowLatencyEnabled         = true;  // master — tick budget / early skip
+input bool   UltraLowLatencyEarlySmartTick  = true;  // skip news/market prelude when price unchanged
+input bool   UltraLowLatencySkipHeavy       = true;  // cadence Adaptive/Bug/Maint only
+input int    UltraLowLatencyHeavyMs         = 50;    // min ms between heavy analytics passes
+input bool   UltraLowLatencyLogBoot         = true;  // boot summary line
+
 input group "31 · ULTRA ZERO-FAIL RECOVERY ENGINE ∞ (Final Order P16)"
 input bool   UltraZFREnabled             = true;   // master — never stop on recoverable faults
 input bool   UltraZFRLog                 = true;   // recovery action logs
@@ -13394,6 +13401,156 @@ string UltraMaint_Dashboard()
 #endif // HITMAN_ULTRA_MAINTENANCE_MQH
 //===== END UltraMaintenance.mqh =====
 
+//===== BEGIN UltraLowLatency.mqh =====
+#ifndef HITMAN_ULTRA_LOW_LATENCY_MQH
+#define HITMAN_ULTRA_LOW_LATENCY_MQH
+//+------------------------------------------------------------------+
+//| HITMAN AI — ULTRA LOW-LATENCY ARCHITECTURE ∞                     |
+//| Performance orchestration only (Final Development Rule)          |
+//| Wires UltraOpt + smart-tick + heavy-pass cadence                 |
+//| NEVER skips ManageOpenTrades / Mission / Execute on price change |
+//| NEVER changes strategy, signal, thesis, or Mission authority     |
+//+------------------------------------------------------------------+
+
+// Shell_B — defined later in assemble order
+bool UltraSmartTickUnchanged();
+
+// 37_Optimization — assembled after this module (forwards; no defaults)
+void   UltraOpt_OnTickStart();
+bool   UltraOpt_ShouldSkipHeavy(const int minIntervalMs);
+void   UltraOpt_NoteLatency(const long ms);
+string UltraOpt_Summary();
+
+struct UltraLowLatencyState
+{
+   bool   booted;
+   ulong  tickStarts;
+   ulong  skipEntry;
+   ulong  skipHeavy;
+   ulong  heavyRuns;
+   long   lastTickStartMs;
+   long   lastTickLatencyMs;
+   long   peakTickLatencyMs;
+   long   lastDecisionMs;
+   string summary;
+};
+
+UltraLowLatencyState g_UltraLL;
+
+//--------------------------------------------------------------------//
+void UltraLL_RefreshSummary()
+{
+   g_UltraLL.summary = "LL ";
+   g_UltraLL.summary += UltraLowLatencyEnabled ? "ON" : "OFF";
+   g_UltraLL.summary += " ticks=";
+   g_UltraLL.summary += IntegerToString((int)g_UltraLL.tickStarts);
+   g_UltraLL.summary += " skipE=";
+   g_UltraLL.summary += IntegerToString((int)g_UltraLL.skipEntry);
+   g_UltraLL.summary += " skipH=";
+   g_UltraLL.summary += IntegerToString((int)g_UltraLL.skipHeavy);
+   g_UltraLL.summary += " lat=";
+   g_UltraLL.summary += IntegerToString((int)g_UltraLL.lastTickLatencyMs);
+   g_UltraLL.summary += "ms peak=";
+   g_UltraLL.summary += IntegerToString((int)g_UltraLL.peakTickLatencyMs);
+   g_UltraLL.summary += "ms";
+}
+
+void UltraLL_Boot()
+{
+   ZeroMemory(g_UltraLL);
+   g_UltraLL.booted = true;
+   UltraLL_RefreshSummary();
+   if(UltraLowLatencyLogBoot || UltraFoundationLogBoot)
+      UltraLog("LOW-LATENCY ARCHITECTURE ∞ boot " + g_UltraLL.summary +
+               " HeavyMs=" + IntegerToString(UltraLowLatencyHeavyMs) +
+               " EarlySmartTick=" + (UltraLowLatencyEarlySmartTick ? "Y" : "N") +
+               " BUILD=HA_ULTRA_93");
+}
+
+//--------------------------------------------------------------------//
+// Call once per RunTradingCycle — budgets the tick                   //
+//--------------------------------------------------------------------//
+void UltraLL_OnTickStart()
+{
+   UltraOpt_OnTickStart();
+   g_UltraLL.tickStarts++;
+   g_UltraLL.lastTickStartMs = (long)GetTickCount();
+}
+
+void UltraLL_OnTickEnd()
+{
+   if(g_UltraLL.lastTickStartMs <= 0)
+      return;
+   long dt = (long)GetTickCount() - g_UltraLL.lastTickStartMs;
+   if(dt < 0) dt = 0;
+   g_UltraLL.lastTickLatencyMs = dt;
+   if(dt > g_UltraLL.peakTickLatencyMs)
+      g_UltraLL.peakTickLatencyMs = dt;
+   UltraOpt_NoteLatency(dt);
+   UltraLL_RefreshSummary();
+}
+
+void UltraLL_NoteDecisionLatency(const long ms)
+{
+   g_UltraLL.lastDecisionMs = ms;
+   UltraOpt_NoteLatency(ms);
+}
+
+void UltraLL_NoteSkipEntry()
+{
+   g_UltraLL.skipEntry++;
+}
+
+//--------------------------------------------------------------------//
+// Heavy analytics / maintenance cadence (never position manage/exec) //
+//--------------------------------------------------------------------//
+bool UltraLL_AllowMaintPass()
+{
+   if(!UltraLowLatencyEnabled || !UltraLowLatencySkipHeavy)
+      return true;
+
+   if(UltraOpt_ShouldSkipHeavy(UltraLowLatencyHeavyMs))
+   {
+      g_UltraLL.skipHeavy++;
+      return false;
+   }
+   g_UltraLL.heavyRuns++;
+   return true;
+}
+
+//--------------------------------------------------------------------//
+// Entry eval: false = price unchanged + already decided (skip path)  //
+// News InstantPath always allows (maximum event responsiveness)      //
+//--------------------------------------------------------------------//
+bool UltraLL_ShouldEarlySkipEntry()
+{
+   if(!UltraLowLatencyEnabled || !UltraLowLatencyEarlySmartTick)
+      return false;
+   if(!EnableTickLevelSignalDetection)
+      return false;
+   if(UltraNewsExec_InstantPath())
+      return false;
+   return UltraSmartTickUnchanged();
+}
+
+string UltraLL_Dashboard()
+{
+   UltraLL_RefreshSummary();
+   return g_UltraLL.summary;
+}
+
+string UltraLL_Summary()
+{
+   UltraLL_RefreshSummary();
+   string t = g_UltraLL.summary;
+   t += " | ";
+   t += UltraOpt_Summary();
+   return t;
+}
+
+#endif // HITMAN_ULTRA_LOW_LATENCY_MQH
+//===== END UltraLowLatency.mqh =====
+
 //===== BEGIN UltraZeroFailRecovery.mqh =====
 #ifndef HITMAN_ULTRA_ZERO_FAIL_RECOVERY_MQH
 #define HITMAN_ULTRA_ZERO_FAIL_RECOVERY_MQH
@@ -14254,7 +14411,7 @@ string UltraTradeGate_Dashboard()
 //| Status mirrors live engines — never guess                        |
 //+------------------------------------------------------------------+
 
-#define ULTRA_MOD_MAX 28
+#define ULTRA_MOD_MAX 32
 
 struct UltraModEntry
 {
@@ -14387,6 +14544,8 @@ void UltraMod_Refresh()
                 g_UltraSysHealth.status);
    UltraMod_Reg("SUP_MEMORY", false, UltraMemoryEngineEnabled, g_UltraFoundation.memoryOK,
                 g_UltraFoundation.memoryOK ? "OK" : "OVERFLOW");
+   UltraMod_Reg("SUP_LOW_LATENCY", false, UltraLowLatencyEnabled, UltraLowLatencyEnabled,
+                UltraLowLatencyEnabled ? g_UltraLL.summary : "OFF");
 
    g_UltraMods.summary = "MODS ";
    g_UltraMods.summary += IntegerToString(g_UltraMods.healthyN);
@@ -15414,7 +15573,9 @@ void UltraOpt_OnTickStart()
    g_UltraPerfOpt.cycleCount++;
 }
 
-bool UltraOpt_ShouldSkipHeavy(const int minIntervalMs=50)
+// Default cadence is owned by UltraLowLatency (UltraLowLatencyHeavyMs).
+// No default here — first forward is in UltraLowLatency.mqh (MetaEditor-safe).
+bool UltraOpt_ShouldSkipHeavy(const int minIntervalMs)
 {
    long now = (long)GetTickCount();
    if(g_UltraPerfOpt.lastHeavyMs > 0 && (now - g_UltraPerfOpt.lastHeavyMs) < minIntervalMs)
@@ -16241,6 +16402,7 @@ int OnInit()
    UltraAdaptive_Boot();    // P13 Performance Analytics (soft adaptive)
    UltraBug_Boot();         // P17 Maintenance core (Bug Elimination)
    UltraMaint_Boot();       // P17 Maintenance orchestrator
+   UltraLL_Boot();          // ULTRA LOW-LATENCY ARCHITECTURE ∞
    UltraZFR_Boot();         // P16 Zero-Fail Recovery
    // Re-note handles after Boot zero (InitializeIndicators ran earlier)
    {
@@ -16258,10 +16420,14 @@ int OnInit()
    UltraTradeGate_Boot();   // P11 Risk Intelligence gate
    UltraMod_Boot();         // Module Manager — Final Module Order P1-17
    UltraBT_Boot();          // P12 Backtest Compatibility
-   UltraOpt_OnTickStart();  // P17 Maintenance — CPU/perf cadence
    UltraMission_Init();     // P06 Mission Control
    UltraBug_AuditInit(BrokerSymbol); // P17 init / handles / broker / timer audit
    Print("FINAL MODULE ORDER: HA_ULTRA_93 | Phases 1-17 | one strategy · one signal · one thesis · one mission · one exit");
+   Print("ULTRA LOW-LATENCY ∞: Enabled=", UltraYN(UltraLowLatencyEnabled),
+         " EarlySmartTick=", UltraYN(UltraLowLatencyEarlySmartTick),
+         " SkipHeavy=", UltraYN(UltraLowLatencySkipHeavy),
+         " HeavyMs=", UltraLowLatencyHeavyMs,
+         " ", g_UltraLL.summary);
    Print("MODULE MANAGER: ", g_UltraMods.summary);
    Print("P12 BT COMPAT ∞: Mode=", UltraBT_ModeName(),
          " Compat=", UltraYN(g_UltraBT.compatMode),
@@ -17191,6 +17357,9 @@ void RunTradingCycle(string symbol)
 
    BrokerSymbol = symbol;
 
+   // ULTRA LOW-LATENCY — tick budget (UltraOpt cycle + latency stamp)
+   UltraLL_OnTickStart();
+
    // FINAL MODULE ORDER — tick cycle (Decide path completes P3–P11 inside InstantExecution)
    // P01 Foundation
    UltraFoundation_OnTick(symbol);
@@ -17199,6 +17368,7 @@ void RunTradingCycle(string symbol)
    if(UltraFoundationEnabled && g_UltraFoundation.status == "RED")
    {
       ManageOpenTrades(); // still protect open positions — never abandon risk
+      UltraLL_OnTickEnd();
       return;
    }
 
@@ -17208,37 +17378,49 @@ void RunTradingCycle(string symbol)
    {
       UltraZFR_OnTick(symbol); // keep recovering data path
       ManageOpenTrades(); // still protect open positions — never abandon risk
+      UltraLL_OnTickEnd();
       return;
    }
 
    // DEFENSE LINE 9 — EMERGENCY (connection / data / symbol recover)
    UltraDefense_Line9_Emergency(symbol);
 
-   // Supporting health (P01 integrity); RED blocks entry path only
+   // Supporting health (P01 integrity); RED blocks entry path only — never skipped
    if(UltraUpgradeEnabled && UltraSystemHealthEnabled)
    {
       if(!UltraSystemHealth_Update(symbol))
       {
          ManageOpenTrades(); // still protect open positions
+         UltraLL_OnTickEnd();
          return;
       }
    }
 
-   // P13 Performance Analytics — continuous soft re-analysis
-   UltraAdaptive_OnTick(symbol);
+   // Cadenced heavy pass (Adaptive / Bug audit / Maint) — never blocks Manage/Exec
+   bool heavyPass = UltraLL_AllowMaintPass();
+   if(heavyPass)
+   {
+      // P13 Performance Analytics — continuous soft re-analysis
+      UltraAdaptive_OnTick(symbol);
+   }
 
-   // P17 Maintenance — bug audits + status mirror
+   // P17 Maintenance — bug audits + status mirror (perf wrap always for Instant path)
    UltraBug_PerfBegin();
-   UltraBug_OnTick(symbol);
-   UltraMaint_OnTick(symbol);
+   if(heavyPass)
+   {
+      UltraBug_OnTick(symbol);
+      UltraMaint_OnTick(symbol);
+   }
 
    // P09/P10/P11 — position/exit/risk via Manage; P3–P8 via InstantExecution→Decide
+   // LOW-LATENCY LOCK: ManageOpenTrades NEVER skipped
    ManageOpenTrades();
 
    if(TradingAllowed)
       InstantExecution();
 
    UltraBug_PerfEnd(symbol);
+   UltraLL_OnTickEnd();
 }
 
 void OnTimer()
@@ -27416,6 +27598,18 @@ void InstantExecution()
       return;
    }
 
+   // ULTRA LOW-LATENCY — earliest safe short-circuit BEFORE news/market prelude
+   // (UltraSmartTickUnchanged has side effects — call at most once per InstantExecution)
+   bool smartTickChecked = false;
+   if(UltraLL_ShouldEarlySkipEntry())
+   {
+      UltraLL_NoteSkipEntry();
+      return;
+   }
+   if(UltraLowLatencyEnabled && UltraLowLatencyEarlySmartTick &&
+      EnableTickLevelSignalDetection && !UltraNewsExec_InstantPath())
+      smartTickChecked = true; // ShouldEarlySkipEntry already ran UltraSmartTickUnchanged
+
    // OK70: news aware + clean market analysis (never refuse on news/spread)
    UpdateNewsAwareness();
    AnalyzeLiveMarket(false);
@@ -27424,7 +27618,7 @@ void InstantExecution()
       g_UltraDecisionStartMs = (long)GetTickCount();
 
    // Every symbol gets its own trading-cycle "tick" for the indicator
-   // cache (Part 2) - incremented once per RunTradingCycle() call so
+   // cache (Part 2) - incremented once per entry-eval path so
    // GetEMA()/GetADX()/GetATR() only re-fetch buffers once per symbol per
    // cycle instead of once per call.
    g_CycleCounter++;
@@ -27450,8 +27644,13 @@ void InstantExecution()
 
    // Ultra smart tick filter: same bid/ask + already decided this price → skip
    // News Mode instant path: never skip — maximum execution speed under events
-   if(EnableTickLevelSignalDetection && UltraSmartTickUnchanged() && !UltraNewsExec_InstantPath())
+   // Skip re-check when Low-Latency early path already evaluated smart tick
+   if(!smartTickChecked &&
+      EnableTickLevelSignalDetection && UltraSmartTickUnchanged() && !UltraNewsExec_InstantPath())
+   {
+      UltraLL_NoteSkipEntry();
       return;
+   }
 
    if(currentBarTime > 0)
       LastEntryEvalBarTimeArr[idx] = currentBarTime;
@@ -27535,6 +27734,7 @@ void InstantExecution()
       {
          g_UltraLastDecisionMs = (long)GetTickCount() - g_UltraDecisionStartMs;
          g_UltraHealthOK = (g_UltraLastDecisionMs < 500) ? 1 : 0;
+         UltraLL_NoteDecisionLatency(g_UltraLastDecisionMs);
       }
       return;
    }
@@ -27580,6 +27780,7 @@ void InstantExecution()
       {
          g_UltraLastDecisionMs = (long)GetTickCount() - g_UltraDecisionStartMs;
          g_UltraHealthOK = (g_UltraLastDecisionMs < 500) ? 1 : 0;
+         UltraLL_NoteDecisionLatency(g_UltraLastDecisionMs);
       }
       return;
    }
@@ -27600,7 +27801,10 @@ void InstantExecution()
    }
 
    if(EnableUltraCore && UltraHealthMonitor)
+   {
       g_UltraLastDecisionMs = (long)GetTickCount() - g_UltraDecisionStartMs;
+      UltraLL_NoteDecisionLatency(g_UltraLastDecisionMs);
+   }
 
    if(EnableSetupLogging)
    {

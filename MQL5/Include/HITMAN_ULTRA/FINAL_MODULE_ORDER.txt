@@ -91,6 +91,11 @@ PHASE 17 — ULTRA MAINTENANCE ENGINE
   Broker Updates · Version Management
   LOCK: maintenance only — not a new strategy (Final Development Rule)
 
+ULTRA LOW-LATENCY ARCHITECTURE ∞ (cross-cutting · perf only)
+  Module: UltraLowLatency.mqh — see ULTRA_LOW_LATENCY_ARCHITECTURE.txt
+  Tick budget · early smart-tick · heavy analytics cadence
+  LOCK: never skips ManageOpenTrades / Mission / Execute on price change
+
 ============================================================
 MAIN EXECUTION FLOW
 

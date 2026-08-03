@@ -22,7 +22,9 @@ void UltraOpt_OnTickStart()
    g_UltraPerfOpt.cycleCount++;
 }
 
-bool UltraOpt_ShouldSkipHeavy(const int minIntervalMs=50)
+// Default cadence is owned by UltraLowLatency (UltraLowLatencyHeavyMs).
+// No default here — first forward is in UltraLowLatency.mqh (MetaEditor-safe).
+bool UltraOpt_ShouldSkipHeavy(const int minIntervalMs)
 {
    long now = (long)GetTickCount();
    if(g_UltraPerfOpt.lastHeavyMs > 0 && (now - g_UltraPerfOpt.lastHeavyMs) < minIntervalMs)

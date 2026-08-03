@@ -6,7 +6,7 @@
 //| Status mirrors live engines — never guess                        |
 //+------------------------------------------------------------------+
 
-#define ULTRA_MOD_MAX 28
+#define ULTRA_MOD_MAX 32
 
 struct UltraModEntry
 {
@@ -139,6 +139,8 @@ void UltraMod_Refresh()
                 g_UltraSysHealth.status);
    UltraMod_Reg("SUP_MEMORY", false, UltraMemoryEngineEnabled, g_UltraFoundation.memoryOK,
                 g_UltraFoundation.memoryOK ? "OK" : "OVERFLOW");
+   UltraMod_Reg("SUP_LOW_LATENCY", false, UltraLowLatencyEnabled, UltraLowLatencyEnabled,
+                UltraLowLatencyEnabled ? g_UltraLL.summary : "OFF");
 
    g_UltraMods.summary = "MODS ";
    g_UltraMods.summary += IntegerToString(g_UltraMods.healthyN);
